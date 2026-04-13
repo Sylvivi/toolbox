@@ -604,7 +604,8 @@
         }
         .collection-item-fields input:focus, .collection-item-fields select:focus,
         .collection-item-fields textarea:focus { border-color: #5aab8b; }
-        .collection-item-fields textarea { resize: vertical; min-height: 60px; font-family: 'SF Mono','Fira Code','Consolas',monospace; line-height: 1.5; }
+        .collection-item-fields textarea { resize: vertical; min-height: 160px; font-family: 'SF Mono','Fira Code','Consolas',monospace; line-height: 1.5; white-space: pre; overflow-x: auto; }
+        .collection-item-fields textarea.ci-content-text { font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; white-space: pre-wrap; word-break: break-word; overflow-x: hidden; }
         .collection-item-remove {
             flex-shrink: 0; width: 24px; height: 24px; background: var(--red-bg);
             border: none; border-radius: 6px; color: var(--red); font-size: 15px;
@@ -2329,7 +2330,7 @@
                         '<option value="code"' + (sub.type==='code'?' selected':'') + '>💻 代码</option>' +
                     '</select>' +
                     '<input type="text" placeholder="https://..." class="ci-url" style="display:' + (sub.type!=='link'?'none':'block') + '" value="' + esc(sub.url || '') + '">' +
-                    '<textarea placeholder="内容..." class="ci-content" style="display:' + (sub.type==='link'?'none':'block') + '">' + esc(sub.content || '') + '</textarea>' +
+                    '<textarea placeholder="内容..." class="ci-content' + (sub.type==='text'?' ci-content-text':'') + '" style="display:' + (sub.type==='link'?'none':'block') + '">' + esc(sub.content || '') + '</textarea>' +
                 '</div>' +
                 '<button class="collection-item-remove" onclick="this.closest(\'.collection-item-row\').remove()">×</button>';
             container.appendChild(div);
@@ -2339,8 +2340,12 @@
         function toggleCollectionItemFields(sel) {
             var row = sel.closest('.collection-item-row');
             var isLink = sel.value === 'link';
+            var isText = sel.value === 'text';
             row.querySelector('.ci-url').style.display = isLink ? 'block' : 'none';
-            row.querySelector('.ci-content').style.display = isLink ? 'none' : 'block';
+            var ta = row.querySelector('.ci-content');
+            ta.style.display = isLink ? 'none' : 'block';
+            if (isText) ta.classList.add('ci-content-text');
+            else ta.classList.remove('ci-content-text');
         }
 
         function collectCollectionItems() {
