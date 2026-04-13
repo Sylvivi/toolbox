@@ -2255,7 +2255,17 @@
                                 delBtn +
                                 '<button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub(\'' + item.id + '\',' + idx + ',this)">复制</button>';
                         } else {
-                            actions = delBtn +
+                            actions = '<div class="btn-export-wrap" style="position:relative;display:inline-block">' +
+                                '<button class="btn-copy" onclick="event.stopPropagation();toggleExportMenu(this)" style="font-size:11px">💾</button>' +
+                                '<div class="export-menu" style="min-width:80px;right:0;left:auto">' +
+                                    '<button class="export-menu-item" onclick="event.stopPropagation();exportCollectionSub(\'' + item.id + '\',' + idx + ',\'txt\')">📄 .txt</button>' +
+                                    '<button class="export-menu-item" onclick="event.stopPropagation();exportCollectionSub(\'' + item.id + '\',' + idx + ',\'md\')">📝 .md</button>' +
+                                    '<button class="export-menu-item" onclick="event.stopPropagation();exportCollectionSub(\'' + item.id + '\',' + idx + ',\'html\')">🌐 .html</button>' +
+                                    '<button class="export-menu-item" onclick="event.stopPropagation();exportCollectionSub(\'' + item.id + '\',' + idx + ',\'js\')">⚡ .js</button>' +
+                                    '<button class="export-menu-item" onclick="event.stopPropagation();exportCollectionSub(\'' + item.id + '\',' + idx + ',\'css\')">🎨 .css</button>' +
+                                    '<button class="export-menu-item" onclick="event.stopPropagation();exportCollectionSub(\'' + item.id + '\',' + idx + ',\'json\')">📋 .json</button>' +
+                                '</div></div>' +
+                                delBtn +
                                 '<button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub(\'' + item.id + '\',' + idx + ',this)">复制</button>';
                         }
                         return '<div class="collection-sub-item" data-sub-idx="' + idx + '">' +
@@ -2482,6 +2492,27 @@
                 if (data[i].id === cardId && data[i].items) {
                     var sub = data[i].items[subIdx];
                     if (sub) copyText(sub.type === 'link' ? (sub.url || '') : (sub.content || ''), btn);
+                    return;
+                }
+            }
+        }
+
+        function exportCollectionSub(cardId, subIdx, ext) {
+            var data = getSnipData();
+            for (var i = 0; i < data.length; i++) {
+                if (data[i].id === cardId && data[i].items) {
+                    var sub = data[i].items[subIdx];
+                    if (!sub) return;
+                    var content = sub.content || '';
+                    var title = sub.title || 'untitled';
+                    var mimeMap = { txt:'text/plain', css:'text/css', html:'text/html', js:'application/javascript', json:'application/json', md:'text/markdown' };
+                    var blob = new Blob([content], { type: mimeMap[ext] || 'text/plain' });
+                    var a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = title.replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_') + '.' + ext;
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                    document.querySelectorAll('.export-menu.show').forEach(function(m) { m.classList.remove('show'); });
+                    showToast('💾 已保存为 .' + ext + ' 文件');
                     return;
                 }
             }
