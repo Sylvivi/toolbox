@@ -78,7 +78,7 @@
 
         /* ===== 全局数据栏 ===== */
         .global-bar {
-            display: flex; gap: 6px; margin-bottom: 12px;
+            display: flex; gap: 6px; margin-bottom: 4px;
         }
         .global-bar .toolbar-btn {
             flex: 1; padding: 8px 4px;
@@ -92,8 +92,9 @@
         /* ===== 备份提醒条 ===== */
         .backup-reminder {
             display: flex; align-items: center; justify-content: space-between; gap: 10px;
-            background: linear-gradient(135deg, #d97706, #f59e0b);
-            color: #fff; font-size: 12px; padding: 8px 14px;
+            background: var(--accent-light);
+            border: 1px solid rgba(90,171,139,0.3);
+            color: var(--accent); font-size: 12px; padding: 8px 14px;
             border-radius: 10px; margin-bottom: 10px;
         }
 
@@ -446,6 +447,15 @@
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
+        /* 卡片左侧色条 (C) */
+        .card[data-kid] { border-left: 3px solid rgba(90,171,139,0.4); }
+        .card[data-kid]:hover { border-color: #5aab8b; border-left-color: #5aab8b; }
+        .card[data-sid] { border-left: 3px solid rgba(90,171,139,0.4); }
+        .card[data-sid]:hover { border-color: #5aab8b; border-left-color: #5aab8b; }
+
+        /* 大标题 (D) */
+        .header h1 { font-size: 26px; }
+
         /* ===== 底部导航 ===== */
         .bottom-nav {
             position: fixed; bottom: 0; left: 0; right: 0; z-index: 150;
@@ -456,9 +466,11 @@
         .nav-item {
             flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
             gap: 2px; border: none; background: transparent; cursor: pointer;
-            color: var(--text-light); font-size: 10px; font-weight: 500; transition: color 0.2s;
+            color: var(--text-light); font-size: 10px; font-weight: 500; transition: all 0.2s;
+            border-radius: 12px; margin: 6px; padding: 0;
         }
-        .nav-item.active { color: var(--accent); }
+        .nav-item.active { color: #fff; background: linear-gradient(135deg, #3a9d71, #5aab8b); }
+        .dark .nav-item.active { background: linear-gradient(135deg, #2d7a58, #4a9a7a); }
         .nav-item .nav-icon { font-size: 20px; }
         .nav-item .nav-label { font-size: 10px; }
 
@@ -699,19 +711,29 @@
     <div class="backup-reminder" id="backupReminder" style="display:none">
         <span id="backupReminderText"></span>
         <div style="display:flex;gap:8px;flex-shrink:0">
-            <button onclick="exportAllData()" style="padding:4px 10px;background:rgba(255,255,255,0.25);border:1px solid rgba(255,255,255,0.4);border-radius:6px;color:#fff;font-size:12px;cursor:pointer">立即导出</button>
-            <button onclick="dismissBackupReminder()" style="padding:4px 8px;background:transparent;border:none;color:rgba(255,255,255,0.7);font-size:16px;cursor:pointer;line-height:1">×</button>
+            <button onclick="exportAllData()" style="padding:4px 10px;background:rgba(42,107,79,0.15);border:1px solid rgba(42,107,79,0.3);border-radius:6px;color:var(--accent);font-size:12px;cursor:pointer">立即导出</button>
+            <button onclick="dismissBackupReminder()" style="padding:4px 8px;background:transparent;border:none;color:var(--text-muted);font-size:16px;cursor:pointer;line-height:1">×</button>
         </div>
     </div>
 
     <!-- ===== 全局数据导入导出 ===== -->
     <div class="global-bar">
-        <div class="toolbar-btn" onclick="openCalcModal()">🧮 计算器</div>
+        <div class="toolbar-btn" style="position:relative" onclick="toggleGlobalMenu('toolMenu', event)">🛠️ 工具
+            <div class="export-menu" id="toolMenu">
+                <button class="export-menu-item" onclick="openCalcModal()">🧮 计算器</button>
+                <button class="export-menu-item" onclick="openImgBedModal()">🖼️ 图床</button>
+            </div>
+        </div>
         <div class="toolbar-btn" onclick="openGistModal()">☁️ 云同步</div>
-        <div class="toolbar-btn" onclick="exportAllData()">💾 导出</div>
-        <div class="toolbar-btn" onclick="document.getElementById('globalImportFile').click()">📦 导入</div>
+        <div class="toolbar-btn" style="position:relative" onclick="toggleGlobalMenu('dataMenu', event)">📦 数据
+            <div class="export-menu" id="dataMenu">
+                <button class="export-menu-item" onclick="exportAllData()">💾 导出</button>
+                <button class="export-menu-item" onclick="document.getElementById('globalImportFile').click()">📥 导入</button>
+            </div>
+        </div>
         <input type="file" id="globalImportFile" accept=".json" style="display:none" onchange="importAllData(event)">
     </div>
+    <div id="gistStatusLine" style="font-size:10px;color:var(--text-muted);text-align:right;margin:-8px 0 8px;padding-right:2px"></div>
 
     <!-- ===== Gist 云同步弹窗 ===== -->
     <div class="modal-overlay" id="gistModalOverlay" onclick="if(event.target===this)closeGistModal()">
@@ -743,6 +765,24 @@
                 <button class="btn-cancel" onclick="closeGistModal()">关闭</button>
                 <button class="btn-cancel" id="gistPullBtn" onclick="gistPull(true)" style="display:none">⬇️ 拉取</button>
                 <button class="btn-save" id="gistSaveBtn" onclick="gistSaveConfig()">连接</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 图床弹窗 ===== -->
+    <div class="modal-overlay" id="imgBedModalOverlay" onclick="if(event.target===this)closeImgBedModal()">
+        <div class="modal" style="max-width:420px;width:100%">
+            <h2>🖼️ 图床管理</h2>
+            <div class="modal-body">
+                <div id="imgBedList" style="margin-bottom:14px"></div>
+                <div style="display:flex;gap:8px">
+                    <input type="text" id="imgBedName" placeholder="名称，如「SM.MS」" style="flex:1;padding:9px 12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none">
+                    <input type="text" id="imgBedUrl" placeholder="网址 https://..." style="flex:2;padding:9px 12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none">
+                    <button onclick="addImgBed()" style="padding:9px 14px;background:var(--accent-chip);border:none;border-radius:8px;color:#fff;font-size:13px;cursor:pointer;white-space:nowrap">添加</button>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeImgBedModal()">关闭</button>
             </div>
         </div>
     </div>
@@ -965,10 +1005,10 @@
     <button class="fab-add" id="fabAdd" onclick="onFabAdd()">+</button>
 
     <div class="bottom-nav">
-        <button class="nav-item" onclick="switchTab('keys', this)">
+        <button class="nav-item nav-keys" onclick="switchTab('keys', this)">
             <span class="nav-icon">🔑</span><span class="nav-label">密钥</span>
         </button>
-        <button class="nav-item active" onclick="switchTab('snippets', this)">
+        <button class="nav-item nav-snippets active" onclick="switchTab('snippets', this)">
             <span class="nav-icon">📝</span><span class="nav-label">收藏</span>
         </button>
     </div>
@@ -1018,7 +1058,8 @@
             document.querySelectorAll('.nav-item').forEach(function(b) { b.classList.remove('active'); });
             document.getElementById('tab-' + tab).classList.add('active');
             btn.classList.add('active');
-            document.getElementById('fabAdd').style.display = (tab === 'keys' || tab === 'snippets') ? 'flex' : 'none';
+            document.body.classList.remove('on-keys', 'on-snippets');
+            document.body.classList.add('on-' + tab);
             updateFabPositions();
             window.scrollTo(0, 0);
         }
@@ -1032,6 +1073,22 @@
 
         function openCalcModal() { document.getElementById('calcModalOverlay').classList.add('show'); }
         function closeCalcModal() { document.getElementById('calcModalOverlay').classList.remove('show'); }
+
+        function toggleGlobalMenu(id, e) {
+            e.stopPropagation();
+            var menu = document.getElementById(id);
+            var isShow = menu.classList.contains('show');
+            document.querySelectorAll('.export-menu.show').forEach(function(m) { m.classList.remove('show'); });
+            if (!isShow) {
+                menu.classList.add('show');
+                setTimeout(function() {
+                    function close(ev) {
+                        if (!menu.contains(ev.target)) { menu.classList.remove('show'); document.removeEventListener('click', close); }
+                    }
+                    document.addEventListener('click', close);
+                }, 0);
+            }
+        }
 
         function onFabAdd() {
             if (currentTab === 'keys') openKeyModal();
@@ -2029,25 +2086,84 @@
         })();
 
         /* ============================================================
-           备份提醒
+           图床管理
            ============================================================ */
+        var IMGBED_STORE = 'toolbox_imgbeds';
+        function getImgBedData() { return JSON.parse(localStorage.getItem(IMGBED_STORE) || '[]'); }
+        function setImgBedData(d) { localStorage.setItem(IMGBED_STORE, JSON.stringify(d)); }
+
+        function openImgBedModal() {
+            renderImgBedList();
+            document.getElementById('imgBedModalOverlay').classList.add('show');
+        }
+        function closeImgBedModal() {
+            document.getElementById('imgBedModalOverlay').classList.remove('show');
+        }
+
+        function renderImgBedList() {
+            var data = getImgBedData();
+            var el = document.getElementById('imgBedList');
+            if (data.length === 0) {
+                el.innerHTML = '<div style="font-size:13px;color:var(--text-muted);text-align:center;padding:20px 0">还没有图床，在下方添加吧</div>';
+                return;
+            }
+            el.innerHTML = data.map(function(item, i) {
+                return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:10px 12px;background:var(--card-inner);border-radius:10px">' +
+                    '<span style="flex:1;font-size:13px;font-weight:600;color:var(--accent)">' + esc(item.name) + '</span>' +
+                    '<span style="flex:2;font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(item.url) + '</span>' +
+                    '<a href="' + esc(item.url) + '" target="_blank" style="padding:5px 12px;background:var(--accent-light);border:none;border-radius:6px;color:var(--accent-mid);font-size:12px;text-decoration:none;white-space:nowrap;cursor:pointer">前往 →</a>' +
+                    '<button onclick="deleteImgBed(' + i + ')" style="padding:5px 8px;background:var(--red-bg);border:none;border-radius:6px;color:var(--red);font-size:12px;cursor:pointer">×</button>' +
+                    '</div>';
+            }).join('');
+        }
+
+        function addImgBed() {
+            var name = document.getElementById('imgBedName').value.trim();
+            var url = document.getElementById('imgBedUrl').value.trim();
+            if (!name || !url) { showToast('⚠️ 名称和网址都不能为空'); return; }
+            if (!/^https?:\/\//.test(url)) url = 'https://' + url;
+            var data = getImgBedData();
+            data.push({ name: name, url: url });
+            setImgBedData(data);
+            document.getElementById('imgBedName').value = '';
+            document.getElementById('imgBedUrl').value = '';
+            renderImgBedList();
+            showToast('✅ 已添加 ' + name);
+        }
+
+        function deleteImgBed(index) {
+            var data = getImgBedData();
+            data.splice(index, 1);
+            setImgBedData(data);
+            renderImgBedList();
+        }
         function checkBackupReminder() {
-            var last = localStorage.getItem('toolbox_last_backup');
+            var cfg = gistGetConfig();
+            var statusLine = document.getElementById('gistStatusLine');
+
+            // 已配置同步：显示上次同步时间，不显示备份提醒
+            if (cfg.token && cfg.gistId) {
+                var t = localStorage.getItem('toolbox_gist_last_sync');
+                if (statusLine) statusLine.textContent = t ? fmtTimeShort(t) : '未同步';
+                return;
+            }
+
+            // 未配置同步：检查是否需要提醒备份
+            if (statusLine) statusLine.textContent = '未连接';
             var bar = document.getElementById('backupReminder');
+            var last = localStorage.getItem('toolbox_last_backup');
+            var hasData = getKeyData().length > 0 || getSnipData().length > 0;
+            if (!hasData) return;
             if (!last) {
-                // 从未备份过，看是否有数据
-                var hasData = getKeyData().length > 0 || getSnipData().length > 0;
-                if (!hasData) return;
                 var dismissed = localStorage.getItem('toolbox_backup_dismissed');
                 if (dismissed === 'never') return;
                 document.getElementById('backupReminderText').textContent = '⚠️ 你还从未导出过备份，建议现在导出一份保存好';
-                bar.style.display = 'flex';
-                return;
+                bar.style.display = 'flex'; return;
             }
             var days = Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
             if (days < 7) return;
             var dismissed = localStorage.getItem('toolbox_backup_dismissed');
-            if (dismissed === last) return; // 同一次提醒已关闭
+            if (dismissed === last) return;
             document.getElementById('backupReminderText').textContent = '⏰ 距上次备份已 ' + days + ' 天，建议导出一份最新数据';
             bar.style.display = 'flex';
         }
@@ -2159,7 +2275,7 @@
         function gistPushData() {
             var cfg = gistGetConfig();
             if (!cfg.token || !cfg.gistId) return;
-            var all = { api_keys: getKeyData(), snippets: getSnipData() };
+            var all = { api_keys: getKeyData(), snippets: getSnipData(), imgbeds: getImgBedData() };
             fetch('https://api.github.com/gists/' + cfg.gistId, {
                 method: 'PATCH',
                 headers: { 'Authorization': 'token ' + cfg.token, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
@@ -2167,6 +2283,8 @@
             }).then(function(r) {
                 if (!r.ok) throw new Error();
                 localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
+                var sl = document.getElementById('gistStatusLine');
+                if (sl) sl.textContent = fmtTimeShort(new Date().toISOString());
             }).catch(function() {});
         }
 
@@ -2212,8 +2330,13 @@
                     setSnipData(sData);
                 }
                 localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
+                var sl = document.getElementById('gistStatusLine');
+                if (sl) sl.textContent = fmtTimeShort(new Date().toISOString());
                 renderKeyFilters(); renderKeyCards();
                 renderSnipFilters(); renderSnippets();
+                if (imported.imgbeds && Array.isArray(imported.imgbeds)) {
+                    setImgBedData(imported.imgbeds);
+                }
                 if (manual && (kCount + sCount > 0)) showToast('☁️ 同步完成，新增 ' + (kCount + sCount) + ' 条');
                 else if (manual) showToast('☁️ 已是最新，无新内容');
             });
@@ -2225,6 +2348,7 @@
         renderSnipFilters();
         renderSnippets();
         updateFabPositions();
+        document.body.classList.add('on-snippets');
         checkBackupReminder();
         // 打开页面自动静默拉取
         (function() { var cfg = gistGetConfig(); if (cfg.token && cfg.gistId) gistPull(false); })();
