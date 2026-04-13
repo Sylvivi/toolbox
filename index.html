@@ -1212,7 +1212,7 @@
         var keyVisible = {};
 
         function getKeyData() { return JSON.parse(localStorage.getItem(KEY_STORE) || '[]'); }
-        function setKeyData(d) { localStorage.setItem(KEY_STORE, JSON.stringify(d)); gistSchedulePush(); }
+        function setKeyData(d) { localStorage.setItem(KEY_STORE, JSON.stringify(d)); localStorage.setItem('toolbox_last_local_modified', new Date().toISOString()); gistSchedulePush(); }
 
         function maskKey(key) {
             if (!key) return '未设置';
@@ -1408,6 +1408,7 @@
 
         function deleteKeyEntry(id) {
             if (!confirm('确定删除这条记录吗？')) return;
+            addTombstone(id);
             setKeyData(getKeyData().filter(function(d) { return d.id !== id; }));
             renderKeyFilters(); renderKeyCards(); showToast('🗑️ 已删除');
         }
@@ -1508,7 +1509,7 @@
         var currentEditorType = 'code';
 
         function getSnipData() { return JSON.parse(localStorage.getItem(SNIP_STORE) || '[]'); }
-        function setSnipData(d) { localStorage.setItem(SNIP_STORE, JSON.stringify(d)); gistSchedulePush(); }
+        function setSnipData(d) { localStorage.setItem(SNIP_STORE, JSON.stringify(d)); localStorage.setItem('toolbox_last_local_modified', new Date().toISOString()); gistSchedulePush(); }
 
         function setSnipType(type, el) {
             snipTypeFilter = type;
@@ -1873,6 +1874,7 @@
 
         function deleteSnipEntry(id) {
             if (!confirm('确定删除这个片段吗？')) return;
+            addTombstone(id);
             setSnipData(getSnipData().filter(function(d) { return d.id !== id; }));
             renderSnipFilters(); renderSnippets(); showToast('🗑️ 已删除');
         }
@@ -2133,6 +2135,7 @@
 
         function deleteImgBed(index) {
             var data = getImgBedData();
+            addTombstone('imgbed_' + data[index].url);
             data.splice(index, 1);
             setImgBedData(data);
             renderImgBedList();
@@ -2253,7 +2256,7 @@
         }
 
         function gistCreateNew(token) {
-            var all = { api_keys: getKeyData(), snippets: getSnipData() };
+            var all = buildSyncPayload();
             return fetch('https://api.github.com/gists', {
                 method: 'POST',
                 headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
@@ -2272,14 +2275,34 @@
             });
         }
 
+        /* ---- 墓碑（删除记录） ---- */
+        var TOMB_STORE = 'toolbox_tombstones';
+        function getTombstones() { return JSON.parse(localStorage.getItem(TOMB_STORE) || '{}'); }
+        function setTombstones(t) { localStorage.setItem(TOMB_STORE, JSON.stringify(t)); }
+        function addTombstone(id) {
+            var t = getTombstones();
+            t[id] = new Date().toISOString();
+            setTombstones(t);
+        }
+
+        /* ---- 构建推送数据 ---- */
+        function buildSyncPayload() {
+            return {
+                api_keys: getKeyData(),
+                snippets: getSnipData(),
+                imgbeds: getImgBedData(),
+                tombstones: getTombstones(),
+                lastModified: new Date().toISOString()
+            };
+        }
+
         function gistPushData() {
             var cfg = gistGetConfig();
             if (!cfg.token || !cfg.gistId) return;
-            var all = { api_keys: getKeyData(), snippets: getSnipData(), imgbeds: getImgBedData() };
             fetch('https://api.github.com/gists/' + cfg.gistId, {
                 method: 'PATCH',
                 headers: { 'Authorization': 'token ' + cfg.token, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
-                body: JSON.stringify({ files: { 'toolbox_data.json': { content: JSON.stringify(all, null, 2) } } })
+                body: JSON.stringify({ files: { 'toolbox_data.json': { content: JSON.stringify(buildSyncPayload(), null, 2) } } })
             }).then(function(r) {
                 if (!r.ok) throw new Error();
                 localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
@@ -2314,31 +2337,68 @@
             }).then(function(data) {
                 var content = data.files && data.files['toolbox_data.json'] && data.files['toolbox_data.json'].content;
                 if (!content) return;
-                var imported = JSON.parse(content);
-                var kCount = 0, sCount = 0;
-                if (imported.api_keys && Array.isArray(imported.api_keys)) {
-                    var kData = getKeyData(); var kIds = {};
-                    kData.forEach(function(d) { kIds[d.id] = true; });
-                    imported.api_keys.forEach(function(d) { if (!kIds[d.id]) { kData.push(d); kCount++; } });
+                var remote = JSON.parse(content);
+
+                // ---- A: 冲突兜底 ----
+                // 如果远端 lastModified 比本地最后同步时间新很多（超过1分钟），且本地没有更新记录，直接用远端整体覆盖
+                var localSync = localStorage.getItem('toolbox_gist_last_sync');
+                var remoteTime = remote.lastModified ? new Date(remote.lastModified).getTime() : 0;
+                var localTime = localSync ? new Date(localSync).getTime() : 0;
+                var localModified = localStorage.getItem('toolbox_last_local_modified');
+                var localModTime = localModified ? new Date(localModified).getTime() : 0;
+
+                if (remoteTime > localTime + 60000 && localModTime <= localTime) {
+                    // 远端明显更新，本地自上次同步后没有改动，直接用远端
+                    if (remote.api_keys) setKeyData(remote.api_keys);
+                    if (remote.snippets) setSnipData(remote.snippets);
+                    if (remote.imgbeds) setImgBedData(remote.imgbeds);
+                    if (remote.tombstones) setTombstones(remote.tombstones);
+                } else {
+                    // ---- B: 墓碑合并 ----
+                    // 1. 合并墓碑表（取最新时间）
+                    var localTombs = getTombstones();
+                    var remoteTombs = remote.tombstones || {};
+                    var mergedTombs = Object.assign({}, localTombs);
+                    Object.keys(remoteTombs).forEach(function(id) {
+                        if (!mergedTombs[id] || remoteTombs[id] > mergedTombs[id]) mergedTombs[id] = remoteTombs[id];
+                    });
+                    setTombstones(mergedTombs);
+
+                    // 2. 用合并后的墓碑删掉本地还存在的条目
+                    var kData = getKeyData().filter(function(d) {
+                        return !mergedTombs[d.id] || (d.updatedAt && d.updatedAt > mergedTombs[d.id]);
+                    });
+                    var sData = getSnipData().filter(function(d) {
+                        return !mergedTombs[d.id] || (d.updatedAt && d.updatedAt > mergedTombs[d.id]);
+                    });
+
+                    // 3. 把远端有、本地没有、且未被墓碑的条目加进来
+                    var kCount = 0, sCount = 0;
+                    var kIds = {}; kData.forEach(function(d) { kIds[d.id] = true; });
+                    (remote.api_keys || []).forEach(function(d) {
+                        if (!kIds[d.id] && !mergedTombs[d.id]) { kData.push(d); kCount++; }
+                    });
+                    var sIds = {}; sData.forEach(function(d) { sIds[d.id] = true; });
+                    (remote.snippets || []).forEach(function(d) {
+                        if (!sIds[d.id] && !mergedTombs[d.id]) { sData.push(d); sCount++; }
+                    });
+
                     setKeyData(kData);
-                }
-                var snipArr = imported.snippets || [];
-                if (Array.isArray(snipArr)) {
-                    var sData = getSnipData(); var sIds = {};
-                    sData.forEach(function(d) { sIds[d.id] = true; });
-                    snipArr.forEach(function(d) { if (!sIds[d.id]) { sData.push(d); sIds[d.id] = true; sCount++; } });
                     setSnipData(sData);
+                    if (remote.imgbeds) setImgBedData(remote.imgbeds);
+
+                    if (manual && (kCount + sCount > 0)) showToast('☁️ 同步完成，新增 ' + (kCount + sCount) + ' 条');
+                    else if (manual) showToast('☁️ 已是最新');
                 }
+
                 localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
                 var sl = document.getElementById('gistStatusLine');
                 if (sl) sl.textContent = fmtTimeShort(new Date().toISOString());
                 renderKeyFilters(); renderKeyCards();
                 renderSnipFilters(); renderSnippets();
-                if (imported.imgbeds && Array.isArray(imported.imgbeds)) {
-                    setImgBedData(imported.imgbeds);
-                }
-                if (manual && (kCount + sCount > 0)) showToast('☁️ 同步完成，新增 ' + (kCount + sCount) + ' 条');
-                else if (manual) showToast('☁️ 已是最新，无新内容');
+
+                // 4. 同步后把合并结果推回 Gist（让两端保持一致）
+                setTimeout(gistPushData, 1000);
             });
         }
 
