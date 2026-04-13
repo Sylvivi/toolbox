@@ -849,10 +849,10 @@
         <div class="toolbar-btn" onclick="quickLock()" title="一键上锁">🔐</div>
         <input type="file" id="globalImportFile" accept=".json" style="display:none" onchange="importAllData(event)">
     </div>
-    <div id="gistStatusLine" style="font-size:10px;color:var(--text-muted);text-align:right;margin:-8px 0 8px;padding-right:2px">04/13 16:12</div>
+    <div id="gistStatusLine" style="font-size:10px;color:var(--text-muted);text-align:right;margin:-8px 0 8px;padding-right:2px">04/13 16:17</div>
 
     <!-- ===== Gist 云同步弹窗 ===== -->
-    <div class="modal-overlay show" id="gistModalOverlay" onclick="if(event.target===this)closeGistModal()">
+    <div class="modal-overlay" id="gistModalOverlay" onclick="if(event.target===this)closeGistModal()">
         <div class="modal" style="max-width:440px;width:100%">
             <h2>☁️ GitHub Gist 云同步</h2>
             <div class="modal-body">
@@ -868,29 +868,29 @@
                     <label>GitHub Token</label>
                     <input type="password" id="gistToken" placeholder="ghp_xxxxxxxxxxxxxxxxxx">
                 </div>
-                <div class="form-group" id="gistIdGroup" style="display: block;">
+                <div class="form-group" id="gistIdGroup" style="display: none;">
                     <label style="display:flex;justify-content:space-between">
                         <span>Gist ID <span style="font-weight:400;color:var(--text-muted);font-size:11px">（自动生成，无需修改）</span></span>
                     </label>
                     <input type="text" id="gistId" placeholder="自动填入" readonly="" style="opacity:0.6">
                 </div>
-                <div id="gistStatus" style="font-size: 12px; color: var(--text-muted); margin-top: 6px; min-height: 18px;">✅ 已连接，数据变动时自动同步</div>
-                <div id="gistLastSync" style="font-size:11px;color:var(--text-muted);margin-top:4px">上次同步：2026-04-13 16:12</div>
+                <div id="gistStatus" style="font-size: 12px; color: var(--text-muted); margin-top: 6px; min-height: 18px;"></div>
+                <div id="gistLastSync" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
 
-                <div id="deploySection" style="display: block; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--card-border);">
+                <div id="deploySection" style="display: none; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--card-border);">
                     <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px">🚀 一键部署到 GitHub Pages</div>
                     <div style="display:flex;gap:8px;margin-bottom:8px">
                         <input type="text" id="deployRepo" placeholder="用户名/仓库名" style="flex:1;padding:6px 10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:7px;color:var(--text);font-size:12px;outline:none">
                     </div>
                     <div style="display:flex;gap:8px;align-items:center">
                         <button class="btn-save" onclick="deployToGitHub()" style="flex:none;padding:8px 20px">🚀 部署</button>
-                        <span id="deployStatus" style="font-size: 12px; color: var(--text-muted);">🔄 正在部署…</span>
+                        <span id="deployStatus" style="font-size: 12px; color: var(--text-muted);"></span>
                     </div>
                 </div>
             </div>
             <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
                 <button class="btn-cancel" onclick="closeGistModal()">关闭</button>
-                <button class="btn-cancel" id="gistPullBtn" onclick="gistPull(true)" style="display: inline-flex;">⬇️ 拉取</button>
+                <button class="btn-cancel" id="gistPullBtn" onclick="gistPull(true)" style="display: none;">⬇️ 拉取</button>
                 <button class="btn-save" id="gistSaveBtn" onclick="gistSaveConfig()">重新连接</button>
             </div>
         </div>
@@ -7179,7 +7179,41 @@ http://127.0.0.1:8000
             localStorage.setItem('toolbox_deploy_repo', repo);
             statusEl.textContent = '🔄 正在部署…'; statusEl.style.color = 'var(--text-muted)';
 
+            // ---- 部署前清理 DOM 状态，避免弹窗/输入残留到线上 ----
+            // 1. 关闭所有弹窗
+            var overlays = document.querySelectorAll('.modal-overlay.show');
+            overlays.forEach(function(o) { o.classList.remove('show'); });
+            // 2. 确保锁屏隐藏
+            document.getElementById('lockScreen').classList.add('hidden');
+            // 3. 清除敏感输入框（Token 等）
+            var sensitiveInputs = ['gistToken', 'gistId', 'deployRepo', 'lockInput'];
+            var savedValues = {};
+            sensitiveInputs.forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el) { savedValues[id] = el.value; el.value = ''; el.removeAttribute('value'); }
+            });
+            // 4. 清除状态文字
+            ['gistStatus', 'gistLastSync', 'deployStatus', 'lockMsg'].forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el) el.textContent = '';
+            });
+            // 5. 重置 Gist 弹窗内的条件显示区域
+            var gistIdGroup = document.getElementById('gistIdGroup');
+            var gistPullBtn = document.getElementById('gistPullBtn');
+            var deploySection = document.getElementById('deploySection');
+            if (gistIdGroup) gistIdGroup.style.display = 'none';
+            if (gistPullBtn) gistPullBtn.style.display = 'none';
+            if (deploySection) deploySection.style.display = 'none';
+
             var content = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+
+            // ---- 部署后恢复现场 ----
+            overlays.forEach(function(o) { o.classList.add('show'); });
+            sensitiveInputs.forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el && savedValues[id] !== undefined) el.value = savedValues[id];
+            });
+            // 重新打开 Gist 弹窗时会自动恢复这些区域，无需手动还原
             var encoded = new TextEncoder().encode(content);
             var binary = '';
             for (var i = 0; i < encoded.length; i++) binary += String.fromCharCode(encoded[i]);
