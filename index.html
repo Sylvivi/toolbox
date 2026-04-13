@@ -586,6 +586,41 @@
         .code-form-fields { display: block; }
         .code-form-fields.hide { display: none; }
 
+        /* ===== 集合卡片 ===== */
+        .collection-item-row {
+            display: flex; align-items: flex-start; gap: 6px;
+            background: var(--card-inner); border-radius: 10px; padding: 8px 10px;
+        }
+        .collection-item-drag {
+            color: var(--text-muted); font-size: 14px; cursor: grab; padding-top: 2px;
+            flex-shrink: 0; user-select: none; letter-spacing: 1px;
+        }
+        .collection-item-drag:active { cursor: grabbing; }
+        .collection-item-fields { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+        .collection-item-fields input, .collection-item-fields select, .collection-item-fields textarea {
+            width: 100%; padding: 6px 10px; background: var(--input-bg);
+            border: 1px solid var(--input-border); border-radius: 7px;
+            color: var(--text); font-size: 12px; outline: none;
+        }
+        .collection-item-fields input:focus, .collection-item-fields select:focus,
+        .collection-item-fields textarea:focus { border-color: #5aab8b; }
+        .collection-item-fields textarea { resize: vertical; min-height: 60px; font-family: 'SF Mono','Fira Code','Consolas',monospace; line-height: 1.5; }
+        .collection-item-remove {
+            flex-shrink: 0; width: 24px; height: 24px; background: var(--red-bg);
+            border: none; border-radius: 6px; color: var(--red); font-size: 15px;
+            cursor: pointer; margin-top: 2px;
+        }
+
+        /* 集合展示 */
+        .collection-sub-list { display: flex; flex-direction: column; gap: 6px; }
+        .collection-sub-item {
+            display: flex; align-items: center; gap: 8px;
+            background: var(--card-inner); border-radius: 8px; padding: 8px 12px;
+        }
+        .collection-sub-icon { font-size: 14px; flex-shrink: 0; }
+        .collection-sub-title { flex: 1; font-size: 13px; color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .collection-sub-actions { display: flex; gap: 5px; flex-shrink: 0; }
+
         /* ===== 密钥管理专用 ===== */
         .drag-handle {
             display: flex; align-items: center; justify-content: center;
@@ -900,6 +935,7 @@
             <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接</div>
             <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码</div>
             <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本</div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合</div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar">
@@ -934,6 +970,15 @@
                         <button class="type-btn active" id="typeCode" onclick="setEditorType('code')">💻 代码</button>
                         <button class="type-btn" id="typeText" onclick="setEditorType('text')">📄 文本</button>
                         <button class="type-btn" id="typeLink" onclick="setEditorType('link')">🔗 链接</button>
+                        <button class="type-btn" id="typeCollection" onclick="setEditorType('collection')">📦 集合</button>
+                    </div>
+                </div>
+
+                <div class="collection-form-fields" id="collectionFormFields" style="display:none">
+                    <div class="form-group">
+                        <label>子条目</label>
+                        <div id="collectionItems" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px"></div>
+                        <button type="button" onclick="addCollectionItem()" style="width:100%;padding:8px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer" onmouseover="this.style.borderColor='#5aab8b'" onmouseout="this.style.borderColor='rgba(90,171,139,0.4)'">＋ 添加子条目</button>
                     </div>
                 </div>
 
@@ -1034,7 +1079,46 @@
     <div class="batch-bar" id="batchBar">
         <span class="batch-cancel-btn" onclick="exitSelectMode()">取消</span>
         <span id="batchCountText" style="font-size:14px;font-weight:600">已选 0 项</span>
-        <span class="batch-delete-btn" onclick="batchDelete()">删除</span>
+        <div style="display:flex;gap:8px">
+            <span class="batch-cancel-btn" id="batchMergeBtn" onclick="openMergeModal()" style="display:none;background:rgba(255,255,255,0.2)">📦 合并</span>
+            <span class="batch-delete-btn" onclick="batchDelete()">删除</span>
+        </div>
+    </div>
+
+    <!-- ===== 合并为集合弹窗 ===== -->
+    <div class="modal-overlay" id="mergeModalOverlay" onclick="if(event.target===this)closeMergeModal()">
+        <div class="modal" style="max-width:360px;width:100%">
+            <h2>📦 合并为集合</h2>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>集合名称</label>
+                    <input type="text" id="mergeTitle" placeholder="给这个集合起个名字">
+                </div>
+                <div class="form-group">
+                    <label>标签 <span style="font-weight:400;color:var(--text-muted)">（可选）</span></label>
+                    <input type="text" id="mergeTag" placeholder="例如：工作 / 常用 / 参考">
+                </div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px" id="mergePreview"></div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeMergeModal()">取消</button>
+                <button class="btn-save" onclick="confirmMerge()">合并</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 删除确认弹窗 ===== -->
+    <div class="modal-overlay" id="deleteConfirmOverlay" onclick="if(event.target===this)closeDeleteConfirm()">
+        <div class="modal" style="max-width:320px;width:100%">
+            <h2>🗑️ 确认删除</h2>
+            <div class="modal-body">
+                <div id="deleteConfirmText" style="font-size:14px;color:var(--text-main)"></div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeDeleteConfirm()">取消</button>
+                <button class="btn-save" style="background:linear-gradient(135deg,#dc2626,#ef4444)" onclick="doConfirmedDelete()">删除</button>
+            </div>
+        </div>
     </div>
 
     <div class="bottom-nav">
@@ -1141,7 +1225,17 @@
             document.getElementById('fabTheme').textContent = '☀️';
         }
 
-        function toggleCard(header) { header.closest('.card').classList.toggle('collapsed'); }
+        var longPressDetected = false;
+        function toggleCard(header) {
+            if (longPressDetected) { longPressDetected = false; return; }
+            if (selectModeOn) {
+                var card = header.closest('.card');
+                card.classList.toggle('selected');
+                updateBatchCount();
+                return;
+            }
+            header.closest('.card').classList.toggle('collapsed');
+        }
 
         /* ===== 长按进入批量选择模式 ===== */
         (function initLongPress() {
@@ -1159,6 +1253,7 @@
                 timer = setTimeout(function() {
                     if (cancelled) return;
                     header.classList.remove('pressing');
+                    longPressDetected = true;
                     var card = header.closest('.card');
                     if (!card) return;
                     if (!selectModeOn) enterSelectMode();
@@ -1337,7 +1432,6 @@
                         '<div class="card-actions">' +
                             '<button class="btn-duplicate" onclick="duplicateKeyEntry(\'' + item.id + '\')">📋 复制</button>' +
                             '<button class="btn-edit" onclick="editKeyEntry(\'' + item.id + '\')">✏️ 编辑</button>' +
-                            '<button class="btn-delete" onclick="deleteKeyEntry(\'' + item.id + '\')">🗑️ 删除</button>' +
                         '</div>' +
                     '</div></div>';
             }
@@ -1555,9 +1649,9 @@
 
         function updateTypeFilterCounts() {
             var data = getSnipData();
-            var counts = { all: data.length, link: 0, code: 0, text: 0 };
+            var counts = { all: data.length, link: 0, code: 0, text: 0, collection: 0 };
             data.forEach(function(d) { var t = d.type || 'code'; if (counts[t] !== undefined) counts[t]++; });
-            ['all','link','code','text'].forEach(function(t) {
+            ['all','link','code','text','collection'].forEach(function(t) {
                 var el = document.getElementById('tf' + t);
                 if (!el) return;
                 var badge = el.querySelector('.chip-count');
@@ -1571,9 +1665,13 @@
             document.getElementById('typeCode').classList.toggle('active', type === 'code');
             document.getElementById('typeText').classList.toggle('active', type === 'text');
             document.getElementById('typeLink').classList.toggle('active', type === 'link');
+            document.getElementById('typeCollection').classList.toggle('active', type === 'collection');
 
-            document.getElementById('linkFormFields').classList.toggle('show', type === 'link');
-            document.getElementById('codeFormFields').classList.toggle('hide', type === 'link');
+            var isCollection = type === 'collection';
+            var isLink = type === 'link';
+            document.getElementById('linkFormFields').classList.toggle('show', isLink);
+            document.getElementById('codeFormFields').classList.toggle('hide', isLink || isCollection);
+            document.getElementById('collectionFormFields').style.display = isCollection ? 'block' : 'none';
 
             var wrap = document.getElementById('editorWrap');
             wrap.classList.toggle('text-mode', type === 'text');
@@ -1724,7 +1822,26 @@
                 var contentHtml = '';
                 var typeIcon = '💻';
 
-                if (item.type === 'link') {
+                if (item.type === 'collection') {
+                    typeIcon = '📦';
+                    var subItems = item.items || [];
+                    var subHtml = subItems.map(function(sub, idx) {
+                        var icon = sub.type === 'link' ? '🔗' : sub.type === 'text' ? '📄' : '💻';
+                        var actions = '';
+                        if (sub.type === 'link' && sub.url) {
+                            actions = '<a class="btn-visit" href="' + esc(sub.url) + '" target="_blank" onclick="event.stopPropagation()">访问</a>' +
+                                '<button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub(\'' + item.id + '\',' + idx + ',this)">复制</button>';
+                        } else {
+                            actions = '<button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub(\'' + item.id + '\',' + idx + ',this)">复制</button>';
+                        }
+                        return '<div class="collection-sub-item">' +
+                            '<span class="collection-sub-icon">' + icon + '</span>' +
+                            '<span class="collection-sub-title">' + esc(sub.title || (sub.url || sub.content || '').substring(0, 40)) + '</span>' +
+                            '<div class="collection-sub-actions">' + actions + '</div>' +
+                            '</div>';
+                    }).join('');
+                    contentHtml = '<div class="collection-sub-list">' + subHtml + '</div>';
+                } else if (item.type === 'link') {
                     typeIcon = '🔗';
                     contentHtml = '<div class="link-block"><div class="link-block-url"><span class="url-text">' + esc(item.url || '') + '</span>' +
                         '<a class="btn-visit" href="' + esc(item.url || '') + '" target="_blank" onclick="event.stopPropagation()">访问</a>' +
@@ -1740,7 +1857,7 @@
                         '<button class="btn-copy" style="position:absolute;top:8px;right:8px" onclick="copySnipCode(\'' + item.id + '\', this)">复制</button>' +
                         '</div>';
                 } else {
-                    var lines = item.code.split('\n');
+                    var lines = (item.code || '').split('\n');
                     var lineNums = '';
                     for (var j = 1; j <= lines.length; j++) { lineNums += j + '\n'; }
                     contentHtml = '<div class="code-block">' +
@@ -1786,7 +1903,6 @@
                         '<div class="card-actions">' +
                             '<button class="btn-pin" onclick="toggleSnipPin(\'' + item.id + '\')">' + (item.pinned ? '📌 取消' : '📌 置顶') + '</button>' +
                             '<button class="btn-edit" onclick="editSnipEntry(\'' + item.id + '\')">✏️ 编辑</button>' +
-                            '<button class="btn-delete" onclick="deleteSnipEntry(\'' + item.id + '\')">🗑️ 删除</button>' +
                         '</div></div></div>';
             }
             list.innerHTML = html;
@@ -1840,13 +1956,18 @@
             document.getElementById('snipEditId').value = item ? item.id : '';
             document.getElementById('snipFormTitle').value = item ? item.title : '';
             document.getElementById('snipFormTag').value = item ? (item.tag || '') : '';
-            document.getElementById('snipFormCode').value = item ? item.code : '';
+            document.getElementById('snipFormCode').value = item ? (item.code || '') : '';
             document.getElementById('snipFormNote').value = item ? (item.note || '') : '';
             document.getElementById('snipFormUrl').value = item ? (item.url || '') : '';
 
-            var type = 'code';
-            if (item) { type = item.type || 'code'; }
+            var type = item ? (item.type || 'code') : 'code';
             setEditorType(type);
+
+            // 集合子条目
+            document.getElementById('collectionItems').innerHTML = '';
+            if (type === 'collection' && item && item.items) {
+                item.items.forEach(function(sub) { addCollectionItem(sub); });
+            }
 
             document.getElementById('editorSearchBar').classList.remove('show');
             document.getElementById('editorSearchInput').value = '';
@@ -1861,6 +1982,32 @@
             var title = document.getElementById('snipFormTitle').value.trim();
             var code = document.getElementById('snipFormCode').value;
             var url = document.getElementById('snipFormUrl').value.trim();
+
+            if (currentEditorType === 'collection') {
+                var items = collectCollectionItems();
+                if (items.length === 0) { showToast('⚠️ 请至少添加一个子条目'); return; }
+                if (!title) title = '未命名集合';
+                var editId = document.getElementById('snipEditId').value;
+                var now = new Date().toISOString();
+                var data = getSnipData();
+                var oldItem = null;
+                if (editId) { for (var i = 0; i < data.length; i++) { if (data[i].id === editId) { oldItem = data[i]; break; } } }
+                var entry = {
+                    id: editId || generateId(), title: title,
+                    tag: document.getElementById('snipFormTag').value.trim(),
+                    type: 'collection', items: items,
+                    note: document.getElementById('snipFormNote').value.trim(),
+                    code: '', url: '',
+                    createdAt: (oldItem && oldItem.createdAt) ? oldItem.createdAt : now,
+                    updatedAt: now, pinned: oldItem ? !!oldItem.pinned : false
+                };
+                var idx = -1;
+                for (var i = 0; i < data.length; i++) { if (data[i].id === entry.id) { idx = i; break; } }
+                if (idx >= 0) data[idx] = entry; else data.unshift(entry);
+                setSnipData(data); closeSnipModal(); renderSnipFilters(); renderSnippets();
+                showToast('✅ 保存成功');
+                return;
+            }
 
             if (currentEditorType === 'link') {
                 if (!url) { showToast('⚠️ 请填写网址'); return; }
@@ -1886,8 +2033,7 @@
                 id: editId || generateId(),
                 title: title,
                 tag: document.getElementById('snipFormTag').value.trim(),
-                code: code,
-                url: url,
+                code: code, url: url,
                 note: document.getElementById('snipFormNote').value.trim(),
                 type: currentEditorType,
                 createdAt: (oldItem && oldItem.createdAt) ? oldItem.createdAt : now,
@@ -1901,6 +2047,17 @@
 
             setSnipData(data); closeSnipModal(); renderSnipFilters(); renderSnippets();
             showToast('✅ 保存成功');
+        }
+
+        function copyCollectionSub(cardId, subIdx, btn) {
+            var data = getSnipData();
+            for (var i = 0; i < data.length; i++) {
+                if (data[i].id === cardId && data[i].items) {
+                    var sub = data[i].items[subIdx];
+                    if (sub) copyText(sub.type === 'link' ? (sub.url || '') : (sub.content || ''), btn);
+                    return;
+                }
+            }
         }
 
         function editSnipEntry(id) {
@@ -2017,6 +2174,8 @@
             selectModeOn = true;
             document.querySelectorAll('.card-list').forEach(function(l) { l.classList.add('select-mode-on'); });
             document.getElementById('batchBar').classList.add('show');
+            document.getElementById('fabAdd').style.display = 'none';
+            document.getElementById('fabTheme').style.display = 'none';
             updateBatchCount();
         }
 
@@ -2025,6 +2184,8 @@
             document.querySelectorAll('.card-list').forEach(function(l) { l.classList.remove('select-mode-on'); });
             document.querySelectorAll('.card.selected').forEach(function(c) { c.classList.remove('selected'); });
             document.getElementById('batchBar').classList.remove('show');
+            document.getElementById('fabAdd').style.display = 'flex';
+            document.getElementById('fabTheme').style.display = 'flex';
         }
 
         function toggleCardSelect(circle) {
@@ -2037,12 +2198,98 @@
         function updateBatchCount() {
             var n = document.querySelectorAll('.card.selected').length;
             document.getElementById('batchCountText').textContent = '已选 ' + n + ' 项';
+            // 只有收藏页选中了2个以上才显示合并按钮（密钥不能合并）
+            var snipSelected = document.querySelectorAll('.card.selected[data-sid]').length;
+            var keySelected = document.querySelectorAll('.card.selected[data-kid]').length;
+            var mergeBtn = document.getElementById('batchMergeBtn');
+            mergeBtn.style.display = (snipSelected >= 2 && keySelected === 0) ? 'inline-block' : 'none';
+        }
+
+        function openMergeModal() {
+            var selected = document.querySelectorAll('.card.selected[data-sid]');
+            var preview = '将合并 ' + selected.length + ' 个条目：';
+            var names = [];
+            selected.forEach(function(card) {
+                var title = card.querySelector('.card-title');
+                if (title) names.push(title.textContent.replace('📌 ', '').trim());
+            });
+            document.getElementById('mergePreview').textContent = preview + names.slice(0, 3).join('、') + (names.length > 3 ? '…' : '');
+            document.getElementById('mergeTitle').value = '';
+            document.getElementById('mergeTag').value = '';
+            document.getElementById('mergeModalOverlay').classList.add('show');
+            setTimeout(function() { document.getElementById('mergeTitle').focus(); }, 100);
+        }
+
+        function closeMergeModal() {
+            document.getElementById('mergeModalOverlay').classList.remove('show');
+        }
+
+        function confirmMerge() {
+            var title = document.getElementById('mergeTitle').value.trim();
+            var tag = document.getElementById('mergeTag').value.trim();
+            if (!title) { showToast('⚠️ 请填写集合名称'); return; }
+
+            var selected = document.querySelectorAll('.card.selected[data-sid]');
+            var data = getSnipData();
+            var subItems = [];
+            var idsToDelete = {};
+
+            // 按勾选顺序收集（DOM 顺序即勾选顺序）
+            selected.forEach(function(card) {
+                var id = card.dataset.sid;
+                idsToDelete[id] = true;
+                var item = null;
+                for (var i = 0; i < data.length; i++) { if (data[i].id === id) { item = data[i]; break; } }
+                if (!item) return;
+
+                if (item.type === 'collection' && item.items) {
+                    // 集合展开合并
+                    item.items.forEach(function(sub) { subItems.push(sub); });
+                } else if (item.type === 'link') {
+                    subItems.push({ id: generateId(), title: item.title, type: 'link', url: item.url || '' });
+                } else {
+                    subItems.push({ id: generateId(), title: item.title, type: item.type || 'text', content: item.code || '' });
+                }
+            });
+
+            // 删除原卡片（记录墓碑）
+            Object.keys(idsToDelete).forEach(function(id) { addTombstone(id); });
+            var newData = data.filter(function(d) { return !idsToDelete[d.id]; });
+
+            // 插入新集合卡片
+            var now = new Date().toISOString();
+            var collection = {
+                id: generateId(), title: title, tag: tag,
+                type: 'collection', items: subItems,
+                code: '', url: '', note: '',
+                createdAt: now, updatedAt: now, pinned: false
+            };
+            newData.unshift(collection);
+            setSnipData(newData);
+
+            closeMergeModal();
+            exitSelectMode();
+            renderSnipFilters();
+            renderSnippets();
+            showToast('📦 已合并为集合「' + title + '」');
         }
 
         function batchDelete() {
             var selected = document.querySelectorAll('.card.selected');
+            if (selected.length === 0) { showToast('⚠️ 请先选择要删除的卡片'); return; }
+            document.getElementById('deleteConfirmText').textContent = '确定删除选中的 ' + selected.length + ' 项吗？此操作不可撤销。';
+            document.getElementById('deleteConfirmOverlay').classList.add('show');
+        }
+
+        function closeDeleteConfirm() {
+            document.getElementById('deleteConfirmOverlay').classList.remove('show');
+        }
+
+        function doConfirmedDelete() {
+            closeDeleteConfirm();
+            var selected = document.querySelectorAll('.card.selected');
             if (selected.length === 0) return;
-            if (!confirm('确定删除选中的 ' + selected.length + ' 项吗？')) return;
+            var count = selected.length;
             selected.forEach(function(card) {
                 var id = card.dataset.sid || card.dataset.kid;
                 if (!id) return;
@@ -2060,7 +2307,104 @@
                 renderKeyFilters(); renderKeyCards();
             }
             exitSelectMode();
-            showToast('🗑️ 已删除 ' + selected.length + ' 项');
+            showToast('🗑️ 已删除 ' + count + ' 项');
+        }
+
+        /* ============================================================
+           集合卡片
+           ============================================================ */
+        function addCollectionItem(sub) {
+            sub = sub || { id: generateId(), title: '', type: 'link', url: '', content: '' };
+            var container = document.getElementById('collectionItems');
+            var div = document.createElement('div');
+            div.className = 'collection-item-row';
+            div.dataset.subId = sub.id;
+            div.innerHTML =
+                '<span class="collection-item-drag">⋮⋮</span>' +
+                '<div class="collection-item-fields">' +
+                    '<input type="text" placeholder="子标题" class="ci-title" value="' + esc(sub.title || '') + '">' +
+                    '<select class="ci-type" onchange="toggleCollectionItemFields(this)">' +
+                        '<option value="link"' + (sub.type==='link'?' selected':'') + '>🔗 链接</option>' +
+                        '<option value="text"' + (sub.type==='text'?' selected':'') + '>📄 文本</option>' +
+                        '<option value="code"' + (sub.type==='code'?' selected':'') + '>💻 代码</option>' +
+                    '</select>' +
+                    '<input type="text" placeholder="https://..." class="ci-url" style="display:' + (sub.type!=='link'?'none':'block') + '" value="' + esc(sub.url || '') + '">' +
+                    '<textarea placeholder="内容..." class="ci-content" style="display:' + (sub.type==='link'?'none':'block') + '">' + esc(sub.content || '') + '</textarea>' +
+                '</div>' +
+                '<button class="collection-item-remove" onclick="this.closest(\'.collection-item-row\').remove()">×</button>';
+            container.appendChild(div);
+            initCollectionDrag();
+        }
+
+        function toggleCollectionItemFields(sel) {
+            var row = sel.closest('.collection-item-row');
+            var isLink = sel.value === 'link';
+            row.querySelector('.ci-url').style.display = isLink ? 'block' : 'none';
+            row.querySelector('.ci-content').style.display = isLink ? 'none' : 'block';
+        }
+
+        function collectCollectionItems() {
+            var rows = document.querySelectorAll('#collectionItems .collection-item-row');
+            var items = [];
+            rows.forEach(function(row) {
+                var type = row.querySelector('.ci-type').value;
+                var item = {
+                    id: row.dataset.subId || generateId(),
+                    title: row.querySelector('.ci-title').value.trim(),
+                    type: type
+                };
+                if (type === 'link') item.url = row.querySelector('.ci-url').value.trim();
+                else item.content = row.querySelector('.ci-content').value;
+                items.push(item);
+            });
+            return items;
+        }
+
+        function initCollectionDrag() {
+            // 简单拖拽排序（mousedown/touchstart）
+            var container = document.getElementById('collectionItems');
+            if (container._dragInit) return;
+            container._dragInit = true;
+            var dragEl = null, placeholder = null;
+            container.addEventListener('mousedown', startDrag);
+            container.addEventListener('touchstart', startDrag, { passive: true });
+
+            function startDrag(e) {
+                var handle = e.target.closest('.collection-item-drag');
+                if (!handle) return;
+                dragEl = handle.closest('.collection-item-row');
+                placeholder = document.createElement('div');
+                placeholder.style.cssText = 'height:' + dragEl.offsetHeight + 'px;background:var(--accent-light);border-radius:10px;';
+                dragEl.parentNode.insertBefore(placeholder, dragEl.nextSibling);
+                dragEl.style.opacity = '0.5';
+                document.addEventListener('mousemove', onDrag);
+                document.addEventListener('touchmove', onDrag, { passive: false });
+                document.addEventListener('mouseup', endDrag);
+                document.addEventListener('touchend', endDrag);
+            }
+            function onDrag(e) {
+                if (!dragEl) return;
+                if (e.cancelable) e.preventDefault();
+                var y = e.touches ? e.touches[0].clientY : e.clientY;
+                var rows = Array.from(container.querySelectorAll('.collection-item-row:not([style*="opacity: 0.5"])'));
+                var after = rows.find(function(r) {
+                    var rect = r.getBoundingClientRect();
+                    return y < rect.top + rect.height / 2;
+                });
+                if (after) container.insertBefore(placeholder, after);
+                else container.appendChild(placeholder);
+            }
+            function endDrag() {
+                if (!dragEl) return;
+                container.insertBefore(dragEl, placeholder);
+                placeholder.remove();
+                dragEl.style.opacity = '';
+                dragEl = null;
+                document.removeEventListener('mousemove', onDrag);
+                document.removeEventListener('touchmove', onDrag);
+                document.removeEventListener('mouseup', endDrag);
+                document.removeEventListener('touchend', endDrag);
+            }
         }
 
         /* ============================================================
