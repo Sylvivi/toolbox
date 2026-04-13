@@ -311,6 +311,27 @@
         .card.pinned { border-color: rgba(90,171,139,0.5); }
         .card.pinned .card-title::before { content: '📌 '; }
 
+        /* ===== 批量删除 ===== */
+        .card-select-circle {
+            width: 20px; height: 20px; border-radius: 50%;
+            border: 2px solid var(--text-muted); flex-shrink: 0;
+            display: none; align-items: center; justify-content: center;
+            transition: all 0.15s; background: transparent; margin-right: 4px;
+        }
+        .select-mode-on .card-select-circle { display: flex; }
+        .card.selected .card-select-circle { background: var(--accent); border-color: var(--accent); }
+        .card.selected .card-select-circle::after { content: '✓'; font-size: 11px; font-weight: 700; color: #fff; }
+        .card.selected { border-color: var(--accent); background: var(--accent-light); }
+        .batch-bar {
+            display: none; position: fixed; bottom: 66px; left: 16px; right: 16px; z-index: 160;
+            background: var(--red); color: #fff; border-radius: 14px;
+            padding: 14px 20px; align-items: center; justify-content: space-between;
+            box-shadow: 0 8px 24px rgba(220,38,38,0.35);
+        }
+        .batch-bar.show { display: flex; animation: fadeIn 0.2s; }
+        .batch-cancel-btn { padding: 7px 16px; background: rgba(255,255,255,0.2); border: none; border-radius: 8px; color: #fff; font-size: 13px; cursor: pointer; }
+        .batch-delete-btn { padding: 7px 16px; background: #fff; border: none; border-radius: 8px; color: var(--red); font-size: 13px; font-weight: 600; cursor: pointer; }
+
         /* ===== 长按删除 ===== */
         .card-header { position: relative; overflow: hidden; }
         .card-header::after {
@@ -553,6 +574,12 @@
             font-size: 14px; line-height: 1.7; border-radius: 10px;
         }
         .editor-wrap.text-mode .editor-line-nums { display: none; }
+
+        /* 电脑上文本编辑器体验优化 */
+        @media (min-width: 640px) {
+            .modal.snip-modal { max-width: 80vw; max-height: 90vh; }
+            .snip-modal .editor-wrap.text-mode textarea { min-height: 55vh; max-height: 55vh; }
+        }
 
         .link-form-fields { display: none; }
         .link-form-fields.show { display: block; }
@@ -889,7 +916,7 @@
 
     <!-- ===== 收藏编辑弹窗 ===== -->
     <div class="modal-overlay" id="snipModalOverlay" onclick="if(event.target===this)closeSnipModal()">
-        <div class="modal">
+        <div class="modal snip-modal">
             <h2 id="snipModalTitle">➕ 添加片段</h2>
             <input type="hidden" id="snipEditId">
             <div class="modal-body">
@@ -1004,6 +1031,12 @@
     <button class="fab-theme" id="fabTheme" onclick="toggleDarkMode()">🌙</button>
     <button class="fab-add" id="fabAdd" onclick="onFabAdd()">+</button>
 
+    <div class="batch-bar" id="batchBar">
+        <span class="batch-cancel-btn" onclick="exitSelectMode()">取消</span>
+        <span id="batchCountText" style="font-size:14px;font-weight:600">已选 0 项</span>
+        <span class="batch-delete-btn" onclick="batchDelete()">删除</span>
+    </div>
+
     <div class="bottom-nav">
         <button class="nav-item nav-keys" onclick="switchTab('keys', this)">
             <span class="nav-icon">🔑</span><span class="nav-label">密钥</span>
@@ -1110,12 +1143,12 @@
 
         function toggleCard(header) { header.closest('.card').classList.toggle('collapsed'); }
 
-        /* ===== 长按删除 ===== */
+        /* ===== 长按进入批量选择模式 ===== */
         (function initLongPress() {
             var timer = null, target = null, startX = 0, startY = 0, cancelled = false;
 
             function start(e) {
-                if (e.target.closest('.drag-handle') || e.target.closest('button')) return;
+                if (e.target.closest('.drag-handle') || e.target.closest('button') || e.target.closest('a')) return;
                 var header = e.target.closest('.card-header');
                 if (!header) return;
                 var pt = e.touches ? e.touches[0] : e;
@@ -1127,11 +1160,10 @@
                     if (cancelled) return;
                     header.classList.remove('pressing');
                     var card = header.closest('.card');
-                    var id = card && (card.dataset.sid || card.dataset.kid);
-                    if (!id) return;
-                    if (!confirm('确定删除这条记录吗？')) return;
-                    if (card.dataset.sid) deleteSnipEntry(id);
-                    else deleteKeyEntry(id);
+                    if (!card) return;
+                    if (!selectModeOn) enterSelectMode();
+                    card.classList.add('selected');
+                    updateBatchCount();
                 }, 650);
             }
 
@@ -1213,6 +1245,7 @@
 
         function getKeyData() { return JSON.parse(localStorage.getItem(KEY_STORE) || '[]'); }
         function setKeyData(d) { localStorage.setItem(KEY_STORE, JSON.stringify(d)); localStorage.setItem('toolbox_last_local_modified', new Date().toISOString()); gistSchedulePush(); }
+        function setKeyDataSilent(d) { localStorage.setItem(KEY_STORE, JSON.stringify(d)); }
 
         function maskKey(key) {
             if (!key) return '未设置';
@@ -1289,6 +1322,7 @@
 
                 html += '<div class="card collapsed" data-kid="' + item.id + '">' +
                     '<div class="card-header" onclick="toggleCard(this)">' +
+                        '<div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div>' +
                         '<div class="drag-handle key-drag" title="拖动排序" onclick="event.stopPropagation()">⋮⋮</div>' +
                         '<div class="card-title" style="flex:1">' + esc(item.name) + '</div>' +
                         (item.group ? '<div class="card-group">' + esc(item.group) + '</div>' : '') +
@@ -1510,6 +1544,7 @@
 
         function getSnipData() { return JSON.parse(localStorage.getItem(SNIP_STORE) || '[]'); }
         function setSnipData(d) { localStorage.setItem(SNIP_STORE, JSON.stringify(d)); localStorage.setItem('toolbox_last_local_modified', new Date().toISOString()); gistSchedulePush(); }
+        function setSnipDataSilent(d) { localStorage.setItem(SNIP_STORE, JSON.stringify(d)); }
 
         function setSnipType(type, el) {
             snipTypeFilter = type;
@@ -1733,6 +1768,7 @@
 
                 html += '<div class="card collapsed' + (item.pinned ? ' pinned' : '') + '" data-sid="' + item.id + '">' +
                     '<div class="card-header" onclick="toggleCard(this)">' +
+                        '<div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div>' +
                         '<div class="card-title">' + esc(item.title) + '</div>' +
                         (item.tag ? '<div class="card-tag">' + esc(item.tag) + '</div>' : '') +
                         (item.type === 'link' && item.url
@@ -1973,7 +2009,62 @@
         });
 
         /* ============================================================
-           全量导出/导入（密钥 + 收藏）
+           批量删除
+           ============================================================ */
+        var selectModeOn = false;
+
+        function enterSelectMode() {
+            selectModeOn = true;
+            document.querySelectorAll('.card-list').forEach(function(l) { l.classList.add('select-mode-on'); });
+            document.getElementById('batchBar').classList.add('show');
+            updateBatchCount();
+        }
+
+        function exitSelectMode() {
+            selectModeOn = false;
+            document.querySelectorAll('.card-list').forEach(function(l) { l.classList.remove('select-mode-on'); });
+            document.querySelectorAll('.card.selected').forEach(function(c) { c.classList.remove('selected'); });
+            document.getElementById('batchBar').classList.remove('show');
+        }
+
+        function toggleCardSelect(circle) {
+            if (!selectModeOn) return;
+            var card = circle.closest('.card');
+            card.classList.toggle('selected');
+            updateBatchCount();
+        }
+
+        function updateBatchCount() {
+            var n = document.querySelectorAll('.card.selected').length;
+            document.getElementById('batchCountText').textContent = '已选 ' + n + ' 项';
+        }
+
+        function batchDelete() {
+            var selected = document.querySelectorAll('.card.selected');
+            if (selected.length === 0) return;
+            if (!confirm('确定删除选中的 ' + selected.length + ' 项吗？')) return;
+            selected.forEach(function(card) {
+                var id = card.dataset.sid || card.dataset.kid;
+                if (!id) return;
+                addTombstone(id);
+            });
+            var snipIds = {}, keyIds = {};
+            document.querySelectorAll('.card.selected[data-sid]').forEach(function(c) { snipIds[c.dataset.sid] = true; });
+            document.querySelectorAll('.card.selected[data-kid]').forEach(function(c) { keyIds[c.dataset.kid] = true; });
+            if (Object.keys(snipIds).length) {
+                setSnipData(getSnipData().filter(function(d) { return !snipIds[d.id]; }));
+                renderSnipFilters(); renderSnippets();
+            }
+            if (Object.keys(keyIds).length) {
+                setKeyData(getKeyData().filter(function(d) { return !keyIds[d.id]; }));
+                renderKeyFilters(); renderKeyCards();
+            }
+            exitSelectMode();
+            showToast('🗑️ 已删除 ' + selected.length + ' 项');
+        }
+
+        /* ============================================================
+           修复同步删除逻辑 — 长按进入选择模式
            ============================================================ */
         function exportAllData() {
             var keys = getKeyData();
@@ -2383,8 +2474,8 @@
                         if (!sIds[d.id] && !mergedTombs[d.id]) { sData.push(d); sCount++; }
                     });
 
-                    setKeyData(kData);
-                    setSnipData(sData);
+                    setKeyDataSilent(kData);
+                    setSnipDataSilent(sData);
                     if (remote.imgbeds) setImgBedData(remote.imgbeds);
 
                     if (manual && (kCount + sCount > 0)) showToast('☁️ 同步完成，新增 ' + (kCount + sCount) + ' 条');
