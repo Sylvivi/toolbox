@@ -813,11 +813,30 @@
     <div class="lock-screen hidden" id="lockScreen">
         <div class="lock-title">🔒</div>
         <div class="lock-subtitle" id="lockSubtitle">请输入密码</div>
+        <!-- 主密码输入 -->
         <input type="password" class="lock-input" id="lockInput" placeholder="输入密码" maxlength="20" autocomplete="off">
+        <!-- 设置密码时：安全问题区 -->
+        <div id="lockSqSetup" style="display: none; width: 240px; margin-top: 4px;">
+            <select id="lockSqSelect" style="width:100%;padding:10px 12px;font-size:13px;background:var(--card-bg);border:1.5px solid var(--card-border);border-radius:10px;color:var(--text);outline:none;appearance:none;-webkit-appearance:none">
+                <option value="">选择安全问题</option>
+                <option value="你的小学叫什么？">你的小学叫什么？</option>
+                <option value="你最喜欢的电影？">你最喜欢的电影？</option>
+                <option value="你宠物的名字？">你宠物的名字？</option>
+                <option value="你最好朋友的昵称？">你最好朋友的昵称？</option>
+                <option value="你出生的城市？">你出生的城市？</option>
+            </select>
+            <input type="text" class="lock-input" id="lockSqAnswer" placeholder="安全问题答案" style="margin-top:8px;font-size:14px;letter-spacing:0">
+        </div>
+        <!-- 重置时：验证安全问题区 -->
+        <div id="lockSqVerify" style="display:none;width:240px;margin-top:4px">
+            <div id="lockSqQuestion" style="font-size:13px;color:var(--text-sub);text-align:center;margin-bottom:8px"></div>
+            <input type="text" class="lock-input" id="lockSqVerifyAnswer" placeholder="输入答案" style="font-size:14px;letter-spacing:0">
+        </div>
         <button class="lock-btn" id="lockBtn" onclick="handleLockAction()">解锁</button>
         <div class="lock-msg" id="lockMsg"></div>
         <div class="lock-footer">
-            <button class="lock-footer-btn" id="lockResetBtn" onclick="resetLockPassword()" style="display:none">忘记密码？重置</button>
+            <button class="lock-footer-btn" id="lockResetBtn" onclick="startResetFlow()" style="display: inline;">忘记密码？</button>
+            <button class="lock-footer-btn" id="lockBackBtn" onclick="cancelResetFlow()" style="display:none">← 返回输入密码</button>
         </div>
     </div>
 
@@ -849,7 +868,7 @@
         <div class="toolbar-btn" onclick="quickLock()" title="一键上锁">🔐</div>
         <input type="file" id="globalImportFile" accept=".json" style="display:none" onchange="importAllData(event)">
     </div>
-    <div id="gistStatusLine" style="font-size:10px;color:var(--text-muted);text-align:right;margin:-8px 0 8px;padding-right:2px">04/13 16:17</div>
+    <div id="gistStatusLine" style="font-size:10px;color:var(--text-muted);text-align:right;margin:-8px 0 8px;padding-right:2px">04/13 16:24</div>
 
     <!-- ===== Gist 云同步弹窗 ===== -->
     <div class="modal-overlay" id="gistModalOverlay" onclick="if(event.target===this)closeGistModal()">
@@ -5217,12 +5236,14 @@ http://127.0.0.1:8000
         </button>
     </div>
 
-    <div class="toast" id="toast"></div>
+    <div class="toast" id="toast">🔒 已上锁</div>
 
     <script>
         /* ===== 密码锁 ===== */
         var LOCK_HASH_KEY = 'toolbox_lock_hash';
         var LOCK_TS_KEY = 'toolbox_lock_ts';
+        var LOCK_SQ_KEY = 'toolbox_lock_sq';
+        var LOCK_SA_KEY = 'toolbox_lock_sa';
         var LOCK_TIMEOUT = 60 * 60 * 1000; // 1小时
 
         function simpleHash(str) {
@@ -5246,31 +5267,45 @@ http://127.0.0.1:8000
             localStorage.setItem(LOCK_TS_KEY, Date.now().toString());
         }
 
+        var lockMode = 'normal'; // 'normal' | 'setup' | 'reset'
+
         function showLockScreen() {
+            lockMode = 'normal';
             var lockEl = document.getElementById('lockScreen');
             var input = document.getElementById('lockInput');
             var subtitle = document.getElementById('lockSubtitle');
             var btn = document.getElementById('lockBtn');
             var resetBtn = document.getElementById('lockResetBtn');
+            var backBtn = document.getElementById('lockBackBtn');
             lockEl.classList.remove('hidden');
             input.value = '';
             document.getElementById('lockMsg').textContent = '';
+            document.getElementById('lockSqSetup').style.display = 'none';
+            document.getElementById('lockSqVerify').style.display = 'none';
+            backBtn.style.display = 'none';
             if (isLockEnabled()) {
                 subtitle.textContent = '请输入密码';
                 btn.textContent = '解锁';
                 input.type = 'password';
+                input.style.display = '';
                 resetBtn.style.display = 'inline';
             } else {
+                lockMode = 'setup';
                 subtitle.textContent = '设置访问密码（留空跳过）';
                 btn.textContent = '设置密码';
                 input.type = 'password';
+                input.style.display = '';
                 resetBtn.style.display = 'none';
+                document.getElementById('lockSqSetup').style.display = 'block';
+                document.getElementById('lockSqSelect').value = '';
+                document.getElementById('lockSqAnswer').value = '';
             }
             setTimeout(function() { input.focus(); }, 100);
         }
 
         function hideLockScreen() {
             document.getElementById('lockScreen').classList.add('hidden');
+            lockMode = 'normal';
             refreshSession();
         }
 
@@ -5278,7 +5313,28 @@ http://127.0.0.1:8000
             var input = document.getElementById('lockInput');
             var msg = document.getElementById('lockMsg');
             var pwd = input.value;
+
+            if (lockMode === 'reset') {
+                // 验证安全问题答案
+                var answer = document.getElementById('lockSqVerifyAnswer').value.trim();
+                if (!answer) { msg.textContent = '⚠️ 请输入答案'; return; }
+                if (simpleHash(answer.toLowerCase()) === localStorage.getItem(LOCK_SA_KEY)) {
+                    localStorage.removeItem(LOCK_HASH_KEY);
+                    localStorage.removeItem(LOCK_TS_KEY);
+                    localStorage.removeItem(LOCK_SQ_KEY);
+                    localStorage.removeItem(LOCK_SA_KEY);
+                    hideLockScreen();
+                    showToast('🔓 密码已清除，可重新设置');
+                } else {
+                    msg.textContent = '❌ 答案不正确';
+                    document.getElementById('lockSqVerifyAnswer').value = '';
+                    document.getElementById('lockSqVerifyAnswer').focus();
+                }
+                return;
+            }
+
             if (isLockEnabled()) {
+                // 正常解锁
                 if (simpleHash(pwd) === localStorage.getItem(LOCK_HASH_KEY)) {
                     hideLockScreen();
                 } else {
@@ -5287,24 +5343,49 @@ http://127.0.0.1:8000
                     input.focus();
                 }
             } else {
+                // 设置密码
                 if (!pwd) {
                     hideLockScreen();
                     return;
                 }
                 if (pwd.length < 2) { msg.textContent = '⚠️ 密码至少2位'; return; }
+                var sq = document.getElementById('lockSqSelect').value;
+                var sa = document.getElementById('lockSqAnswer').value.trim();
+                if (!sq || !sa) { msg.textContent = '⚠️ 请选择安全问题并填写答案'; return; }
                 localStorage.setItem(LOCK_HASH_KEY, simpleHash(pwd));
+                localStorage.setItem(LOCK_SQ_KEY, sq);
+                localStorage.setItem(LOCK_SA_KEY, simpleHash(sa.toLowerCase()));
                 hideLockScreen();
                 showToast('🔒 密码已设置');
             }
         }
 
-        function resetLockPassword() {
-            if (confirm('重置密码将清除密码锁，确定吗？')) {
-                localStorage.removeItem(LOCK_HASH_KEY);
-                localStorage.removeItem(LOCK_TS_KEY);
-                hideLockScreen();
-                showToast('🔓 密码已清除');
+        function startResetFlow() {
+            var sq = localStorage.getItem(LOCK_SQ_KEY);
+            var msg = document.getElementById('lockMsg');
+            if (!sq) {
+                msg.textContent = '⚠️ 未设置安全问题，请在浏览器开发者工具中清除 localStorage';
+                return;
             }
+            lockMode = 'reset';
+            document.getElementById('lockSubtitle').textContent = '验证安全问题';
+            document.getElementById('lockInput').style.display = 'none';
+            document.getElementById('lockSqVerify').style.display = 'block';
+            document.getElementById('lockSqQuestion').textContent = sq;
+            document.getElementById('lockSqVerifyAnswer').value = '';
+            document.getElementById('lockBtn').textContent = '验证并重置';
+            document.getElementById('lockResetBtn').style.display = 'none';
+            document.getElementById('lockBackBtn').style.display = 'inline';
+            msg.textContent = '';
+            setTimeout(function() { document.getElementById('lockSqVerifyAnswer').focus(); }, 100);
+        }
+
+        function cancelResetFlow() {
+            showLockScreen();
+        }
+
+        function resetLockPassword() {
+            startResetFlow();
         }
 
         // 页面加载时检查锁
@@ -5322,6 +5403,12 @@ http://127.0.0.1:8000
         document.getElementById('lockInput').addEventListener('keydown', function(e) {
             if (e.key === 'Enter') handleLockAction();
         });
+        document.getElementById('lockSqAnswer').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') handleLockAction();
+        });
+        document.getElementById('lockSqVerifyAnswer').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') handleLockAction();
+        });
 
         // 用户活动时刷新会话
         document.addEventListener('click', function() { if (!document.getElementById('lockScreen').classList.contains('hidden')) return; refreshSession(); });
@@ -5333,6 +5420,8 @@ http://127.0.0.1:8000
                 if (choice) {
                     localStorage.removeItem(LOCK_HASH_KEY);
                     localStorage.removeItem(LOCK_TS_KEY);
+                    localStorage.removeItem(LOCK_SQ_KEY);
+                    localStorage.removeItem(LOCK_SA_KEY);
                     showToast('🔓 密码已清除');
                 }
             } else {
@@ -7186,7 +7275,7 @@ http://127.0.0.1:8000
             // 2. 确保锁屏隐藏
             document.getElementById('lockScreen').classList.add('hidden');
             // 3. 清除敏感输入框（Token 等）
-            var sensitiveInputs = ['gistToken', 'gistId', 'deployRepo', 'lockInput'];
+            var sensitiveInputs = ['gistToken', 'gistId', 'deployRepo', 'lockInput', 'lockSqAnswer', 'lockSqVerifyAnswer'];
             var savedValues = {};
             sensitiveInputs.forEach(function(id) {
                 var el = document.getElementById(id);
