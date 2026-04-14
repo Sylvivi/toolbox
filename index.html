@@ -1,6 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
-<head>
+<html lang="zh-CN"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>工具箱</title>
@@ -941,7 +940,7 @@
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body>
+<body class="on-snippets">
 
     <!-- ===== 密码锁屏 ===== -->
     <div class="lock-screen hidden" id="lockScreen">
@@ -1020,30 +1019,35 @@
                     <label>GitHub Token</label>
                     <input type="password" id="gistToken" placeholder="ghp_xxxxxxxxxxxxxxxxxx">
                 </div>
-                <div class="form-group" id="gistIdGroup" style="display:none">
+                <div class="form-group" id="gistIdGroup" style="display: none;">
                     <label style="display:flex;justify-content:space-between">
                         <span>Gist ID <span style="font-weight:400;color:var(--text-muted);font-size:11px">（自动生成，无需修改）</span></span>
                     </label>
-                    <input type="text" id="gistId" placeholder="自动填入" readonly style="opacity:0.6">
+                    <input type="text" id="gistId" placeholder="自动填入" readonly="" style="opacity:0.6">
                 </div>
-                <div id="gistStatus" style="font-size:12px;color:var(--text-muted);margin-top:6px;min-height:18px"></div>
+                <div id="gistStatus" style="font-size: 12px; color: var(--text-muted); margin-top: 6px; min-height: 18px;"></div>
                 <div id="gistLastSync" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
 
-                <div id="deploySection" style="display:none;margin-top:16px;padding-top:14px;border-top:1px solid var(--card-border)">
+                <div id="deploySection" style="display: none; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--card-border);">
                     <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px">🚀 一键部署到 GitHub Pages</div>
                     <div style="display:flex;gap:8px;margin-bottom:8px">
                         <input type="text" id="deployRepo" placeholder="用户名/仓库名" style="flex:1;padding:6px 10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:7px;color:var(--text);font-size:12px;outline:none">
+                        <select id="deployBranch" style="flex:none;padding:6px 10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:7px;color:var(--text);font-size:12px;outline:none">
+                            <option value="main">main</option>
+                            <option value="gh-pages">gh-pages</option>
+                        </select>
                     </div>
-                    <div style="display:flex;gap:8px;align-items:center">
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                         <button class="btn-save" onclick="deployToGitHub()" style="flex:none;padding:8px 20px">🚀 部署</button>
-                        <span id="deployStatus" style="font-size:12px;color:var(--text-muted)"></span>
+                        <span id="deployStatus" style="font-size: 12px; color: var(--text-muted);"></span>
                     </div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5">💡 请确保仓库已在 Settings → Pages 中启用对应分支</div>
                 </div>
             </div>
             <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
                 <button class="btn-cancel" onclick="closeGistModal()">关闭</button>
-                <button class="btn-cancel" id="gistPullBtn" onclick="gistPull(true)" style="display:none">⬇️ 拉取</button>
-                <button class="btn-save" id="gistSaveBtn" onclick="gistSaveConfig()">连接</button>
+                <button class="btn-cancel" id="gistPullBtn" onclick="gistPull(true)" style="display: none;">⬇️ 拉取</button>
+                <button class="btn-save" id="gistSaveBtn" onclick="gistSaveConfig()">重新连接</button>
             </div>
         </div>
     </div>
@@ -1150,17 +1154,17 @@
             <input type="text" id="snipSearchInput" placeholder="搜索标题、标签、内容..." oninput="renderSnippets()">
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部</div>
-            <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接</div>
-            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码</div>
-            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本</div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合</div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">18</span></div>
+            <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">6</span></div>
+            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">1</span></div>
+            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">2</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">9</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
             <span class="sort-label">排序：</span>
             <!-- chips will be rendered by JS in saved order -->
-        </div>
+        <div class="sort-chip" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip active" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
         <div class="toolbar">
             <div class="toolbar-btn" id="snipExpandBtn" onclick="toggleAllSnippets()">📂 展开</div>
         </div>
@@ -1314,7 +1318,7 @@
         </div>
     </div>
 
-    <button class="fab-add" id="fabAdd" onclick="handleFabTap()">+</button>
+    <button class="fab-add" id="fabAdd" onclick="handleFabTap()" style="display: flex;">+</button>
 
     <div class="batch-bar" id="batchBar">
         <span class="batch-cancel-btn" onclick="exitSelectMode()">取消</span>
@@ -4213,6 +4217,7 @@
             var deploySection = document.getElementById('deploySection');
             deploySection.style.display = cfg.token ? 'block' : 'none';
             document.getElementById('deployRepo').value = localStorage.getItem('toolbox_deploy_repo') || 'Sylvivi/toolbox';
+            document.getElementById('deployBranch').value = localStorage.getItem('toolbox_deploy_branch') || 'main';
             document.getElementById('deployStatus').textContent = '';
             document.getElementById('gistModalOverlay').classList.add('show');
         }
@@ -4413,34 +4418,34 @@
         document.body.classList.add('on-snippets');
         checkBackupReminder();
         /* ===== 一键部署到 GitHub Pages ===== */
-        function deployToGitHub() {
-            var token = document.getElementById('gistToken').value.trim();
-            var repo = document.getElementById('deployRepo').value.trim();
-            var statusEl = document.getElementById('deployStatus');
-            if (!token) { statusEl.textContent = '⚠️ 请先填写 GitHub Token'; statusEl.style.color = 'var(--red)'; return; }
-            if (!repo || repo.indexOf('/') === -1) { statusEl.textContent = '⚠️ 仓库格式：用户名/仓库名'; statusEl.style.color = 'var(--red)'; return; }
-            localStorage.setItem('toolbox_deploy_repo', repo);
-            statusEl.textContent = '🔄 正在部署…'; statusEl.style.color = 'var(--text-muted)';
-
-            // ---- 部署前清理 DOM 状态，避免弹窗/输入残留到线上 ----
-            // 1. 关闭所有弹窗
+        function deployGetCleanHtml() {
+            // 深度清理 DOM 快照：移除所有动态渲染的列表内容、敏感值、运行时状态
             var overlays = document.querySelectorAll('.modal-overlay.show');
             overlays.forEach(function(o) { o.classList.remove('show'); });
-            // 2. 确保锁屏隐藏
-            document.getElementById('lockScreen').classList.add('hidden');
-            // 3. 清除敏感输入框（Token 等）
-            var sensitiveInputs = ['gistToken', 'gistId', 'deployRepo', 'lockInput', 'lockSqAnswer', 'lockSqVerifyAnswer'];
-            var savedValues = {};
-            sensitiveInputs.forEach(function(id) {
+            var lockScreen = document.getElementById('lockScreen');
+            if (lockScreen) lockScreen.classList.add('hidden');
+
+            // 清空敏感输入框
+            var sensitiveIds = ['gistToken', 'gistId', 'deployRepo', 'deployBranch', 'lockInput', 'lockSqAnswer', 'lockSqVerifyAnswer'];
+            var saved = {};
+            sensitiveIds.forEach(function(id) {
                 var el = document.getElementById(id);
-                if (el) { savedValues[id] = el.value; el.value = ''; el.removeAttribute('value'); }
+                if (el) { saved[id] = el.value; el.value = ''; el.removeAttribute('value'); }
             });
-            // 4. 清除状态文字
-            ['gistStatus', 'gistLastSync', 'deployStatus', 'lockMsg'].forEach(function(id) {
+
+            // 清空状态文字
+            ['gistStatus', 'gistLastSync', 'deployStatus', 'lockMsg', 'gistStatusLine'].forEach(function(id) {
                 var el = document.getElementById(id);
                 if (el) el.textContent = '';
             });
-            // 5. 重置 Gist 弹窗内的条件显示区域
+
+            // 清空动态渲染的列表内容（关键！避免僵尸卡片）
+            ['keyCardList', 'snipCardList', 'keyFilterBar', 'snipFilterBar', 'imgbedList', 'collectionItems', 'modelEntries'].forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el) el.innerHTML = '';
+            });
+
+            // 隐藏仅在连接后显示的区域
             var gistIdGroup = document.getElementById('gistIdGroup');
             var gistPullBtn = document.getElementById('gistPullBtn');
             var deploySection = document.getElementById('deploySection');
@@ -4448,56 +4453,115 @@
             if (gistPullBtn) gistPullBtn.style.display = 'none';
             if (deploySection) deploySection.style.display = 'none';
 
-            var content = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+            // 移除可能残留的 .active 状态
+            document.querySelectorAll('.filter-chip.active').forEach(function(el) { el.classList.remove('active'); });
 
-            // ---- 部署后恢复现场 ----
+            var html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+
+            // ---- 立即恢复现场 ----
             overlays.forEach(function(o) { o.classList.add('show'); });
-            sensitiveInputs.forEach(function(id) {
+            sensitiveIds.forEach(function(id) {
                 var el = document.getElementById(id);
-                if (el && savedValues[id] !== undefined) el.value = savedValues[id];
+                if (el && saved[id] !== undefined) el.value = saved[id];
             });
-            // 重新打开 Gist 弹窗时会自动恢复这些区域，无需手动还原
-            var content = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+            if (gistIdGroup) gistIdGroup.style.display = '';
+            if (gistPullBtn) gistPullBtn.style.display = '';
+            if (deploySection) deploySection.style.display = '';
 
-            // 分块 base64 编码（避免大字符串 btoa 崩溃）
-            var base64;
-            try {
-                var encoded = new TextEncoder().encode(content);
-                var chunkSize = 32768;
-                var binary = '';
-                for (var i = 0; i < encoded.length; i += chunkSize) {
-                    var chunk = encoded.subarray(i, i + chunkSize);
-                    binary += String.fromCharCode.apply(null, chunk);
-                }
-                base64 = btoa(binary);
-            } catch(e) {
-                statusEl.textContent = '❌ 编码失败：' + e.message;
-                statusEl.style.color = 'var(--red)';
-                return;
-            }
-            var apiUrl = 'https://api.github.com/repos/' + repo + '/contents/index.html';
+            // 重新渲染
+            if (typeof renderKeyFilters === 'function') renderKeyFilters();
+            if (typeof renderKeyCards === 'function') renderKeyCards();
+            if (typeof renderSnipFilters === 'function') renderSnipFilters();
+            if (typeof renderSnippets === 'function') renderSnippets();
+
+            return html;
+        }
+
+        function deployToGitHub() {
+            var token = document.getElementById('gistToken').value.trim();
+            var repo = document.getElementById('deployRepo').value.trim();
+            var branch = document.getElementById('deployBranch').value;
+            var statusEl = document.getElementById('deployStatus');
+            if (!token) { statusEl.textContent = '⚠️ 请先填写 GitHub Token'; statusEl.style.color = 'var(--red)'; return; }
+            if (!repo || repo.indexOf('/') === -1) { statusEl.textContent = '⚠️ 仓库格式：用户名/仓库名'; statusEl.style.color = 'var(--red)'; return; }
+            localStorage.setItem('toolbox_deploy_repo', repo);
+            localStorage.setItem('toolbox_deploy_branch', branch);
+            statusEl.textContent = '🔄 [1/4] 获取源码…'; statusEl.style.color = 'var(--text-muted)';
+
             var headers = { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' };
 
-            fetch(apiUrl, { headers: headers })
-            .then(function(r) { return r.ok ? r.json() : null; })
-            .then(function(existing) {
-                var body = { message: '🚀 toolbox deploy ' + new Date().toLocaleString('zh-CN'), content: base64 };
-                if (existing && existing.sha) body.sha = existing.sha;
-                return fetch(apiUrl, { method: 'PUT', headers: headers, body: JSON.stringify(body) });
+            // ---- 1. 获取源码：http(s) 用 fetch 拿原始源码，file:// 用清理后的 DOM 快照 ----
+            var sourcePromise;
+            if (location.protocol === 'file:') {
+                sourcePromise = Promise.resolve(deployGetCleanHtml());
+            } else {
+                sourcePromise = fetch(location.href).then(function(r) {
+                    if (!r.ok) throw new Error('无法获取源码 (HTTP ' + r.status + ')');
+                    return r.text();
+                });
+            }
+
+            sourcePromise
+            .then(function(sourceHtml) {
+                statusEl.textContent = '🔄 [2/4] 编码中… (' + Math.round(sourceHtml.length / 1024) + 'KB)';
+
+                // ---- 2. Base64 编码（Blob + FileReader，兼容大文件 + UTF-8）----
+                return new Promise(function(resolve, reject) {
+                    var blob = new Blob([sourceHtml], { type: 'text/html;charset=utf-8' });
+                    var reader = new FileReader();
+                    reader.onload = function() {
+                        var base64 = reader.result.split(',')[1];
+                        if (!base64) { reject(new Error('Base64 编码结果为空')); return; }
+                        resolve(base64);
+                    };
+                    reader.onerror = function() { reject(new Error('FileReader 编码失败')); };
+                    reader.readAsDataURL(blob);
+                });
+            })
+            .then(function(base64) {
+                statusEl.textContent = '🔄 [3/4] 检查远端…';
+
+                // ---- 3. 检查远端文件（获取 sha）----
+                var checkUrl = 'https://api.github.com/repos/' + repo + '/contents/index.html?ref=' + encodeURIComponent(branch);
+                return fetch(checkUrl, { headers: headers })
+                .then(function(r) { return r.ok ? r.json() : null; })
+                .then(function(existing) {
+                    return { base64: base64, sha: existing && existing.sha ? existing.sha : null };
+                });
+            })
+            .then(function(info) {
+                statusEl.textContent = '🔄 [4/4] 推送到 ' + branch + '…';
+
+                // ---- 4. 推送 ----
+                var putUrl = 'https://api.github.com/repos/' + repo + '/contents/index.html';
+                var body = {
+                    message: '🚀 toolbox deploy ' + new Date().toLocaleString('zh-CN'),
+                    content: info.base64,
+                    branch: branch
+                };
+                if (info.sha) body.sha = info.sha;
+
+                return fetch(putUrl, { method: 'PUT', headers: headers, body: JSON.stringify(body) });
             })
             .then(function(r) {
                 if (r.ok) {
-                    statusEl.textContent = '✅ 部署成功！稍等片刻即可访问';
+                    var parts = repo.split('/');
+                    var pageUrl = 'https://' + parts[0] + '.github.io/' + parts[1] + '/';
+                    statusEl.innerHTML = '✅ 部署成功！<a href="' + pageUrl + '" target="_blank" style="color:var(--accent);text-decoration:underline">访问页面 ↗</a>';
                     statusEl.style.color = 'var(--accent)';
                 } else {
                     return r.json().then(function(d) {
-                        statusEl.textContent = '❌ ' + (d.message || '部署失败');
+                        var msg = d.message || '部署失败';
+                        if (r.status === 404) msg = '仓库不存在或 Token 无 repo 权限（gist 权限不够，需要勾选 repo）';
+                        else if (r.status === 409) msg = '分支 ' + branch + ' 不存在，请先创建或选择正确的分支';
+                        else if (r.status === 422) msg = 'SHA 冲突，请重试';
+                        statusEl.textContent = '❌ HTTP ' + r.status + ': ' + msg;
                         statusEl.style.color = 'var(--red)';
                     });
                 }
             })
             .catch(function(e) {
-                statusEl.textContent = '❌ 网络错误：' + e.message;
+                statusEl.textContent = '❌ ' + e.message;
                 statusEl.style.color = 'var(--red)';
             });
         }
@@ -4505,5 +4569,5 @@
         // 打开页面自动静默拉取
         (function() { var cfg = gistGetConfig(); if (cfg.token && cfg.gistId) gistPull(false); })();
     </script>
-</body>
-</html>
+
+</body></html>
