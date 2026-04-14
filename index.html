@@ -642,6 +642,54 @@
             color: var(--accent-mid); font-size: 12px; cursor: pointer;
         }
 
+        /* ===== 编辑器操作工具栏 ===== */
+        .editor-ops-bar {
+            display: flex; gap: 4px; flex-wrap: wrap; padding: 6px 0; align-items: center;
+        }
+        .editor-ops-bar .eop {
+            padding: 4px 8px; background: var(--accent-light); border: none; border-radius: 6px;
+            color: var(--accent-mid); font-size: 12px; cursor: pointer; transition: all 0.15s;
+            white-space: nowrap; line-height: 1;
+        }
+        .editor-ops-bar .eop:hover { background: rgba(90,171,139,0.25); color: var(--accent); }
+        .editor-ops-bar .eop-sep {
+            width: 1px; height: 16px; background: var(--card-border); margin: 0 2px; flex-shrink: 0;
+        }
+        .editor-ops-bar .eop.active { background: var(--accent-chip); color: #fff; }
+
+        /* Markdown 预览 */
+        .md-preview {
+            display: none; padding: 14px; background: var(--card-inner);
+            border: 1px solid var(--input-border); border-radius: 10px;
+            font-size: 14px; line-height: 1.7; color: var(--text);
+            overflow-y: auto; -webkit-overflow-scrolling: touch;
+            min-height: 200px; max-height: 360px;
+        }
+        .md-preview.show { display: block; }
+        .md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4 { color: var(--accent); margin: 16px 0 8px; }
+        .md-preview h1 { font-size: 20px; border-bottom: 1px solid var(--card-border); padding-bottom: 6px; }
+        .md-preview h2 { font-size: 17px; }
+        .md-preview h3 { font-size: 15px; }
+        .md-preview p { margin: 8px 0; }
+        .md-preview code {
+            background: var(--code-bg); color: var(--code-text); padding: 2px 6px;
+            border-radius: 4px; font-size: 13px; font-family: 'SF Mono','Fira Code','Consolas',monospace;
+        }
+        .md-preview pre { background: var(--code-bg); border-radius: 8px; padding: 12px; overflow-x: auto; margin: 8px 0; }
+        .md-preview pre code { background: none; padding: 0; }
+        .md-preview blockquote {
+            border-left: 3px solid var(--accent-mid); padding: 4px 12px; margin: 8px 0;
+            color: var(--text-sub); background: var(--accent-light); border-radius: 0 6px 6px 0;
+        }
+        .md-preview ul,.md-preview ol { padding-left: 20px; margin: 8px 0; }
+        .md-preview li { margin: 4px 0; }
+        .md-preview a { color: var(--accent); text-decoration: underline; }
+        .md-preview table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+        .md-preview th,.md-preview td { border: 1px solid var(--card-border); padding: 6px 10px; font-size: 13px; }
+        .md-preview th { background: var(--card-inner); font-weight: 600; }
+        .md-preview hr { border: none; border-top: 1px solid var(--card-border); margin: 12px 0; }
+        .md-preview img { max-width: 100%; border-radius: 6px; }
+
         .type-toggle { display: flex; gap: 8px; }
         .type-btn {
             flex: 1; padding: 8px; border: 1px solid var(--card-border); border-radius: 8px;
@@ -951,7 +999,7 @@
         <div class="toolbar-btn" onclick="openGistModal()">☁️ 云同步</div>
         <input type="file" id="globalImportFile" accept=".json" style="display:none" onchange="importAllData(event)">
     </div>
-    <div id="gistStatusLine" style="display:flex;align-items:center;justify-content:flex-end;gap:5px;margin:2px 0 10px;padding-right:4px;font-size:11px;color:var(--accent);opacity:0.85;letter-spacing:0.3px">☁️ 04/14 14:47 <span style="opacity:0.5">已同步</span></div>
+    <div id="gistStatusLine" style="display:flex;align-items:center;justify-content:flex-end;gap:5px;margin:2px 0 10px;padding-right:4px;font-size:11px;color:var(--accent);opacity:0.85;letter-spacing:0.3px">☁️ 04/14 15:09 <span style="opacity:0.5">已同步</span></div>
 
     <!-- ===== Gist 云同步弹窗 ===== -->
     <div class="modal-overlay" id="gistModalOverlay" onclick="if(event.target===this)closeGistModal()">
@@ -1004,10 +1052,12 @@
             <h2>🖼️ 图床管理</h2>
             <div class="modal-body">
                 <div id="imgBedList" style="margin-bottom:14px"></div>
-                <div style="display:flex;gap:8px">
-                    <input type="text" id="imgBedName" placeholder="名称，如「SM.MS」" style="flex:1;padding:9px 12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none">
-                    <input type="text" id="imgBedUrl" placeholder="网址 https://..." style="flex:2;padding:9px 12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none">
-                    <button onclick="addImgBed()" style="padding:9px 14px;background:var(--accent-chip);border:none;border-radius:8px;color:#fff;font-size:13px;cursor:pointer;white-space:nowrap">添加</button>
+                <div style="display:flex;flex-wrap:wrap;gap:8px">
+                    <input type="text" id="imgBedName" placeholder="名称，如「SM.MS」" style="flex:1;min-width:80px;padding:9px 12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none">
+                    <div style="display:flex;flex:2;min-width:160px;gap:8px">
+                        <input type="text" id="imgBedUrl" placeholder="网址 https://..." style="flex:1;padding:9px 12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none">
+                        <button onclick="addImgBed()" style="padding:9px 14px;background:var(--accent-chip);border:none;border-radius:8px;color:#fff;font-size:13px;cursor:pointer;white-space:nowrap;flex-shrink:0">添加</button>
+                    </div>
                 </div>
             </div>
             <div class="modal-actions">
@@ -1112,7 +1162,7 @@
         <div class="toolbar">
             <div class="toolbar-btn" id="snipExpandBtn" onclick="toggleAllSnippets()">📂 展开</div>
         </div>
-        <div class="card-list" id="snipCardList"><div class="card" data-sid="mny3gffb5o2uh"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">喵的气泡（聊天框字体没改）</div><span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:6px;background:var(--accent-light);color:var(--accent-mid);font-weight:600">2 项</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/14 12:00</span><div class="dot"></div><span>✏️ 04/14 14:27</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mny3gffb5o2uh')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mny3gffb5o2uh')">✏️ 编辑</button></div><div class="collection-sub-list" data-card-id="mny3gffb5o2uh"><div class="collection-sub-item" data-sub-idx="0" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">💻</span><span class="collection-sub-title">喵的气泡（聊天框字体没改）</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mny3gffb5o2uh',0)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mny3gffb5o2uh',0)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mny3gffb5o2uh',0,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mny3gffb5o2uh',0)" title="删除">×</button></div><div style="width:100%;font-size:10px;color:var(--text-muted);opacity:0.5;padding-left:28px;margin-top:2px">🕐 04/14 12:00</div></div><div class="collection-sub-item" data-sub-idx="1" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">💻</span><span class="collection-sub-title">/**</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mny3gffb5o2uh',1)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mny3gffb5o2uh',1)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mny3gffb5o2uh',1,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mny3gffb5o2uh',1)" title="删除">×</button></div><div style="width:100%;font-size:10px;color:var(--text-muted);opacity:0.5;padding-left:28px;margin-top:2px">🕐 04/14 14:27</div></div></div><button onclick="event.stopPropagation();addSubToCard('mny3gffb5o2uh')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='#5aab8b';this.style.color='var(--accent-mid)'" onmouseout="this.style.borderColor='rgba(90,171,139,0.4)';this.style.color='var(--text-sub)'">＋ 添加子条目</button><div class="time-info"><span>🕐 创建：2026-04-14 12:00</span><span>✏️ 编辑：2026-04-14 14:27</span></div></div></div><div class="card collapsed" data-sid="mnxcm3i5jwf9g"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">仿ig气泡代码及效果</div><span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:6px;background:var(--accent-light);color:var(--accent-mid);font-weight:600">3 项</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/13 23:29</span><div class="dot"></div><span>✏️ 04/14 11:49</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mnxcm3i5jwf9g')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mnxcm3i5jwf9g')">✏️ 编辑</button></div><div class="collection-sub-list" data-card-id="mnxcm3i5jwf9g"><div class="collection-sub-item" data-sub-idx="0" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">💻</span><span class="collection-sub-title">聊天界面优化版.css试一下标题</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnxcm3i5jwf9g',0)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnxcm3i5jwf9g',0)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnxcm3i5jwf9g',0,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnxcm3i5jwf9g',0)" title="删除">×</button></div><div style="width:100%;font-size:10px;color:var(--text-muted);opacity:0.5;padding-left:28px;margin-top:2px">🕐 04/14 01:35  ✏️ 04/14 01:35</div></div><div class="sub-img-layout" data-sub-idx="1"><div class="sub-img-drag-strip collection-sub-drag" title="拖动排序">⋮⋮</div><div class="sub-img-left"><div class="sub-img-header"><span class="sub-icon">🔗</span><span class="sub-img-title">仿ig图片效果</span></div><div class="sub-img-url">https://i.imgs.ovh/2026/04/13/ZKIZFF.jpeg</div><div class="sub-img-btns"><a class="btn-visit" href="https://i.imgs.ovh/2026/04/13/ZKIZFF.jpeg" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:3px 8px">访问</a><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnxcm3i5jwf9g',1)" style="font-size:11px;padding:3px 8px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnxcm3i5jwf9g',1,this)" style="font-size:11px;padding:3px 8px">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnxcm3i5jwf9g',1)" title="删除" style="width:20px;height:20px;font-size:12px">×</button></div></div><div class="sub-img-right"><img src="https://i.imgs.ovh/2026/04/13/ZKIZFF.jpeg" onclick="event.stopPropagation();window.open('https://i.imgs.ovh/2026/04/13/ZKIZFF.jpeg','_blank')" onerror="this.parentNode.innerHTML='<div class=img-preview-fail>加载失败</div>'" loading="lazy"></div></div><div class="sub-img-layout" data-sub-idx="2"><div class="sub-img-drag-strip collection-sub-drag" title="拖动排序">⋮⋮</div><div class="sub-img-left"><div class="sub-img-header"><span class="sub-icon">🔗</span><span class="sub-img-title">小狗头上戴纸盒</span></div><div class="sub-img-url">https://i.imgs.ovh/2026/04/14/ZpKsiH.jpeg</div><div class="sub-img-btns"><a class="btn-visit" href="https://i.imgs.ovh/2026/04/14/ZpKsiH.jpeg" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:3px 8px">访问</a><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnxcm3i5jwf9g',2)" style="font-size:11px;padding:3px 8px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnxcm3i5jwf9g',2,this)" style="font-size:11px;padding:3px 8px">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnxcm3i5jwf9g',2)" title="删除" style="width:20px;height:20px;font-size:12px">×</button></div><div style="font-size:10px;color:var(--text-muted);opacity:0.6;margin-top:2px">🕐 04/14 11:49</div></div><div class="sub-img-right"><img src="https://i.imgs.ovh/2026/04/14/ZpKsiH.jpeg" onclick="event.stopPropagation();window.open('https://i.imgs.ovh/2026/04/14/ZpKsiH.jpeg','_blank')" onerror="this.parentNode.innerHTML='<div class=img-preview-fail>加载失败</div>'" loading="lazy"></div></div></div><button onclick="event.stopPropagation();addSubToCard('mnxcm3i5jwf9g')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='#5aab8b';this.style.color='var(--accent-mid)'" onmouseout="this.style.borderColor='rgba(90,171,139,0.4)';this.style.color='var(--text-sub)'">＋ 添加子条目</button><div class="time-info"><span>🕐 创建：2026-04-13 23:29</span><span>✏️ 编辑：2026-04-14 11:49</span></div></div></div><div class="card collapsed" data-sid="mnxc9hzbrhhes"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">原始气泡及改版</div><span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:6px;background:var(--accent-light);color:var(--accent-mid);font-weight:600">3 项</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/13 23:19</span><div class="dot"></div><span>✏️ 04/14 11:59</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mnxc9hzbrhhes')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mnxc9hzbrhhes')">✏️ 编辑</button></div><div class="collection-sub-list" data-card-id="mnxc9hzbrhhes"><div class="collection-sub-item" data-sub-idx="0" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">💻</span><span class="collection-sub-title">白底半透明气泡</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnxc9hzbrhhes',0)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnxc9hzbrhhes',0)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnxc9hzbrhhes',0,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnxc9hzbrhhes',0)" title="删除">×</button></div><div style="width:100%;font-size:10px;color:var(--text-muted);opacity:0.5;padding-left:28px;margin-top:2px">🕐 04/14 11:42</div></div><div class="collection-sub-item" data-sub-idx="1" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">💻</span><span class="collection-sub-title">淡蓝色半透明气泡</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnxc9hzbrhhes',1)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnxc9hzbrhhes',1)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnxc9hzbrhhes',1,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnxc9hzbrhhes',1)" title="删除">×</button></div><div style="width:100%;font-size:10px;color:var(--text-muted);opacity:0.5;padding-left:28px;margin-top:2px">🕐 04/14 11:41</div></div><div class="collection-sub-item" data-sub-idx="2" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">💻</span><span class="collection-sub-title">对话框字体更小</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnxc9hzbrhhes',2)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnxc9hzbrhhes',2)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnxc9hzbrhhes',2,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnxc9hzbrhhes',2)" title="删除">×</button></div><div style="width:100%;font-size:10px;color:var(--text-muted);opacity:0.5;padding-left:28px;margin-top:2px">🕐 04/14 11:42</div></div></div><button onclick="event.stopPropagation();addSubToCard('mnxc9hzbrhhes')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='#5aab8b';this.style.color='var(--accent-mid)'" onmouseout="this.style.borderColor='rgba(90,171,139,0.4)';this.style.color='var(--text-sub)'">＋ 添加子条目</button><div class="time-info"><span>🕐 创建：2026-04-13 23:19</span><span>✏️ 编辑：2026-04-14 11:59</span></div></div></div><div class="card collapsed" data-sid="mnx7co4r5gscm"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">api监控</div><span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:6px;background:var(--accent-light);color:var(--accent-mid);font-weight:600">3 项</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/13 21:02</span><div class="dot"></div><span>✏️ 04/13 21:02</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mnx7co4r5gscm')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mnx7co4r5gscm')">✏️ 编辑</button></div><div class="collection-sub-list" data-card-id="mnx7co4r5gscm"><div class="collection-sub-item" data-sub-idx="0" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">🔗</span><span class="collection-sub-title">刺猬监控</span><div class="collection-sub-actions"><a class="btn-visit" href="https://sts.cwapi.vip" target="_blank" onclick="event.stopPropagation()">访问</a><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnx7co4r5gscm',0)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnx7co4r5gscm',0,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnx7co4r5gscm',0)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="1" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">🔗</span><span class="collection-sub-title">空悲切模型监控</span><div class="collection-sub-actions"><a class="btn-visit" href="http://model-status.kbq.de5.net/" target="_blank" onclick="event.stopPropagation()">访问</a><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnx7co4r5gscm',1)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnx7co4r5gscm',1,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnx7co4r5gscm',1)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="2" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">🔗</span><span class="collection-sub-title">ekan8模型监控</span><div class="collection-sub-actions"><a class="btn-visit" href="https://model.ekan8.com/embed.html" target="_blank" onclick="event.stopPropagation()">访问</a><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnx7co4r5gscm',2)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnx7co4r5gscm',2,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnx7co4r5gscm',2)" title="删除">×</button></div></div></div><button onclick="event.stopPropagation();addSubToCard('mnx7co4r5gscm')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='#5aab8b';this.style.color='var(--accent-mid)'" onmouseout="this.style.borderColor='rgba(90,171,139,0.4)';this.style.color='var(--text-sub)'">＋ 添加子条目</button><div class="time-info"><span>🕐 创建：2026-04-13 21:02</span><span>✏️ 编辑：2026-04-13 21:02</span></div></div></div><div class="card collapsed" data-sid="mnx6p8pr1b0bv"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">无争二胎聊天效果调试</div><span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:6px;background:var(--accent-light);color:var(--accent-mid);font-weight:600">2 项</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/13 20:44</span><div class="dot"></div><span>✏️ 04/13 20:44</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mnx6p8pr1b0bv')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mnx6p8pr1b0bv')">✏️ 编辑</button></div><div class="collection-sub-list" data-card-id="mnx6p8pr1b0bv"><div class="collection-sub-item" data-sub-idx="0" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">💻</span><span class="collection-sub-title">无争二胎场景规则</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnx6p8pr1b0bv',0)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnx6p8pr1b0bv',0)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnx6p8pr1b0bv',0,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnx6p8pr1b0bv',0)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="1" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">💻</span><span class="collection-sub-title">无争二胎角色卡</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnx6p8pr1b0bv',1)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnx6p8pr1b0bv',1)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnx6p8pr1b0bv',1,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnx6p8pr1b0bv',1)" title="删除">×</button></div></div></div><button onclick="event.stopPropagation();addSubToCard('mnx6p8pr1b0bv')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='#5aab8b';this.style.color='var(--accent-mid)'" onmouseout="this.style.borderColor='rgba(90,171,139,0.4)';this.style.color='var(--text-sub)'">＋ 添加子条目</button><div class="time-info"><span>🕐 创建：2026-04-13 20:44</span><span>✏️ 编辑：2026-04-13 20:44</span></div></div></div><div class="card collapsed" data-sid="mnx186fz92b1q"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">github部署网页及密钥</div><span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:6px;background:var(--accent-light);color:var(--accent-mid);font-weight:600">2 项</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/13 18:10</span><div class="dot"></div><span>✏️ 04/14 08:22</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mnx186fz92b1q')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mnx186fz92b1q')">✏️ 编辑</button></div><div class="collection-sub-list" data-card-id="mnx186fz92b1q"><div class="collection-sub-item" data-sub-idx="0" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">📄</span><span class="collection-sub-title">部署密钥</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnx186fz92b1q',0)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnx186fz92b1q',0)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnx186fz92b1q',0,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnx186fz92b1q',0)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="1" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">🔗</span><span class="collection-sub-title">部署网页</span><div class="collection-sub-actions"><a class="btn-visit" href="https://sylvivi.github.io/toolbox/" target="_blank" onclick="event.stopPropagation()">访问</a><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnx186fz92b1q',1)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnx186fz92b1q',1,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnx186fz92b1q',1)" title="删除">×</button></div></div></div><button onclick="event.stopPropagation();addSubToCard('mnx186fz92b1q')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='#5aab8b';this.style.color='var(--accent-mid)'" onmouseout="this.style.borderColor='rgba(90,171,139,0.4)';this.style.color='var(--text-sub)'">＋ 添加子条目</button><div class="time-info"><span>🕐 创建：2026-04-13 18:10</span><span>✏️ 编辑：2026-04-14 08:22</span></div></div></div><div class="card collapsed" data-sid="mnwrsuqjce2ku"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">中转站【非主力】</div><span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:6px;background:var(--accent-light);color:var(--accent-mid);font-weight:600">3 项</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/13 13:46</span><div class="dot"></div><span>✏️ 04/13 18:07</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mnwrsuqjce2ku')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mnwrsuqjce2ku')">✏️ 编辑</button></div><div class="collection-sub-list" data-card-id="mnwrsuqjce2ku"><div class="collection-sub-item" data-sub-idx="0" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">🔗</span><span class="collection-sub-title">togo</span><div class="collection-sub-actions"><a class="btn-visit" href="https://togoapi.cn/dashboard" target="_blank" onclick="event.stopPropagation()">访问</a><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnwrsuqjce2ku',0)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnwrsuqjce2ku',0,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnwrsuqjce2ku',0)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="1" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">🔗</span><span class="collection-sub-title">芙卡卡</span><div class="collection-sub-actions"><a class="btn-visit" href="https://api.fuka.win/console" target="_blank" onclick="event.stopPropagation()">访问</a><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnwrsuqjce2ku',1)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnwrsuqjce2ku',1,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnwrsuqjce2ku',1)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="2" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">🔗</span><span class="collection-sub-title">ekan8</span><div class="collection-sub-actions"><a class="btn-visit" href="https://api.ekan8.com/console" target="_blank" onclick="event.stopPropagation()">访问</a><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnwrsuqjce2ku',2)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnwrsuqjce2ku',2,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnwrsuqjce2ku',2)" title="删除">×</button></div></div></div><button onclick="event.stopPropagation();addSubToCard('mnwrsuqjce2ku')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='#5aab8b';this.style.color='var(--accent-mid)'" onmouseout="this.style.borderColor='rgba(90,171,139,0.4)';this.style.color='var(--text-sub)'">＋ 添加子条目</button><div class="time-info"><span>🕐 创建：2026-04-13 13:46</span><span>✏️ 编辑：2026-04-13 18:07</span></div></div></div><div class="card collapsed" data-sid="mnwrkxccgoe1b"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">termux命令行</div><div class="card-tag">termux</div><span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:6px;background:var(--accent-light);color:var(--accent-mid);font-weight:600">2 项</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/13 13:40</span><div class="dot"></div><span>✏️ 04/13 13:40</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mnwrkxccgoe1b')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mnwrkxccgoe1b')">✏️ 编辑</button></div><div class="collection-sub-list" data-card-id="mnwrkxccgoe1b"><div class="collection-sub-item" data-sub-idx="0" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">📄</span><span class="collection-sub-title">启动酒馆命令行</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnwrkxccgoe1b',0)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnwrkxccgoe1b',0)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnwrkxccgoe1b',0,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnwrkxccgoe1b',0)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="1" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">📄</span><span class="collection-sub-title">启动网站服务器命令行</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnwrkxccgoe1b',1)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnwrkxccgoe1b',1)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnwrkxccgoe1b',1,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnwrkxccgoe1b',1)" title="删除">×</button></div></div></div><button onclick="event.stopPropagation();addSubToCard('mnwrkxccgoe1b')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='#5aab8b';this.style.color='var(--accent-mid)'" onmouseout="this.style.borderColor='rgba(90,171,139,0.4)';this.style.color='var(--text-sub)'">＋ 添加子条目</button><div class="time-info"><span>🕐 创建：2026-04-13 13:40</span><span>✏️ 编辑：2026-04-13 13:40</span></div></div></div><div class="card collapsed" data-sid="mnwr611o8vgv9"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">无争聊天效果调试</div><div class="card-tag">eve</div><span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:6px;background:var(--accent-light);color:var(--accent-mid);font-weight:600">4 项</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/13 13:29</span><div class="dot"></div><span>✏️ 04/13 19:37</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mnwr611o8vgv9')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mnwr611o8vgv9')">✏️ 编辑</button></div><div class="collection-sub-list" data-card-id="mnwr611o8vgv9"><div class="collection-sub-item" data-sub-idx="0" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">📄</span><span class="collection-sub-title">场景+角色卡</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnwr611o8vgv9',0)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnwr611o8vgv9',0)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnwr611o8vgv9',0,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnwr611o8vgv9',0)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="1" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">💻</span><span class="collection-sub-title">无争世界书</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnwr611o8vgv9',1)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnwr611o8vgv9',1)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnwr611o8vgv9',1,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnwr611o8vgv9',1)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="2" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">💻</span><span class="collection-sub-title">乔祺角色卡</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnwr611o8vgv9',2)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnwr611o8vgv9',2)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnwr611o8vgv9',2,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnwr611o8vgv9',2)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="3" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">📄</span><span class="collection-sub-title">场景规则</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnwr611o8vgv9',3)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnwr611o8vgv9',3)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnwr611o8vgv9',3,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnwr611o8vgv9',3)" title="删除">×</button></div></div></div><button onclick="event.stopPropagation();addSubToCard('mnwr611o8vgv9')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='#5aab8b';this.style.color='var(--accent-mid)'" onmouseout="this.style.borderColor='rgba(90,171,139,0.4)';this.style.color='var(--text-sub)'">＋ 添加子条目</button><div class="time-info"><span>🕐 创建：2026-04-13 13:29</span><span>✏️ 编辑：2026-04-13 19:37</span></div></div></div><div class="card collapsed" data-sid="mnvmmel54sl10"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">工具箱最终版</div><div class="card-tag">HTML</div><span style="font-size:14px;flex-shrink:0">💻</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/12 18:34</span><div class="dot"></div><span>✏️ 04/12 18:34</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mnvmmel54sl10')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mnvmmel54sl10')">✏️ 编辑</button></div><div class="code-block"><div class="copy-bar"><span class="lang">1981 行</span><div class="copy-bar-btns"><button class="btn-search-toggle" onclick="toggleCodeSearch('mnvmmel54sl10')">🔍</button><button class="btn-copy-code" onclick="copySnipCode('mnvmmel54sl10', this)">📋 复制</button><div class="btn-export-wrap"><button class="btn-export-file" onclick="toggleExportMenu(this)">💾 存为</button><div class="export-menu"><button class="export-menu-item" onclick="exportFile('mnvmmel54sl10','txt')">📄 .txt</button><button class="export-menu-item" onclick="exportFile('mnvmmel54sl10','css')">🎨 .css</button><button class="export-menu-item" onclick="exportFile('mnvmmel54sl10','html')">🌐 .html</button><button class="export-menu-item" onclick="exportFile('mnvmmel54sl10','js')">⚡ .js</button><button class="export-menu-item" onclick="exportFile('mnvmmel54sl10','json')">📋 .json</button><button class="export-menu-item" onclick="exportFile('mnvmmel54sl10','md')">📝 .md</button></div></div></div></div><div class="code-search-bar"><input type="text" placeholder="在代码中搜索..." oninput="doCodeSearch('mnvmmel54sl10', this)" onkeydown="if(event.key==='Enter'){event.preventDefault();jumpMatch('mnvmmel54sl10',1)}"><span class="code-search-info"></span><button class="code-search-btn" onclick="jumpMatch('mnvmmel54sl10',-1)">▲</button><button class="code-search-btn" onclick="jumpMatch('mnvmmel54sl10',1)">▼</button></div><div class="code-scroll"><div class="line-numbers">1
+        <div class="card-list" id="snipCardList"><div class="card collapsed" data-sid="mny9zhygwvwxa"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">27直播分享</div><span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:6px;background:var(--accent-light);color:var(--accent-mid);font-weight:600">1 项</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/14 15:03</span><div class="dot"></div><span>✏️ 04/14 15:05</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mny9zhygwvwxa')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mny9zhygwvwxa')">✏️ 编辑</button></div><div class="collection-sub-list" data-card-id="mny9zhygwvwxa"><div class="collection-sub-item" data-sub-idx="0" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">📄</span><span class="collection-sub-title">27直播分享</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mny9zhygwvwxa',0)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mny9zhygwvwxa',0)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mny9zhygwvwxa',0,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mny9zhygwvwxa',0)" title="删除">×</button></div><div style="width:100%;font-size:10px;color:var(--text-muted);opacity:0.5;padding-left:28px;margin-top:2px">🕐 04/14 15:03</div></div></div><button onclick="event.stopPropagation();addSubToCard('mny9zhygwvwxa')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='#5aab8b';this.style.color='var(--accent-mid)'" onmouseout="this.style.borderColor='rgba(90,171,139,0.4)';this.style.color='var(--text-sub)'">＋ 添加子条目</button><div class="time-info"><span>🕐 创建：2026-04-14 15:03</span><span>✏️ 编辑：2026-04-14 15:05</span></div></div></div><div class="card collapsed" data-sid="mnxcm3i5jwf9g"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">仿ig气泡代码及效果</div><span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:6px;background:var(--accent-light);color:var(--accent-mid);font-weight:600">3 项</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/13 23:29</span><div class="dot"></div><span>✏️ 04/14 11:49</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mnxcm3i5jwf9g')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mnxcm3i5jwf9g')">✏️ 编辑</button></div><div class="collection-sub-list" data-card-id="mnxcm3i5jwf9g"><div class="collection-sub-item" data-sub-idx="0" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">💻</span><span class="collection-sub-title">聊天界面优化版.css试一下标题</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnxcm3i5jwf9g',0)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnxcm3i5jwf9g',0)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnxcm3i5jwf9g',0,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnxcm3i5jwf9g',0)" title="删除">×</button></div><div style="width:100%;font-size:10px;color:var(--text-muted);opacity:0.5;padding-left:28px;margin-top:2px">🕐 04/14 01:35  ✏️ 04/14 01:35</div></div><div class="sub-img-layout" data-sub-idx="1"><div class="sub-img-drag-strip collection-sub-drag" title="拖动排序">⋮⋮</div><div class="sub-img-left"><div class="sub-img-header"><span class="sub-icon">🔗</span><span class="sub-img-title">仿ig图片效果</span></div><div class="sub-img-url">https://i.imgs.ovh/2026/04/13/ZKIZFF.jpeg</div><div class="sub-img-btns"><a class="btn-visit" href="https://i.imgs.ovh/2026/04/13/ZKIZFF.jpeg" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:3px 8px">访问</a><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnxcm3i5jwf9g',1)" style="font-size:11px;padding:3px 8px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnxcm3i5jwf9g',1,this)" style="font-size:11px;padding:3px 8px">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnxcm3i5jwf9g',1)" title="删除" style="width:20px;height:20px;font-size:12px">×</button></div></div><div class="sub-img-right"><img src="https://i.imgs.ovh/2026/04/13/ZKIZFF.jpeg" onclick="event.stopPropagation();window.open('https://i.imgs.ovh/2026/04/13/ZKIZFF.jpeg','_blank')" onerror="this.parentNode.innerHTML='<div class=img-preview-fail>加载失败</div>'" loading="lazy"></div></div><div class="sub-img-layout" data-sub-idx="2"><div class="sub-img-drag-strip collection-sub-drag" title="拖动排序">⋮⋮</div><div class="sub-img-left"><div class="sub-img-header"><span class="sub-icon">🔗</span><span class="sub-img-title">小狗头上戴纸盒</span></div><div class="sub-img-url">https://i.imgs.ovh/2026/04/14/ZpKsiH.jpeg</div><div class="sub-img-btns"><a class="btn-visit" href="https://i.imgs.ovh/2026/04/14/ZpKsiH.jpeg" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:3px 8px">访问</a><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnxcm3i5jwf9g',2)" style="font-size:11px;padding:3px 8px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnxcm3i5jwf9g',2,this)" style="font-size:11px;padding:3px 8px">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnxcm3i5jwf9g',2)" title="删除" style="width:20px;height:20px;font-size:12px">×</button></div><div style="font-size:10px;color:var(--text-muted);opacity:0.6;margin-top:2px">🕐 04/14 11:49</div></div><div class="sub-img-right"><img src="https://i.imgs.ovh/2026/04/14/ZpKsiH.jpeg" onclick="event.stopPropagation();window.open('https://i.imgs.ovh/2026/04/14/ZpKsiH.jpeg','_blank')" onerror="this.parentNode.innerHTML='<div class=img-preview-fail>加载失败</div>'" loading="lazy"></div></div></div><button onclick="event.stopPropagation();addSubToCard('mnxcm3i5jwf9g')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='#5aab8b';this.style.color='var(--accent-mid)'" onmouseout="this.style.borderColor='rgba(90,171,139,0.4)';this.style.color='var(--text-sub)'">＋ 添加子条目</button><div class="time-info"><span>🕐 创建：2026-04-13 23:29</span><span>✏️ 编辑：2026-04-14 11:49</span></div></div></div><div class="card collapsed" data-sid="mnxc9hzbrhhes"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">原始气泡及改版</div><span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:6px;background:var(--accent-light);color:var(--accent-mid);font-weight:600">3 项</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/13 23:19</span><div class="dot"></div><span>✏️ 04/14 11:59</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mnxc9hzbrhhes')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mnxc9hzbrhhes')">✏️ 编辑</button></div><div class="collection-sub-list" data-card-id="mnxc9hzbrhhes"><div class="collection-sub-item" data-sub-idx="0" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">💻</span><span class="collection-sub-title">白底半透明气泡</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnxc9hzbrhhes',0)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnxc9hzbrhhes',0)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnxc9hzbrhhes',0,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnxc9hzbrhhes',0)" title="删除">×</button></div><div style="width:100%;font-size:10px;color:var(--text-muted);opacity:0.5;padding-left:28px;margin-top:2px">🕐 04/14 11:42</div></div><div class="collection-sub-item" data-sub-idx="1" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">💻</span><span class="collection-sub-title">淡蓝色半透明气泡</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnxc9hzbrhhes',1)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnxc9hzbrhhes',1)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnxc9hzbrhhes',1,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnxc9hzbrhhes',1)" title="删除">×</button></div><div style="width:100%;font-size:10px;color:var(--text-muted);opacity:0.5;padding-left:28px;margin-top:2px">🕐 04/14 11:41</div></div><div class="collection-sub-item" data-sub-idx="2" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">💻</span><span class="collection-sub-title">对话框字体更小</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnxc9hzbrhhes',2)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnxc9hzbrhhes',2)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnxc9hzbrhhes',2,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnxc9hzbrhhes',2)" title="删除">×</button></div><div style="width:100%;font-size:10px;color:var(--text-muted);opacity:0.5;padding-left:28px;margin-top:2px">🕐 04/14 11:42</div></div></div><button onclick="event.stopPropagation();addSubToCard('mnxc9hzbrhhes')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='#5aab8b';this.style.color='var(--accent-mid)'" onmouseout="this.style.borderColor='rgba(90,171,139,0.4)';this.style.color='var(--text-sub)'">＋ 添加子条目</button><div class="time-info"><span>🕐 创建：2026-04-13 23:19</span><span>✏️ 编辑：2026-04-14 11:59</span></div></div></div><div class="card collapsed" data-sid="mnx7co4r5gscm"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">api监控</div><span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:6px;background:var(--accent-light);color:var(--accent-mid);font-weight:600">3 项</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/13 21:02</span><div class="dot"></div><span>✏️ 04/13 21:02</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mnx7co4r5gscm')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mnx7co4r5gscm')">✏️ 编辑</button></div><div class="collection-sub-list" data-card-id="mnx7co4r5gscm"><div class="collection-sub-item" data-sub-idx="0" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">🔗</span><span class="collection-sub-title">刺猬监控</span><div class="collection-sub-actions"><a class="btn-visit" href="https://sts.cwapi.vip" target="_blank" onclick="event.stopPropagation()">访问</a><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnx7co4r5gscm',0)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnx7co4r5gscm',0,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnx7co4r5gscm',0)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="1" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">🔗</span><span class="collection-sub-title">空悲切模型监控</span><div class="collection-sub-actions"><a class="btn-visit" href="http://model-status.kbq.de5.net/" target="_blank" onclick="event.stopPropagation()">访问</a><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnx7co4r5gscm',1)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnx7co4r5gscm',1,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnx7co4r5gscm',1)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="2" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">🔗</span><span class="collection-sub-title">ekan8模型监控</span><div class="collection-sub-actions"><a class="btn-visit" href="https://model.ekan8.com/embed.html" target="_blank" onclick="event.stopPropagation()">访问</a><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnx7co4r5gscm',2)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnx7co4r5gscm',2,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnx7co4r5gscm',2)" title="删除">×</button></div></div></div><button onclick="event.stopPropagation();addSubToCard('mnx7co4r5gscm')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='#5aab8b';this.style.color='var(--accent-mid)'" onmouseout="this.style.borderColor='rgba(90,171,139,0.4)';this.style.color='var(--text-sub)'">＋ 添加子条目</button><div class="time-info"><span>🕐 创建：2026-04-13 21:02</span><span>✏️ 编辑：2026-04-13 21:02</span></div></div></div><div class="card collapsed" data-sid="mnx6p8pr1b0bv"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">无争二胎聊天效果调试</div><span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:6px;background:var(--accent-light);color:var(--accent-mid);font-weight:600">2 项</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/13 20:44</span><div class="dot"></div><span>✏️ 04/13 20:44</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mnx6p8pr1b0bv')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mnx6p8pr1b0bv')">✏️ 编辑</button></div><div class="collection-sub-list" data-card-id="mnx6p8pr1b0bv"><div class="collection-sub-item" data-sub-idx="0" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">💻</span><span class="collection-sub-title">无争二胎场景规则</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnx6p8pr1b0bv',0)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnx6p8pr1b0bv',0)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnx6p8pr1b0bv',0,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnx6p8pr1b0bv',0)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="1" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">💻</span><span class="collection-sub-title">无争二胎角色卡</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnx6p8pr1b0bv',1)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnx6p8pr1b0bv',1)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnx6p8pr1b0bv',1,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnx6p8pr1b0bv',1)" title="删除">×</button></div></div></div><button onclick="event.stopPropagation();addSubToCard('mnx6p8pr1b0bv')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='#5aab8b';this.style.color='var(--accent-mid)'" onmouseout="this.style.borderColor='rgba(90,171,139,0.4)';this.style.color='var(--text-sub)'">＋ 添加子条目</button><div class="time-info"><span>🕐 创建：2026-04-13 20:44</span><span>✏️ 编辑：2026-04-13 20:44</span></div></div></div><div class="card collapsed" data-sid="mnx186fz92b1q"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">github部署网页及密钥</div><span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:6px;background:var(--accent-light);color:var(--accent-mid);font-weight:600">2 项</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/13 18:10</span><div class="dot"></div><span>✏️ 04/14 08:22</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mnx186fz92b1q')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mnx186fz92b1q')">✏️ 编辑</button></div><div class="collection-sub-list" data-card-id="mnx186fz92b1q"><div class="collection-sub-item" data-sub-idx="0" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">📄</span><span class="collection-sub-title">部署密钥</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnx186fz92b1q',0)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnx186fz92b1q',0)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnx186fz92b1q',0,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnx186fz92b1q',0)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="1" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">🔗</span><span class="collection-sub-title">部署网页</span><div class="collection-sub-actions"><a class="btn-visit" href="https://sylvivi.github.io/toolbox/" target="_blank" onclick="event.stopPropagation()">访问</a><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnx186fz92b1q',1)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnx186fz92b1q',1,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnx186fz92b1q',1)" title="删除">×</button></div></div></div><button onclick="event.stopPropagation();addSubToCard('mnx186fz92b1q')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='#5aab8b';this.style.color='var(--accent-mid)'" onmouseout="this.style.borderColor='rgba(90,171,139,0.4)';this.style.color='var(--text-sub)'">＋ 添加子条目</button><div class="time-info"><span>🕐 创建：2026-04-13 18:10</span><span>✏️ 编辑：2026-04-14 08:22</span></div></div></div><div class="card collapsed" data-sid="mnwrsuqjce2ku"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">中转站【非主力】</div><span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:6px;background:var(--accent-light);color:var(--accent-mid);font-weight:600">3 项</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/13 13:46</span><div class="dot"></div><span>✏️ 04/13 18:07</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mnwrsuqjce2ku')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mnwrsuqjce2ku')">✏️ 编辑</button></div><div class="collection-sub-list" data-card-id="mnwrsuqjce2ku"><div class="collection-sub-item" data-sub-idx="0" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">🔗</span><span class="collection-sub-title">togo</span><div class="collection-sub-actions"><a class="btn-visit" href="https://togoapi.cn/dashboard" target="_blank" onclick="event.stopPropagation()">访问</a><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnwrsuqjce2ku',0)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnwrsuqjce2ku',0,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnwrsuqjce2ku',0)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="1" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">🔗</span><span class="collection-sub-title">芙卡卡</span><div class="collection-sub-actions"><a class="btn-visit" href="https://api.fuka.win/console" target="_blank" onclick="event.stopPropagation()">访问</a><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnwrsuqjce2ku',1)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnwrsuqjce2ku',1,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnwrsuqjce2ku',1)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="2" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">🔗</span><span class="collection-sub-title">ekan8</span><div class="collection-sub-actions"><a class="btn-visit" href="https://api.ekan8.com/console" target="_blank" onclick="event.stopPropagation()">访问</a><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnwrsuqjce2ku',2)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnwrsuqjce2ku',2,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnwrsuqjce2ku',2)" title="删除">×</button></div></div></div><button onclick="event.stopPropagation();addSubToCard('mnwrsuqjce2ku')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='#5aab8b';this.style.color='var(--accent-mid)'" onmouseout="this.style.borderColor='rgba(90,171,139,0.4)';this.style.color='var(--text-sub)'">＋ 添加子条目</button><div class="time-info"><span>🕐 创建：2026-04-13 13:46</span><span>✏️ 编辑：2026-04-13 18:07</span></div></div></div><div class="card collapsed" data-sid="mnwrkxccgoe1b"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">termux命令行</div><div class="card-tag">termux</div><span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:6px;background:var(--accent-light);color:var(--accent-mid);font-weight:600">2 项</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/13 13:40</span><div class="dot"></div><span>✏️ 04/13 13:40</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mnwrkxccgoe1b')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mnwrkxccgoe1b')">✏️ 编辑</button></div><div class="collection-sub-list" data-card-id="mnwrkxccgoe1b"><div class="collection-sub-item" data-sub-idx="0" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">📄</span><span class="collection-sub-title">启动酒馆命令行</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnwrkxccgoe1b',0)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnwrkxccgoe1b',0)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnwrkxccgoe1b',0,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnwrkxccgoe1b',0)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="1" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">📄</span><span class="collection-sub-title">启动网站服务器命令行</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnwrkxccgoe1b',1)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnwrkxccgoe1b',1)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnwrkxccgoe1b',1,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnwrkxccgoe1b',1)" title="删除">×</button></div></div></div><button onclick="event.stopPropagation();addSubToCard('mnwrkxccgoe1b')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='#5aab8b';this.style.color='var(--accent-mid)'" onmouseout="this.style.borderColor='rgba(90,171,139,0.4)';this.style.color='var(--text-sub)'">＋ 添加子条目</button><div class="time-info"><span>🕐 创建：2026-04-13 13:40</span><span>✏️ 编辑：2026-04-13 13:40</span></div></div></div><div class="card collapsed" data-sid="mnwr611o8vgv9"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">无争聊天效果调试</div><div class="card-tag">eve</div><span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:6px;background:var(--accent-light);color:var(--accent-mid);font-weight:600">4 项</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/13 13:29</span><div class="dot"></div><span>✏️ 04/13 19:37</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mnwr611o8vgv9')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mnwr611o8vgv9')">✏️ 编辑</button></div><div class="collection-sub-list" data-card-id="mnwr611o8vgv9"><div class="collection-sub-item" data-sub-idx="0" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">📄</span><span class="collection-sub-title">场景+角色卡</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnwr611o8vgv9',0)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnwr611o8vgv9',0)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnwr611o8vgv9',0,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnwr611o8vgv9',0)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="1" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">💻</span><span class="collection-sub-title">无争世界书</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnwr611o8vgv9',1)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnwr611o8vgv9',1)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnwr611o8vgv9',1,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnwr611o8vgv9',1)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="2" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">💻</span><span class="collection-sub-title">乔祺角色卡</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnwr611o8vgv9',2)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnwr611o8vgv9',2)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnwr611o8vgv9',2,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnwr611o8vgv9',2)" title="删除">×</button></div></div><div class="collection-sub-item" data-sub-idx="3" style="flex-wrap:wrap"><span class="collection-sub-drag" title="拖动排序">⋮⋮</span><span class="collection-sub-icon">📄</span><span class="collection-sub-title">场景规则</span><div class="collection-sub-actions"><button class="btn-copy" onclick="event.stopPropagation();openExportPicker('sub','mnwr611o8vgv9',3)" style="font-size:11px">💾</button><button class="btn-copy" onclick="event.stopPropagation();openSubEdit('mnwr611o8vgv9',3)" style="font-size:11px">✏️</button><button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub('mnwr611o8vgv9',3,this)">复制</button><button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub('mnwr611o8vgv9',3)" title="删除">×</button></div></div></div><button onclick="event.stopPropagation();addSubToCard('mnwr611o8vgv9')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='#5aab8b';this.style.color='var(--accent-mid)'" onmouseout="this.style.borderColor='rgba(90,171,139,0.4)';this.style.color='var(--text-sub)'">＋ 添加子条目</button><div class="time-info"><span>🕐 创建：2026-04-13 13:29</span><span>✏️ 编辑：2026-04-13 19:37</span></div></div></div><div class="card collapsed" data-sid="mnvmmel54sl10"><div class="card-header" onclick="toggleCard(this)"><div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div><div class="card-title">工具箱最终版</div><div class="card-tag">HTML</div><span style="font-size:14px;flex-shrink:0">💻</span><div class="card-chevron">▼</div></div><div class="card-time-preview"><span>🕐 04/12 18:34</span><div class="dot"></div><span>✏️ 04/12 18:34</span></div><div class="card-body"><div class="card-actions" style="margin-bottom:8px"><button class="btn-pin" onclick="toggleSnipPin('mnvmmel54sl10')">📌 置顶</button><button class="btn-edit" onclick="editSnipEntry('mnvmmel54sl10')">✏️ 编辑</button></div><div class="code-block"><div class="copy-bar"><span class="lang">1981 行</span><div class="copy-bar-btns"><button class="btn-search-toggle" onclick="toggleCodeSearch('mnvmmel54sl10')">🔍</button><button class="btn-copy-code" onclick="copySnipCode('mnvmmel54sl10', this)">📋 复制</button><div class="btn-export-wrap"><button class="btn-export-file" onclick="toggleExportMenu(this)">💾 存为</button><div class="export-menu"><button class="export-menu-item" onclick="exportFile('mnvmmel54sl10','txt')">📄 .txt</button><button class="export-menu-item" onclick="exportFile('mnvmmel54sl10','css')">🎨 .css</button><button class="export-menu-item" onclick="exportFile('mnvmmel54sl10','html')">🌐 .html</button><button class="export-menu-item" onclick="exportFile('mnvmmel54sl10','js')">⚡ .js</button><button class="export-menu-item" onclick="exportFile('mnvmmel54sl10','json')">📋 .json</button><button class="export-menu-item" onclick="exportFile('mnvmmel54sl10','md')">📝 .md</button></div></div></div></div><div class="code-search-bar"><input type="text" placeholder="在代码中搜索..." oninput="doCodeSearch('mnvmmel54sl10', this)" onkeydown="if(event.key==='Enter'){event.preventDefault();jumpMatch('mnvmmel54sl10',1)}"><span class="code-search-info"></span><button class="code-search-btn" onclick="jumpMatch('mnvmmel54sl10',-1)">▲</button><button class="code-search-btn" onclick="jumpMatch('mnvmmel54sl10',1)">▼</button></div><div class="code-scroll"><div class="line-numbers">1
 2
 3
 4
@@ -5194,6 +5244,27 @@ http://127.0.0.1:8000
                             <button class="editor-search-btn" onclick="jumpEditorMatch(-1)">▲</button>
                             <button class="editor-search-btn" onclick="jumpEditorMatch(1)">▼</button>
                         </div>
+                        <div class="editor-ops-bar" id="editorOpsBar">
+                            <button class="eop" onclick="editorOp('indent')" title="缩进 (Tab)">→⎵</button>
+                            <button class="eop" onclick="editorOp('outdent')" title="取消缩进 (Shift+Tab)">⎵←</button>
+                            <span class="eop-sep"></span>
+                            <button class="eop" onclick="editorOp('dupLine')" title="复制行">⊕行</button>
+                            <button class="eop" onclick="editorOp('delLine')" title="删除行">⊖行</button>
+                            <button class="eop" onclick="editorOp('moveUp')" title="上移行">↑行</button>
+                            <button class="eop" onclick="editorOp('moveDown')" title="下移行">↓行</button>
+                            <span class="eop-sep"></span>
+                            <button class="eop" onclick="mdInsert('heading')" title="标题">H</button>
+                            <button class="eop" onclick="mdInsert('bold')" title="加粗">B</button>
+                            <button class="eop" onclick="mdInsert('italic')" title="斜体">I</button>
+                            <button class="eop" onclick="mdInsert('code')" title="行内代码">`</button>
+                            <button class="eop" onclick="mdInsert('codeblock')" title="代码块">```</button>
+                            <button class="eop" onclick="mdInsert('link')" title="链接">🔗</button>
+                            <button class="eop" onclick="mdInsert('list')" title="列表">•</button>
+                            <button class="eop" onclick="mdInsert('quote')" title="引用">❝</button>
+                            <span class="eop-sep"></span>
+                            <button class="eop" id="mdPreviewBtn" onclick="toggleMdPreview()" title="Markdown预览">👁 预览</button>
+                        </div>
+                        <div class="md-preview" id="mdPreview"></div>
                         <div class="editor-wrap" id="editorWrap">
                             <div class="editor-line-nums" id="editorLineNums">1</div>
                             <div class="ta-hl-wrap" style="flex:1;min-width:0;position:relative">
@@ -5338,11 +5409,11 @@ http://127.0.0.1:8000
                         <option value="code">💻 代码</option>
                     </select>
                 </div>
-                <div class="form-group" id="subEditUrlGroup" style="display: none;">
+                <div class="form-group" id="subEditUrlGroup">
                     <label>链接地址</label>
                     <input type="text" id="subEditUrl" placeholder="https://...">
                 </div>
-                <div class="form-group" id="subEditContentGroup" style="display: block;">
+                <div class="form-group" id="subEditContentGroup" style="display:none">
                     <label style="display:flex;justify-content:space-between;align-items:center">
                         <span>内容</span>
                         <div style="display:flex;gap:6px;align-items:center">
@@ -5351,341 +5422,15 @@ http://127.0.0.1:8000
                             <input type="file" id="subEditFileInput" accept=".txt,.css,.html,.htm,.js,.json,.md,.xml,.svg,.py,.java,.c,.cpp,.h,.ts,.tsx,.jsx,.vue,.sh,.bat,.yaml,.yml,.toml,.ini,.cfg,.log,.sql,.php,.rb,.go,.rs,.swift,.kt,.dart,.r,.lua,.pl,.scss,.sass,.less,.csv,.tsv,.env" style="display:none" onchange="loadFileToSubEdit(event)">
                         </div>
                     </label>
-                    <div class="code-search-bar show" id="subEditSearchBar">
+                    <div class="code-search-bar" id="subEditSearchBar">
                         <input type="text" id="subEditSearch" placeholder="搜索..." oninput="doSubEditSearch()" onkeydown="if(event.key==='Enter'){event.preventDefault();jumpSubEditMatch(1)}">
-                        <span class="code-search-info" id="subEditSearchInfo">1 / 7</span>
+                        <span class="code-search-info" id="subEditSearchInfo"></span>
                         <button class="code-search-btn" onclick="jumpSubEditMatch(-1)">▲</button>
                         <button class="code-search-btn" onclick="jumpSubEditMatch(1)">▼</button>
                     </div>
-                    <div class="ta-hl-wrap hl-active" id="subEditHlWrap">
-                        <textarea id="subEditContent" oninput="syncSubEditHighlight()" onscroll="syncSubEditScroll()" style="width: 100%; min-height: 160px; padding: 10px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 8px; color: var(--text); font-size: 13px; resize: vertical; outline: none; font-family: &quot;SF Mono&quot;, &quot;Fira Code&quot;, Consolas, monospace; white-space: pre; overflow-x: auto; line-height: 1.6; word-break: normal;" placeholder="内容..."></textarea>
-                        <div class="ta-hl-layer" id="subEditHlLayer" style="padding: 10px; font-size: 13px; font-family: &quot;SF Mono&quot;, &quot;Fira Code&quot;, Consolas, monospace; line-height: 1.6; border-radius: 8px; white-space: pre; word-break: normal;"><div class="ta-hl-content" id="subEditHlContent">/**
- * ✧ ⁺◦ ⋆⊹⋆
- * 代码由猫猫鱼の聊天气泡设计器生成
- * ✧ ⁺◦ ⋆⊹⋆
- */
-
-/* ─── 请保留"猫猫鱼"字样。大家食用愉快~ ─── */
-/* ─── 适配eve小手机 ─── */
-
-/* ─── 我的消息气泡 ─── */
-.message-container.sent .message-bubble {
-    background: rgba(203, 240, 255, 0.23) !important;
-    border-radius: 23px 23px 4px 23px !important;
-    color: #000000 !important;
-    position: relative !important;
-    padding: 6px 10px;
-    border: 0.5px solid #cbf0ff !important;
-    box-shadow: 0px 1px 6px #cbf0ff, inset 0 0 0 0.5px #ffffff !important;
-    backdrop-filter: blur(11px) !important;
-    -webkit-backdrop-filter: blur(11px) !important;
-}
-
-/* ─── ta的消息气泡 ─── */
-.message-container.received .message-bubble {
-    background: rgba(203, 240, 255, 0.23) !important;
-    border-radius: 23px 23px 23px 4px !important;
-    color: #000000 !important;
-    position: relative !important;
-    padding: 6px 10px;
-    border: 0.5px solid #cbf0ff !important;
-    box-shadow: 0px 1px 6px #cbf0ff, inset 0 0 0 0.5px #ffffff !important;
-    backdrop-filter: blur(11px) !important;
-    -webkit-backdrop-filter: blur(11px) !important;
-}
-
-/* ─── 语音时长颜色 ─── */
-.message-container.sent .voice-message-bar .voice-duration {
-    color: #000000 !important;
-}
-.message-container.received .voice-message-bar .voice-duration {
-    color: #000000 !important;
-}
-
-/* ─── 语音图标滤镜 ─── */
-.message-container.sent .voice-message-bar .voice-icon {
-    filter: brightness(0) saturate(100%) invert(60%) sepia(10%) saturate(500%) hue-rotate(0deg);
-}
-.message-container.received .voice-message-bar .voice-icon {
-    filter: brightness(0) saturate(100%) invert(60%) sepia(10%) saturate(500%) hue-rotate(0deg);
-}
-
-/* ─── 我的转账卡片 ─── */
-.message-container.sent .transfer-card {
-    background: rgba(203, 240, 255, 0.23) !important;
-    border: 0.5px solid #cbf0ff !important;
-    box-shadow: 0px 1px 6px #cbf0ff, inset 0 0 0 0.5px #ffffff !important;
-    backdrop-filter: blur(11px) !important;
-    -webkit-backdrop-filter: blur(11px) !important;
-    border-radius: 12px !important;
-    padding: 8px 12px !important;
-    overflow: visible !important;
-    position: relative !important;
-}
-.message-container.sent .transfer-amount {
-    font-size: 18px !important;
-    font-weight: 600 !important;
-    text-align: center !important;
-    color: #000000 !important;
-    margin: 4px 0 !important;
-}
-.message-container.sent .transfer-amount span {
-    color: #000000 !important;
-}
-.message-container.sent .transfer-note {
-    font-size: 12px !important;
-    text-align: center !important;
-    color: #000000 !important;
-    opacity: 0.8 !important;
-}
-.message-container.sent .transfer-title::after {
-    content: "⌯&gt;ᴗo⌯ಣ" !important;
-    font-size: 11px !important;
-    display: block !important;
-    text-align: center !important;
-    color: #000000 !important;
-    opacity: 0.6 !important;
-}
-.message-container.sent .transfer-card::after {
-    display: none !important;
-}
-
-/* ─── ta的转账卡片 ─── */
-.message-container.received .transfer-card {
-    background: rgba(203, 240, 255, 0.23) !important;
-    border: 0.5px solid #cbf0ff !important;
-    box-shadow: 0px 1px 6px #cbf0ff, inset 0 0 0 0.5px #ffffff !important;
-    backdrop-filter: blur(11px) !important;
-    -webkit-backdrop-filter: blur(11px) !important;
-    border-radius: 12px !important;
-    padding: 8px 12px !important;
-    overflow: visible !important;
-    position: relative !important;
-}
-.message-container.received .transfer-amount {
-    font-size: 18px !important;
-    font-weight: 600 !important;
-    text-align: center !important;
-    color: #000000 !important;
-    margin: 4px 0 !important;
-}
-.message-container.received .transfer-amount span {
-    color: #000000 !important;
-}
-.message-container.received .transfer-note {
-    font-size: 12px !important;
-    text-align: center !important;
-    color: #000000 !important;
-    opacity: 0.8 !important;
-}
-.message-container.received .transfer-title::after {
-    content: "♡♡♡" !important;
-    font-size: 11px !important;
-    display: block !important;
-    text-align: center !important;
-    color: #000000 !important;
-    opacity: 0.6 !important;
-}
-.message-container.received .transfer-card::after {
-    display: none !important;
-}
-
-/* ===== 顶部毛玻璃效果 ===== */
-
-#api-chat-screen .app-top-container {
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    z-index: 100 !important;
-    height: 125px !important;
-}
-
-#api-chat-screen .app-status-bar {
-    background: transparent !important;
-}
-
-#api-chat-screen .header {
-    background: rgba(255, 255, 255, 0.1) !important;
-    background-color: rgba(255, 255, 255, 0.1) !important;
-    background-image: none !important;
-    backdrop-filter: blur(5px) !important;
-    -webkit-backdrop-filter: blur(5px) !important;
-    border-bottom: none !important;
-}
-
-#api-chat-screen .header .default-controls,
-#api-chat-screen .header .selection-controls {
-    background: transparent !important;
-}
-
-/* ===== 底部输入区毛玻璃效果 ===== */
-
-#api-chat-screen .<mark class="code-hl current">chat-input</mark>-area {
-    background: rgba(255, 255, 255, 0.1) !important;
-    background-color: rgba(255, 255, 255, 0.1) !important;
-    background-image: none !important;
-    backdrop-filter: blur(5px) !important;
-    -webkit-backdrop-filter: blur(5px) !important;
-    border-top: none !important;
-}
-
-#api-chat-screen .<mark class="code-hl">chat-input</mark> {
-    background: rgba(255, 255, 255, 0.3) !important;
-    background-color: rgba(255, 255, 255, 0.3) !important;
-    backdrop-filter: blur(5px) !important;
-    -webkit-backdrop-filter: blur(5px) !important;
-    border: 1px solid rgba(255, 255, 255, 0.2) !important;
-}
-
-#api-chat-screen .toggle-tools-btn {
-    background: rgba(255, 255, 255, 0.3) !important;
-    background-color: rgba(255, 255, 255, 0.3) !important;
-    background-image: none !important;
-    backdrop-filter: blur(5px) !important;
-    -webkit-backdrop-filter: blur(5px) !important;
-    border: 1px solid rgba(255, 255, 255, 0.2) !important;
-}
-
-#api-chat-screen .chat-action-btn {
-    background: rgba(255, 255, 255, 0.3) !important;
-    background-color: rgba(255, 255, 255, 0.3) !important;
-    background-image: none !important;
-    backdrop-filter: blur(5px) !important;
-    -webkit-backdrop-filter: blur(5px) !important;
-    border: 1px solid rgba(255, 255, 255, 0.2) !important;
-}
-
-#api-chat-screen .send-button {
-    background: rgba(255, 255, 255, 0.3) !important;
-    background-color: rgba(255, 255, 255, 0.3) !important;
-    background-image: none !important;
-    backdrop-filter: blur(5px) !important;
-    -webkit-backdrop-filter: blur(5px) !important;
-    border: 1px solid rgba(255, 255, 255, 0.2) !important;
-}
-
-/* ===== 聊天区域间距 ===== */
-
-#api-chat-screen .app-content {
-    padding-top: 0 !important;
-    margin-top: 0 !important;
-}
-
-#api-chat-screen .chat-messages {
-    padding-top: 125px !important;
-    padding-bottom: 70px !important;
-}
-
-/* ===== 标题布局 ===== */
-
-#api-chat-screen .header .header-title {
-    text-align: left !important;
-    padding-left: 35px !important;
-    flex: 1 !important;
-}
-
-#api-chat-screen .header .character-status {
-    position: absolute !important;
-    top: 63px !important;
-    left: 71px !important;
-    transform: none !important;
-    justify-content: flex-start !important;
-}
-
-.header:has(.character-status) .header-title {
-    transform: translateY(0) !important;
-}
-
-/* ===== 状态小灯 ===== */
-
-.status-indicator.online {
-    background-color: #333333 !important;
-    box-shadow: 0 0 6px rgba(51, 51, 51, 0.5) !important;
-}
-
-.status-indicator.offline {
-    background-color: #999999 !important;
-    box-shadow: 0 0 6px rgba(153, 153, 153, 0.3) !important;
-}
-
-.status-indicator.busy {
-    background-color: #ff0000 !important;
-    box-shadow: 0 0 6px rgba(255, 0, 0, 0.5) !important;
-}
-
-.status-indicator.away {
-    background-color: #ffaa00 !important;
-    box-shadow: 0 0 6px rgba(255, 170, 0, 0.5) !important;
-}
-
-/* ===== 顶部文字/图标改黑色 ===== */
-
-#api-chat-screen .header .header-title {
-    color: #000000 !important;
-}
-
-#api-chat-screen .header * {
-    color: #000000 !important;
-}
-
-#api-chat-screen .header .back-btn,
-#api-chat-screen .header .back-btn svg {
-    color: #000000 !important;
-    fill: #000000 !important;
-}
-
-#api-chat-screen .header .menu-btn,
-#api-chat-screen .header .menu-btn svg {
-    color: #000000 !important;
-    fill: #000000 !important;
-}
-
-#api-chat-screen .header svg {
-    fill: #000000 !important;
-    color: #000000 !important;
-}
-
-#api-chat-screen .header .character-status,
-#api-chat-screen .header .character-status * {
-    color: rgba(0, 0, 0, 0.6) !important;
-}
-
-/* ===== 底部文字/图标改黑色 ===== */
-
-#api-chat-screen .<mark class="code-hl">chat-input</mark> {
-    color: #000000 !important;
-}
-
-#api-chat-screen .<mark class="code-hl">chat-input</mark>::placeholder {
-    color: rgba(0, 0, 0, 0.4) !important;
-}
-
-#api-chat-screen .send-button {
-    color: #000000 !important;
-}
-
-#api-chat-screen .<mark class="code-hl">chat-input</mark>-area * {
-    color: #000000 !important;
-}
-
-#api-chat-screen .<mark class="code-hl">chat-input</mark>-area svg,
-#api-chat-screen .<mark class="code-hl">chat-input</mark>-area icon {
-    fill: #000000 !important;
-    color: #000000 !important;
-}
-
-/* ===== 时间戳 ===== */
-
-.message-timestamp {
-    color: rgba(0, 0, 0, 0.5) !important;
-}
-
-/* 聊天气泡文字大小 */
-.message-container .message-bubble {
-    font-size: 14px !important;
-}
-</div></div>
+                    <div class="ta-hl-wrap" id="subEditHlWrap">
+                        <textarea id="subEditContent" oninput="syncSubEditHighlight()" onscroll="syncSubEditScroll()" style="width:100%;min-height:160px;padding:10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;resize:vertical;outline:none;font-family:'SF Mono','Fira Code','Consolas',monospace;white-space:pre;overflow-x:auto;line-height:1.6" placeholder="内容..."></textarea>
+                        <div class="ta-hl-layer" id="subEditHlLayer" style="padding:10px;font-size:13px;font-family:'SF Mono','Fira Code','Consolas',monospace;line-height:1.6;border-radius:8px"><div class="ta-hl-content" id="subEditHlContent"></div></div>
                     </div>
                 </div>
             </div>
@@ -6497,19 +6242,24 @@ http://127.0.0.1:8000
 
             var codeTools = document.getElementById('editorCodeTools');
             var infoBar = document.getElementById('editorInfoBar');
+            var opsBar = document.getElementById('editorOpsBar');
             if (type === 'code' || type === 'text') {
                 codeTools.style.display = '';
+                opsBar.style.display = '';
                 infoBar.style.display = type === 'code' ? '' : 'none';
             } else {
                 codeTools.style.display = 'none';
+                opsBar.style.display = 'none';
                 infoBar.style.display = 'none';
             }
-            // 切换类型时清除搜索
+            // 切换类型时清除搜索和关闭预览
             document.getElementById('editorSearchBar').classList.remove('show');
             document.getElementById('editorSearchInput').value = '';
             document.getElementById('editorSearchInfo').textContent = '';
             editorSearchState = { matches: [], current: -1 };
             clearEditorHighlight();
+            // 关闭MD预览
+            if (mdPreviewOn) { mdPreviewOn = false; document.getElementById('mdPreview').classList.remove('show'); document.getElementById('editorWrap').style.display = ''; document.getElementById('mdPreviewBtn').classList.remove('active'); }
             syncEditorLines();
         }
 
@@ -7014,6 +6764,11 @@ http://127.0.0.1:8000
             document.getElementById('editorSearchInfo').textContent = '';
             editorSearchState = { matches: [], current: -1 };
             clearEditorHighlight();
+            // 重置MD预览
+            mdPreviewOn = false;
+            document.getElementById('mdPreview').classList.remove('show');
+            document.getElementById('editorWrap').style.display = '';
+            document.getElementById('mdPreviewBtn').classList.remove('active');
             syncEditorLines();
         }
 
@@ -7555,10 +7310,205 @@ http://127.0.0.1:8000
             reader.readAsText(file); event.target.value = '';
         }
 
+        /* ===== 编辑器文本操作 ===== */
+        function editorOp(op) {
+            var ta = document.getElementById('snipFormCode');
+            var s = ta.selectionStart, e = ta.selectionEnd;
+            var text = ta.value;
+            var lines = text.split('\n');
+            // 找出光标所在行范围
+            var startLine = text.substring(0, s).split('\n').length - 1;
+            var endLine = text.substring(0, e).split('\n').length - 1;
+
+            if (op === 'indent') {
+                for (var i = startLine; i <= endLine; i++) lines[i] = '    ' + lines[i];
+                ta.value = lines.join('\n');
+                ta.selectionStart = s + 4; ta.selectionEnd = e + (endLine - startLine + 1) * 4;
+            } else if (op === 'outdent') {
+                var removed = 0, firstRemoved = 0;
+                for (var i = startLine; i <= endLine; i++) {
+                    var m = lines[i].match(/^( {1,4}|\t)/);
+                    if (m) { var len = m[0].length; lines[i] = lines[i].substring(len); removed += len; if (i === startLine) firstRemoved = len; }
+                }
+                ta.value = lines.join('\n');
+                ta.selectionStart = Math.max(0, s - firstRemoved); ta.selectionEnd = Math.max(0, e - removed);
+            } else if (op === 'dupLine') {
+                var line = lines[startLine];
+                lines.splice(startLine + 1, 0, line);
+                ta.value = lines.join('\n');
+                var newStart = text.split('\n').slice(0, startLine + 1).join('\n').length + 1;
+                ta.selectionStart = newStart; ta.selectionEnd = newStart + line.length;
+            } else if (op === 'delLine') {
+                lines.splice(startLine, 1);
+                if (lines.length === 0) lines = [''];
+                ta.value = lines.join('\n');
+                var pos = lines.slice(0, startLine).join('\n').length + (startLine > 0 ? 1 : 0);
+                ta.selectionStart = ta.selectionEnd = Math.min(pos, ta.value.length);
+            } else if (op === 'moveUp' && startLine > 0) {
+                var moved = lines.splice(startLine, 1)[0];
+                lines.splice(startLine - 1, 0, moved);
+                ta.value = lines.join('\n');
+                var newPos = lines.slice(0, startLine - 1).join('\n').length + (startLine > 1 ? 1 : 0);
+                ta.selectionStart = newPos; ta.selectionEnd = newPos + moved.length;
+            } else if (op === 'moveDown' && startLine < lines.length - 1) {
+                var moved = lines.splice(startLine, 1)[0];
+                lines.splice(startLine + 1, 0, moved);
+                ta.value = lines.join('\n');
+                var newPos = lines.slice(0, startLine + 1).join('\n').length + 1;
+                ta.selectionStart = newPos; ta.selectionEnd = newPos + moved.length;
+            }
+            ta.focus(); syncEditorLines(); syncEditorHighlight();
+        }
+
+        /* ===== Markdown 快捷插入 ===== */
+        function mdInsert(type) {
+            var ta = document.getElementById('snipFormCode');
+            var s = ta.selectionStart, e = ta.selectionEnd;
+            var sel = ta.value.substring(s, e);
+            var before = ta.value.substring(0, s), after = ta.value.substring(e);
+            var insert = '', cursorOffset = 0;
+
+            if (type === 'heading') {
+                var lineStart = before.lastIndexOf('\n') + 1;
+                var lineText = before.substring(lineStart);
+                var m = lineText.match(/^(#{0,5})\s*/);
+                var level = m ? m[1].length + 1 : 1;
+                if (level > 6) level = 1;
+                var hashes = '#'.repeat(level) + ' ';
+                before = before.substring(0, lineStart);
+                var restOfLine = lineText.replace(/^#{0,6}\s*/, '');
+                insert = hashes + restOfLine + sel;
+                cursorOffset = hashes.length + restOfLine.length + sel.length;
+            } else if (type === 'bold') {
+                insert = '**' + (sel || '粗体') + '**';
+                cursorOffset = sel ? insert.length : 2;
+            } else if (type === 'italic') {
+                insert = '*' + (sel || '斜体') + '*';
+                cursorOffset = sel ? insert.length : 1;
+            } else if (type === 'code') {
+                insert = '`' + (sel || '代码') + '`';
+                cursorOffset = sel ? insert.length : 1;
+            } else if (type === 'codeblock') {
+                insert = '\n```\n' + (sel || '') + '\n```\n';
+                cursorOffset = 5 + (sel ? sel.length + 5 : 0);
+            } else if (type === 'link') {
+                insert = '[' + (sel || '链接文字') + '](url)';
+                cursorOffset = sel ? insert.length - 4 : 1;
+            } else if (type === 'list') {
+                var items = sel ? sel.split('\n') : [''];
+                insert = items.map(function(l) { return '- ' + l; }).join('\n');
+                cursorOffset = 2;
+            } else if (type === 'quote') {
+                var items = sel ? sel.split('\n') : [''];
+                insert = items.map(function(l) { return '> ' + l; }).join('\n');
+                cursorOffset = 2;
+            }
+
+            ta.value = before + insert + after;
+            var newPos = before.length + cursorOffset;
+            ta.selectionStart = ta.selectionEnd = newPos;
+            ta.focus(); syncEditorLines(); syncEditorHighlight();
+        }
+
+        /* ===== Markdown 预览 ===== */
+        var mdPreviewOn = false;
+
+        function toggleMdPreview() {
+            mdPreviewOn = !mdPreviewOn;
+            var preview = document.getElementById('mdPreview');
+            var wrap = document.getElementById('editorWrap');
+            var infoBar = document.getElementById('editorInfoBar');
+            var btn = document.getElementById('mdPreviewBtn');
+
+            if (mdPreviewOn) {
+                var text = document.getElementById('snipFormCode').value;
+                preview.innerHTML = parseMd(text);
+                preview.classList.add('show');
+                wrap.style.display = 'none';
+                if (infoBar) infoBar.style.display = 'none';
+                btn.classList.add('active');
+            } else {
+                preview.classList.remove('show');
+                wrap.style.display = '';
+                if (infoBar && currentEditorType === 'code') infoBar.style.display = '';
+                btn.classList.remove('active');
+            }
+        }
+
+        function parseMd(text) {
+            // 轻量 Markdown 解析
+            var html = esc(text);
+
+            // 代码块 (```...```)
+            html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(m, lang, code) {
+                return '<pre><code>' + code.trim() + '</code></pre>';
+            });
+
+            // 行内代码
+            html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+
+            // 标题
+            html = html.replace(/^###### (.+)$/gm, '<h6>$1</h6>');
+            html = html.replace(/^##### (.+)$/gm, '<h5>$1</h5>');
+            html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+            html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+            html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+            html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+            // 粗体和斜体
+            html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+            // 引用
+            html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+            // 合并连续引用
+            html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
+
+            // 水平线
+            html = html.replace(/^---$/gm, '<hr>');
+
+            // 图片
+            html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
+            // 链接
+            html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+
+            // 无序列表
+            html = html.replace(/^[\-\*] (.+)$/gm, '<li>$1</li>');
+            html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+
+            // 有序列表
+            html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+
+            // 表格
+            html = html.replace(/^(\|.+\|)\n(\|[\-\|: ]+\|)\n((?:\|.+\|\n?)*)/gm, function(m, header, sep, body) {
+                var ths = header.split('|').filter(function(c){return c.trim();}).map(function(c){return '<th>'+c.trim()+'</th>';}).join('');
+                var rows = body.trim().split('\n').map(function(row) {
+                    var tds = row.split('|').filter(function(c){return c.trim();}).map(function(c){return '<td>'+c.trim()+'</td>';}).join('');
+                    return '<tr>' + tds + '</tr>';
+                }).join('');
+                return '<table><thead><tr>' + ths + '</tr></thead><tbody>' + rows + '</tbody></table>';
+            });
+
+            // 段落：非标签行包裹 <p>
+            html = html.replace(/^(?!<[a-z/])((?!^\s*$).+)$/gm, '<p>$1</p>');
+            // 清理多余空行
+            html = html.replace(/\n{2,}/g, '\n');
+
+            return html;
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             var ta = document.getElementById('snipFormCode');
             ta.addEventListener('click', updateCursorPos);
             ta.addEventListener('keyup', updateCursorPos);
+            // Tab/Shift+Tab 快捷键
+            ta.addEventListener('keydown', function(e) {
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    editorOp(e.shiftKey ? 'outdent' : 'indent');
+                }
+            });
         });
 
         /* ============================================================
