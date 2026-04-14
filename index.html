@@ -757,7 +757,30 @@
         .collection-sub-drag:active { cursor: grabbing; }
         .collection-sub-icon { font-size: 14px; flex-shrink: 0; }
         .collection-sub-title { flex: 1; font-size: 13px; color: var(--text); font-weight: 500; overflow: hidden; word-break: break-word; min-width: 0; }
-        .collection-sub-actions { display: flex; gap: 5px; flex-shrink: 0; overflow: visible; }
+        .collection-sub-actions { display: flex; gap: 5px; flex-shrink: 0; overflow: visible; position: relative; }
+        .sub-more-btn {
+            padding: 2px 8px; border: none; border-radius: 5px; cursor: pointer;
+            font-size: 16px; line-height: 1; letter-spacing: 1px;
+            background: transparent; color: var(--text-muted); transition: all 0.15s;
+        }
+        .sub-more-btn:hover { background: var(--accent-light); color: var(--accent); }
+        .sub-more-menu {
+            display: none; position: absolute; right: 0; top: 100%; z-index: 50;
+            background: var(--modal-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border); border-radius: 10px;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.12); padding: 6px 0;
+            min-width: 120px; white-space: nowrap;
+        }
+        .sub-more-menu.show { display: block; }
+        .sub-more-menu-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 14px; font-size: 13px; color: var(--text);
+            border: none; background: none; width: 100%; cursor: pointer;
+            transition: background 0.15s; text-align: left;
+        }
+        .sub-more-menu-item:hover { background: var(--accent-light); }
+        .sub-more-menu-item.danger { color: var(--red); }
+        .sub-more-menu-item.danger:hover { background: var(--red-bg); }
         .btn-sub-del {
             padding: 2px 6px; border: none; border-radius: 5px; cursor: pointer;
             font-size: 13px; font-weight: 600; line-height: 1;
@@ -1025,7 +1048,7 @@
                     </label>
                     <input type="text" id="gistId" placeholder="自动填入" readonly="" style="opacity:0.6">
                 </div>
-                <div id="gistStatus" style="font-size:12px;color:var(--text-muted);margin-top:6px;min-height:18px"></div>
+                <div id="gistStatus" style="font-size: 12px; color: var(--accent); margin-top: 6px; min-height: 18px;"></div>
                 <div id="gistLastSync" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
 
                 <div id="deploySection" style="display: none; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--card-border);">
@@ -1462,7 +1485,7 @@
         </button>
     </div>
 
-    <div class="toast" id="toast"></div>
+    <div class="toast show" id="toast">☁️ 已是最新</div>
 
     <script>
         /* ===== 密码锁 ===== */
@@ -2581,19 +2604,18 @@
                     var subHtml = subItems.map(function(sub, idx) {
                         var icon = sub.type === 'link' ? '🔗' : sub.type === 'text' ? '📄' : '💻';
                         var actions = '';
-                        var delBtn = '<button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub(\'' + item.id + '\',' + idx + ')" title="删除">×</button>';
-                        var editBtn = '<button class="btn-copy" onclick="event.stopPropagation();openSubEdit(\'' + item.id + '\',' + idx + ')" style="font-size:11px">✏️</button>';
+                        var moreMenu = '<div class="sub-more-menu">' +
+                            '<button class="sub-more-menu-item" onclick="event.stopPropagation();openSubEdit(\'' + item.id + '\',' + idx + ')">✏️ 编辑</button>' +
+                            '<button class="sub-more-menu-item" onclick="event.stopPropagation();copyCollectionSub(\'' + item.id + '\',' + idx + ',this)">📋 复制</button>' +
+                            '<button class="sub-more-menu-item danger" onclick="event.stopPropagation();deleteCollectionSub(\'' + item.id + '\',' + idx + ')">🗑️ 删除</button>' +
+                            '</div>';
                         if (sub.type === 'link' && sub.url) {
-                            actions = '<a class="btn-visit" href="' + esc(sub.url) + '" target="_blank" onclick="event.stopPropagation()">访问</a>' +
-                                editBtn +
-                                '<button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub(\'' + item.id + '\',' + idx + ',this)">复制</button>' +
-                                delBtn;
+                            actions = '<a class="btn-copy" href="' + esc(sub.url) + '" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;text-decoration:none">🔗</a>' +
+                                '<button class="sub-more-btn" onclick="event.stopPropagation();toggleSubMoreMenu(this)">⋯</button>' + moreMenu;
                         } else {
-                            actions = '<button class="btn-copy" onclick="event.stopPropagation();toggleSubPreview(\'' + item.id + '\',' + idx + ',this)" style="font-size:11px" title="展开内容">▶</button>' +
-                                '<button class="btn-copy" onclick="event.stopPropagation();openExportPicker(\'sub\',\'' + item.id + '\',' + idx + ')" style="font-size:11px">💾</button>' +
-                                editBtn +
-                                '<button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub(\'' + item.id + '\',' + idx + ',this)">复制</button>' +
-                                delBtn;
+                            actions = '<button class="btn-copy" onclick="event.stopPropagation();openExportPicker(\'sub\',\'' + item.id + '\',' + idx + ')" style="font-size:11px">💾</button>' +
+                                '<button class="btn-copy" onclick="event.stopPropagation();toggleSubPreview(\'' + item.id + '\',' + idx + ',this)" style="font-size:11px" title="展开内容">▶</button>' +
+                                '<button class="sub-more-btn" onclick="event.stopPropagation();toggleSubMoreMenu(this)">⋯</button>' + moreMenu;
                         }
                         var isImgLink = sub.type === 'link' && isImageUrl(sub.url);
                         if (isImgLink) {
@@ -2603,14 +2625,11 @@
                                     '<div class="sub-img-header">' +
                                         '<span class="sub-icon">🔗</span>' +
                                         '<span class="sub-img-title">' + esc(sub.title || sub.url.split('/').pop().split('?')[0]) + '</span>' +
+                                        '<div class="collection-sub-actions" style="margin-left:auto">' +
+                                            '<button class="sub-more-btn" onclick="event.stopPropagation();toggleSubMoreMenu(this)">⋯</button>' + moreMenu +
+                                        '</div>' +
                                     '</div>' +
                                     '<div class="sub-img-url">' + esc(sub.url) + '</div>' +
-                                    '<div class="sub-img-btns">' +
-                                        '<a class="btn-visit" href="' + esc(sub.url) + '" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;padding:3px 8px">访问</a>' +
-                                        '<button class="btn-copy" onclick="event.stopPropagation();openSubEdit(\'' + item.id + '\',' + idx + ')" style="font-size:11px;padding:3px 8px">✏️</button>' +
-                                        '<button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub(\'' + item.id + '\',' + idx + ',this)" style="font-size:11px;padding:3px 8px">复制</button>' +
-                                        '<button class="btn-sub-del" onclick="event.stopPropagation();deleteCollectionSub(\'' + item.id + '\',' + idx + ')" title="删除" style="width:20px;height:20px;font-size:12px">×</button>' +
-                                    '</div>' +
                                     (sub.createdAt ? '<div style="font-size:10px;color:var(--text-muted);opacity:0.6;margin-top:2px">🕐 ' + fmtTimeShort(sub.createdAt) + (sub.updatedAt && sub.updatedAt !== sub.createdAt ? '  ✏️ ' + fmtTimeShort(sub.updatedAt) : '') + '</div>' : '') +
                                 '</div>' +
                                 '<div class="sub-img-right">' +
@@ -3349,6 +3368,26 @@
                     openSubEdit(cardId, item.items.length - 1);
                     return;
                 }
+            }
+        }
+
+        function toggleSubMoreMenu(btn) {
+            var menu = btn.nextElementSibling;
+            var wasOpen = menu.classList.contains('show');
+            // 先关掉所有已打开的菜单
+            document.querySelectorAll('.sub-more-menu.show').forEach(function(m) { m.classList.remove('show'); });
+            if (!wasOpen) {
+                menu.classList.add('show');
+                // 点击其他地方关闭
+                setTimeout(function() {
+                    function closeMenu(e) {
+                        if (!menu.contains(e.target) && e.target !== btn) {
+                            menu.classList.remove('show');
+                            document.removeEventListener('click', closeMenu);
+                        }
+                    }
+                    document.addEventListener('click', closeMenu);
+                }, 0);
             }
         }
 
