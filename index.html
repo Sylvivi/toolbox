@@ -1177,11 +1177,11 @@
             <input type="text" id="snipSearchInput" placeholder="搜索标题、标签、内容..." oninput="renderSnippets()">
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">19</span></div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">20</span></div>
             <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">6</span></div>
-            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">1</span></div>
-            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">2</span></div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">10</span></div>
+            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">0</span></div>
+            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">3</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">11</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
@@ -1485,7 +1485,7 @@
         </button>
     </div>
 
-    <div class="toast" id="toast">✅ 已复制到剪贴板</div>
+    <div class="toast" id="toast"></div>
 
     <script>
         /* ===== 密码锁 ===== */
@@ -2736,6 +2736,62 @@
             list.innerHTML = html;
         }
 
+        /* 带状态保持的渲染：保存展开状态、子条目预览状态、滚动位置，渲染后恢复 */
+        function renderSnippetsKeepState(targetId) {
+            // 1. 记住哪些卡片是展开的
+            var expandedIds = {};
+            document.querySelectorAll('.card[data-sid]:not(.collapsed)').forEach(function(c) {
+                expandedIds[c.getAttribute('data-sid')] = true;
+            });
+            // 如果指定了 targetId（刚编辑的卡片），确保它展开
+            if (targetId) expandedIds[targetId] = true;
+
+            // 2. 记住哪些子条目预览是展开的
+            var expandedSubs = {};
+            document.querySelectorAll('.sub-content-preview').forEach(function(el) {
+                if (el.style.display !== 'none') {
+                    var subItem = el.closest('.collection-sub-item');
+                    var card = el.closest('.card[data-sid]');
+                    if (subItem && card) {
+                        var cardId = card.getAttribute('data-sid');
+                        var subIdx = subItem.getAttribute('data-sub-idx');
+                        expandedSubs[cardId + ':' + subIdx] = true;
+                    }
+                }
+            });
+
+            // 3. 记住滚动位置
+            var scrollY = window.scrollY;
+
+            // 4. 重新渲染
+            renderSnipFilters();
+            renderSnippets();
+
+            // 5. 恢复展开状态
+            document.querySelectorAll('.card[data-sid]').forEach(function(c) {
+                if (expandedIds[c.getAttribute('data-sid')]) {
+                    c.classList.remove('collapsed');
+                }
+            });
+
+            // 6. 恢复子条目预览展开状态
+            document.querySelectorAll('.card[data-sid]').forEach(function(card) {
+                var cardId = card.getAttribute('data-sid');
+                card.querySelectorAll('.collection-sub-item').forEach(function(subItem) {
+                    var subIdx = subItem.getAttribute('data-sub-idx');
+                    if (expandedSubs[cardId + ':' + subIdx]) {
+                        var preview = subItem.querySelector('.sub-content-preview');
+                        var btn = subItem.querySelector('.btn-copy');
+                        if (preview) preview.style.display = 'block';
+                        if (btn && btn.textContent.trim() === '▶') btn.textContent = '▼';
+                    }
+                });
+            });
+
+            // 7. 恢复滚动位置（用 requestAnimationFrame 确保 DOM 已更新）
+            requestAnimationFrame(function() { window.scrollTo(0, scrollY); });
+        }
+
         function toggleAllSnippets() {
             var cards = document.querySelectorAll('.card[data-sid]');
             snipAllExpanded = !snipAllExpanded;
@@ -2840,7 +2896,7 @@
                 var idx = -1;
                 for (var i = 0; i < data.length; i++) { if (data[i].id === entry.id) { idx = i; break; } }
                 if (idx >= 0) data[idx] = entry; else data.unshift(entry);
-                setSnipData(data); closeSnipModal(); renderSnipFilters(); renderSnippets();
+                setSnipData(data); closeSnipModal(); renderSnippetsKeepState(entry.id);
                 showToast('✅ 保存成功');
                 return;
             }
@@ -2881,7 +2937,7 @@
             for (var i = 0; i < data.length; i++) { if (data[i].id === entry.id) { idx = i; break; } }
             if (idx >= 0) data[idx] = entry; else data.unshift(entry);
 
-            setSnipData(data); closeSnipModal(); renderSnipFilters(); renderSnippets();
+            setSnipData(data); closeSnipModal(); renderSnippetsKeepState(entry.id);
             showToast('✅ 保存成功');
         }
 
