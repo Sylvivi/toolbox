@@ -1,6 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
-<head>
+<html lang="zh-CN"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>工具箱</title>
@@ -1044,7 +1043,7 @@
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body>
+<body class="dark on-snippets">
 
     <!-- ===== 密码锁屏 ===== -->
     <div class="lock-screen hidden" id="lockScreen">
@@ -1123,16 +1122,16 @@
                     <label>GitHub Token</label>
                     <input type="password" id="gistToken" placeholder="ghp_xxxxxxxxxxxxxxxxxx">
                 </div>
-                <div class="form-group" id="gistIdGroup" style="display:none">
+                <div class="form-group" id="gistIdGroup" style="display: none;">
                     <label style="display:flex;justify-content:space-between">
                         <span>Gist ID <span style="font-weight:400;color:var(--text-muted);font-size:11px">（自动生成，无需修改）</span></span>
                     </label>
-                    <input type="text" id="gistId" placeholder="自动填入" readonly style="opacity:0.6">
+                    <input type="text" id="gistId" placeholder="自动填入" readonly="" style="opacity:0.6">
                 </div>
-                <div id="gistStatus" style="font-size:12px;color:var(--text-muted);margin-top:6px;min-height:18px"></div>
+                <div id="gistStatus" style="font-size: 12px; color: var(--text-muted); margin-top: 6px; min-height: 18px;"></div>
                 <div id="gistLastSync" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
 
-                <div id="deploySection" style="display:none;margin-top:16px;padding-top:14px;border-top:1px solid var(--card-border)">
+                <div id="deploySection" style="display: none; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--card-border);">
                     <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px">🚀 一键部署到 GitHub Pages</div>
                     <div style="display:flex;gap:8px;margin-bottom:8px">
                         <input type="text" id="deployRepo" placeholder="用户名/仓库名" style="flex:1;padding:6px 10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:7px;color:var(--text);font-size:12px;outline:none">
@@ -1150,8 +1149,9 @@
             </div>
             <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
                 <button class="btn-cancel" onclick="closeGistModal()">关闭</button>
-                <button class="btn-cancel" id="gistPullBtn" onclick="gistPull(true)" style="display:none">⬇️ 拉取</button>
-                <button class="btn-save" id="gistSaveBtn" onclick="gistSaveConfig()">连接</button>
+                <button class="btn-cancel" id="gistPullBtn" onclick="gistPull(true)" style="display: none;">⬇️ 拉取</button>
+                <button class="btn-cancel" id="gistPushBtn" onclick="gistManualPush()" style="display: none;">⬆️ 推送</button>
+                <button class="btn-save" id="gistSaveBtn" onclick="gistSaveConfig()">重新连接</button>
             </div>
         </div>
     </div>
@@ -1258,17 +1258,17 @@
             <input type="text" id="snipSearchInput" placeholder="搜索标题、标签、内容..." oninput="renderSnippets()">
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部</div>
-            <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接</div>
-            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码</div>
-            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本</div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合</div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">19</span></div>
+            <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">6</span></div>
+            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">3</span></div>
+            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">2</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">8</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
             <span class="sort-label">排序：</span>
             <!-- chips will be rendered by JS in saved order -->
-        </div>
+        <div class="sort-chip active" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
         <div class="toolbar">
             <div class="toolbar-btn" id="snipExpandBtn" onclick="toggleAllSnippets()">📂 展开</div>
         </div>
@@ -1382,8 +1382,8 @@
     <!-- ===== 密钥编辑弹窗 ===== -->
     <div class="modal-overlay" id="keyModalOverlay" onclick="if(event.target===this)closeKeyModal()">
         <div class="modal">
-            <h2 id="keyModalTitle">➕ 添加 API</h2>
-            <input type="hidden" id="keyEditId">
+            <h2 id="keyModalTitle">✏️ 编辑 API</h2>
+            <input type="hidden" id="keyEditId" value="mo0cq4rsv55gp">
             <div class="modal-body">
                 <div class="form-group">
                     <label>名称 *</label>
@@ -1422,7 +1422,7 @@
         </div>
     </div>
 
-    <button class="fab-add" id="fabAdd" onclick="handleFabTap()">+</button>
+    <button class="fab-add" id="fabAdd" onclick="handleFabTap()" style="display: flex;">+</button>
 
     <div class="batch-bar" id="batchBar">
         <span class="batch-cancel-btn" onclick="exitSelectMode()">取消</span>
@@ -1566,7 +1566,7 @@
         </button>
     </div>
 
-    <div class="toast" id="toast"></div>
+    <div class="toast" id="toast">✅ 保存成功</div>
 
     <script>
         /* ===== 密码锁 ===== */
@@ -4805,6 +4805,7 @@
             document.getElementById('gistId').value = cfg.gistId;
             document.getElementById('gistIdGroup').style.display = cfg.gistId ? 'block' : 'none';
             document.getElementById('gistPullBtn').style.display = cfg.gistId ? 'inline-flex' : 'none';
+            document.getElementById('gistPushBtn').style.display = cfg.gistId ? 'inline-flex' : 'none';
             document.getElementById('gistSaveBtn').textContent = cfg.gistId ? '重新连接' : '连接';
             gistSetStatus(cfg.gistId ? '✅ 已连接，数据变动时自动同步' : '');
             gistUpdateLastSync();
@@ -4850,6 +4851,7 @@
                 document.getElementById('gistId').value = cfg.gistId;
                 document.getElementById('gistIdGroup').style.display = 'block';
                 document.getElementById('gistPullBtn').style.display = 'inline-flex';
+                document.getElementById('gistPushBtn').style.display = 'inline-flex';
                 document.getElementById('gistSaveBtn').textContent = '重新连接';
                 gistUpdateLastSync();
             }).catch(function(err) {
@@ -4917,6 +4919,27 @@
         function gistSchedulePush() {
             if (gistPushTimer) clearTimeout(gistPushTimer);
             gistPushTimer = setTimeout(gistPushData, 3000);
+        }
+
+        // 手动推送（带状态反馈）
+        function gistManualPush() {
+            var cfg = gistGetConfig();
+            if (!cfg.token || !cfg.gistId) { gistSetStatus('⚠️ 请先连接 Gist', 'var(--red)'); return; }
+            gistSetStatus('🔄 正在推送本地数据…', 'var(--text-muted)');
+            fetch('https://api.github.com/gists/' + cfg.gistId, {
+                method: 'PATCH',
+                headers: { 'Authorization': 'token ' + cfg.token, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+                body: JSON.stringify({ files: { 'toolbox_data.json': { content: JSON.stringify(buildSyncPayload(), null, 2) } } })
+            }).then(function(r) {
+                if (!r.ok) return r.json().then(function(d) { throw new Error(d.message || 'HTTP ' + r.status); });
+                localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
+                gistSetStatus('✅ 推送成功！本地数据已覆盖云端', 'var(--accent)');
+                gistUpdateLastSync();
+                var sl = document.getElementById('gistStatusLine');
+                if (sl) sl.innerHTML = '☁️ ' + fmtTimeShort(new Date().toISOString()) + ' <span style="opacity:0.5">已同步</span>';
+            }).catch(function(err) {
+                gistSetStatus('❌ 推送失败: ' + (err.message || '网络错误'), 'var(--red)');
+            });
         }
 
         function gistPull(manual) {
@@ -5043,9 +5066,11 @@
             // 隐藏仅在连接后显示的区域
             var gistIdGroup = document.getElementById('gistIdGroup');
             var gistPullBtn = document.getElementById('gistPullBtn');
+            var gistPushBtn = document.getElementById('gistPushBtn');
             var deploySection = document.getElementById('deploySection');
             if (gistIdGroup) gistIdGroup.style.display = 'none';
             if (gistPullBtn) gistPullBtn.style.display = 'none';
+            if (gistPushBtn) gistPushBtn.style.display = 'none';
             if (deploySection) deploySection.style.display = 'none';
 
             // 移除可能残留的 .active 状态
@@ -5061,6 +5086,7 @@
             });
             if (gistIdGroup) gistIdGroup.style.display = '';
             if (gistPullBtn) gistPullBtn.style.display = '';
+            if (gistPushBtn) gistPushBtn.style.display = '';
             if (deploySection) deploySection.style.display = '';
 
             // 重新渲染
@@ -5164,5 +5190,5 @@
         // 打开页面自动静默拉取
         (function() { var cfg = gistGetConfig(); if (cfg.token && cfg.gistId) gistPull(false); })();
     </script>
-</body>
-</html>
+
+</body></html>
