@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="zh-CN"><head>
+<html lang="zh-CN">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>工具箱</title>
@@ -916,6 +917,36 @@
         .key-chat-input-row button:hover { transform: scale(1.03); }
         .key-chat-input-row button:active { transform: scale(0.97); }
 
+        .key-model-list {
+            margin-top: 10px; padding: 10px; background: var(--card-bg);
+            border: 1px solid var(--card-border); border-radius: 10px;
+        }
+        .key-model-list-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 8px;
+        }
+        .key-model-list-header span { font-size: 12px; color: var(--text-sub); font-weight: 600; }
+        .key-model-list-header .model-count { font-size: 11px; color: var(--text-muted); font-weight: 400; }
+        .key-model-list-search {
+            width: 100%; padding: 6px 10px; margin-bottom: 8px;
+            background: var(--input-bg); border: 1px solid var(--input-border);
+            border-radius: 8px; color: var(--text); font-size: 12px; outline: none;
+        }
+        .key-model-list-search:focus { border-color: #5aab8b; }
+        .key-model-list-search::placeholder { color: var(--text-muted); }
+        .key-model-list-body {
+            display: flex; flex-wrap: wrap; gap: 6px;
+            max-height: 200px; overflow-y: auto; -webkit-overflow-scrolling: touch;
+        }
+        .key-model-list-body::-webkit-scrollbar { width: 3px; }
+        .key-model-list-body::-webkit-scrollbar-thumb { background: rgba(90,171,139,0.3); border-radius: 3px; }
+        .key-model-chip {
+            padding: 4px 10px; background: var(--accent-light); border: 1px solid transparent;
+            border-radius: 14px; font-size: 11px; color: var(--accent-mid);
+            cursor: pointer; transition: all 0.15s; word-break: break-all;
+        }
+        .key-model-chip:hover { border-color: #5aab8b; color: var(--accent); background: rgba(90,171,139,0.25); }
+
         /* ===== 计算器 ===== */
         .calc-card {
             background: var(--card-bg); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
@@ -1013,7 +1044,7 @@
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body class="on-keys">
+<body>
 
     <!-- ===== 密码锁屏 ===== -->
     <div class="lock-screen hidden" id="lockScreen">
@@ -1092,16 +1123,16 @@
                     <label>GitHub Token</label>
                     <input type="password" id="gistToken" placeholder="ghp_xxxxxxxxxxxxxxxxxx">
                 </div>
-                <div class="form-group" id="gistIdGroup" style="display: none;">
+                <div class="form-group" id="gistIdGroup" style="display:none">
                     <label style="display:flex;justify-content:space-between">
                         <span>Gist ID <span style="font-weight:400;color:var(--text-muted);font-size:11px">（自动生成，无需修改）</span></span>
                     </label>
-                    <input type="text" id="gistId" placeholder="自动填入" readonly="" style="opacity:0.6">
+                    <input type="text" id="gistId" placeholder="自动填入" readonly style="opacity:0.6">
                 </div>
                 <div id="gistStatus" style="font-size:12px;color:var(--text-muted);margin-top:6px;min-height:18px"></div>
                 <div id="gistLastSync" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
 
-                <div id="deploySection" style="display: none; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--card-border);">
+                <div id="deploySection" style="display:none;margin-top:16px;padding-top:14px;border-top:1px solid var(--card-border)">
                     <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px">🚀 一键部署到 GitHub Pages</div>
                     <div style="display:flex;gap:8px;margin-bottom:8px">
                         <input type="text" id="deployRepo" placeholder="用户名/仓库名" style="flex:1;padding:6px 10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:7px;color:var(--text);font-size:12px;outline:none">
@@ -1119,8 +1150,8 @@
             </div>
             <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
                 <button class="btn-cancel" onclick="closeGistModal()">关闭</button>
-                <button class="btn-cancel" id="gistPullBtn" onclick="gistPull(true)" style="display: none;">⬇️ 拉取</button>
-                <button class="btn-save" id="gistSaveBtn" onclick="gistSaveConfig()">重新连接</button>
+                <button class="btn-cancel" id="gistPullBtn" onclick="gistPull(true)" style="display:none">⬇️ 拉取</button>
+                <button class="btn-save" id="gistSaveBtn" onclick="gistSaveConfig()">连接</button>
             </div>
         </div>
     </div>
@@ -1202,7 +1233,7 @@
     </div>
 
     <!-- ==================== 页面二：密钥管理 ==================== -->
-    <div class="tab-content active" id="tab-keys">
+    <div class="tab-content" id="tab-keys">
         <div class="header">
             <h1>🔑 API 密钥管理器</h1>
             <p>安全管理你的 API 密钥与模型价格</p>
@@ -1218,7 +1249,7 @@
     </div>
 
     <!-- ==================== 页面三：收藏（代码/文本/链接） ==================== -->
-    <div class="tab-content" id="tab-snippets">
+    <div class="tab-content active" id="tab-snippets">
         <div class="header">
             <h1>📝 收藏夹</h1>
             <p>收藏代码、文本片段和常用链接</p>
@@ -1227,17 +1258,17 @@
             <input type="text" id="snipSearchInput" placeholder="搜索标题、标签、内容..." oninput="renderSnippets()">
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">16</span></div>
-            <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">8</span></div>
-            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">1</span></div>
-            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">2</span></div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">5</span></div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部</div>
+            <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接</div>
+            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码</div>
+            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本</div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合</div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
             <span class="sort-label">排序：</span>
             <!-- chips will be rendered by JS in saved order -->
-        <div class="sort-chip active" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
+        </div>
         <div class="toolbar">
             <div class="toolbar-btn" id="snipExpandBtn" onclick="toggleAllSnippets()">📂 展开</div>
         </div>
@@ -1391,7 +1422,7 @@
         </div>
     </div>
 
-    <button class="fab-add" id="fabAdd" onclick="handleFabTap()" style="display: flex;">+</button>
+    <button class="fab-add" id="fabAdd" onclick="handleFabTap()">+</button>
 
     <div class="batch-bar" id="batchBar">
         <span class="batch-cancel-btn" onclick="exitSelectMode()">取消</span>
@@ -1527,10 +1558,10 @@
     </div>
 
     <div class="bottom-nav">
-        <button class="nav-item nav-keys active" onclick="switchTab('keys', this)">
+        <button class="nav-item nav-keys" onclick="switchTab('keys', this)">
             <span class="nav-icon">🔑</span><span class="nav-label">密钥</span>
         </button>
-        <button class="nav-item nav-snippets" onclick="switchTab('snippets', this)">
+        <button class="nav-item nav-snippets active" onclick="switchTab('snippets', this)">
             <span class="nav-icon">📝</span><span class="nav-label">收藏</span>
         </button>
     </div>
@@ -2065,10 +2096,12 @@
                                 (item.url ? '<button class="key-diag-btn" onclick="event.stopPropagation();checkKeyBalance(\'' + item.id + '\')">💰 查余额</button>' : '') +
                                 (item.url ? '<button class="key-diag-btn" onclick="event.stopPropagation();pingKeyApi(\'' + item.id + '\')">🚀 测速</button>' : '') +
                                 (item.url ? '<button class="key-diag-btn" onclick="event.stopPropagation();showChatTest(\'' + item.id + '\')">🤖 试聊</button>' : '') +
-                                (item.website ? '<button class="key-diag-btn" onclick="event.stopPropagation();window.open(\'' + escAttr(item.website.replace(/\/$/, '')) + '/#/log\',\'_blank\')">📊 消耗记录</button>' : '') +
+                                ((item.website || item.url) ? '<button class="key-diag-btn" onclick="event.stopPropagation();openKeyLog(\'' + item.id + '\')">📊 消耗记录</button>' : '') +
+                                (item.url ? '<button class="key-diag-btn" onclick="event.stopPropagation();fetchKeyModels(\'' + item.id + '\')">📋 拉取模型</button>' : '') +
                             '</div>' +
                             '<div class="key-diag-result" id="diag-' + item.id + '"></div>' +
                             '<div id="chat-test-' + item.id + '"></div>' +
+                            '<div id="model-list-' + item.id + '"></div>' +
                         '</div>' +
                         '<div class="card-actions">' +
                             '<button class="btn-duplicate" onclick="duplicateKeyEntry(\'' + item.id + '\')">📋 复制</button>' +
@@ -2221,61 +2254,111 @@
             return getBaseUrl(url).replace(/\/v1$/i, '');
         }
 
-        // 💰 查余额 — 兼容 New API / One API
-        function checkKeyBalance(id) {
+        // 💰 查余额 — 依次尝试 subscription+usage → credit_grants → user/self
+        async function checkKeyBalance(id) {
             var item = getKeyItemById(id);
             if (!item || !item.url) return;
             diagClear(id);
-            diagAppend(id, '<div class="diag-row">💰 正在查询余额…</div>');
+            diagAppend(id, '<div class="diag-row">💰 <span style="color:var(--text-muted)">正在连接…</span></div>');
 
-            var rootUrl = getRootUrl(item.url);
+            var baseUrl = item.url.replace(/\/v1\/?$/, '').replace(/\/$/, '');
             var headers = { 'Authorization': 'Bearer ' + item.key, 'Content-Type': 'application/json' };
 
-            // 尝试 New API / One API 的 /api/user/self 接口
-            fetch(rootUrl + '/api/user/self', { headers: headers })
-            .then(function(r) {
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                return r.json();
-            })
-            .then(function(json) {
-                if (json.success === false) throw new Error(json.message || '接口返回失败');
-                var d = json.data || json;
-                // New API 余额字段：quota（单位可能是分或美元的 500000 倍）
-                var balance = '未知';
-                if (d.quota !== undefined) {
-                    // New API: quota 单位是 1/500000 美元
-                    balance = '$' + (d.quota / 500000).toFixed(4);
-                } else if (d.balance !== undefined) {
-                    balance = '$' + Number(d.balance).toFixed(4);
+            try {
+                // 接口 1：New API 最常用的 subscription + usage
+                var subUsageResult = null;
+                var resSub = await fetch(baseUrl + '/v1/dashboard/billing/subscription', { headers: headers });
+                if (resSub.ok) {
+                    var subData = await resSub.json();
+                    var totalAmount = subData.hard_limit_usd;
+
+                    var today = new Date();
+                    var y = today.getFullYear();
+                    var m = String(today.getMonth() + 1).padStart(2, '0');
+                    var startD = y + '-' + m + '-01';
+                    var endD = y + '-' + m + '-31';
+
+                    var resUsage = await fetch(baseUrl + '/v1/dashboard/billing/usage?start_date=' + startD + '&end_date=' + endD, { headers: headers });
+                    if (resUsage.ok) {
+                        var usageData = await resUsage.json();
+                        var used = usageData.total_usage / 100;
+                        var remain = totalAmount - used;
+                        // 如果总额 < 99999，说明是真实余额，直接用
+                        if (totalAmount < 99999) {
+                            diagClear(id);
+                            diagAppend(id, '<div class="diag-row">💰 <span class="diag-label">余额</span><span class="diag-ok">$' + remain.toFixed(2) + '</span>  |  总额: $' + totalAmount.toFixed(2) + '  |  本月已用: $' + used.toFixed(2) + '</div>');
+                            return;
+                        }
+                        // 总额过大（站长设的无限额度），先存着用量，继续尝试后面的接口拿真实余额
+                        subUsageResult = { used: used };
+                    }
                 }
-                var usedQuota = '';
-                if (d.used_quota !== undefined) {
-                    usedQuota = '  |  已用: $' + (d.used_quota / 500000).toFixed(4);
+
+                // 接口 2：credit_grants
+                var resGrants = await fetch(baseUrl + '/v1/dashboard/billing/credit_grants', { headers: headers });
+                if (resGrants.ok) {
+                    var grantData = await resGrants.json();
+                    if (grantData.total_available !== undefined) {
+                        var extra = subUsageResult ? '  |  本月已用: $' + subUsageResult.used.toFixed(2) : '';
+                        diagClear(id);
+                        diagAppend(id, '<div class="diag-row">💰 <span class="diag-label">余额</span><span class="diag-ok">$' + Number(grantData.total_available).toFixed(2) + '</span>'
+                            + (grantData.total_granted ? '  |  总额: $' + Number(grantData.total_granted).toFixed(2) : '')
+                            + (grantData.total_used ? '  |  已用: $' + Number(grantData.total_used).toFixed(2) : '')
+                            + extra + '</div>');
+                        return;
+                    }
                 }
-                var username = d.username ? '  |  用户: ' + esc(d.username) : '';
+
+                // 接口 3：New API user/self（quota 字段）
+                var resSelf = await fetch(baseUrl + '/api/user/self', { headers: headers });
+                if (resSelf.ok) {
+                    var selfData = await resSelf.json();
+                    if (selfData.data && selfData.data.quota !== undefined) {
+                        var remainUsd = selfData.data.quota / 500000;
+                        var usedInfo = selfData.data.used_quota !== undefined ? '  |  已用: ≈$' + (selfData.data.used_quota / 500000).toFixed(2) : '';
+                        var extra = subUsageResult ? '  |  本月消耗: $' + subUsageResult.used.toFixed(2) : '';
+                        diagClear(id);
+                        diagAppend(id, '<div class="diag-row">💰 <span class="diag-label">余额</span><span class="diag-ok">≈ $' + remainUsd.toFixed(2) + '</span>' + usedInfo + extra + ' <span style="font-size:10px;color:var(--text-muted)">(50万=1$)</span></div>');
+                        return;
+                    }
+                }
+
+                // 如果前面 subscription 拿到了用量但余额是无限的，至少显示用量
+                if (subUsageResult) {
+                    diagClear(id);
+                    diagAppend(id, '<div class="diag-row">💰 <span class="diag-label">余额</span><span class="diag-ok">♾️ 无限额度</span>  |  本月已用: $' + subUsageResult.used.toFixed(2) + '</div>');
+                    return;
+                }
+
+                // 全部失败
                 diagClear(id);
-                diagAppend(id, '<div class="diag-row">💰 <span class="diag-label">余额</span><span class="diag-ok">' + balance + '</span>' + usedQuota + username + '</div>');
-            })
-            .catch(function(e) {
-                // 回退尝试 OpenAI 兼容接口
-                var baseUrl = getBaseUrl(item.url);
-                fetch(baseUrl + '/dashboard/billing/credit_grants', { headers: headers })
-                .then(function(r) {
-                    if (!r.ok) throw new Error('HTTP ' + r.status);
-                    return r.json();
-                })
-                .then(function(json) {
-                    var total = json.total_granted || 0;
-                    var used = json.total_used || 0;
-                    var avail = json.total_available || (total - used);
-                    diagClear(id);
-                    diagAppend(id, '<div class="diag-row">💰 <span class="diag-label">余额</span><span class="diag-ok">$' + Number(avail).toFixed(4) + '</span>  |  总额: $' + Number(total).toFixed(2) + '  已用: $' + Number(used).toFixed(2) + '</div>');
-                })
-                .catch(function(e2) {
-                    diagClear(id);
-                    diagAppend(id, '<div class="diag-row">💰 <span class="diag-label">余额</span><span class="diag-fail">❌ 查询失败: ' + esc(e.message || '网络错误/CORS') + '</span></div>');
-                });
-            });
+                diagAppend(id, '<div class="diag-row">💰 <span class="diag-label">余额</span><span style="color:var(--gold)">⚠️ 该站不支持余额查询</span></div>');
+            } catch (e) {
+                console.error(e);
+                diagClear(id);
+                var isCors = e.message && (e.message.indexOf('Failed to fetch') !== -1 || e.message.indexOf('NetworkError') !== -1 || e.message.indexOf('CORS') !== -1);
+                if (isCors) {
+                    var linkHtml = '';
+                    var goUrl = item.website || item.url;
+                    if (goUrl) {
+                        var goBase = goUrl.replace(/\/v1\/?$/, '').replace(/\/$/, '');
+                        linkHtml = '  <a href="' + esc(goBase) + '" target="_blank" style="color:var(--accent);text-decoration:underline;font-size:11px;margin-left:6px">去官网查看 ↗</a>';
+                    }
+                    diagAppend(id, '<div class="diag-row">💰 <span class="diag-label">余额</span><span style="color:var(--gold)">🚫 该站未开放跨域查询</span>' + linkHtml + '</div>');
+                } else {
+                    diagAppend(id, '<div class="diag-row">💰 <span class="diag-label">余额</span><span class="diag-fail">❌ 查询失败: ' + esc(e.message || '未知错误') + '</span></div>');
+                }
+            }
+        }
+
+        // 📊 打开消耗记录页面
+        function openKeyLog(id) {
+            var item = getKeyItemById(id);
+            if (!item) return;
+            var url = item.website || item.url || '';
+            if (!url) { showToast('⚠️ 请先配置官网或 API 地址'); return; }
+            var base = url.replace(/\/v1\/?$/, '').replace(/\/$/, '');
+            window.open(base + '/log', '_blank');
         }
 
         // 🚀 测速 Ping — 用 /v1/models 接口
@@ -2382,6 +2465,83 @@
                 diagAppend(id, '<div class="diag-row">🤖 <span class="diag-label">试聊</span><span class="diag-fail">❌ 无法对话 (' + ms + 'ms)</span></div>' +
                     '<div class="diag-row" style="padding-left:56px;color:var(--text-muted);font-size:11px">错误: ' + esc(e.message || '网络错误/CORS') + '</div>');
             });
+        }
+
+        // 📋 拉取模型列表
+        function fetchKeyModels(id) {
+            var container = document.getElementById('model-list-' + id);
+            if (!container) return;
+            // 切换显示/隐藏
+            if (container.innerHTML) { container.innerHTML = ''; return; }
+
+            var item = getKeyItemById(id);
+            if (!item || !item.url) return;
+
+            container.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:8px 0">📋 正在拉取模型列表…</div>';
+
+            var baseUrl = getBaseUrl(item.url);
+            var headers = { 'Authorization': 'Bearer ' + item.key };
+
+            fetch(baseUrl + '/models', { headers: headers })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function(json) {
+                var models = (json.data || []).map(function(m) { return m.id || m.name || ''; }).filter(Boolean);
+                models.sort(function(a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()); });
+
+                if (models.length === 0) {
+                    container.innerHTML = '<div style="font-size:12px;color:var(--gold);padding:8px 0">⚠️ 该站未返回任何模型</div>';
+                    return;
+                }
+
+                // 存到内存供搜索用
+                container._allModels = models;
+                container._keyId = id;
+                renderModelList(container, models);
+            })
+            .catch(function(e) {
+                container.innerHTML = '<div style="font-size:12px;color:var(--red);padding:8px 0">❌ 拉取失败: ' + esc(e.message || '网络错误') + '</div>';
+            });
+        }
+
+        function renderModelList(container, models) {
+            var id = container._keyId;
+            var chips = models.map(function(name) {
+                return '<span class="key-model-chip" onclick="event.stopPropagation();pickModelForChat(\'' + escAttr(id) + '\',\'' + escAttr(name) + '\')" title="点击试聊">' + esc(name) + '</span>';
+            }).join('');
+
+            container.innerHTML = '<div class="key-model-list">' +
+                '<div class="key-model-list-header"><span>📋 可用模型</span><span class="model-count">' + models.length + ' 个</span></div>' +
+                '<input class="key-model-list-search" type="text" placeholder="搜索模型名…" oninput="filterModelList(this,\'' + escAttr(id) + '\')" onclick="event.stopPropagation()">' +
+                '<div class="key-model-list-body" id="model-chips-' + id + '">' + chips + '</div>' +
+                '</div>';
+        }
+
+        function filterModelList(input, id) {
+            var container = document.getElementById('model-list-' + id);
+            if (!container || !container._allModels) return;
+            var kw = input.value.toLowerCase();
+            var filtered = container._allModels.filter(function(m) { return m.toLowerCase().indexOf(kw) !== -1; });
+            var chipsEl = document.getElementById('model-chips-' + id);
+            if (!chipsEl) return;
+            chipsEl.innerHTML = filtered.map(function(name) {
+                return '<span class="key-model-chip" onclick="event.stopPropagation();pickModelForChat(\'' + escAttr(id) + '\',\'' + escAttr(name) + '\')" title="点击试聊">' + esc(name) + '</span>';
+            }).join('');
+        }
+
+        // 点击模型名 → 自动打开试聊并填入模型名
+        function pickModelForChat(id, modelName) {
+            var container = document.getElementById('chat-test-' + id);
+            if (!container) return;
+            // 确保试聊框显示
+            container.innerHTML = '<div class="key-chat-input-row">' +
+                '<input type="text" id="chat-model-' + id + '" placeholder="输入模型名" value="' + esc(modelName) + '">' +
+                '<button onclick="event.stopPropagation();doKeyChat(\'' + id + '\')">发送</button>' +
+                '</div>';
+            // 自动发起试聊
+            doKeyChat(id);
         }
 
         var keyDragState = null;
@@ -5004,5 +5164,5 @@
         // 打开页面自动静默拉取
         (function() { var cfg = gistGetConfig(); if (cfg.token && cfg.gistId) gistPull(false); })();
     </script>
-
-</body></html>
+</body>
+</html>
