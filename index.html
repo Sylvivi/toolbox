@@ -1043,7 +1043,7 @@
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body class="dark on-snippets">
+<body class="on-snippets">
 
     <!-- ===== 密码锁屏 ===== -->
     <div class="lock-screen hidden" id="lockScreen">
@@ -1128,7 +1128,7 @@
                     </label>
                     <input type="text" id="gistId" placeholder="自动填入" readonly="" style="opacity:0.6">
                 </div>
-                <div id="gistStatus" style="font-size: 12px; color: var(--text-muted); margin-top: 6px; min-height: 18px;"></div>
+                <div id="gistStatus" style="font-size:12px;color:var(--text-muted);margin-top:6px;min-height:18px"></div>
                 <div id="gistLastSync" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
 
                 <div id="deploySection" style="display: none; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--card-border);">
@@ -1147,11 +1147,15 @@
                     <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5">💡 请确保仓库已在 Settings → Pages 中启用对应分支</div>
                 </div>
             </div>
-            <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
-                <button class="btn-cancel" onclick="closeGistModal()">关闭</button>
-                <button class="btn-cancel" id="gistPullBtn" onclick="gistPull(true)" style="display: none;">⬇️ 拉取</button>
-                <button class="btn-cancel" id="gistPushBtn" onclick="gistManualPush()" style="display: none;">⬆️ 推送</button>
-                <button class="btn-save" id="gistSaveBtn" onclick="gistSaveConfig()">重新连接</button>
+            <div class="modal-actions" style="flex-direction:column;gap:10px;padding:14px 24px 20px">
+                <div id="gistSyncBtns" style="display: none; gap: 8px;">
+                    <button class="btn-cancel" id="gistPullBtn" onclick="gistPull(true)" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
+                    <button class="btn-cancel" id="gistPushBtn" onclick="gistManualPush()" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
+                </div>
+                <div style="display:flex;gap:8px">
+                    <button class="btn-cancel" onclick="closeGistModal()">关闭</button>
+                    <button class="btn-save" id="gistSaveBtn" onclick="gistSaveConfig()">重新连接</button>
+                </div>
             </div>
         </div>
     </div>
@@ -1260,9 +1264,9 @@
         <div class="type-filter-bar">
             <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">19</span></div>
             <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">6</span></div>
-            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">3</span></div>
+            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">2</span></div>
             <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">2</span></div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">8</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">9</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
@@ -1382,8 +1386,8 @@
     <!-- ===== 密钥编辑弹窗 ===== -->
     <div class="modal-overlay" id="keyModalOverlay" onclick="if(event.target===this)closeKeyModal()">
         <div class="modal">
-            <h2 id="keyModalTitle">✏️ 编辑 API</h2>
-            <input type="hidden" id="keyEditId" value="mo0cq4rsv55gp">
+            <h2 id="keyModalTitle">➕ 添加 API</h2>
+            <input type="hidden" id="keyEditId">
             <div class="modal-body">
                 <div class="form-group">
                     <label>名称 *</label>
@@ -1566,7 +1570,7 @@
         </button>
     </div>
 
-    <div class="toast" id="toast">✅ 保存成功</div>
+    <div class="toast" id="toast"></div>
 
     <script>
         /* ===== 密码锁 ===== */
@@ -4804,8 +4808,7 @@
             document.getElementById('gistToken').value = cfg.token;
             document.getElementById('gistId').value = cfg.gistId;
             document.getElementById('gistIdGroup').style.display = cfg.gistId ? 'block' : 'none';
-            document.getElementById('gistPullBtn').style.display = cfg.gistId ? 'inline-flex' : 'none';
-            document.getElementById('gistPushBtn').style.display = cfg.gistId ? 'inline-flex' : 'none';
+            document.getElementById('gistSyncBtns').style.display = cfg.gistId ? 'flex' : 'none';
             document.getElementById('gistSaveBtn').textContent = cfg.gistId ? '重新连接' : '连接';
             gistSetStatus(cfg.gistId ? '✅ 已连接，数据变动时自动同步' : '');
             gistUpdateLastSync();
@@ -4850,8 +4853,7 @@
                 var cfg = gistGetConfig();
                 document.getElementById('gistId').value = cfg.gistId;
                 document.getElementById('gistIdGroup').style.display = 'block';
-                document.getElementById('gistPullBtn').style.display = 'inline-flex';
-                document.getElementById('gistPushBtn').style.display = 'inline-flex';
+                document.getElementById('gistSyncBtns').style.display = 'flex';
                 document.getElementById('gistSaveBtn').textContent = '重新连接';
                 gistUpdateLastSync();
             }).catch(function(err) {
@@ -5065,12 +5067,10 @@
 
             // 隐藏仅在连接后显示的区域
             var gistIdGroup = document.getElementById('gistIdGroup');
-            var gistPullBtn = document.getElementById('gistPullBtn');
-            var gistPushBtn = document.getElementById('gistPushBtn');
+            var gistSyncBtns = document.getElementById('gistSyncBtns');
             var deploySection = document.getElementById('deploySection');
             if (gistIdGroup) gistIdGroup.style.display = 'none';
-            if (gistPullBtn) gistPullBtn.style.display = 'none';
-            if (gistPushBtn) gistPushBtn.style.display = 'none';
+            if (gistSyncBtns) gistSyncBtns.style.display = 'none';
             if (deploySection) deploySection.style.display = 'none';
 
             // 移除可能残留的 .active 状态
@@ -5085,8 +5085,7 @@
                 if (el && saved[id] !== undefined) el.value = saved[id];
             });
             if (gistIdGroup) gistIdGroup.style.display = '';
-            if (gistPullBtn) gistPullBtn.style.display = '';
-            if (gistPushBtn) gistPushBtn.style.display = '';
+            if (gistSyncBtns) gistSyncBtns.style.display = '';
             if (deploySection) deploySection.style.display = '';
 
             // 重新渲染
