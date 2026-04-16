@@ -935,10 +935,18 @@
         .key-model-list-search::placeholder { color: var(--text-muted); }
         .key-model-list-body {
             display: flex; flex-wrap: wrap; gap: 6px;
-            max-height: 200px; overflow-y: auto; -webkit-overflow-scrolling: touch;
+            max-height: 240px; overflow-y: auto; -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            padding-bottom: 2px;
         }
-        .key-model-list-body::-webkit-scrollbar { width: 3px; }
-        .key-model-list-body::-webkit-scrollbar-thumb { background: rgba(90,171,139,0.3); border-radius: 3px; }
+        .key-model-list-body::-webkit-scrollbar { width: 6px; }
+        .key-model-list-body::-webkit-scrollbar-track { background: rgba(90,171,139,0.08); border-radius: 3px; }
+        .key-model-list-body::-webkit-scrollbar-thumb { background: rgba(90,171,139,0.5); border-radius: 3px; }
+        .key-model-list-body::-webkit-scrollbar-thumb:hover { background: rgba(90,171,139,0.7); }
+        .key-model-list-hint {
+            font-size: 10px; color: var(--text-muted); text-align: center;
+            padding: 4px 0 0; opacity: 0.6;
+        }
         .key-model-chip {
             padding: 4px 10px; background: var(--accent-light); border: 1px solid transparent;
             border-radius: 14px; font-size: 11px; color: var(--accent-mid);
@@ -1043,7 +1051,7 @@
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body class="on-snippets">
+<body class="on-keys">
 
     <!-- ===== 密码锁屏 ===== -->
     <div class="lock-screen hidden" id="lockScreen">
@@ -1238,7 +1246,7 @@
     </div>
 
     <!-- ==================== 页面二：密钥管理 ==================== -->
-    <div class="tab-content" id="tab-keys">
+    <div class="tab-content active" id="tab-keys">
         <div class="header">
             <h1>🔑 API 密钥管理器</h1>
             <p>安全管理你的 API 密钥与模型价格</p>
@@ -1254,7 +1262,7 @@
     </div>
 
     <!-- ==================== 页面三：收藏（代码/文本/链接） ==================== -->
-    <div class="tab-content active" id="tab-snippets">
+    <div class="tab-content" id="tab-snippets">
         <div class="header">
             <h1>📝 收藏夹</h1>
             <p>收藏代码、文本片段和常用链接</p>
@@ -1599,10 +1607,10 @@
     </div>
 
     <div class="bottom-nav">
-        <button class="nav-item nav-keys" onclick="switchTab('keys', this)">
+        <button class="nav-item nav-keys active" onclick="switchTab('keys', this)">
             <span class="nav-icon">🔑</span><span class="nav-label">密钥</span>
         </button>
-        <button class="nav-item nav-snippets active" onclick="switchTab('snippets', this)">
+        <button class="nav-item nav-snippets" onclick="switchTab('snippets', this)">
             <span class="nav-icon">📝</span><span class="nav-label">收藏</span>
         </button>
     </div>
@@ -2557,7 +2565,17 @@
                 '<div class="key-model-list-header"><span>📋 可用模型</span><span class="model-count">' + models.length + ' 个</span></div>' +
                 '<input class="key-model-list-search" type="text" placeholder="搜索模型名…" oninput="filterModelList(this,\'' + escAttr(id) + '\')" onclick="event.stopPropagation()">' +
                 '<div class="key-model-list-body" id="model-chips-' + id + '">' + chips + '</div>' +
+                '<div class="key-model-list-hint" id="model-hint-' + id + '"></div>' +
                 '</div>';
+
+            // 检测是否可滚动，显示提示
+            setTimeout(function() {
+                var body = document.getElementById('model-chips-' + id);
+                var hint = document.getElementById('model-hint-' + id);
+                if (body && hint && body.scrollHeight > body.clientHeight + 2) {
+                    hint.textContent = '↕ 上下滑动查看更多';
+                }
+            }, 50);
         }
 
         function filterModelList(input, id) {
