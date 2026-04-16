@@ -1098,6 +1098,7 @@
             <div class="export-menu" id="dataMenu" style="min-width:90px">
                 <button class="export-menu-item" onclick="exportAllData()">💾 导出</button>
                 <button class="export-menu-item" onclick="document.getElementById('globalImportFile').click()">📥 导入</button>
+                <button class="export-menu-item" onclick="openSnapshotModal()">🕐 快照恢复</button>
             </div>
         </div>
         <div class="toolbar-btn" onclick="openGistModal()">☁️ 云同步</div>
@@ -1128,7 +1129,7 @@
                     </label>
                     <input type="text" id="gistId" placeholder="自动填入" readonly="" style="opacity:0.6">
                 </div>
-                <div id="gistStatus" style="font-size:12px;color:var(--text-muted);margin-top:6px;min-height:18px"></div>
+                <div id="gistStatus" style="font-size: 12px; color: var(--text-muted); margin-top: 6px; min-height: 18px;"></div>
                 <div id="gistLastSync" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
 
                 <div id="deploySection" style="display: none; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--card-border);">
@@ -1142,15 +1143,15 @@
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                         <button class="btn-save" onclick="deployToGitHub()" style="flex:none;padding:8px 20px">🚀 部署</button>
-                        <span id="deployStatus" style="font-size:12px;color:var(--text-muted)"></span>
+                        <span id="deployStatus" style="font-size: 12px; color: var(--text-muted);"></span>
                     </div>
                     <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5">💡 请确保仓库已在 Settings → Pages 中启用对应分支</div>
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:10px;padding:14px 24px 20px">
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
-                    <button class="btn-cancel" id="gistPullBtn" onclick="gistPull(true)" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
-                    <button class="btn-cancel" id="gistPushBtn" onclick="gistManualPush()" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
+                    <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
+                    <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
                 </div>
                 <div style="display:flex;gap:8px">
                     <button class="btn-cancel" onclick="closeGistModal()">关闭</button>
@@ -1272,7 +1273,7 @@
         <div class="sort-bar" id="sortBar">
             <span class="sort-label">排序：</span>
             <!-- chips will be rendered by JS in saved order -->
-        <div class="sort-chip active" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
+        <div class="sort-chip" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip active" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
         <div class="toolbar">
             <div class="toolbar-btn" id="snipExpandBtn" onclick="toggleAllSnippets()">📂 展开</div>
         </div>
@@ -1473,6 +1474,42 @@
         </div>
     </div>
 
+    <!-- ===== 同步方向确认弹窗 ===== -->
+    <div class="modal-overlay" id="syncConfirmOverlay" onclick="if(event.target===this)closeSyncConfirm()">
+        <div class="modal" style="max-width:380px;width:100%">
+            <h2 id="syncConfirmTitle">⬆️ 推送本地数据</h2>
+            <div class="modal-body">
+                <div id="syncConfirmText" style="font-size:14px;line-height:1.7;color:var(--text)">将把<b style="color:var(--accent)">本地</b>的数据上传，<b style="color:var(--red)">覆盖云端</b>。<br><br>适用场景：云端数据损坏、或要把本地新数据强制同步上去。<br><br>⚠️ 如果云端有本地没有的新数据，会被冲掉。</div>
+                <div style="margin-top:12px;padding:10px 12px;background:var(--accent-light);border-radius:8px;font-size:12px;color:var(--accent-mid);line-height:1.6">
+                    💡 操作前会自动在本地保存一份快照，万一搞错了可以在「数据 → 🕐 快照恢复」里找回。
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeSyncConfirm()">取消</button>
+                <button class="btn-save" id="syncConfirmBtn" onclick="doSyncConfirm()" style="background: linear-gradient(135deg, rgb(217, 119, 6), rgb(245, 158, 11));">⬆️ 确认推送</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 快照恢复弹窗 ===== -->
+    <div class="modal-overlay" id="snapshotOverlay" onclick="if(event.target===this)closeSnapshotModal()">
+        <div class="modal" style="max-width:480px;width:100%">
+            <h2>🕐 快照恢复</h2>
+            <div class="modal-body">
+                <div style="font-size:12px;color:var(--text-sub);margin-bottom:12px;line-height:1.7;background:var(--card-inner);padding:10px 12px;border-radius:8px">
+                    每次<b>拉取、推送、导入</b>操作之前，系统会自动把当时的本地数据保存一份快照。最多保留最近 10 份。找不到数据时可以从这里恢复。
+                </div>
+                <div id="snapshotList"></div>
+                <div style="margin-top:10px;text-align:center">
+                    <a href="https://gist.github.com" target="_blank" style="font-size:12px;color:var(--accent);text-decoration:underline">🔗 打开 Gist.github.com 查看云端历史版本</a>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeSnapshotModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ===== 导出格式选择弹窗 ===== -->
     <div class="modal-overlay" id="exportPickerOverlay" onclick="if(event.target===this)closeExportPicker()">
         <div class="modal" style="max-width:280px;width:100%">
@@ -1570,7 +1607,7 @@
         </button>
     </div>
 
-    <div class="toast" id="toast"></div>
+    <div class="toast" id="toast">☁️ 已是最新</div>
 
     <script>
         /* ===== 密码锁 ===== */
@@ -4579,6 +4616,8 @@
 
         function importAllData(event) {
             var file = event.target.files[0]; if (!file) return;
+            // 导入前先自动存一份快照
+            takeSnapshot('导入前');
             var reader = new FileReader();
             reader.onload = function(e) {
                 try {
@@ -4902,6 +4941,142 @@
             };
         }
 
+        /* ===== 本地快照系统 ===== */
+        var SNAPSHOT_STORE = 'toolbox_snapshots';
+        var SNAPSHOT_MAX = 10;
+
+        function takeSnapshot(reason) {
+            var list = JSON.parse(localStorage.getItem(SNAPSHOT_STORE) || '[]');
+            var snap = {
+                time: new Date().toISOString(),
+                reason: reason || '自动',
+                payload: buildSyncPayload()
+            };
+            list.unshift(snap);
+            if (list.length > SNAPSHOT_MAX) list = list.slice(0, SNAPSHOT_MAX);
+            try {
+                localStorage.setItem(SNAPSHOT_STORE, JSON.stringify(list));
+            } catch (e) {
+                // 空间不足时删旧的再试
+                while (list.length > 3) {
+                    list.pop();
+                    try { localStorage.setItem(SNAPSHOT_STORE, JSON.stringify(list)); return; } catch (e2) {}
+                }
+            }
+        }
+
+        function getSnapshots() {
+            return JSON.parse(localStorage.getItem(SNAPSHOT_STORE) || '[]');
+        }
+
+        function openSnapshotModal() {
+            document.querySelectorAll('.export-menu.show').forEach(function(m) { m.classList.remove('show'); });
+            document.getElementById('snapshotOverlay').classList.add('show');
+            renderSnapshotList();
+        }
+        function closeSnapshotModal() { document.getElementById('snapshotOverlay').classList.remove('show'); }
+
+        function renderSnapshotList() {
+            var list = getSnapshots();
+            var el = document.getElementById('snapshotList');
+            if (!list.length) {
+                el.innerHTML = '<div style="text-align:center;padding:30px 20px;color:var(--text-muted);font-size:13px">📭 还没有快照<br><span style="font-size:11px">拉取/推送/导入时会自动创建</span></div>';
+                return;
+            }
+            el.innerHTML = list.map(function(s, i) {
+                var p = s.payload || {};
+                var keyCount = (p.api_keys || []).length;
+                var snipCount = (p.snippets || []).length;
+                return '<div style="background:var(--card-inner);border:1px solid var(--card-border);border-radius:10px;padding:12px;margin-bottom:8px">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">' +
+                        '<div style="flex:1;min-width:0">' +
+                            '<div style="font-size:13px;color:var(--text);font-weight:600">🕐 ' + fmtTime(s.time) + '</div>' +
+                            '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">原因：' + esc(s.reason) + '  |  🔑 ' + keyCount + ' 条  |  📝 ' + snipCount + ' 条</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div style="display:flex;gap:6px">' +
+                        '<button onclick="restoreSnapshot(' + i + ')" style="flex:1;padding:6px;background:var(--accent-light);border:none;border-radius:6px;color:var(--accent);font-size:12px;cursor:pointer;font-weight:500">♻️ 恢复此版本</button>' +
+                        '<button onclick="downloadSnapshot(' + i + ')" style="padding:6px 12px;background:var(--blue-bg);border:none;border-radius:6px;color:var(--blue);font-size:12px;cursor:pointer">💾 下载</button>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        }
+
+        function restoreSnapshot(idx) {
+            var list = getSnapshots();
+            var snap = list[idx];
+            if (!snap) return;
+            if (!confirm('确认恢复到 ' + fmtTime(snap.time) + ' 的快照？\n\n当前本地数据会被覆盖（但会先自动存一份新快照）。')) return;
+            // 先备份当前
+            takeSnapshot('恢复快照前');
+            var p = snap.payload || {};
+            if (p.api_keys) setKeyDataSilent(p.api_keys);
+            if (p.snippets) setSnipDataSilent(p.snippets);
+            if (p.imgbeds) setImgBedData(p.imgbeds);
+            if (p.tombstones) setTombstones(p.tombstones);
+            localStorage.setItem('toolbox_last_local_modified', new Date().toISOString());
+            if (typeof renderKeyFilters === 'function') renderKeyFilters();
+            if (typeof renderKeyCards === 'function') renderKeyCards();
+            if (typeof renderSnipFilters === 'function') renderSnipFilters();
+            if (typeof renderSnippets === 'function') renderSnippets();
+            closeSnapshotModal();
+            showToast('✅ 已恢复快照');
+        }
+
+        function downloadSnapshot(idx) {
+            var list = getSnapshots();
+            var snap = list[idx];
+            if (!snap) return;
+            var blob = new Blob([JSON.stringify(snap.payload, null, 2)], { type: 'application/json' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'toolbox_snapshot_' + snap.time.replace(/[:.]/g, '-') + '.json';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        }
+
+        /* ===== 同步方向确认弹窗 ===== */
+        var pendingSyncAction = null;
+
+        function openSyncConfirm(action) {
+            pendingSyncAction = action;
+            var titleEl = document.getElementById('syncConfirmTitle');
+            var textEl = document.getElementById('syncConfirmText');
+            var btnEl = document.getElementById('syncConfirmBtn');
+            if (action === 'pull') {
+                titleEl.innerHTML = '⬇️ 拉取云端数据';
+                textEl.innerHTML = '将把<b style="color:var(--accent)">云端</b>的数据下载下来，<b style="color:var(--red)">覆盖本地</b>。<br><br>' +
+                    '适用场景：在新设备上同步、或本地数据丢失要从云端恢复。<br><br>' +
+                    '⚠️ 如果本地有云端没有的新数据，会被冲掉。';
+                btnEl.textContent = '⬇️ 确认拉取';
+                btnEl.style.background = 'linear-gradient(135deg,#2563eb,#3b82f6)';
+            } else if (action === 'push') {
+                titleEl.innerHTML = '⬆️ 推送本地数据';
+                textEl.innerHTML = '将把<b style="color:var(--accent)">本地</b>的数据上传，<b style="color:var(--red)">覆盖云端</b>。<br><br>' +
+                    '适用场景：云端数据损坏、或要把本地新数据强制同步上去。<br><br>' +
+                    '⚠️ 如果云端有本地没有的新数据，会被冲掉。';
+                btnEl.textContent = '⬆️ 确认推送';
+                btnEl.style.background = 'linear-gradient(135deg,#d97706,#f59e0b)';
+            }
+            document.getElementById('syncConfirmOverlay').classList.add('show');
+        }
+
+        function closeSyncConfirm() {
+            document.getElementById('syncConfirmOverlay').classList.remove('show');
+            pendingSyncAction = null;
+        }
+
+        function doSyncConfirm() {
+            var action = pendingSyncAction;
+            closeSyncConfirm();
+            if (action === 'pull') {
+                takeSnapshot('拉取云端前');
+                doGistPull();
+            } else if (action === 'push') {
+                takeSnapshot('推送云端前');
+                doGistPush();
+            }
+        }
+
         function gistPushData() {
             var cfg = gistGetConfig();
             if (!cfg.token || !cfg.gistId) return;
@@ -4923,8 +5098,8 @@
             gistPushTimer = setTimeout(gistPushData, 3000);
         }
 
-        // 手动推送（带状态反馈）
-        function gistManualPush() {
+        // 实际执行推送（已经过确认框 + 自动快照）
+        function doGistPush() {
             var cfg = gistGetConfig();
             if (!cfg.token || !cfg.gistId) { gistSetStatus('⚠️ 请先连接 Gist', 'var(--red)'); return; }
             gistSetStatus('🔄 正在推送本地数据…', 'var(--text-muted)');
@@ -4942,6 +5117,11 @@
             }).catch(function(err) {
                 gistSetStatus('❌ 推送失败: ' + (err.message || '网络错误'), 'var(--red)');
             });
+        }
+
+        // 实际执行拉取（已经过确认框 + 自动快照）
+        function doGistPull() {
+            gistPull(true);
         }
 
         function gistPull(manual) {
