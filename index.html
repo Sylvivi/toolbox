@@ -201,7 +201,7 @@
         .card-body {
             overflow: hidden;
             transition: max-height 0.35s ease, opacity 0.25s ease, margin-top 0.35s ease;
-            max-height: 800px; opacity: 1; margin-top: 14px;
+            max-height: 5000px; opacity: 1; margin-top: 14px;
         }
         .card.collapsed .card-body { max-height: 0; opacity: 0; margin-top: 0; }
 
@@ -608,6 +608,43 @@
         }
         .fab-add:hover { transform: scale(1.1); }
 
+        .fab-search {
+            position: fixed; bottom: 140px; right: 16px; z-index: 155;
+            width: 56px; height: 56px;
+            background: var(--card-bg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+            border: 1px solid var(--card-border);
+            border-radius: 16px; color: var(--accent); font-size: 22px; cursor: pointer;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.1); transition: all 0.3s;
+            display: none; align-items: center; justify-content: center;
+            line-height: 1;
+        }
+        .fab-search:hover { transform: scale(1.1); border-color: #5aab8b; }
+        .fab-search.active { background: var(--accent-chip); color: #fff; border-color: rgba(90,171,139,0.7); }
+
+        .float-search-bar {
+            position: fixed; bottom: 64px; left: 12px; right: 80px; z-index: 156;
+            display: none; align-items: center; gap: 8px;
+            background: var(--modal-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border); border-radius: 14px;
+            padding: 8px 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+            animation: fadeIn 0.2s;
+        }
+        .float-search-bar.show { display: flex; }
+        .float-search-bar input {
+            flex: 1; padding: 8px 12px; min-width: 0;
+            background: var(--input-bg); border: 1px solid var(--input-border);
+            border-radius: 10px; color: var(--text); font-size: 14px; outline: none;
+        }
+        .float-search-bar input:focus { border-color: #5aab8b; }
+        .float-search-bar input::placeholder { color: var(--text-muted); }
+        .float-search-bar .float-search-clear {
+            flex-shrink: 0; width: 32px; height: 32px;
+            background: var(--red-bg); border: none; border-radius: 8px;
+            color: var(--red); font-size: 16px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+        }
+
         /* ===== 编辑器 ===== */
         .editor-wrap {
             display: flex; border: 1px solid var(--input-border); border-radius: 10px;
@@ -942,17 +979,12 @@
         .key-model-list-body {
             display: flex; flex-wrap: wrap; gap: 6px;
             max-height: 240px; overflow-y: auto; -webkit-overflow-scrolling: touch;
-            overscroll-behavior: contain;
+            overscroll-behavior: contain; touch-action: pan-y;
             padding-bottom: 2px;
         }
         .key-model-list-body::-webkit-scrollbar { width: 6px; }
         .key-model-list-body::-webkit-scrollbar-track { background: rgba(90,171,139,0.08); border-radius: 3px; }
         .key-model-list-body::-webkit-scrollbar-thumb { background: rgba(90,171,139,0.5); border-radius: 3px; }
-        .key-model-list-body::-webkit-scrollbar-thumb:hover { background: rgba(90,171,139,0.7); }
-        .key-model-list-hint {
-            font-size: 10px; color: var(--text-muted); text-align: center;
-            padding: 4px 0 0; opacity: 0.6;
-        }
         .key-model-chip {
             padding: 4px 10px; background: var(--accent-light); border: 1px solid transparent;
             border-radius: 14px; font-size: 11px; color: var(--accent-mid);
@@ -1057,7 +1089,7 @@
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body class="dark on-keys">
+<body class="dark on-snippets">
 
     <!-- ===== 密码锁屏 ===== -->
     <div class="lock-screen hidden" id="lockScreen">
@@ -1252,7 +1284,7 @@
     </div>
 
     <!-- ==================== 页面二：密钥管理 ==================== -->
-    <div class="tab-content active" id="tab-keys">
+    <div class="tab-content" id="tab-keys">
         <div class="header">
             <h1>🔑 API 密钥管理器</h1>
             <p>安全管理你的 API 密钥与模型价格</p>
@@ -1268,7 +1300,7 @@
     </div>
 
     <!-- ==================== 页面三：收藏（代码/文本/链接） ==================== -->
-    <div class="tab-content" id="tab-snippets">
+    <div class="tab-content active" id="tab-snippets">
         <div class="header">
             <h1>📝 收藏夹</h1>
             <p>收藏代码、文本片段和常用链接</p>
@@ -1277,11 +1309,11 @@
             <input type="text" id="snipSearchInput" placeholder="搜索标题、标签、内容..." oninput="renderSnippets()">
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">19</span></div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">20</span></div>
             <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">6</span></div>
             <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">2</span></div>
             <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">2</span></div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">9</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">10</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
@@ -1441,7 +1473,13 @@
         </div>
     </div>
 
+    <button class="fab-search" id="fabSearch" onclick="toggleFloatSearch()" style="display: flex;">🔍</button>
     <button class="fab-add" id="fabAdd" onclick="handleFabTap()" style="display: flex;">+</button>
+
+    <div class="float-search-bar" id="floatSearchBar">
+        <input type="text" id="floatSearchInput" placeholder="搜索标题、标签、内容..." oninput="doFloatSearch(this.value)">
+        <button class="float-search-clear" onclick="clearFloatSearch()">✕</button>
+    </div>
 
     <div class="batch-bar" id="batchBar">
         <span class="batch-cancel-btn" onclick="exitSelectMode()">取消</span>
@@ -1613,10 +1651,10 @@
     </div>
 
     <div class="bottom-nav">
-        <button class="nav-item nav-keys active" onclick="switchTab('keys', this)">
+        <button class="nav-item nav-keys" onclick="switchTab('keys', this)">
             <span class="nav-icon">🔑</span><span class="nav-label">密钥</span>
         </button>
-        <button class="nav-item nav-snippets" onclick="switchTab('snippets', this)">
+        <button class="nav-item nav-snippets active" onclick="switchTab('snippets', this)">
             <span class="nav-icon">📝</span><span class="nav-label">收藏</span>
         </button>
     </div>
@@ -1874,12 +1912,50 @@
             btn.classList.add('active');
             document.body.classList.remove('on-keys', 'on-snippets');
             document.body.classList.add('on-' + tab);
+            closeFloatSearch();
             updateFabPositions();
             window.scrollTo(0, 0);
         }
 
         function updateFabPositions() {
             document.getElementById('fabAdd').style.display = 'flex';
+            // 搜索 FAB 只在收藏页显示
+            document.getElementById('fabSearch').style.display = (currentTab === 'snippets') ? 'flex' : 'none';
+        }
+
+        /* ===== 浮动搜索栏 ===== */
+        function toggleFloatSearch() {
+            var bar = document.getElementById('floatSearchBar');
+            var btn = document.getElementById('fabSearch');
+            var isOpen = bar.classList.contains('show');
+            if (isOpen) {
+                closeFloatSearch();
+            } else {
+                bar.classList.add('show');
+                btn.classList.add('active');
+                document.getElementById('floatSearchInput').focus();
+                // 同步已有搜索内容
+                var existing = document.getElementById('snipSearchInput').value;
+                if (existing) document.getElementById('floatSearchInput').value = existing;
+            }
+        }
+
+        function closeFloatSearch() {
+            document.getElementById('floatSearchBar').classList.remove('show');
+            document.getElementById('fabSearch').classList.remove('active');
+        }
+
+        function doFloatSearch(val) {
+            // 同步到原来的搜索框并触发渲染
+            document.getElementById('snipSearchInput').value = val;
+            renderSnippets();
+        }
+
+        function clearFloatSearch() {
+            document.getElementById('floatSearchInput').value = '';
+            document.getElementById('snipSearchInput').value = '';
+            renderSnippets();
+            closeFloatSearch();
         }
 
         function openCalcModal() { document.getElementById('calcModalOverlay').classList.add('show'); }
@@ -2571,17 +2647,7 @@
                 '<div class="key-model-list-header"><span>📋 可用模型</span><span class="model-count">' + models.length + ' 个</span></div>' +
                 '<input class="key-model-list-search" type="text" placeholder="搜索模型名…" oninput="filterModelList(this,\'' + escAttr(id) + '\')" onclick="event.stopPropagation()">' +
                 '<div class="key-model-list-body" id="model-chips-' + id + '">' + chips + '</div>' +
-                '<div class="key-model-list-hint" id="model-hint-' + id + '"></div>' +
                 '</div>';
-
-            // 检测是否可滚动，显示提示
-            setTimeout(function() {
-                var body = document.getElementById('model-chips-' + id);
-                var hint = document.getElementById('model-hint-' + id);
-                if (body && hint && body.scrollHeight > body.clientHeight + 2) {
-                    hint.textContent = '↕ 上下滑动查看更多';
-                }
-            }, 50);
         }
 
         function filterModelList(input, id) {
@@ -4361,6 +4427,8 @@
             document.querySelectorAll('.card-list').forEach(function(l) { l.classList.add('select-mode-on'); });
             document.getElementById('batchBar').classList.add('show');
             document.getElementById('fabAdd').style.display = 'none';
+            document.getElementById('fabSearch').style.display = 'none';
+            closeFloatSearch();
             updateBatchCount();
         }
 
@@ -4370,6 +4438,7 @@
             document.querySelectorAll('.card.selected').forEach(function(c) { c.classList.remove('selected'); });
             document.getElementById('batchBar').classList.remove('show');
             document.getElementById('fabAdd').style.display = 'flex';
+            if (currentTab === 'snippets') document.getElementById('fabSearch').style.display = 'flex';
         }
 
         function toggleCardSelect(circle) {
