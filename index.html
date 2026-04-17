@@ -3,6 +3,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>工具箱</title>
+    <meta name="theme-color" content="#2a6b4f">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="工具箱">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -1051,7 +1057,7 @@
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body class="on-keys">
+<body class="dark on-keys">
 
     <!-- ===== 密码锁屏 ===== -->
     <div class="lock-screen hidden" id="lockScreen">
@@ -5348,11 +5354,39 @@
             if (!repo || repo.indexOf('/') === -1) { statusEl.textContent = '⚠️ 仓库格式：用户名/仓库名'; statusEl.style.color = 'var(--red)'; return; }
             localStorage.setItem('toolbox_deploy_repo', repo);
             localStorage.setItem('toolbox_deploy_branch', branch);
-            statusEl.textContent = '🔄 [1/4] 获取源码…'; statusEl.style.color = 'var(--text-muted)';
+            statusEl.textContent = '🔄 [1/6] 获取源码…'; statusEl.style.color = 'var(--text-muted)';
 
             var headers = { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' };
 
-            // ---- 1. 获取源码：http(s) 用 fetch 拿原始源码，file:// 用清理后的 DOM 快照 ----
+            // 推送单个文件的辅助函数
+            function pushFile(path, contentBase64, msg) {
+                var checkUrl = 'https://api.github.com/repos/' + repo + '/contents/' + path + '?ref=' + encodeURIComponent(branch);
+                return fetch(checkUrl, { headers: headers })
+                .then(function(r) { return r.ok ? r.json() : null; })
+                .then(function(existing) {
+                    var putUrl = 'https://api.github.com/repos/' + repo + '/contents/' + path;
+                    var body = { message: msg, content: contentBase64, branch: branch };
+                    if (existing && existing.sha) body.sha = existing.sha;
+                    return fetch(putUrl, { method: 'PUT', headers: headers, body: JSON.stringify(body) });
+                })
+                .then(function(r) {
+                    if (!r.ok) return r.json().then(function(d) { throw new Error(path + ': ' + (d.message || 'HTTP ' + r.status)); });
+                    return r.json();
+                });
+            }
+
+            // Base64 编码辅助
+            function toBase64(str) {
+                return new Promise(function(resolve, reject) {
+                    var blob = new Blob([str], { type: 'text/plain;charset=utf-8' });
+                    var reader = new FileReader();
+                    reader.onload = function() { resolve(reader.result.split(',')[1]); };
+                    reader.onerror = function() { reject(new Error('编码失败')); };
+                    reader.readAsDataURL(blob);
+                });
+            }
+
+            // ---- 1. 获取 HTML 源码 ----
             var sourcePromise;
             if (location.protocol === 'http:' || location.protocol === 'https:') {
                 sourcePromise = fetch(location.href).then(function(r) {
@@ -5363,73 +5397,166 @@
                 sourcePromise = Promise.resolve(deployGetCleanHtml());
             }
 
+            var deployMsg = '🚀 toolbox deploy ' + new Date().toLocaleString('zh-CN');
+
             sourcePromise
             .then(function(sourceHtml) {
-                statusEl.textContent = '🔄 [2/4] 编码中… (' + Math.round(sourceHtml.length / 1024) + 'KB)';
-
-                // ---- 2. Base64 编码（Blob + FileReader，兼容大文件 + UTF-8）----
-                return new Promise(function(resolve, reject) {
-                    var blob = new Blob([sourceHtml], { type: 'text/html;charset=utf-8' });
-                    var reader = new FileReader();
-                    reader.onload = function() {
-                        var base64 = reader.result.split(',')[1];
-                        if (!base64) { reject(new Error('Base64 编码结果为空')); return; }
-                        resolve(base64);
-                    };
-                    reader.onerror = function() { reject(new Error('FileReader 编码失败')); };
-                    reader.readAsDataURL(blob);
-                });
+                statusEl.textContent = '🔄 [2/6] 编码中… (' + Math.round(sourceHtml.length / 1024) + 'KB)';
+                return toBase64(sourceHtml);
             })
-            .then(function(base64) {
-                statusEl.textContent = '🔄 [3/4] 检查远端…';
-
-                // ---- 3. 检查远端文件（获取 sha）----
-                var checkUrl = 'https://api.github.com/repos/' + repo + '/contents/index.html?ref=' + encodeURIComponent(branch);
-                return fetch(checkUrl, { headers: headers })
-                .then(function(r) { return r.ok ? r.json() : null; })
-                .then(function(existing) {
-                    return { base64: base64, sha: existing && existing.sha ? existing.sha : null };
-                });
+            .then(function(htmlBase64) {
+                statusEl.textContent = '🔄 [3/6] 推送 index.html…';
+                return pushFile('index.html', htmlBase64, deployMsg);
             })
-            .then(function(info) {
-                statusEl.textContent = '🔄 [4/4] 推送到 ' + branch + '…';
-
-                // ---- 4. 推送 ----
-                var putUrl = 'https://api.github.com/repos/' + repo + '/contents/index.html';
-                var body = {
-                    message: '🚀 toolbox deploy ' + new Date().toLocaleString('zh-CN'),
-                    content: info.base64,
-                    branch: branch
-                };
-                if (info.sha) body.sha = info.sha;
-
-                return fetch(putUrl, { method: 'PUT', headers: headers, body: JSON.stringify(body) });
+            .then(function() {
+                statusEl.textContent = '🔄 [4/6] 推送 PWA 配置…';
+                return toBase64(PWA_MANIFEST).then(function(b64) { return pushFile('manifest.json', b64, deployMsg + ' [manifest]'); });
             })
-            .then(function(r) {
-                if (r.ok) {
-                    var parts = repo.split('/');
-                    var pageUrl = 'https://' + parts[0] + '.github.io/' + parts[1] + '/';
-                    statusEl.innerHTML = '✅ 部署成功！<a href="' + pageUrl + '" target="_blank" style="color:var(--accent);text-decoration:underline">访问页面 ↗</a>';
-                    statusEl.style.color = 'var(--accent)';
-                } else {
-                    return r.json().then(function(d) {
-                        var msg = d.message || '部署失败';
-                        if (r.status === 404) msg = '仓库不存在或 Token 无 repo 权限（gist 权限不够，需要勾选 repo）';
-                        else if (r.status === 409) msg = '分支 ' + branch + ' 不存在，请先创建或选择正确的分支';
-                        else if (r.status === 422) msg = 'SHA 冲突，请重试';
-                        statusEl.textContent = '❌ HTTP ' + r.status + ': ' + msg;
-                        statusEl.style.color = 'var(--red)';
-                    });
-                }
+            .then(function() {
+                statusEl.textContent = '🔄 [5/6] 推送 Service Worker…';
+                return toBase64(PWA_SW).then(function(b64) { return pushFile('sw.js', b64, deployMsg + ' [sw]'); });
+            })
+            .then(function() {
+                statusEl.textContent = '🔄 [6/6] 推送图标…';
+                var icon192 = generateAppIcon(192);
+                var icon512 = generateAppIcon(512);
+                return pushFile('icon-192.png', icon192, deployMsg + ' [icon192]')
+                .then(function() { return pushFile('icon-512.png', icon512, deployMsg + ' [icon512]'); });
+            })
+            .then(function() {
+                var parts = repo.split('/');
+                var pageUrl = 'https://' + parts[0] + '.github.io/' + parts[1] + '/';
+                statusEl.innerHTML = '✅ 部署成功！<a href="' + pageUrl + '" target="_blank" style="color:var(--accent);text-decoration:underline">访问页面 ↗</a>';
+                statusEl.style.color = 'var(--accent)';
             })
             .catch(function(e) {
-                statusEl.textContent = '❌ ' + e.message;
+                var msg = e.message || '部署失败';
+                if (msg.indexOf('404') !== -1) msg = '仓库不存在或 Token 无 repo 权限（需勾选 repo）';
+                else if (msg.indexOf('409') !== -1) msg = '分支 ' + branch + ' 不存在';
+                else if (msg.indexOf('422') !== -1) msg = 'SHA 冲突，请重试';
+                statusEl.textContent = '❌ ' + msg;
                 statusEl.style.color = 'var(--red)';
             });
         }
 
         // 打开页面自动静默拉取
         (function() { var cfg = gistGetConfig(); if (cfg.token && cfg.gistId) gistPull(false); })();
+
+        /* ===== PWA 支持 ===== */
+        // Service Worker 注册（仅在 HTTPS 下有效）
+        if ('serviceWorker' in navigator && location.protocol === 'https:') {
+            navigator.serviceWorker.register('sw.js').catch(function() {});
+        }
+
+        // PWA 文件内容定义（部署时推送）
+        var PWA_MANIFEST = JSON.stringify({
+            name: '工具箱',
+            short_name: '工具箱',
+            description: 'API 密钥管理 & 代码/文本/链接收藏夹',
+            start_url: './',
+            display: 'standalone',
+            background_color: '#1a2420',
+            theme_color: '#2a6b4f',
+            icons: [
+                { src: 'icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+                { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+            ]
+        }, null, 2);
+
+        var PWA_SW = [
+            "var CACHE = 'toolbox-v1';",
+            "var PRECACHE = ['./', 'index.html', 'manifest.json'];",
+            "",
+            "self.addEventListener('install', function(e) {",
+            "  e.waitUntil(caches.open(CACHE).then(function(c) { return c.addAll(PRECACHE); }));",
+            "  self.skipWaiting();",
+            "});",
+            "",
+            "self.addEventListener('activate', function(e) {",
+            "  e.waitUntil(caches.keys().then(function(ks) {",
+            "    return Promise.all(ks.filter(function(k) { return k !== CACHE; }).map(function(k) { return caches.delete(k); }));",
+            "  }));",
+            "  self.clients.claim();",
+            "});",
+            "",
+            "self.addEventListener('fetch', function(e) {",
+            "  if (e.request.method !== 'GET') return;",
+            "  if (e.request.url.indexOf('api.github.com') !== -1) return;",
+            "  if (e.request.url.indexOf('/v1/') !== -1) return;",
+            "  e.respondWith(",
+            "    fetch(e.request).then(function(r) {",
+            "      if (r.ok) { var rc = r.clone(); caches.open(CACHE).then(function(c) { c.put(e.request, rc); }); }",
+            "      return r;",
+            "    }).catch(function() { return caches.match(e.request); })",
+            "  );",
+            "});"
+        ].join('\n');
+
+        // 生成 APP 图标（绿色渐变 + 工具箱图形）
+        function generateAppIcon(size) {
+            var c = document.createElement('canvas');
+            c.width = size; c.height = size;
+            var ctx = c.getContext('2d');
+            // 圆角矩形背景
+            var r = size * 0.22;
+            var grad = ctx.createLinearGradient(0, 0, size, size);
+            grad.addColorStop(0, '#2d7a58');
+            grad.addColorStop(1, '#5aab8b');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.moveTo(r, 0); ctx.lineTo(size - r, 0);
+            ctx.quadraticCurveTo(size, 0, size, r);
+            ctx.lineTo(size, size - r);
+            ctx.quadraticCurveTo(size, size, size - r, size);
+            ctx.lineTo(r, size);
+            ctx.quadraticCurveTo(0, size, 0, size - r);
+            ctx.lineTo(0, r);
+            ctx.quadraticCurveTo(0, 0, r, 0);
+            ctx.closePath();
+            ctx.fill();
+            // 工具箱图形
+            ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+            ctx.fillStyle = 'rgba(255,255,255,0.95)';
+            ctx.lineWidth = size * 0.03;
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            var cx = size / 2, cy = size * 0.53;
+            var bw = size * 0.48, bh = size * 0.3;
+            var bx = cx - bw / 2, by = cy - bh / 2;
+            // 箱体
+            ctx.beginPath();
+            var br = size * 0.04;
+            ctx.moveTo(bx + br, by); ctx.lineTo(bx + bw - br, by);
+            ctx.quadraticCurveTo(bx + bw, by, bx + bw, by + br);
+            ctx.lineTo(bx + bw, by + bh - br);
+            ctx.quadraticCurveTo(bx + bw, by + bh, bx + bw - br, by + bh);
+            ctx.lineTo(bx + br, by + bh);
+            ctx.quadraticCurveTo(bx, by + bh, bx, by + bh - br);
+            ctx.lineTo(bx, by + br);
+            ctx.quadraticCurveTo(bx, by, bx + br, by);
+            ctx.closePath();
+            ctx.stroke();
+            // 中间横线
+            ctx.beginPath();
+            ctx.moveTo(bx, cy); ctx.lineTo(bx + bw, cy);
+            ctx.stroke();
+            // 提手
+            var hw = size * 0.2, hh = size * 0.1;
+            var hx = cx - hw / 2, hy = by - hh;
+            ctx.beginPath();
+            ctx.moveTo(hx, by);
+            ctx.lineTo(hx, hy + size * 0.03);
+            ctx.quadraticCurveTo(hx, hy, hx + size * 0.03, hy);
+            ctx.lineTo(hx + hw - size * 0.03, hy);
+            ctx.quadraticCurveTo(hx + hw, hy, hx + hw, hy + size * 0.03);
+            ctx.lineTo(hx + hw, by);
+            ctx.stroke();
+            // 锁扣
+            ctx.fillStyle = 'rgba(255,255,255,0.95)';
+            ctx.beginPath();
+            ctx.arc(cx, cy, size * 0.035, 0, Math.PI * 2);
+            ctx.fill();
+            return c.toDataURL('image/png').split(',')[1];
+        }
     </script>
 
 </body></html>
