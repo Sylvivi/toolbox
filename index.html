@@ -1162,7 +1162,7 @@
                         <b style="color:var(--accent)">📖 首次配置步骤</b>
                         <span style="font-size:12px;color:var(--text-muted)">▼</span>
                     </div>
-                    <div id="gistGuideBody" style="display: none; padding: 0px 12px 12px; line-height: 1.8;">
+                    <div id="gistGuideBody" style="display:none;padding:0 12px 12px;line-height:1.8">
                         1. 登录 <a href="https://github.com" target="_blank" style="color:var(--accent)">github.com</a>（没有账号先注册）<br>
                         2. 点右上角头像 → Settings<br>
                         3. 左侧找 Developer settings → Personal access tokens → Tokens (classic)<br>
@@ -1183,7 +1183,7 @@
                 <div id="gistStatus" style="font-size:12px;color:var(--text-muted);margin-top:6px;min-height:18px"></div>
                 <div id="gistLastSync" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
 
-                <div id="deploySection" style="display: none; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--card-border);">
+                <div id="deploySection" style="margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--card-border); display: none;">
                     <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px">🚀 一键部署到 GitHub Pages</div>
                     <div style="display:flex;gap:8px;margin-bottom:8px">
                         <input type="text" id="deployRepo" placeholder="用户名/仓库名" style="flex:1;padding:6px 10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:7px;color:var(--text);font-size:12px;outline:none">
@@ -1194,13 +1194,13 @@
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                         <button class="btn-save" onclick="deployToGitHub()" style="flex:none;padding:8px 20px">🚀 部署</button>
-                        <span id="deployStatus" style="font-size:12px;color:var(--text-muted)"></span>
+                        <span id="deployStatus" style="font-size: 12px; color: var(--text-muted);"></span>
                     </div>
                     <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5">💡 请确保仓库已在 Settings → Pages 中启用对应分支</div>
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:10px;padding:14px 24px 20px">
-                <div id="gistSyncBtns" style="display: none; gap: 8px;">
+                <div id="gistSyncBtns" style="gap: 8px; display: none;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
                 </div>
@@ -1314,11 +1314,11 @@
             <input type="text" id="snipSearchInput" placeholder="搜索标题、标签、内容..." oninput="renderSnippets()">
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">21</span></div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">28</span></div>
             <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">6</span></div>
-            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">2</span></div>
-            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">2</span></div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">11</span></div>
+            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">3</span></div>
+            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">6</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">13</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
@@ -5225,7 +5225,7 @@
             fetch('https://api.github.com/gists/' + cfg.gistId, {
                 method: 'PATCH',
                 headers: { 'Authorization': 'token ' + cfg.token, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
-                body: JSON.stringify({ files: { 'toolbox_data.json': { content: JSON.stringify(buildSyncPayload(), null, 2) } } })
+                body: JSON.stringify({ files: { 'toolbox_data.json': { content: JSON.stringify(buildSyncPayload()) } } })
             }).then(function(r) {
                 if (!r.ok) throw new Error();
                 localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
@@ -5295,11 +5295,13 @@
                 var localTime = localSync ? new Date(localSync).getTime() : 0;
                 var localModified = localStorage.getItem('toolbox_last_local_modified');
                 var localModTime = localModified ? new Date(localModified).getTime() : 0;
+                var needPushBack = false;
 
                 if (remoteTime > localTime + 60000 && localModTime <= localTime) {
                     // 远端明显更新，本地自上次同步后没有改动，直接用远端
-                    if (remote.api_keys) setKeyData(remote.api_keys);
-                    if (remote.snippets) setSnipData(remote.snippets);
+                    // 注意：用 Silent 版本，避免触发 gistSchedulePush 导致循环推送
+                    if (remote.api_keys) setKeyDataSilent(remote.api_keys);
+                    if (remote.snippets) setSnipDataSilent(remote.snippets);
                     if (remote.imgbeds) setImgBedData(remote.imgbeds);
                     if (remote.tombstones) setTombstones(remote.tombstones);
                 } else {
@@ -5321,23 +5323,52 @@
                         return !mergedTombs[d.id] || (d.updatedAt && d.updatedAt > mergedTombs[d.id]);
                     });
 
-                    // 3. 把远端有、本地没有、且未被墓碑的条目加进来
-                    var kCount = 0, sCount = 0;
-                    var kIds = {}; kData.forEach(function(d) { kIds[d.id] = true; });
+                    // 3. 合并远端条目：新增本地没有的，更新本地有但远端更新的
+                    var kCount = 0, sCount = 0, kUpdated = 0, sUpdated = 0;
+                    var kIds = {}; kData.forEach(function(d, i) { kIds[d.id] = i; });
                     (remote.api_keys || []).forEach(function(d) {
-                        if (!kIds[d.id] && !mergedTombs[d.id]) { kData.push(d); kCount++; }
+                        if (mergedTombs[d.id]) return;
+                        if (kIds[d.id] === undefined) {
+                            // 本地没有，新增
+                            kData.push(d); kCount++;
+                        } else {
+                            // 本地有，比较 updatedAt，用更新的
+                            var localItem = kData[kIds[d.id]];
+                            if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
+                                kData[kIds[d.id]] = d; kUpdated++;
+                            }
+                        }
                     });
-                    var sIds = {}; sData.forEach(function(d) { sIds[d.id] = true; });
+                    var sIds = {}; sData.forEach(function(d, i) { sIds[d.id] = i; });
                     (remote.snippets || []).forEach(function(d) {
-                        if (!sIds[d.id] && !mergedTombs[d.id]) { sData.push(d); sCount++; }
+                        if (mergedTombs[d.id]) return;
+                        if (sIds[d.id] === undefined) {
+                            // 本地没有，新增
+                            sData.push(d); sCount++;
+                        } else {
+                            // 本地有，比较 updatedAt，用更新的
+                            var localItem = sData[sIds[d.id]];
+                            if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
+                                sData[sIds[d.id]] = d; sUpdated++;
+                            }
+                        }
                     });
 
                     setKeyDataSilent(kData);
                     setSnipDataSilent(sData);
                     if (remote.imgbeds) setImgBedData(remote.imgbeds);
 
-                    if (manual && (kCount + sCount > 0)) showToast('☁️ 同步完成，新增 ' + (kCount + sCount) + ' 条');
+                    var totalChanges = kCount + sCount + kUpdated + sUpdated;
+                    if (manual && totalChanges > 0) {
+                        var msgs = [];
+                        if (kCount + sCount > 0) msgs.push('新增 ' + (kCount + sCount) + ' 条');
+                        if (kUpdated + sUpdated > 0) msgs.push('更新 ' + (kUpdated + sUpdated) + ' 条');
+                        showToast('☁️ 同步完成，' + msgs.join('，'));
+                    }
                     else if (manual) showToast('☁️ 已是最新');
+
+                    // 仅在合并产生了实际变更时才推回 Gist
+                    needPushBack = totalChanges > 0;
                 }
 
                 localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
@@ -5346,8 +5377,8 @@
                 renderKeyFilters(); renderKeyCards();
                 renderSnipFilters(); renderSnippets();
 
-                // 4. 同步后把合并结果推回 Gist（让两端保持一致）
-                setTimeout(gistPushData, 1000);
+                // 4. 同步后把合并结果推回 Gist（让两端保持一致），仅在有变更时
+                if (needPushBack) setTimeout(gistPushData, 1000);
             });
         }
 
