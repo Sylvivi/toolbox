@@ -3320,6 +3320,7 @@
                         '<div class="card-actions" style="margin-bottom:8px">' +
                             '<button class="btn-pin" onclick="toggleSnipPin(\'' + item.id + '\')">' + (item.pinned ? '📌 取消' : '📌 置顶') + '</button>' +
                             '<button class="btn-edit" onclick="editSnipEntry(\'' + item.id + '\')">✏️ 编辑</button>' +
+                            (item.type !== 'link' ? '<button class="btn-edit" onclick="openExportPicker(\'card\',\'' + item.id + '\')">💾 另存为</button>' : '') +
                         '</div>' +
                         contentHtml + noteHtml +
                         '<button onclick="event.stopPropagation();addSubToCard(\'' + item.id + '\')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor=\'#5aab8b\';this.style.color=\'var(--accent-mid)\'" onmouseout="this.style.borderColor=\'rgba(90,171,139,0.4)\';this.style.color=\'var(--text-sub)\'">＋ 添加子条目</button>' +
@@ -3409,8 +3410,17 @@
             var item = null;
             for (var i = 0; i < data.length; i++) { if (data[i].id === id) { item = data[i]; break; } }
             if (!item) return;
+            var content = item.code || '';
+            // 集合类型：合并所有子条目内容
+            if (item.type === 'collection' && item.items && item.items.length > 0) {
+                content = item.items.map(function(sub) {
+                    var header = '## ' + (sub.title || '无标题');
+                    var body = sub.type === 'link' ? (sub.url || '') : (sub.content || '');
+                    return header + '\n' + body;
+                }).join('\n\n');
+            }
             var mimeMap = { txt:'text/plain', css:'text/css', html:'text/html', js:'application/javascript', json:'application/json', md:'text/markdown' };
-            var blob = new Blob([item.code], { type: mimeMap[ext] || 'text/plain' });
+            var blob = new Blob([content], { type: mimeMap[ext] || 'text/plain' });
             var a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
             a.download = item.title.replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_') + '.' + ext;
