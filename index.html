@@ -4771,18 +4771,69 @@
                     var imported = JSON.parse(e.target.result);
                     var kCount = 0, sCount = 0;
 
+                    var kUpdated = 0;
                     if (imported.api_keys && Array.isArray(imported.api_keys)) {
                         var kData = getKeyData();
-                        var kIds = {}; kData.forEach(function(d) { kIds[d.id] = true; });
-                        imported.api_keys.forEach(function(d) { if (!kIds[d.id]) { kData.push(d); kCount++; } });
+                        var kIds = {}; kData.forEach(function(d, i) { kIds[d.id] = i; });
+                        imported.api_keys.forEach(function(d) {
+                            if (kIds[d.id] === undefined) {
+                                kIds[d.id] = kData.length;
+                                kData.push(d); kCount++;
+                            } else {
+                                var localItem = kData[kIds[d.id]];
+                                if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
+                                    kData[kIds[d.id]] = d; kUpdated++;
+                                }
+                            }
+                        });
                         setKeyData(kData);
                     }
 
                     var snipArr = Array.isArray(imported) ? imported : (imported.snippets || []);
                     if (Array.isArray(snipArr)) {
                         var sData = getSnipData();
-                        var sIds = {}; sData.forEach(function(d) { sIds[d.id] = true; });
-                        snipArr.forEach(function(d) { if (!sIds[d.id]) { sData.push(d); sIds[d.id] = true; sCount++; } });
+                        var sIds = {}; sData.forEach(function(d, i) { sIds[d.id] = i; });
+                        var sUpdated = 0;
+                        snipArr.forEach(function(d) {
+                            if (sIds[d.id] === undefined) {
+                                // 本地没有，新增
+                                sIds[d.id] = sData.length;
+                                sData.push(d); sCount++;
+                            } else {
+                                // 本地已有，尝试合并
+                                var localItem = sData[sIds[d.id]];
+                                if (localItem.type === 'collection' && d.type === 'collection') {
+                                    // 集合类型：子条目级别合并
+                                    var localSubs = localItem.items || [];
+                                    var remoteSubs = d.items || [];
+                                    var subMap = {};
+                                    var changed = false;
+                                    localSubs.forEach(function(s) { subMap[s.id] = s; });
+                                    remoteSubs.forEach(function(rs) {
+                                        var ls = subMap[rs.id];
+                                        if (!ls) {
+                                            subMap[rs.id] = rs; changed = true;
+                                        } else if (rs.updatedAt && (!ls.updatedAt || rs.updatedAt > ls.updatedAt)) {
+                                            subMap[rs.id] = rs; changed = true;
+                                        }
+                                    });
+                                    if (changed) {
+                                        var mergedSubs = Object.keys(subMap).map(function(k) { return subMap[k]; });
+                                        mergedSubs.sort(function(a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
+                                        localItem.items = mergedSubs;
+                                        if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
+                                            localItem.updatedAt = d.updatedAt;
+                                        }
+                                        sUpdated++;
+                                    }
+                                } else {
+                                    // 非集合：用更新的覆盖
+                                    if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
+                                        sData[sIds[d.id]] = d; sUpdated++;
+                                    }
+                                }
+                            }
+                        });
 
                         if (imported.url_bookmarks && Array.isArray(imported.url_bookmarks)) {
                             imported.url_bookmarks.forEach(function(d) {
@@ -4815,7 +4866,8 @@
                         setImgBedData(ibData);
                     }
 
-                    showToast('📦 导入成功，密钥+' + kCount + '，收藏+' + sCount + (ibCount ? '，图床+' + ibCount : ''));
+                    var totalUpdated = kUpdated + sUpdated;
+                    showToast('📦 导入成功，密钥+' + kCount + '，收藏+' + sCount + (totalUpdated ? '，更新' + totalUpdated : '') + (ibCount ? '，图床+' + ibCount : ''));
                 } catch (err) { showToast('❌ 文件格式错误'); }
             };
             reader.readAsText(file); event.target.value = '';
@@ -5380,10 +5432,51 @@
                             // 本地没有，新增
                             sData.push(d); sCount++;
                         } else {
-                            // 本地有，比较 updatedAt，用更新的
+                            // 本地有，需要合并
                             var localItem = sData[sIds[d.id]];
-                            if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
-                                sData[sIds[d.id]] = d; sUpdated++;
+                            if (localItem.type === 'collection' && d.type === 'collection') {
+                                // ---- 集合类型：子条目级别合并 ----
+                                var localSubs = localItem.items || [];
+                                var remoteSubs = d.items || [];
+                                var subMap = {};
+                                var changed = false;
+                                // 先以本地子条目为基础
+                                localSubs.forEach(function(s) { subMap[s.id] = s; });
+                                // 合并远端子条目
+                                remoteSubs.forEach(function(rs) {
+                                    var ls = subMap[rs.id];
+                                    if (!ls) {
+                                        // 本地没有这个子条目，新增
+                                        subMap[rs.id] = rs;
+                                        changed = true;
+                                    } else if (rs.updatedAt && (!ls.updatedAt || rs.updatedAt > ls.updatedAt)) {
+                                        // 远端更新，替换
+                                        subMap[rs.id] = rs;
+                                        changed = true;
+                                    }
+                                });
+                                if (changed) {
+                                    // 按 createdAt 排序保持顺序稳定
+                                    var mergedSubs = Object.keys(subMap).map(function(k) { return subMap[k]; });
+                                    mergedSubs.sort(function(a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
+                                    localItem.items = mergedSubs;
+                                    // 卡片级别的 updatedAt 取两方更新的
+                                    if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
+                                        localItem.updatedAt = d.updatedAt;
+                                    }
+                                    sUpdated++;
+                                }
+                                // 合并卡片级字段（标题、标签等），取更新的
+                                if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
+                                    var mergedItems = localItem.items; // 保留已合并的子条目
+                                    sData[sIds[d.id]] = d;
+                                    sData[sIds[d.id]].items = mergedItems;
+                                }
+                            } else {
+                                // ---- 非集合类型：整卡替换 ----
+                                if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
+                                    sData[sIds[d.id]] = d; sUpdated++;
+                                }
                             }
                         }
                     });
