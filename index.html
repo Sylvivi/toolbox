@@ -204,6 +204,7 @@
             max-height: 5000px; opacity: 1; margin-top: 14px;
         }
         .card.collapsed .card-body { max-height: 0; opacity: 0; margin-top: 0; }
+        .card.expanded .card-body { overflow: visible; }
 
         .card-actions {
             display: flex; gap: 8px; margin-top: 14px; padding-top: 12px;
@@ -807,6 +808,7 @@
             background: transparent; color: var(--text-muted); transition: all 0.15s;
         }
         .sub-more-btn:hover { background: var(--accent-light); color: var(--accent); }
+        .card-actions .sub-more-btn { padding: 8px 12px; border-radius: 8px; background: var(--card-inner); flex-shrink: 0; }
         .sub-more-menu {
             display: none; position: absolute; right: 0; top: 100%; z-index: 50;
             background: var(--modal-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
@@ -1200,6 +1202,7 @@
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:10px;padding:14px 24px 20px">
+                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：1.78 MB / ~5 MB（36%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
@@ -2032,7 +2035,16 @@
                 updateBatchCount();
                 return;
             }
-            header.closest('.card').classList.toggle('collapsed');
+            var card = header.closest('.card');
+            var isCollapsing = !card.classList.contains('collapsed');
+            if (isCollapsing) {
+                card.classList.remove('expanded');
+                card.classList.add('collapsed');
+            } else {
+                card.classList.remove('collapsed');
+                // 展开动画结束后允许 overflow visible（⋯菜单需要）
+                setTimeout(function() { card.classList.add('expanded'); }, 360);
+            }
         }
 
         /* ===== 长按进入批量选择模式 ===== */
@@ -2253,7 +2265,8 @@
             var cards = document.querySelectorAll('.card[data-kid]');
             keyAllExpanded = !keyAllExpanded;
             cards.forEach(function(c) {
-                if (keyAllExpanded) c.classList.remove('collapsed'); else c.classList.add('collapsed');
+                if (keyAllExpanded) { c.classList.remove('collapsed'); c.classList.add('expanded'); }
+                else { c.classList.remove('expanded'); c.classList.add('collapsed'); }
             });
             document.getElementById('keyExpandBtn').textContent = keyAllExpanded ? '📁 折叠' : '📂 展开';
         }
@@ -3243,8 +3256,8 @@
                                 var cLines = (sub.content || '').split('\n');
                                 var cNums = '';
                                 for (var ln = 1; ln <= cLines.length; ln++) { cNums += ln + '\n'; }
-                                return '<div style="display:flex"><div style="flex-shrink:0;padding:8px 6px 8px 8px;text-align:right;font-size:12px;line-height:1.6;width:38px;font-family:\'SF Mono\',\'Fira Code\',\'Consolas\',monospace;color:var(--text-muted);opacity:0.4;user-select:none;white-space:pre;border-right:1px solid var(--card-border)">' + cNums + '</div><pre style="margin:0;padding:8px 10px;font-size:12px;line-height:1.6;font-family:\'SF Mono\',\'Fira Code\',\'Consolas\',monospace;color:var(--code-text);white-space:pre;flex:1;overflow-x:auto">' + esc(sub.content || '') + '</pre></div><div style="padding:4px 10px;font-size:10px;color:var(--text-muted);opacity:0.6;border-top:1px solid var(--card-border)">共 ' + cLines.length + ' 行</div>';
-                            })() : esc(sub.content || '')) +
+                                return '<div style="display:flex"><div style="flex-shrink:0;padding:8px 6px 8px 8px;text-align:right;font-size:12px;line-height:1.6;width:38px;font-family:\'SF Mono\',\'Fira Code\',\'Consolas\',monospace;color:var(--text-muted);opacity:0.4;user-select:none;white-space:pre;border-right:1px solid var(--card-border)">' + cNums + '</div><pre style="margin:0;padding:8px 10px;font-size:12px;line-height:1.6;font-family:\'SF Mono\',\'Fira Code\',\'Consolas\',monospace;color:var(--code-text);white-space:pre;flex:1;overflow-x:auto">' + esc(sub.content || '') + '</pre></div><div style="padding:4px 10px;font-size:10px;color:var(--text-muted);opacity:0.6;border-top:1px solid var(--card-border)">共 ' + cLines.length + ' 行 · ' + (sub.content || '').length + ' 字符</div>';
+                            })() : esc(sub.content || '') + '<div style="padding:4px 0;font-size:10px;color:var(--text-muted);opacity:0.6;border-top:1px solid var(--card-border);margin-top:6px">' + (sub.content || '').length + ' 字符</div>') +
                             '</div>' +
                             '</div>';
                     }).join('');
@@ -3273,13 +3286,14 @@
                             '<button class="code-search-btn" onclick="jumpMatch(\'' + item.id + '\',1)">▼</button>' +
                         '</div>' +
                         '<div class="text-block" data-text-id="' + item.id + '">' + esc(item.code) + '</div>' +
+                        '<div style="padding:4px 0;font-size:10px;color:var(--text-muted);opacity:0.6">' + (item.code || '').length + ' 字符</div>' +
                         '</div>';
                 } else {
                     var lines = (item.code || '').split('\n');
                     var lineNums = '';
                     for (var j = 1; j <= lines.length; j++) { lineNums += j + '\n'; }
                     contentHtml = '<div class="code-block">' +
-                        '<div class="copy-bar"><span class="lang">' + lines.length + ' 行</span>' +
+                        '<div class="copy-bar"><span class="lang">' + lines.length + ' 行 · ' + (item.code || '').length + ' 字符</span>' +
                         '<div class="copy-bar-btns">' +
                             '<button class="btn-search-toggle" onclick="toggleCodeSearch(\'' + item.id + '\')">🔍</button>' +
                             '<button class="btn-copy-code" onclick="copySnipCode(\'' + item.id + '\', this)">📋 复制</button>' +
@@ -3319,11 +3333,14 @@
                         '<span>✏️ ' + fmtTimeShort(item.updatedAt) + '</span>' +
                     '</div>' +
                     '<div class="card-body">' +
-                        '<div class="card-actions" style="margin-bottom:8px">' +
-                            '<button class="btn-pin" onclick="toggleSnipPin(\'' + item.id + '\')">' + (item.pinned ? '📌 取消' : '📌 置顶') + '</button>' +
+                        '<div class="card-actions" style="margin-bottom:8px;position:relative">' +
                             '<button class="btn-edit" onclick="editSnipEntry(\'' + item.id + '\')">✏️ 编辑</button>' +
-                            (item.type !== 'link' ? '<button class="btn-edit" onclick="openExportPicker(\'card\',\'' + item.id + '\')">💾 另存为</button>' : '') +
                             '<button class="btn-edit" onclick="exportCardData(\'' + item.id + '\')">📤 导出</button>' +
+                            '<button class="sub-more-btn" onclick="event.stopPropagation();toggleSubMoreMenu(this)">⋯</button>' +
+                            '<div class="sub-more-menu">' +
+                                '<button class="sub-more-menu-item" onclick="event.stopPropagation();toggleSnipPin(\'' + item.id + '\')">' + (item.pinned ? '📌 取消置顶' : '📌 置顶') + '</button>' +
+                                (item.type !== 'link' ? '<button class="sub-more-menu-item" onclick="event.stopPropagation();openExportPicker(\'card\',\'' + item.id + '\')">💾 另存为</button>' : '') +
+                            '</div>' +
                         '</div>' +
                         contentHtml + noteHtml +
                         '<button onclick="event.stopPropagation();addSubToCard(\'' + item.id + '\')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor=\'#5aab8b\';this.style.color=\'var(--accent-mid)\'" onmouseout="this.style.borderColor=\'rgba(90,171,139,0.4)\';this.style.color=\'var(--text-sub)\'">＋ 添加子条目</button>' +
@@ -3368,6 +3385,7 @@
             document.querySelectorAll('.card[data-sid]').forEach(function(c) {
                 if (expandedIds[c.getAttribute('data-sid')]) {
                     c.classList.remove('collapsed');
+                    c.classList.add('expanded');
                 }
             });
 
@@ -3393,7 +3411,8 @@
             var cards = document.querySelectorAll('.card[data-sid]');
             snipAllExpanded = !snipAllExpanded;
             cards.forEach(function(c) {
-                if (snipAllExpanded) c.classList.remove('collapsed'); else c.classList.add('collapsed');
+                if (snipAllExpanded) { c.classList.remove('collapsed'); c.classList.add('expanded'); }
+                else { c.classList.remove('expanded'); c.classList.add('collapsed'); }
             });
             document.getElementById('snipExpandBtn').textContent = snipAllExpanded ? '📁 折叠' : '📂 展开';
         }
@@ -3678,8 +3697,10 @@
                     sub.type = document.getElementById('subEditType').value;
                     if (sub.type === 'link') {
                         sub.url = document.getElementById('subEditUrl').value.trim();
+                        sub.content = '';
                     } else {
                         sub.content = document.getElementById('subEditContent').value;
+                        sub.url = '';
                     }
                     sub.updatedAt = new Date().toISOString();
                     if (!sub.createdAt) sub.createdAt = sub.updatedAt;
@@ -3712,6 +3733,7 @@
                     document.querySelectorAll('.card[data-sid]').forEach(function(c) {
                         if (expandedIds[c.getAttribute('data-sid')]) {
                             c.classList.remove('collapsed');
+                            c.classList.add('expanded');
                         }
                     });
                     // 恢复子条目预览展开状态
@@ -3845,7 +3867,7 @@
             var lineNums = '';
             for (var i = 1; i <= lines.length; i++) { lineNums += i + '\n'; }
             nums.textContent = lineNums;
-            document.getElementById('subEditLineCount').textContent = '共 ' + lines.length + ' 行';
+            document.getElementById('subEditLineCount').textContent = '共 ' + lines.length + ' 行 · ' + ta.value.length + ' 字符';
             updateSubEditCursorPos();
         }
 
@@ -4113,7 +4135,7 @@
             var lineNums = '';
             for (var i = 1; i <= lines.length; i++) { lineNums += i + '\n'; }
             nums.textContent = lineNums;
-            document.getElementById('editorLineCount').textContent = '共 ' + lines.length + ' 行';
+            document.getElementById('editorLineCount').textContent = '共 ' + lines.length + ' 行 · ' + ta.value.length + ' 字符';
             updateCursorPos();
         }
 
@@ -5068,6 +5090,37 @@
             document.getElementById('backupReminder').style.display = 'none';
         }
 
+        /* ===== localStorage 用量检测 ===== */
+        function checkStorageUsage() {
+            var used = 0;
+            try {
+                for (var i = 0; i < localStorage.length; i++) {
+                    var key = localStorage.key(i);
+                    used += key.length + (localStorage.getItem(key) || '').length;
+                }
+            } catch(e) {}
+            var usedMB = (used * 2 / 1024 / 1024).toFixed(2); // UTF-16 每字符 2 字节
+            var maxMB = 5; // 大多数浏览器限制
+            var pct = Math.min(100, Math.round(used * 2 / (maxMB * 1024 * 1024) * 100));
+            // 在云同步弹窗显示用量
+            var el = document.getElementById('storageUsageInfo');
+            if (el) {
+                var color = pct > 80 ? 'var(--red)' : pct > 60 ? 'var(--gold)' : 'var(--text-muted)';
+                el.innerHTML = '💾 本地存储：' + usedMB + ' MB / ~' + maxMB + ' MB（' + pct + '%）';
+                el.style.color = color;
+            }
+            // 超过 80% 时在顶部弹提醒
+            if (pct > 80) {
+                var bar = document.getElementById('backupReminder');
+                var textEl = document.getElementById('backupReminderText');
+                if (bar && textEl && bar.style.display === 'none') {
+                    textEl.textContent = '⚠️ 本地存储已用 ' + pct + '%（' + usedMB + ' MB），建议导出备份后清理旧数据';
+                    bar.style.display = 'flex';
+                }
+            }
+            return { usedMB: usedMB, pct: pct };
+        }
+
         /* ============================================================
            GitHub Gist 云同步
            ============================================================ */
@@ -5110,6 +5163,7 @@
             document.getElementById('deployBranch').value = localStorage.getItem('toolbox_deploy_branch') || 'main';
             document.getElementById('deployStatus').textContent = '';
             document.getElementById('gistModalOverlay').classList.add('show');
+            checkStorageUsage();
         }
 
         function closeGistModal() {
@@ -5121,7 +5175,7 @@
             if (!token) { gistSetStatus('⚠️ 请填写 Token', 'var(--red)'); return; }
             gistSetStatus('🔄 正在连接…', 'var(--text-muted)');
             // 先验证 token 是否有效，同时看是否已有工具箱的 gist
-            fetch('https://api.github.com/gists', {
+            fetch('https://api.github.com/gists?per_page=100', {
                 headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
             }).then(function(r) {
                 if (!r.ok) throw new Error('Token 无效或无权限');
@@ -5571,6 +5625,7 @@
         updateFabPositions();
         document.body.classList.add('on-snippets');
         checkBackupReminder();
+        checkStorageUsage();
         /* ===== 一键部署到 GitHub Pages ===== */
         function deployGetCleanHtml() {
             // 深度清理 DOM 快照：移除所有动态渲染的列表内容、敏感值、运行时状态
