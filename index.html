@@ -1154,35 +1154,67 @@
     </div>
     <div id="gistStatusLine" style="display:flex;align-items:center;justify-content:flex-end;gap:5px;margin:2px 0 10px;padding-right:4px;font-size:11px;color:var(--accent);opacity:0.85;letter-spacing:0.3px"></div>
 
-    <!-- ===== Gist 云同步弹窗 ===== -->
+    <!-- ===== 云同步弹窗 ===== -->
     <div class="modal-overlay" id="gistModalOverlay" onclick="if(event.target===this)closeGistModal()">
         <div class="modal" style="max-width:440px;width:100%">
-            <h2>☁️ GitHub Gist 云同步</h2>
+            <h2>☁️ 云同步</h2>
             <div class="modal-body">
-                <div id="gistGuide" style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
-                    <div onclick="var c=document.getElementById('gistGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
-                        <b style="color:var(--accent)">📖 首次配置步骤</b>
-                        <span style="font-size:12px;color:var(--text-muted)">▼</span>
+                <!-- 同步方式选择 -->
+                <div style="display:flex;gap:6px;margin-bottom:14px">
+                    <button class="type-btn active" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
+                    <button class="type-btn" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
+                </div>
+
+                <!-- GitHub Gist 配置 -->
+                <div id="syncGistFields" style="display: block;">
+                    <div id="gistGuide" style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
+                        <div onclick="var c=document.getElementById('gistGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+                            <b style="color:var(--accent)">📖 首次配置步骤</b>
+                            <span style="font-size:12px;color:var(--text-muted)">▼</span>
+                        </div>
+                        <div id="gistGuideBody" style="display:none;padding:0 12px 12px;line-height:1.8">
+                            1. 登录 <a href="https://github.com" target="_blank" style="color:var(--accent)">github.com</a>（没有账号先注册）<br>
+                            2. 点右上角头像 → Settings<br>
+                            3. 左侧找 Developer settings → Personal access tokens → Tokens (classic)<br>
+                            4. Generate new token → 只勾选 <b>gist</b> 权限 → 生成<br>
+                            5. 复制那串 token 粘贴到下方 ↓
+                        </div>
                     </div>
-                    <div id="gistGuideBody" style="display:none;padding:0 12px 12px;line-height:1.8">
-                        1. 登录 <a href="https://github.com" target="_blank" style="color:var(--accent)">github.com</a>（没有账号先注册）<br>
-                        2. 点右上角头像 → Settings<br>
-                        3. 左侧找 Developer settings → Personal access tokens → Tokens (classic)<br>
-                        4. Generate new token → 只勾选 <b>gist</b> 权限 → 生成<br>
-                        5. 复制那串 token 粘贴到下方 ↓
+                    <div class="form-group">
+                        <label>GitHub Token</label>
+                        <input type="password" id="gistToken" placeholder="ghp_xxxxxxxxxxxxxxxxxx">
+                    </div>
+                    <div class="form-group" id="gistIdGroup" style="display: none;">
+                        <label style="display:flex;justify-content:space-between">
+                            <span>Gist ID <span style="font-weight:400;color:var(--text-muted);font-size:11px">（自动生成，无需修改）</span></span>
+                        </label>
+                        <input type="text" id="gistId" placeholder="自动填入" readonly="" style="opacity:0.6">
                     </div>
                 </div>
-                <div class="form-group">
-                    <label>GitHub Token</label>
-                    <input type="password" id="gistToken" placeholder="ghp_xxxxxxxxxxxxxxxxxx">
+
+                <!-- Cloudflare KV 配置 -->
+                <div id="syncCFFields" style="display: none;">
+                    <div style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
+                        <div onclick="var c=document.getElementById('cfGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+                            <b style="color:var(--accent)">📖 配置说明</b>
+                            <span style="font-size:12px;color:var(--text-muted)">▼</span>
+                        </div>
+                        <div id="cfGuideBody" style="display:none;padding:0 12px 12px;line-height:1.8">
+                            填入你的 Cloudflare Worker 地址和密钥即可。<br>
+                            同步速度比 Gist 快很多，数据存储在 Cloudflare 全球节点。
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Worker 地址</label>
+                        <input type="text" id="cfWorkerUrl" placeholder="https://toolbox-api.xxx.workers.dev">
+                    </div>
+                    <div class="form-group">
+                        <label>同步密钥</label>
+                        <input type="password" id="cfToken" placeholder="你设置的 SYNC_TOKEN">
+                    </div>
                 </div>
-                <div class="form-group" id="gistIdGroup" style="display: none;">
-                    <label style="display:flex;justify-content:space-between">
-                        <span>Gist ID <span style="font-weight:400;color:var(--text-muted);font-size:11px">（自动生成，无需修改）</span></span>
-                    </label>
-                    <input type="text" id="gistId" placeholder="自动填入" readonly="" style="opacity:0.6">
-                </div>
-                <div id="gistStatus" style="font-size: 12px; color: var(--text-muted); margin-top: 6px; min-height: 18px;"></div>
+
+                <div id="gistStatus" style="font-size:12px;color:var(--text-muted);margin-top:6px;min-height:18px"></div>
                 <div id="gistLastSync" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
 
                 <div id="deploySection" style="display: none; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--card-border);">
@@ -1196,20 +1228,20 @@
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                         <button class="btn-save" onclick="deployToGitHub()" style="flex:none;padding:8px 20px">🚀 部署</button>
-                        <span id="deployStatus" style="font-size: 12px; color: var(--text-muted);"></span>
+                        <span id="deployStatus" style="font-size:12px;color:var(--text-muted)"></span>
                     </div>
                     <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5">💡 请确保仓库已在 Settings → Pages 中启用对应分支</div>
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:10px;padding:14px 24px 20px">
-                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：1.78 MB / ~5 MB（36%）</div>
+                <div id="storageUsageInfo" style="font-size:11px;color:var(--text-muted);text-align:center;padding:4px 0">💾 本地存储：0.90 MB / ~50 MB（2%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
                 </div>
                 <div style="display:flex;gap:8px">
                     <button class="btn-cancel" onclick="closeGistModal()">关闭</button>
-                    <button class="btn-save" id="gistSaveBtn" onclick="gistSaveConfig()">重新连接</button>
+                    <button class="btn-save" id="gistSaveBtn" onclick="syncSaveConfig()">重新连接</button>
                 </div>
             </div>
         </div>
@@ -1317,17 +1349,17 @@
             <input type="text" id="snipSearchInput" placeholder="搜索标题、标签、内容..." oninput="renderSnippets()">
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">22</span></div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">21</span></div>
             <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">2</span></div>
             <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">2</span></div>
             <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">6</span></div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">12</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">11</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
             <span class="sort-label">排序：</span>
             <!-- chips will be rendered by JS in saved order -->
-        <div class="sort-chip" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip active" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
+        <div class="sort-chip active" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
         <div class="toolbar">
             <div class="toolbar-btn" id="snipExpandBtn" onclick="toggleAllSnippets()">📂 展开</div>
         </div>
@@ -1671,6 +1703,66 @@
     <div class="toast" id="toast"></div>
 
     <script>
+        /* ===== IndexedDB 存储引擎 ===== */
+        var _idbCache = {};
+        var _idb = null;
+        var _idbKeys = ['api_manager_data', 'css_snippets_data', 'toolbox_imgbeds', 'toolbox_tombstones', 'toolbox_sort_order', 'toolbox_snapshots'];
+
+        function idbInit() {
+            return new Promise(function(resolve) {
+                if (!window.indexedDB) { resolve(); return; }
+                var req = indexedDB.open('toolbox_db', 1);
+                req.onupgradeneeded = function(e) {
+                    var db = e.target.result;
+                    if (!db.objectStoreNames.contains('data')) db.createObjectStore('data');
+                };
+                req.onsuccess = function(e) {
+                    _idb = e.target.result;
+                    // 加载所有数据到内存
+                    var tx = _idb.transaction('data', 'readonly');
+                    var store = tx.objectStore('data');
+                    var loaded = 0;
+                    _idbKeys.forEach(function(key) {
+                        var r = store.get(key);
+                        r.onsuccess = function() {
+                            if (r.result !== undefined) _idbCache[key] = r.result;
+                            loaded++;
+                            if (loaded === _idbKeys.length) resolve();
+                        };
+                        r.onerror = function() { loaded++; if (loaded === _idbKeys.length) resolve(); };
+                    });
+                };
+                req.onerror = function() { resolve(); };
+            }).then(function() {
+                // 从 localStorage 迁移旧数据（仅首次）
+                _idbKeys.forEach(function(key) {
+                    var old = localStorage.getItem(key);
+                    if (old && _idbCache[key] === undefined) {
+                        try { _idbCache[key] = JSON.parse(old); } catch(e) { _idbCache[key] = old; }
+                    }
+                    // 迁移完成后写入 IDB 并清理 localStorage
+                    if (old) {
+                        if (_idb) {
+                            var tx = _idb.transaction('data', 'readwrite');
+                            tx.objectStore('data').put(_idbCache[key], key);
+                        }
+                        localStorage.removeItem(key);
+                    }
+                });
+            });
+        }
+
+        function idbGet(key) { return _idbCache[key]; }
+        function idbSet(key, value) {
+            _idbCache[key] = value;
+            if (_idb) {
+                try {
+                    var tx = _idb.transaction('data', 'readwrite');
+                    tx.objectStore('data').put(value, key);
+                } catch(e) {}
+            }
+        }
+
         /* ===== 密码锁 ===== */
         var LOCK_HASH_KEY = 'toolbox_lock_hash';
         var LOCK_TS_KEY = 'toolbox_lock_ts';
@@ -2148,9 +2240,9 @@
         var keyAllExpanded = false;
         var keyVisible = {};
 
-        function getKeyData() { return JSON.parse(localStorage.getItem(KEY_STORE) || '[]'); }
-        function setKeyData(d) { localStorage.setItem(KEY_STORE, JSON.stringify(d)); localStorage.setItem('toolbox_last_local_modified', new Date().toISOString()); gistSchedulePush(); }
-        function setKeyDataSilent(d) { localStorage.setItem(KEY_STORE, JSON.stringify(d)); }
+        function getKeyData() { var d = idbGet(KEY_STORE); return d ? d.slice() : []; }
+        function setKeyData(d) { idbSet(KEY_STORE, d); localStorage.setItem('toolbox_last_local_modified', new Date().toISOString()); gistSchedulePush(); }
+        function setKeyDataSilent(d) { idbSet(KEY_STORE, d); }
 
         function maskKey(key) {
             if (!key) return '未设置';
@@ -2821,9 +2913,9 @@
         var snipAllExpanded = false;
         var currentEditorType = 'code';
 
-        function getSnipData() { return JSON.parse(localStorage.getItem(SNIP_STORE) || '[]'); }
-        function setSnipData(d) { localStorage.setItem(SNIP_STORE, JSON.stringify(d)); localStorage.setItem('toolbox_last_local_modified', new Date().toISOString()); gistSchedulePush(); }
-        function setSnipDataSilent(d) { localStorage.setItem(SNIP_STORE, JSON.stringify(d)); }
+        function getSnipData() { var d = idbGet(SNIP_STORE); return d ? d.slice() : []; }
+        function setSnipData(d) { idbSet(SNIP_STORE, d); localStorage.setItem('toolbox_last_local_modified', new Date().toISOString()); gistSchedulePush(); }
+        function setSnipDataSilent(d) { idbSet(SNIP_STORE, d); }
 
         function setSnipType(type, el) {
             snipTypeFilter = type;
@@ -2937,10 +3029,10 @@
         ];
 
         function getSortOrder() {
-            var saved = localStorage.getItem(SORT_ORDER_KEY);
+            var saved = idbGet(SORT_ORDER_KEY);
             if (saved) {
                 try {
-                    var arr = JSON.parse(saved);
+                    var arr = saved;
                     // validate: must contain all keys
                     var keys = arr.map(function(o) { return o.key; });
                     if (SORT_CHIPS_DEF.every(function(d) { return keys.indexOf(d.key) !== -1; })) return arr;
@@ -3004,7 +3096,7 @@
                         var k = c.getAttribute('data-sort-key');
                         return { key: k, label: c.textContent };
                     });
-                    localStorage.setItem(SORT_ORDER_KEY, JSON.stringify(newOrder));
+                    idbSet(SORT_ORDER_KEY, newOrder);
                 });
             });
 
@@ -3052,7 +3144,7 @@
                             var k = c.getAttribute('data-sort-key');
                             return { key: k, label: c.textContent };
                         });
-                        localStorage.setItem(SORT_ORDER_KEY, JSON.stringify(newOrder));
+                        idbSet(SORT_ORDER_KEY, newOrder);
                     }
                     touchChip = null;
                 }, { passive: true });
@@ -4972,7 +5064,7 @@
         /* ============================================================
            初始化：自动迁移旧版网址收藏数据
            ============================================================ */
-        (function migrateOldUrlBookmarks() {
+        function migrateOldUrlBookmarks() {
             var oldData = localStorage.getItem('url_bookmarks_data');
             if (!oldData) return;
             try {
@@ -4998,14 +5090,14 @@
                 }
                 localStorage.removeItem('url_bookmarks_data');
             } catch(e) {}
-        })();
+        }
 
         /* ============================================================
            图床管理
            ============================================================ */
         var IMGBED_STORE = 'toolbox_imgbeds';
-        function getImgBedData() { return JSON.parse(localStorage.getItem(IMGBED_STORE) || '[]'); }
-        function setImgBedData(d) { localStorage.setItem(IMGBED_STORE, JSON.stringify(d)); }
+        function getImgBedData() { return idbGet(IMGBED_STORE) || []; }
+        function setImgBedData(d) { idbSet(IMGBED_STORE, d); }
 
         function openImgBedModal() {
             renderImgBedList();
@@ -5090,26 +5182,30 @@
             document.getElementById('backupReminder').style.display = 'none';
         }
 
-        /* ===== localStorage 用量检测 ===== */
+        /* ===== 存储用量检测 ===== */
         function checkStorageUsage() {
             var used = 0;
             try {
+                // 测量 IndexedDB 缓存数据大小
+                _idbKeys.forEach(function(key) {
+                    var val = _idbCache[key];
+                    if (val !== undefined) used += JSON.stringify(val).length;
+                });
+                // 加上 localStorage 中的小设置数据
                 for (var i = 0; i < localStorage.length; i++) {
-                    var key = localStorage.key(i);
-                    used += key.length + (localStorage.getItem(key) || '').length;
+                    var k = localStorage.key(i);
+                    used += k.length + (localStorage.getItem(k) || '').length;
                 }
             } catch(e) {}
-            var usedMB = (used * 2 / 1024 / 1024).toFixed(2); // UTF-16 每字符 2 字节
-            var maxMB = 5; // 大多数浏览器限制
+            var usedMB = (used * 2 / 1024 / 1024).toFixed(2);
+            var maxMB = 50; // IndexedDB 通常 50MB+
             var pct = Math.min(100, Math.round(used * 2 / (maxMB * 1024 * 1024) * 100));
-            // 在云同步弹窗显示用量
             var el = document.getElementById('storageUsageInfo');
             if (el) {
                 var color = pct > 80 ? 'var(--red)' : pct > 60 ? 'var(--gold)' : 'var(--text-muted)';
                 el.innerHTML = '💾 本地存储：' + usedMB + ' MB / ~' + maxMB + ' MB（' + pct + '%）';
                 el.style.color = color;
             }
-            // 超过 80% 时在顶部弹提醒
             if (pct > 80) {
                 var bar = document.getElementById('backupReminder');
                 var textEl = document.getElementById('backupReminderText');
@@ -5125,12 +5221,154 @@
            GitHub Gist 云同步
            ============================================================ */
         var gistPushTimer = null;
+        var activeSyncProvider = localStorage.getItem('toolbox_sync_provider') || 'gist';
+
+        function switchSyncProvider(provider) {
+            document.getElementById('syncProvGist').classList.toggle('active', provider === 'gist');
+            document.getElementById('syncProvCF').classList.toggle('active', provider === 'cf');
+            document.getElementById('syncGistFields').style.display = provider === 'gist' ? 'block' : 'none';
+            document.getElementById('syncCFFields').style.display = provider === 'cf' ? 'block' : 'none';
+            // 根据当前选择的 provider 显示连接状态
+            if (provider === 'gist') {
+                var cfg = gistGetConfig();
+                document.getElementById('gistSyncBtns').style.display = cfg.gistId ? 'flex' : 'none';
+                document.getElementById('gistSaveBtn').textContent = cfg.gistId ? '重新连接' : '连接';
+                gistSetStatus(cfg.gistId ? '✅ 已连接' : '');
+                var deploySection = document.getElementById('deploySection');
+                deploySection.style.display = cfg.token ? 'block' : 'none';
+            } else {
+                var cfCfg = cfGetConfig();
+                document.getElementById('gistSyncBtns').style.display = cfCfg.url && cfCfg.token ? 'flex' : 'none';
+                document.getElementById('gistSaveBtn').textContent = cfCfg.url && cfCfg.token ? '重新连接' : '连接';
+                gistSetStatus(cfCfg.url && cfCfg.token ? '✅ 已连接' : '');
+                // CF 模式下也显示部署区域（如果有 GitHub token）
+                var ghToken = localStorage.getItem('toolbox_gist_token');
+                document.getElementById('deploySection').style.display = ghToken ? 'block' : 'none';
+            }
+            gistUpdateLastSync();
+        }
+
+        function syncSaveConfig() {
+            var providerTab = document.getElementById('syncProvCF').classList.contains('active') ? 'cf' : 'gist';
+            if (providerTab === 'cf') {
+                cfSaveConfig();
+            } else {
+                gistSaveConfig();
+            }
+        }
 
         function gistGetConfig() {
             return {
                 token: localStorage.getItem('toolbox_gist_token') || '',
                 gistId: localStorage.getItem('toolbox_gist_id') || ''
             };
+        }
+
+        /* ===== Cloudflare KV 同步 ===== */
+        function cfGetConfig() {
+            return {
+                url: (localStorage.getItem('toolbox_cf_url') || '').replace(/\/+$/, ''),
+                token: localStorage.getItem('toolbox_cf_token') || ''
+            };
+        }
+
+        function cfSaveConfig() {
+            var url = document.getElementById('cfWorkerUrl').value.trim().replace(/\/+$/, '');
+            var token = document.getElementById('cfToken').value.trim();
+            if (!url) { gistSetStatus('⚠️ 请填写 Worker 地址', 'var(--red)'); return; }
+            if (!token) { gistSetStatus('⚠️ 请填写同步密钥', 'var(--red)'); return; }
+            gistSetStatus('🔄 正在连接…', 'var(--text-muted)');
+            // 测试连接
+            fetch(url + '/toolbox_data', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            }).then(function(r) {
+                if (r.status === 401) throw new Error('密钥错误');
+                if (!r.ok) throw new Error('连接失败 (HTTP ' + r.status + ')');
+                return r.json();
+            }).then(function(remote) {
+                localStorage.setItem('toolbox_cf_url', url);
+                localStorage.setItem('toolbox_cf_token', token);
+                localStorage.setItem('toolbox_sync_provider', 'cf');
+                activeSyncProvider = 'cf';
+                var hasData = remote && (remote.api_keys || remote.snippets);
+                if (hasData) {
+                    gistSetStatus('✅ 连接成功，发现云端数据，正在合并…', 'var(--accent)');
+                    applySyncData(remote, false);
+                    // 合并后推回
+                    setTimeout(cfPushData, 1000);
+                } else {
+                    gistSetStatus('✅ 连接成功，正在上传本地数据…', 'var(--accent)');
+                    cfPushData();
+                }
+                localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
+                document.getElementById('gistSyncBtns').style.display = 'flex';
+                document.getElementById('gistSaveBtn').textContent = '重新连接';
+                gistUpdateLastSync();
+                var sl = document.getElementById('gistStatusLine');
+                if (sl) sl.innerHTML = '☁️ ' + fmtTimeShort(new Date().toISOString()) + ' <span style="opacity:0.5">已同步</span>';
+            }).catch(function(err) {
+                gistSetStatus('❌ ' + (err.message || '连接失败'), 'var(--red)');
+            });
+        }
+
+        function cfPushData() {
+            var cfg = cfGetConfig();
+            if (!cfg.url || !cfg.token) return;
+            fetch(cfg.url + '/toolbox_data', {
+                method: 'PUT',
+                headers: { 'Authorization': 'Bearer ' + cfg.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify(buildSyncPayload())
+            }).then(function(r) {
+                if (!r.ok) throw new Error();
+                gistPushRetries = 0;
+                localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
+                var sl = document.getElementById('gistStatusLine');
+                if (sl) sl.innerHTML = '☁️ ' + fmtTimeShort(new Date().toISOString()) + ' <span style="opacity:0.5">已同步</span>';
+            }).catch(function() {
+                var sl = document.getElementById('gistStatusLine');
+                if (gistPushRetries < 2) {
+                    gistPushRetries++;
+                    if (sl) sl.innerHTML = '☁️ <span style="color:var(--gold)">同步失败，' + (5 * gistPushRetries) + '秒后重试…</span>';
+                    setTimeout(syncPushData, 5000 * gistPushRetries);
+                } else {
+                    gistPushRetries = 0;
+                    if (sl) sl.innerHTML = '☁️ <span style="color:var(--red)">同步失败</span> <span onclick="syncPushData()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">重试</span>';
+                }
+            });
+        }
+
+        function cfPullData(manual) {
+            var cfg = cfGetConfig();
+            if (!cfg.url || !cfg.token) return Promise.resolve();
+            return fetch(cfg.url + '/toolbox_data', {
+                headers: { 'Authorization': 'Bearer ' + cfg.token }
+            }).then(function(r) {
+                if (!r.ok) throw new Error('拉取失败');
+                return r.json();
+            }).then(function(remote) {
+                if (!remote || (!remote.api_keys && !remote.snippets)) {
+                    if (manual) gistSetStatus('☁️ 云端暂无数据', 'var(--text-muted)');
+                    return;
+                }
+                var needPushBack = applySyncData(remote, manual);
+                localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
+                var sl = document.getElementById('gistStatusLine');
+                if (sl) sl.innerHTML = '☁️ ' + fmtTimeShort(new Date().toISOString()) + ' <span style="opacity:0.5">已同步</span>';
+                renderKeyFilters(); renderKeyCards();
+                renderSnipFilters(); renderSnippets();
+                if (needPushBack) setTimeout(cfPushData, 1000);
+            });
+        }
+
+        /* ===== 统一同步调度 ===== */
+        function syncPushData() {
+            if (activeSyncProvider === 'cf') { cfPushData(); }
+            else { gistPushData(); }
+        }
+
+        function syncPullData(manual) {
+            if (activeSyncProvider === 'cf') { return cfPullData(manual); }
+            else { return gistPull(manual) || Promise.resolve(); }
         }
 
         function gistSetStatus(msg, color) {
@@ -5148,20 +5386,23 @@
         }
 
         function openGistModal() {
+            // 加载 Gist 配置
             var cfg = gistGetConfig();
             document.getElementById('gistToken').value = cfg.token;
             document.getElementById('gistId').value = cfg.gistId;
             document.getElementById('gistIdGroup').style.display = cfg.gistId ? 'block' : 'none';
-            document.getElementById('gistSyncBtns').style.display = cfg.gistId ? 'flex' : 'none';
-            document.getElementById('gistSaveBtn').textContent = cfg.gistId ? '重新连接' : '连接';
-            gistSetStatus(cfg.gistId ? '✅ 已连接，数据变动时自动同步' : '');
-            gistUpdateLastSync();
+            // 加载 CF 配置
+            var cfCfg = cfGetConfig();
+            document.getElementById('cfWorkerUrl').value = cfCfg.url;
+            document.getElementById('cfToken').value = cfCfg.token;
             // 部署区域
-            var deploySection = document.getElementById('deploySection');
-            deploySection.style.display = cfg.token ? 'block' : 'none';
-            document.getElementById('deployRepo').value = localStorage.getItem('toolbox_deploy_repo') || 'Sylvivi/toolbox';
+            document.getElementById('deployRepo').value = localStorage.getItem('toolbox_deploy_repo') || '';
             document.getElementById('deployBranch').value = localStorage.getItem('toolbox_deploy_branch') || 'main';
             document.getElementById('deployStatus').textContent = '';
+            // 切换到当前活跃的 provider
+            switchSyncProvider(activeSyncProvider);
+            gistSetStatus('');
+            gistUpdateLastSync();
             document.getElementById('gistModalOverlay').classList.add('show');
             checkStorageUsage();
         }
@@ -5228,8 +5469,8 @@
 
         /* ---- 墓碑（删除记录） ---- */
         var TOMB_STORE = 'toolbox_tombstones';
-        function getTombstones() { return JSON.parse(localStorage.getItem(TOMB_STORE) || '{}'); }
-        function setTombstones(t) { localStorage.setItem(TOMB_STORE, JSON.stringify(t)); }
+        function getTombstones() { return idbGet(TOMB_STORE) || {}; }
+        function setTombstones(t) { idbSet(TOMB_STORE, t); }
         function addTombstone(id) {
             var t = getTombstones();
             t[id] = new Date().toISOString();
@@ -5252,7 +5493,7 @@
         var SNAPSHOT_MAX = 10;
 
         function takeSnapshot(reason) {
-            var list = JSON.parse(localStorage.getItem(SNAPSHOT_STORE) || '[]');
+            var list = idbGet(SNAPSHOT_STORE) || [];
             var snap = {
                 time: new Date().toISOString(),
                 reason: reason || '自动',
@@ -5260,19 +5501,11 @@
             };
             list.unshift(snap);
             if (list.length > SNAPSHOT_MAX) list = list.slice(0, SNAPSHOT_MAX);
-            try {
-                localStorage.setItem(SNAPSHOT_STORE, JSON.stringify(list));
-            } catch (e) {
-                // 空间不足时删旧的再试
-                while (list.length > 3) {
-                    list.pop();
-                    try { localStorage.setItem(SNAPSHOT_STORE, JSON.stringify(list)); return; } catch (e2) {}
-                }
-            }
+            idbSet(SNAPSHOT_STORE, list);
         }
 
         function getSnapshots() {
-            return JSON.parse(localStorage.getItem(SNAPSHOT_STORE) || '[]');
+            return idbGet(SNAPSHOT_STORE) || [];
         }
 
         function openSnapshotModal() {
@@ -5376,10 +5609,39 @@
             closeSyncConfirm();
             if (action === 'pull') {
                 takeSnapshot('拉取云端前');
-                doGistPull();
+                if (activeSyncProvider === 'cf') {
+                    gistSetStatus('🔄 正在拉取…', 'var(--text-muted)');
+                    cfPullData(true).then(function() {
+                        gistSetStatus('✅ 拉取完成', 'var(--accent)'); gistUpdateLastSync();
+                        renderKeyFilters(); renderKeyCards(); renderSnipFilters(); renderSnippets();
+                    }).catch(function(e) {
+                        gistSetStatus('❌ ' + (e.message || '拉取失败'), 'var(--red)');
+                    });
+                } else {
+                    doGistPull();
+                }
             } else if (action === 'push') {
                 takeSnapshot('推送云端前');
-                doGistPush();
+                if (activeSyncProvider === 'cf') {
+                    gistSetStatus('🔄 正在推送…', 'var(--text-muted)');
+                    var cfg = cfGetConfig();
+                    fetch(cfg.url + '/toolbox_data', {
+                        method: 'PUT',
+                        headers: { 'Authorization': 'Bearer ' + cfg.token, 'Content-Type': 'application/json' },
+                        body: JSON.stringify(buildSyncPayload())
+                    }).then(function(r) {
+                        if (!r.ok) throw new Error('HTTP ' + r.status);
+                        localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
+                        gistSetStatus('✅ 推送成功！', 'var(--accent)');
+                        gistUpdateLastSync();
+                        var sl = document.getElementById('gistStatusLine');
+                        if (sl) sl.innerHTML = '☁️ ' + fmtTimeShort(new Date().toISOString()) + ' <span style="opacity:0.5">已同步</span>';
+                    }).catch(function(e) {
+                        gistSetStatus('❌ 推送失败: ' + (e.message || '网络错误'), 'var(--red)');
+                    });
+                } else {
+                    doGistPush();
+                }
             }
         }
 
@@ -5415,7 +5677,7 @@
         // 数据变动后 debounce 3 秒再推送
         function gistSchedulePush() {
             if (gistPushTimer) clearTimeout(gistPushTimer);
-            gistPushTimer = setTimeout(gistPushData, 3000);
+            gistPushTimer = setTimeout(syncPushData, 3000);
         }
 
         // 实际执行推送（已经过确认框 + 自动快照）
@@ -5464,7 +5726,6 @@
             }).then(function(data) {
                 var file = data.files && data.files['toolbox_data.json'];
                 if (!file) return;
-                // Gist 文件较大时 content 可能被截断（truncated=true）或为 null，需要从 raw_url 获取完整内容
                 var contentPromise;
                 if (file.content && !file.truncated) {
                     contentPromise = Promise.resolve(file.content);
@@ -5479,153 +5740,137 @@
                     return;
                 }
                 return contentPromise.then(function(content) {
-                var remote = JSON.parse(content);
-
-                // ---- A: 冲突兜底 ----
-                // 如果远端 lastModified 比本地最后同步时间新很多（超过1分钟），且本地没有更新记录，直接用远端整体覆盖
-                var localSync = localStorage.getItem('toolbox_gist_last_sync');
-                var remoteTime = remote.lastModified ? new Date(remote.lastModified).getTime() : 0;
-                var localTime = localSync ? new Date(localSync).getTime() : 0;
-                var localModified = localStorage.getItem('toolbox_last_local_modified');
-                var localModTime = localModified ? new Date(localModified).getTime() : 0;
-                var needPushBack = false;
-
-                if (remoteTime > localTime + 60000 && localModTime <= localTime) {
-                    // 远端明显更新，本地自上次同步后没有改动，直接用远端
-                    // 注意：用 Silent 版本，避免触发 gistSchedulePush 导致循环推送
-                    if (remote.api_keys) setKeyDataSilent(remote.api_keys);
-                    if (remote.snippets) setSnipDataSilent(remote.snippets);
-                    if (remote.imgbeds) setImgBedData(remote.imgbeds);
-                    if (remote.tombstones) setTombstones(remote.tombstones);
-                } else {
-                    // ---- B: 墓碑合并 ----
-                    // 1. 合并墓碑表（取最新时间）
-                    var localTombs = getTombstones();
-                    var remoteTombs = remote.tombstones || {};
-                    var mergedTombs = Object.assign({}, localTombs);
-                    Object.keys(remoteTombs).forEach(function(id) {
-                        if (!mergedTombs[id] || remoteTombs[id] > mergedTombs[id]) mergedTombs[id] = remoteTombs[id];
-                    });
-                    setTombstones(mergedTombs);
-
-                    // 2. 用合并后的墓碑删掉本地还存在的条目
-                    var kData = getKeyData().filter(function(d) {
-                        return !mergedTombs[d.id] || (d.updatedAt && d.updatedAt > mergedTombs[d.id]);
-                    });
-                    var sData = getSnipData().filter(function(d) {
-                        return !mergedTombs[d.id] || (d.updatedAt && d.updatedAt > mergedTombs[d.id]);
-                    });
-
-                    // 3. 合并远端条目：新增本地没有的，更新本地有但远端更新的
-                    var kCount = 0, sCount = 0, kUpdated = 0, sUpdated = 0;
-                    var kIds = {}; kData.forEach(function(d, i) { kIds[d.id] = i; });
-                    (remote.api_keys || []).forEach(function(d) {
-                        if (mergedTombs[d.id]) return;
-                        if (kIds[d.id] === undefined) {
-                            // 本地没有，新增
-                            kData.push(d); kCount++;
-                        } else {
-                            // 本地有，比较 updatedAt，用更新的
-                            var localItem = kData[kIds[d.id]];
-                            if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
-                                kData[kIds[d.id]] = d; kUpdated++;
-                            }
-                        }
-                    });
-                    var sIds = {}; sData.forEach(function(d, i) { sIds[d.id] = i; });
-                    (remote.snippets || []).forEach(function(d) {
-                        if (mergedTombs[d.id]) return;
-                        if (sIds[d.id] === undefined) {
-                            // 本地没有，新增
-                            sData.push(d); sCount++;
-                        } else {
-                            // 本地有，需要合并
-                            var localItem = sData[sIds[d.id]];
-                            if (localItem.type === 'collection' && d.type === 'collection') {
-                                // ---- 集合类型：子条目级别合并 ----
-                                var localSubs = localItem.items || [];
-                                var remoteSubs = d.items || [];
-                                var subMap = {};
-                                var changed = false;
-                                // 先以本地子条目为基础
-                                localSubs.forEach(function(s) { subMap[s.id] = s; });
-                                // 合并远端子条目
-                                remoteSubs.forEach(function(rs) {
-                                    var ls = subMap[rs.id];
-                                    if (!ls) {
-                                        // 本地没有这个子条目，新增
-                                        subMap[rs.id] = rs;
-                                        changed = true;
-                                    } else if (rs.updatedAt && (!ls.updatedAt || rs.updatedAt > ls.updatedAt)) {
-                                        // 远端更新，替换
-                                        subMap[rs.id] = rs;
-                                        changed = true;
-                                    }
-                                });
-                                if (changed) {
-                                    // 按 createdAt 排序保持顺序稳定
-                                    var mergedSubs = Object.keys(subMap).map(function(k) { return subMap[k]; });
-                                    mergedSubs.sort(function(a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
-                                    localItem.items = mergedSubs;
-                                    // 卡片级别的 updatedAt 取两方更新的
-                                    if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
-                                        localItem.updatedAt = d.updatedAt;
-                                    }
-                                    sUpdated++;
-                                }
-                                // 合并卡片级字段（标题、标签等），取更新的
-                                if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
-                                    var mergedItems = localItem.items; // 保留已合并的子条目
-                                    sData[sIds[d.id]] = d;
-                                    sData[sIds[d.id]].items = mergedItems;
-                                }
-                            } else {
-                                // ---- 非集合类型：整卡替换 ----
-                                if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
-                                    sData[sIds[d.id]] = d; sUpdated++;
-                                }
-                            }
-                        }
-                    });
-
-                    setKeyDataSilent(kData);
-                    setSnipDataSilent(sData);
-                    if (remote.imgbeds) setImgBedData(remote.imgbeds);
-
-                    var totalChanges = kCount + sCount + kUpdated + sUpdated;
-                    if (manual && totalChanges > 0) {
-                        var msgs = [];
-                        if (kCount + sCount > 0) msgs.push('新增 ' + (kCount + sCount) + ' 条');
-                        if (kUpdated + sUpdated > 0) msgs.push('更新 ' + (kUpdated + sUpdated) + ' 条');
-                        showToast('☁️ 同步完成，' + msgs.join('，'));
-                    }
-                    else if (manual) showToast('☁️ 已是最新');
-
-                    // 仅在合并产生了实际变更时才推回 Gist
-                    needPushBack = totalChanges > 0;
-                }
-
-                localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
-                var sl = document.getElementById('gistStatusLine');
-                if (sl) sl.innerHTML = '☁️ ' + fmtTimeShort(new Date().toISOString()) + ' <span style="opacity:0.5">已同步</span>';
-                renderKeyFilters(); renderKeyCards();
-                renderSnipFilters(); renderSnippets();
-
-                // 4. 同步后把合并结果推回 Gist（让两端保持一致），仅在有变更时
-                if (needPushBack) setTimeout(gistPushData, 1000);
-                }); // contentPromise.then
+                    var remote = JSON.parse(content);
+                    var needPushBack = applySyncData(remote, manual);
+                    localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
+                    var sl = document.getElementById('gistStatusLine');
+                    if (sl) sl.innerHTML = '☁️ ' + fmtTimeShort(new Date().toISOString()) + ' <span style="opacity:0.5">已同步</span>';
+                    renderKeyFilters(); renderKeyCards();
+                    renderSnipFilters(); renderSnippets();
+                    if (needPushBack) setTimeout(syncPushData, 1000);
+                });
             });
         }
 
-        renderKeyFilters();
-        renderKeyCards();
-        initKeyDrag();
-        renderSnipFilters();
-        renderSnippets();
-        updateFabPositions();
-        document.body.classList.add('on-snippets');
-        checkBackupReminder();
-        checkStorageUsage();
+        /* ---- 通用合并逻辑（Gist / CF 共用） ---- */
+        function applySyncData(remote, manual) {
+            var localSync = localStorage.getItem('toolbox_gist_last_sync');
+            var remoteTime = remote.lastModified ? new Date(remote.lastModified).getTime() : 0;
+            var localTime = localSync ? new Date(localSync).getTime() : 0;
+            var localModified = localStorage.getItem('toolbox_last_local_modified');
+            var localModTime = localModified ? new Date(localModified).getTime() : 0;
+            var needPushBack = false;
+
+            if (remoteTime > localTime + 60000 && localModTime <= localTime) {
+                if (remote.api_keys) setKeyDataSilent(remote.api_keys);
+                if (remote.snippets) setSnipDataSilent(remote.snippets);
+                if (remote.imgbeds) setImgBedData(remote.imgbeds);
+                if (remote.tombstones) setTombstones(remote.tombstones);
+            } else {
+                var localTombs = getTombstones();
+                var remoteTombs = remote.tombstones || {};
+                var mergedTombs = Object.assign({}, localTombs);
+                Object.keys(remoteTombs).forEach(function(id) {
+                    if (!mergedTombs[id] || remoteTombs[id] > mergedTombs[id]) mergedTombs[id] = remoteTombs[id];
+                });
+                setTombstones(mergedTombs);
+
+                var kData = getKeyData().filter(function(d) {
+                    return !mergedTombs[d.id] || (d.updatedAt && d.updatedAt > mergedTombs[d.id]);
+                });
+                var sData = getSnipData().filter(function(d) {
+                    return !mergedTombs[d.id] || (d.updatedAt && d.updatedAt > mergedTombs[d.id]);
+                });
+
+                var kCount = 0, sCount = 0, kUpdated = 0, sUpdated = 0;
+                var kIds = {}; kData.forEach(function(d, i) { kIds[d.id] = i; });
+                (remote.api_keys || []).forEach(function(d) {
+                    if (mergedTombs[d.id]) return;
+                    if (kIds[d.id] === undefined) {
+                        kData.push(d); kCount++;
+                    } else {
+                        var localItem = kData[kIds[d.id]];
+                        if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
+                            kData[kIds[d.id]] = d; kUpdated++;
+                        }
+                    }
+                });
+                var sIds = {}; sData.forEach(function(d, i) { sIds[d.id] = i; });
+                (remote.snippets || []).forEach(function(d) {
+                    if (mergedTombs[d.id]) return;
+                    if (sIds[d.id] === undefined) {
+                        sData.push(d); sCount++;
+                    } else {
+                        var localItem = sData[sIds[d.id]];
+                        if (localItem.type === 'collection' && d.type === 'collection') {
+                            var localSubs = localItem.items || [];
+                            var remoteSubs = d.items || [];
+                            var subMap = {};
+                            var changed = false;
+                            localSubs.forEach(function(s) { subMap[s.id] = s; });
+                            remoteSubs.forEach(function(rs) {
+                                var ls = subMap[rs.id];
+                                if (!ls) { subMap[rs.id] = rs; changed = true; }
+                                else if (rs.updatedAt && (!ls.updatedAt || rs.updatedAt > ls.updatedAt)) { subMap[rs.id] = rs; changed = true; }
+                            });
+                            if (changed) {
+                                var mergedSubs = Object.keys(subMap).map(function(k) { return subMap[k]; });
+                                mergedSubs.sort(function(a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
+                                localItem.items = mergedSubs;
+                                if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) { localItem.updatedAt = d.updatedAt; }
+                                sUpdated++;
+                            }
+                            if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
+                                var mergedItems = localItem.items;
+                                sData[sIds[d.id]] = d;
+                                sData[sIds[d.id]].items = mergedItems;
+                            }
+                        } else {
+                            if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
+                                sData[sIds[d.id]] = d; sUpdated++;
+                            }
+                        }
+                    }
+                });
+
+                setKeyDataSilent(kData);
+                setSnipDataSilent(sData);
+                if (remote.imgbeds) setImgBedData(remote.imgbeds);
+
+                var totalChanges = kCount + sCount + kUpdated + sUpdated;
+                if (manual && totalChanges > 0) {
+                    var msgs = [];
+                    if (kCount + sCount > 0) msgs.push('新增 ' + (kCount + sCount) + ' 条');
+                    if (kUpdated + sUpdated > 0) msgs.push('更新 ' + (kUpdated + sUpdated) + ' 条');
+                    showToast('☁️ 同步完成，' + msgs.join('，'));
+                } else if (manual) showToast('☁️ 已是最新');
+
+                needPushBack = totalChanges > 0;
+            }
+            return needPushBack;
+        }
+
+        // 等待 IndexedDB 初始化完成后再渲染页面
+        idbInit().then(function() {
+            migrateOldUrlBookmarks();
+            renderKeyFilters();
+            renderKeyCards();
+            initKeyDrag();
+            renderSnipFilters();
+            renderSnippets();
+            updateFabPositions();
+            document.body.classList.add('on-snippets');
+            checkBackupReminder();
+            checkStorageUsage();
+            // 打开页面自动静默拉取
+            if (activeSyncProvider === 'cf') {
+                var cfCfg = cfGetConfig();
+                if (cfCfg.url && cfCfg.token) cfPullData(false).catch(function(){});
+            } else {
+                var cfg = gistGetConfig();
+                if (cfg.token && cfg.gistId) gistPull(false);
+            }
+        });
         /* ===== 一键部署到 GitHub Pages ===== */
         function deployGetCleanHtml() {
             // 深度清理 DOM 快照：移除所有动态渲染的列表内容、敏感值、运行时状态
@@ -5635,7 +5880,7 @@
             if (lockScreen) lockScreen.classList.add('hidden');
 
             // 清空敏感输入框
-            var sensitiveIds = ['gistToken', 'gistId', 'deployRepo', 'deployBranch', 'lockInput', 'lockSqAnswer', 'lockSqVerifyAnswer'];
+            var sensitiveIds = ['gistToken', 'gistId', 'cfWorkerUrl', 'cfToken', 'deployRepo', 'deployBranch', 'lockInput', 'lockSqAnswer', 'lockSqVerifyAnswer'];
             var saved = {};
             sensitiveIds.forEach(function(id) {
                 var el = document.getElementById(id);
@@ -5687,7 +5932,7 @@
         }
 
         function deployToGitHub() {
-            var token = document.getElementById('gistToken').value.trim();
+            var token = document.getElementById('gistToken').value.trim() || localStorage.getItem('toolbox_gist_token') || '';
             var repo = document.getElementById('deployRepo').value.trim();
             var branch = document.getElementById('deployBranch').value;
             var statusEl = document.getElementById('deployStatus');
@@ -5796,9 +6041,6 @@
                 statusEl.style.color = 'var(--red)';
             });
         }
-
-        // 打开页面自动静默拉取
-        (function() { var cfg = gistGetConfig(); if (cfg.token && cfg.gistId) gistPull(false); })();
 
         /* ===== PWA 支持 ===== */
         // Service Worker 注册（仅在 HTTPS 下有效）
