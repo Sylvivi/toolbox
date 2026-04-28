@@ -1180,7 +1180,7 @@
                     </label>
                     <input type="text" id="gistId" placeholder="自动填入" readonly="" style="opacity:0.6">
                 </div>
-                <div id="gistStatus" style="font-size:12px;color:var(--text-muted);margin-top:6px;min-height:18px"></div>
+                <div id="gistStatus" style="font-size: 12px; color: var(--text-muted); margin-top: 6px; min-height: 18px;"></div>
                 <div id="gistLastSync" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
 
                 <div id="deploySection" style="display: none; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--card-border);">
@@ -1194,7 +1194,7 @@
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                         <button class="btn-save" onclick="deployToGitHub()" style="flex:none;padding:8px 20px">🚀 部署</button>
-                        <span id="deployStatus" style="font-size:12px;color:var(--text-muted)"></span>
+                        <span id="deployStatus" style="font-size: 12px; color: var(--text-muted);"></span>
                     </div>
                     <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5">💡 请确保仓库已在 Settings → Pages 中启用对应分支</div>
                 </div>
@@ -1314,17 +1314,17 @@
             <input type="text" id="snipSearchInput" placeholder="搜索标题、标签、内容..." oninput="renderSnippets()">
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">31</span></div>
-            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">6</span></div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">22</span></div>
+            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">2</span></div>
             <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">2</span></div>
             <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">6</span></div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">17</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">12</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
             <span class="sort-label">排序：</span>
             <!-- chips will be rendered by JS in saved order -->
-        <div class="sort-chip active" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
+        <div class="sort-chip" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip active" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
         <div class="toolbar">
             <div class="toolbar-btn" id="snipExpandBtn" onclick="toggleAllSnippets()">📂 展开</div>
         </div>
@@ -1490,6 +1490,7 @@
         <span class="batch-cancel-btn" onclick="exitSelectMode()">取消</span>
         <span id="batchCountText" style="font-size:14px;font-weight:600">已选 0 项</span>
         <div style="display:flex;gap:8px">
+            <span class="batch-cancel-btn" id="batchExportBtn" onclick="batchExportData()" style="background:rgba(255,255,255,0.2)">📤 导出</span>
             <span class="batch-cancel-btn" id="batchMergeBtn" onclick="openMergeModal()" style="display:none;background:rgba(255,255,255,0.2)">📦 合并</span>
             <span class="batch-delete-btn" onclick="batchDelete()">删除</span>
         </div>
@@ -2226,6 +2227,7 @@
                         '<div class="card-actions" style="margin-top:0;margin-bottom:8px;padding-top:0;border-top:none">' +
                             '<button class="btn-duplicate" onclick="duplicateKeyEntry(\'' + item.id + '\')">📋 复制</button>' +
                             '<button class="btn-edit" onclick="editKeyEntry(\'' + item.id + '\')">✏️ 编辑</button>' +
+                            '<button class="btn-edit" onclick="exportCardData(\'' + item.id + '\')">📤 导出</button>' +
                         '</div>' +
                         websiteHtml +
                         '<div class="card-field"><div class="card-field-label">API 地址</div><div class="card-field-value"><div class="text">' + esc(item.url || '未设置') + '</div>' + urlCopyBtn + '</div></div>' +
@@ -3321,6 +3323,7 @@
                             '<button class="btn-pin" onclick="toggleSnipPin(\'' + item.id + '\')">' + (item.pinned ? '📌 取消' : '📌 置顶') + '</button>' +
                             '<button class="btn-edit" onclick="editSnipEntry(\'' + item.id + '\')">✏️ 编辑</button>' +
                             (item.type !== 'link' ? '<button class="btn-edit" onclick="openExportPicker(\'card\',\'' + item.id + '\')">💾 另存为</button>' : '') +
+                            '<button class="btn-edit" onclick="exportCardData(\'' + item.id + '\')">📤 导出</button>' +
                         '</div>' +
                         contentHtml + noteHtml +
                         '<button onclick="event.stopPropagation();addSubToCard(\'' + item.id + '\')" style="width:100%;padding:10px;background:transparent;border:1px dashed rgba(90,171,139,0.4);border-radius:8px;color:var(--text-sub);font-size:13px;cursor:pointer;margin-top:10px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor=\'#5aab8b\';this.style.color=\'var(--accent-mid)\'" onmouseout="this.style.borderColor=\'rgba(90,171,139,0.4)\';this.style.color=\'var(--text-sub)\'">＋ 添加子条目</button>' +
@@ -4582,6 +4585,46 @@
             }
             exitSelectMode();
             showToast('🗑️ 已删除 ' + count + ' 项');
+        }
+
+        /* ===== 单卡 / 批量导出为可导入数据 ===== */
+        function exportCardData(id) {
+            var sData = getSnipData();
+            var kData = getKeyData();
+            var item = null;
+            for (var i = 0; i < sData.length; i++) { if (sData[i].id === id) { item = sData[i]; break; } }
+            if (!item) {
+                for (var j = 0; j < kData.length; j++) { if (kData[j].id === id) { item = kData[j]; break; } }
+                if (item) { downloadJSON({ api_keys: [item], snippets: [] }, item.title || 'key_export'); return; }
+            }
+            if (!item) return;
+            downloadJSON({ api_keys: [], snippets: [item] }, item.title || 'card_export');
+        }
+
+        function batchExportData() {
+            var selected = document.querySelectorAll('.card.selected');
+            if (selected.length === 0) { showToast('⚠️ 请先选择要导出的卡片'); return; }
+            var sData = getSnipData();
+            var kData = getKeyData();
+            var sIds = {}, kIds = {};
+            selected.forEach(function(card) {
+                if (card.dataset.sid) sIds[card.dataset.sid] = true;
+                if (card.dataset.kid) kIds[card.dataset.kid] = true;
+            });
+            var exportSnips = sData.filter(function(d) { return sIds[d.id]; });
+            var exportKeys = kData.filter(function(d) { return kIds[d.id]; });
+            var name = 'toolbox_export_' + selected.length + '项';
+            downloadJSON({ api_keys: exportKeys, snippets: exportSnips }, name);
+            exitSelectMode();
+        }
+
+        function downloadJSON(data, name) {
+            var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = name.replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_') + '.json';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            showToast('📤 已导出为 .json 文件');
         }
 
         /* ============================================================
