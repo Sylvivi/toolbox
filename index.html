@@ -809,12 +809,6 @@
             -webkit-tap-highlight-color: transparent; transition: background 0.15s;
         }
         .collection-sub-item:active { background: var(--accent-light); }
-        .sub-content-preview {
-            transition: max-height 0.3s ease, opacity 0.25s ease, margin-top 0.25s ease;
-            overflow: hidden;
-        }
-        .sub-content-preview.collapsing { max-height: 0 !important; opacity: 0; margin-top: 0 !important; }
-        .sub-content-preview.expanding { opacity: 1; }
         .collection-sub-drag {
             color: var(--text-muted); font-size: 12px; cursor: grab; flex-shrink: 0;
             user-select: none; letter-spacing: 1px; opacity: 0.5; padding: 0 2px;
@@ -4258,33 +4252,7 @@
             if (!item) return;
             var preview = item.querySelector('.sub-content-preview');
             if (!preview) return;
-
-            if (preview.style.display === 'none' || !preview.offsetHeight) {
-                // 展开
-                preview.style.display = 'block';
-                preview.style.maxHeight = '0';
-                preview.style.opacity = '0';
-                // 强制 reflow
-                preview.offsetHeight;
-                var h = preview.scrollHeight;
-                preview.style.maxHeight = h + 'px';
-                preview.style.opacity = '1';
-                setTimeout(function() { preview.style.maxHeight = 'none'; }, 300);
-            } else {
-                // 收起
-                var h = preview.scrollHeight;
-                preview.style.maxHeight = h + 'px';
-                preview.style.overflow = 'hidden';
-                preview.offsetHeight;
-                preview.style.maxHeight = '0';
-                preview.style.opacity = '0';
-                setTimeout(function() {
-                    preview.style.display = 'none';
-                    preview.style.maxHeight = '';
-                    preview.style.opacity = '';
-                    preview.style.overflow = '';
-                }, 300);
-            }
+            preview.style.display = preview.style.display === 'none' ? 'block' : 'none';
         }
 
         function deleteCollectionSub(cardId, subIdx) {
