@@ -3355,8 +3355,7 @@
                                 editBtn +
                                 '<button class="sub-more-btn" onclick="event.stopPropagation();toggleSubMoreMenu(this)">⋯</button>' + moreMenu;
                         } else {
-                            actions = '<button class="btn-copy" onclick="event.stopPropagation();toggleSubPreview(\'' + item.id + '\',' + idx + ',this)" style="font-size:11px" title="展开内容">▶</button>' +
-                                '<button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub(\'' + item.id + '\',' + idx + ',this)" style="font-size:11px">📋</button>' +
+                            actions = '<button class="btn-copy" onclick="event.stopPropagation();copyCollectionSub(\'' + item.id + '\',' + idx + ',this)" style="font-size:11px">📋</button>' +
                                 editBtn +
                                 '<button class="sub-more-btn" onclick="event.stopPropagation();toggleSubMoreMenu(this)">⋯</button>' + moreMenu;
                         }
@@ -3381,7 +3380,7 @@
                                 '</div>' +
                             '</div>';
                         }
-                        return '<div class="collection-sub-item" data-sub-idx="' + idx + '" style="flex-wrap:wrap">' +
+                        return '<div class="collection-sub-item" data-sub-idx="' + idx + '" style="flex-wrap:wrap' + (sub.type !== 'link' ? ';cursor:pointer' : '') + '"' + (sub.type !== 'link' ? ' onclick="toggleSubPreview(\'' + item.id + '\',' + idx + ',this)"' : '') + '>' +
                             (subSortMode === 'default' ? '<span class="collection-sub-drag" title="拖动排序">⋮⋮</span>' : '') +
                             '<span class="collection-sub-icon">' + icon + '</span>' +
                             '<span class="collection-sub-title">' + esc(sub.title || (sub.url || sub.content || '').substring(0, 40)) + '</span>' +
@@ -4246,15 +4245,15 @@
             }
         }
 
-        function toggleSubPreview(cardId, subIdx, btn) {
-            var item = btn.closest('.collection-sub-item');
+        function toggleSubPreview(cardId, subIdx, el) {
+            var item = el.closest('.collection-sub-item');
+            if (!item) return;
             var preview = item.querySelector('.sub-content-preview');
+            if (!preview) return;
             if (preview.style.display === 'none') {
                 preview.style.display = 'block';
-                btn.textContent = '▼';
             } else {
                 preview.style.display = 'none';
-                btn.textContent = '▶';
             }
         }
 
