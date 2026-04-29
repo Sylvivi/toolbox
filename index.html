@@ -1161,12 +1161,12 @@
             <div class="modal-body">
                 <!-- 同步方式选择 -->
                 <div style="display:flex;gap:6px;margin-bottom:14px">
-                    <button class="type-btn active" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
-                    <button class="type-btn" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
+                    <button class="type-btn" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
+                    <button class="type-btn active" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
                 </div>
 
                 <!-- GitHub Gist 配置 -->
-                <div id="syncGistFields" style="display: block;">
+                <div id="syncGistFields" style="display: none;">
                     <div id="gistGuide" style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('gistGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 首次配置步骤</b>
@@ -1193,7 +1193,7 @@
                 </div>
 
                 <!-- Cloudflare KV 配置 -->
-                <div id="syncCFFields" style="display: none;">
+                <div id="syncCFFields" style="display: block;">
                     <div style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('cfGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 配置说明</b>
@@ -1241,7 +1241,7 @@
                 </div>
                 <div style="display:flex;gap:8px">
                     <button class="btn-cancel" onclick="closeGistModal()">关闭</button>
-                    <button class="btn-save" id="gistSaveBtn" onclick="syncSaveConfig()">重新连接</button>
+                    <button class="btn-save" id="gistSaveBtn" onclick="syncSaveConfig()">连接</button>
                 </div>
             </div>
         </div>
@@ -2241,7 +2241,13 @@
         var keyVisible = {};
 
         function getKeyData() { var d = idbGet(KEY_STORE); return d ? d.slice() : []; }
-        function setKeyData(d) { idbSet(KEY_STORE, d); localStorage.setItem('toolbox_last_local_modified', new Date().toISOString()); gistSchedulePush(); }
+        function setKeyData(d) {
+            var old = idbGet(KEY_STORE) || [];
+            idbSet(KEY_STORE, d);
+            localStorage.setItem('toolbox_last_local_modified', new Date().toISOString());
+            if (activeSyncProvider === 'cf') { cfSyncCards('k_', old, d); }
+            else { gistSchedulePush(); }
+        }
         function setKeyDataSilent(d) { idbSet(KEY_STORE, d); }
 
         function maskKey(key) {
@@ -2914,7 +2920,13 @@
         var currentEditorType = 'code';
 
         function getSnipData() { var d = idbGet(SNIP_STORE); return d ? d.slice() : []; }
-        function setSnipData(d) { idbSet(SNIP_STORE, d); localStorage.setItem('toolbox_last_local_modified', new Date().toISOString()); gistSchedulePush(); }
+        function setSnipData(d) {
+            var old = idbGet(SNIP_STORE) || [];
+            idbSet(SNIP_STORE, d);
+            localStorage.setItem('toolbox_last_local_modified', new Date().toISOString());
+            if (activeSyncProvider === 'cf') { cfSyncCards('s_', old, d); }
+            else { gistSchedulePush(); }
+        }
         function setSnipDataSilent(d) { idbSet(SNIP_STORE, d); }
 
         function setSnipType(type, el) {
@@ -5264,12 +5276,174 @@
             };
         }
 
-        /* ===== Cloudflare KV 同步 ===== */
+        /* ===== Cloudflare KV 云端优先 · 逐卡存储引擎 ===== */
+        var CF_VER = 2; // per-card format version
+
         function cfGetConfig() {
             return {
                 url: (localStorage.getItem('toolbox_cf_url') || '').replace(/\/+$/, ''),
                 token: localStorage.getItem('toolbox_cf_token') || ''
             };
+        }
+
+        // 通用 KV 请求
+        function cfReq(method, key, body) {
+            var cfg = cfGetConfig();
+            if (!cfg.url || !cfg.token) return Promise.reject('CF not configured');
+            var opts = { method: method, headers: { 'Authorization': 'Bearer ' + cfg.token } };
+            if (body !== undefined) {
+                opts.headers['Content-Type'] = 'application/json';
+                opts.body = JSON.stringify(body);
+            }
+            return fetch(cfg.url + '/' + encodeURIComponent(key), opts).then(function(r) {
+                if (r.status === 404) return null;
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return method === 'DELETE' ? { ok: true } : r.json();
+            });
+        }
+
+        // 批量获取（Worker 需支持 POST /_batch，否则降级逐个 GET）
+        function cfBatchGet(keys) {
+            if (keys.length === 0) return Promise.resolve({});
+            var cfg = cfGetConfig();
+            if (!cfg.url || !cfg.token) return Promise.reject('CF not configured');
+            return fetch(cfg.url + '/_batch', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + cfg.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ keys: keys })
+            }).then(function(r) {
+                if (!r.ok) throw new Error('batch not supported');
+                return r.json();
+            }).catch(function() {
+                // 降级：并发逐个 GET
+                var results = {};
+                var fetches = keys.map(function(k) {
+                    return cfReq('GET', k).then(function(v) {
+                        if (v && typeof v === 'object' && Object.keys(v).length > 0) results[k] = v;
+                    }).catch(function() {});
+                });
+                return Promise.all(fetches).then(function() { return results; });
+            });
+        }
+
+        // Manifest 读写
+        function cfGetManifest() {
+            return cfReq('GET', '_manifest').then(function(data) {
+                if (data && data.ver === CF_VER) return data;
+                return null;
+            });
+        }
+        function cfPutManifest(manifest) {
+            manifest.ver = CF_VER;
+            manifest.lastModified = new Date().toISOString();
+            return cfReq('PUT', '_manifest', manifest);
+        }
+        function cfBuildManifest() {
+            return {
+                ver: CF_VER,
+                keyIds: getKeyData().map(function(d) { return d.id; }),
+                snipIds: getSnipData().map(function(d) { return d.id; }),
+                imgbeds: getImgBedData(),
+                tombstones: getTombstones(),
+                lastModified: new Date().toISOString()
+            };
+        }
+
+        // Diff 同步：比较新旧数组，只推变化的卡片
+        var _cfSyncTimer = null;
+        function cfSyncCards(prefix, oldArr, newArr) {
+            if (activeSyncProvider !== 'cf') return;
+            var cfg = cfGetConfig();
+            if (!cfg.url || !cfg.token) return;
+
+            var oldMap = {};
+            oldArr.forEach(function(d) { oldMap[d.id] = JSON.stringify(d); });
+            var newMap = {};
+            newArr.forEach(function(d) { newMap[d.id] = JSON.stringify(d); });
+
+            var promises = [];
+            // 新增或修改的卡片
+            newArr.forEach(function(d) {
+                if (!oldMap[d.id] || oldMap[d.id] !== newMap[d.id]) {
+                    promises.push(cfReq('PUT', prefix + d.id, d));
+                }
+            });
+            // 被删除的卡片
+            oldArr.forEach(function(d) {
+                if (!newMap[d.id]) {
+                    promises.push(cfReq('DELETE', prefix + d.id));
+                }
+            });
+
+            if (promises.length === 0) return;
+
+            // Debounce manifest 更新（避免频繁写）
+            if (_cfSyncTimer) clearTimeout(_cfSyncTimer);
+            _cfSyncTimer = setTimeout(function() {
+                cfPutManifest(cfBuildManifest()).catch(function() {});
+            }, 1500);
+
+            Promise.all(promises).then(function() {
+                localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
+                var sl = document.getElementById('gistStatusLine');
+                if (sl) sl.innerHTML = '☁️ ' + fmtTimeShort(new Date().toISOString()) + ' <span style="opacity:0.5">已同步</span>';
+            }).catch(function(e) {
+                console.warn('CF card sync error:', e);
+                var sl = document.getElementById('gistStatusLine');
+                if (sl) sl.innerHTML = '☁️ <span style="color:var(--red)">同步失败</span> <span onclick="cfPushData()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">重试</span>';
+            });
+        }
+
+        // 云端优先加载
+        function cfCloudFirstLoad() {
+            return cfGetManifest().then(function(manifest) {
+                if (!manifest) return cfMigrateFromBlob();
+
+                var allKeys = [];
+                (manifest.keyIds || []).forEach(function(id) { allKeys.push('k_' + id); });
+                (manifest.snipIds || []).forEach(function(id) { allKeys.push('s_' + id); });
+
+                if (manifest.tombstones) setTombstones(manifest.tombstones);
+                if (manifest.imgbeds) setImgBedData(manifest.imgbeds);
+                if (allKeys.length === 0) return;
+
+                return cfBatchGet(allKeys).then(function(results) {
+                    var keys = [], snips = [];
+                    (manifest.keyIds || []).forEach(function(id) {
+                        var c = results['k_' + id]; if (c && c.id) keys.push(c);
+                    });
+                    (manifest.snipIds || []).forEach(function(id) {
+                        var c = results['s_' + id]; if (c && c.id) snips.push(c);
+                    });
+                    setKeyDataSilent(keys);
+                    setSnipDataSilent(snips);
+                });
+            });
+        }
+
+        // 旧 blob → 逐卡迁移
+        function cfMigrateFromBlob() {
+            return cfReq('GET', 'toolbox_data').then(function(data) {
+                if (!data || (!data.api_keys && !data.snippets)) return;
+                var promises = [], keyIds = [], snipIds = [];
+                (data.api_keys || []).forEach(function(c) {
+                    if (!c.id) return; keyIds.push(c.id);
+                    promises.push(cfReq('PUT', 'k_' + c.id, c));
+                });
+                (data.snippets || []).forEach(function(c) {
+                    if (!c.id) return; snipIds.push(c.id);
+                    promises.push(cfReq('PUT', 's_' + c.id, c));
+                });
+                promises.push(cfPutManifest({ ver: CF_VER, keyIds: keyIds, snipIds: snipIds,
+                    imgbeds: data.imgbeds || [], tombstones: data.tombstones || {} }));
+                return Promise.all(promises).then(function() {
+                    if (data.api_keys) setKeyDataSilent(data.api_keys);
+                    if (data.snippets) setSnipDataSilent(data.snippets);
+                    if (data.imgbeds) setImgBedData(data.imgbeds);
+                    if (data.tombstones) setTombstones(data.tombstones);
+                    showToast('☁️ 旧数据已迁移到逐卡存储');
+                });
+            });
         }
 
         function cfSaveConfig() {
@@ -5278,28 +5452,37 @@
             if (!url) { gistSetStatus('⚠️ 请填写 Worker 地址', 'var(--red)'); return; }
             if (!token) { gistSetStatus('⚠️ 请填写同步密钥', 'var(--red)'); return; }
             gistSetStatus('🔄 正在连接…', 'var(--text-muted)');
-            // 测试连接
-            fetch(url + '/toolbox_data', {
-                headers: { 'Authorization': 'Bearer ' + token }
-            }).then(function(r) {
-                if (r.status === 401) throw new Error('密钥错误');
-                if (!r.ok) throw new Error('连接失败 (HTTP ' + r.status + ')');
-                return r.json();
-            }).then(function(remote) {
-                localStorage.setItem('toolbox_cf_url', url);
-                localStorage.setItem('toolbox_cf_token', token);
+            localStorage.setItem('toolbox_cf_url', url);
+            localStorage.setItem('toolbox_cf_token', token);
+
+            cfGetManifest().then(function(manifest) {
                 localStorage.setItem('toolbox_sync_provider', 'cf');
                 activeSyncProvider = 'cf';
-                var hasData = remote && (remote.api_keys || remote.snippets);
-                if (hasData) {
-                    gistSetStatus('✅ 连接成功，发现云端数据，正在合并…', 'var(--accent)');
-                    applySyncData(remote, false);
-                    // 合并后推回
-                    setTimeout(cfPushData, 1000);
+                if (manifest) {
+                    gistSetStatus('✅ 连接成功，正在加载云端数据…', 'var(--accent)');
+                    return cfCloudFirstLoad().then(function() {
+                        renderKeyFilters(); renderKeyCards();
+                        renderSnipFilters(); renderSnippets();
+                        gistSetStatus('✅ 云端数据已加载', 'var(--accent)');
+                    });
                 } else {
-                    gistSetStatus('✅ 连接成功，正在上传本地数据…', 'var(--accent)');
-                    cfPushData();
+                    return cfReq('GET', 'toolbox_data').then(function(old) {
+                        if (old && (old.api_keys || old.snippets)) {
+                            gistSetStatus('✅ 发现旧格式，正在迁移…', 'var(--accent)');
+                            return cfMigrateFromBlob().then(function() {
+                                renderKeyFilters(); renderKeyCards();
+                                renderSnipFilters(); renderSnippets();
+                                gistSetStatus('✅ 迁移完成', 'var(--accent)');
+                            });
+                        } else {
+                            gistSetStatus('✅ 连接成功，正在上传本地数据…', 'var(--accent)');
+                            return cfPushAllCards().then(function() {
+                                gistSetStatus('✅ 本地数据已上传', 'var(--accent)');
+                            });
+                        }
+                    });
                 }
+            }).then(function() {
                 localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
                 document.getElementById('gistSyncBtns').style.display = 'flex';
                 document.getElementById('gistSaveBtn').textContent = '重新连接';
@@ -5307,19 +5490,22 @@
                 var sl = document.getElementById('gistStatusLine');
                 if (sl) sl.innerHTML = '☁️ ' + fmtTimeShort(new Date().toISOString()) + ' <span style="opacity:0.5">已同步</span>';
             }).catch(function(err) {
-                gistSetStatus('❌ ' + (err.message || '连接失败'), 'var(--red)');
+                gistSetStatus('❌ ' + (err.message || err || '连接失败'), 'var(--red)');
             });
+        }
+
+        function cfPushAllCards() {
+            var keyData = getKeyData(), snipData = getSnipData(), promises = [];
+            keyData.forEach(function(c) { promises.push(cfReq('PUT', 'k_' + c.id, c)); });
+            snipData.forEach(function(c) { promises.push(cfReq('PUT', 's_' + c.id, c)); });
+            promises.push(cfPutManifest(cfBuildManifest()));
+            return Promise.all(promises);
         }
 
         function cfPushData() {
             var cfg = cfGetConfig();
             if (!cfg.url || !cfg.token) return;
-            fetch(cfg.url + '/toolbox_data', {
-                method: 'PUT',
-                headers: { 'Authorization': 'Bearer ' + cfg.token, 'Content-Type': 'application/json' },
-                body: JSON.stringify(buildSyncPayload())
-            }).then(function(r) {
-                if (!r.ok) throw new Error();
+            cfPushAllCards().then(function() {
                 gistPushRetries = 0;
                 localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
                 var sl = document.getElementById('gistStatusLine');
@@ -5340,23 +5526,13 @@
         function cfPullData(manual) {
             var cfg = cfGetConfig();
             if (!cfg.url || !cfg.token) return Promise.resolve();
-            return fetch(cfg.url + '/toolbox_data', {
-                headers: { 'Authorization': 'Bearer ' + cfg.token }
-            }).then(function(r) {
-                if (!r.ok) throw new Error('拉取失败');
-                return r.json();
-            }).then(function(remote) {
-                if (!remote || (!remote.api_keys && !remote.snippets)) {
-                    if (manual) gistSetStatus('☁️ 云端暂无数据', 'var(--text-muted)');
-                    return;
-                }
-                var needPushBack = applySyncData(remote, manual);
+            return cfCloudFirstLoad().then(function() {
                 localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
-                var sl = document.getElementById('gistStatusLine');
-                if (sl) sl.innerHTML = '☁️ ' + fmtTimeShort(new Date().toISOString()) + ' <span style="opacity:0.5">已同步</span>';
                 renderKeyFilters(); renderKeyCards();
                 renderSnipFilters(); renderSnippets();
-                if (needPushBack) setTimeout(cfPushData, 1000);
+                if (manual) showToast('☁️ 云端数据已加载');
+                var sl = document.getElementById('gistStatusLine');
+                if (sl) sl.innerHTML = '☁️ ' + fmtTimeShort(new Date().toISOString()) + ' <span style="opacity:0.5">已同步</span>';
             });
         }
 
@@ -5624,13 +5800,7 @@
                 takeSnapshot('推送云端前');
                 if (activeSyncProvider === 'cf') {
                     gistSetStatus('🔄 正在推送…', 'var(--text-muted)');
-                    var cfg = cfGetConfig();
-                    fetch(cfg.url + '/toolbox_data', {
-                        method: 'PUT',
-                        headers: { 'Authorization': 'Bearer ' + cfg.token, 'Content-Type': 'application/json' },
-                        body: JSON.stringify(buildSyncPayload())
-                    }).then(function(r) {
-                        if (!r.ok) throw new Error('HTTP ' + r.status);
+                    cfPushAllCards().then(function() {
                         localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
                         gistSetStatus('✅ 推送成功！', 'var(--accent)');
                         gistUpdateLastSync();
@@ -5853,23 +6023,34 @@
         // 等待 IndexedDB 初始化完成后再渲染页面
         idbInit().then(function() {
             migrateOldUrlBookmarks();
-            renderKeyFilters();
-            renderKeyCards();
-            initKeyDrag();
-            renderSnipFilters();
-            renderSnippets();
-            updateFabPositions();
-            document.body.classList.add('on-snippets');
-            checkBackupReminder();
-            checkStorageUsage();
-            // 打开页面自动静默拉取
-            if (activeSyncProvider === 'cf') {
-                var cfCfg = cfGetConfig();
-                if (cfCfg.url && cfCfg.token) cfPullData(false).catch(function(){});
+
+            // 云端优先：CF 模式下先从云端加载全部数据再渲染
+            var cfCfg = cfGetConfig();
+            var loadPromise;
+            if (activeSyncProvider === 'cf' && cfCfg.url && cfCfg.token) {
+                loadPromise = cfCloudFirstLoad().catch(function(e) {
+                    console.warn('Cloud load failed, using local cache:', e);
+                });
             } else {
-                var cfg = gistGetConfig();
-                if (cfg.token && cfg.gistId) gistPull(false);
+                loadPromise = Promise.resolve();
             }
+
+            loadPromise.then(function() {
+                renderKeyFilters();
+                renderKeyCards();
+                initKeyDrag();
+                renderSnipFilters();
+                renderSnippets();
+                updateFabPositions();
+                document.body.classList.add('on-snippets');
+                checkBackupReminder();
+                checkStorageUsage();
+                // Gist 模式下后台静默拉取
+                if (activeSyncProvider !== 'cf') {
+                    var cfg = gistGetConfig();
+                    if (cfg.token && cfg.gistId) gistPull(false);
+                }
+            });
         });
         /* ===== 一键部署到 GitHub Pages ===== */
         function deployGetCleanHtml() {
