@@ -1161,12 +1161,12 @@
             <div class="modal-body">
                 <!-- 同步方式选择 -->
                 <div style="display:flex;gap:6px;margin-bottom:14px">
-                    <button class="type-btn" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
-                    <button class="type-btn active" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
+                    <button class="type-btn active" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
+                    <button class="type-btn" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
                 </div>
 
                 <!-- GitHub Gist 配置 -->
-                <div id="syncGistFields" style="display: none;">
+                <div id="syncGistFields" style="display: block;">
                     <div id="gistGuide" style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('gistGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 首次配置步骤</b>
@@ -1193,7 +1193,7 @@
                 </div>
 
                 <!-- Cloudflare KV 配置 -->
-                <div id="syncCFFields" style="display: block;">
+                <div id="syncCFFields" style="display:none">
                     <div style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('cfGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 配置说明</b>
@@ -1241,7 +1241,7 @@
                 </div>
                 <div style="display:flex;gap:8px">
                     <button class="btn-cancel" onclick="closeGistModal()">关闭</button>
-                    <button class="btn-save" id="gistSaveBtn" onclick="syncSaveConfig()">连接</button>
+                    <button class="btn-save" id="gistSaveBtn" onclick="syncSaveConfig()">重新连接</button>
                 </div>
             </div>
         </div>
@@ -2239,12 +2239,13 @@
         var keyAllExpanded = false;
         var keyVisible = {};
 
-        function getKeyData() { var d = idbGet(KEY_STORE); return d ? d.slice() : []; }
+        function getKeyData() { var d = idbGet(KEY_STORE); return d ? JSON.parse(JSON.stringify(d)) : []; }
         function setKeyData(d) {
             var old = idbGet(KEY_STORE) || [];
+            var oldSnap = JSON.parse(JSON.stringify(old));
             idbSet(KEY_STORE, d);
             localStorage.setItem('toolbox_last_local_modified', new Date().toISOString());
-            if (activeSyncProvider === 'cf') { cfSyncCards('k_', old, d); }
+            if (activeSyncProvider === 'cf') { cfSyncCards('k_', oldSnap, d); }
             else { gistSchedulePush(); }
         }
         function setKeyDataSilent(d) { idbSet(KEY_STORE, d); }
@@ -2921,12 +2922,13 @@
         var snipAllExpanded = false;
         var currentEditorType = 'code';
 
-        function getSnipData() { var d = idbGet(SNIP_STORE); return d ? d.slice() : []; }
+        function getSnipData() { var d = idbGet(SNIP_STORE); return d ? JSON.parse(JSON.stringify(d)) : []; }
         function setSnipData(d) {
             var old = idbGet(SNIP_STORE) || [];
+            var oldSnap = JSON.parse(JSON.stringify(old));
             idbSet(SNIP_STORE, d);
             localStorage.setItem('toolbox_last_local_modified', new Date().toISOString());
-            if (activeSyncProvider === 'cf') { cfSyncCards('s_', old, d); }
+            if (activeSyncProvider === 'cf') { cfSyncCards('s_', oldSnap, d); }
             else { gistSchedulePush(); }
         }
         function setSnipDataSilent(d) { idbSet(SNIP_STORE, d); }
@@ -3728,15 +3730,15 @@
         }
 
         /* ===== 子条目单独编辑弹窗 ===== */
-        var _subEditCtx = null; // { cardId, subIdx }
+        var _subEditCtx = null; // { cardId, subIdx, isNew }
 
-        function openSubEdit(cardId, subIdx) {
+        function openSubEdit(cardId, subIdx, isNew) {
             var data = getSnipData();
             for (var i = 0; i < data.length; i++) {
                 if (data[i].id === cardId && data[i].items) {
                     var sub = data[i].items[subIdx];
                     if (!sub) return;
-                    _subEditCtx = { cardId: cardId, subIdx: subIdx };
+                    _subEditCtx = { cardId: cardId, subIdx: subIdx, isNew: !!isNew };
                     document.getElementById('subEditName').value = sub.title || '';
                     document.getElementById('subEditType').value = sub.type || 'text';
                     document.getElementById('subEditUrl').value = sub.url || '';
@@ -3760,6 +3762,22 @@
         }
 
         function closeSubEdit() {
+            // 如果是新建的子条目且用户取消了，移除空子条目
+            if (_subEditCtx && _subEditCtx.isNew) {
+                var data = getSnipData();
+                for (var i = 0; i < data.length; i++) {
+                    if (data[i].id === _subEditCtx.cardId && data[i].items) {
+                        var sub = data[i].items[_subEditCtx.subIdx];
+                        if (sub && !sub.title && !sub.content && !sub.url) {
+                            data[i].items.splice(_subEditCtx.subIdx, 1);
+                            data[i].updatedAt = new Date().toISOString();
+                            setSnipDataSilent(data);
+                            renderSnippetsKeepState(_subEditCtx.cardId);
+                        }
+                        break;
+                    }
+                }
+            }
             document.getElementById('subEditOverlay').classList.remove('show');
             _subEditCtx = null;
         }
@@ -4155,7 +4173,7 @@
                     setSnipDataSilent(data);
                     renderSnippetsKeepState(cardId);
                     // 打开刚添加的子条目进行编辑
-                    openSubEdit(cardId, item.items.length - 1);
+                    openSubEdit(cardId, item.items.length - 1, true);
                     return;
                 }
             }
@@ -5110,7 +5128,19 @@
            ============================================================ */
         var IMGBED_STORE = 'toolbox_imgbeds';
         function getImgBedData() { return idbGet(IMGBED_STORE) || []; }
-        function setImgBedData(d) { idbSet(IMGBED_STORE, d); }
+        function setImgBedData(d) {
+            idbSet(IMGBED_STORE, d);
+            // CF 模式下同步 manifest（imgbeds 存在 manifest 里）
+            if (activeSyncProvider === 'cf') {
+                var cfg = cfGetConfig();
+                if (cfg.url && cfg.token) {
+                    if (_cfSyncTimer) clearTimeout(_cfSyncTimer);
+                    _cfSyncTimer = setTimeout(function() {
+                        cfPutManifest(cfBuildManifest()).catch(function() {});
+                    }, 1500);
+                }
+            }
+        }
 
         function openImgBedModal() {
             renderImgBedList();
@@ -5726,8 +5756,8 @@
             // 先备份当前
             takeSnapshot('恢复快照前');
             var p = snap.payload || {};
-            if (p.api_keys) setKeyDataSilent(p.api_keys);
-            if (p.snippets) setSnipDataSilent(p.snippets);
+            if (p.api_keys) setKeyData(p.api_keys);
+            if (p.snippets) setSnipData(p.snippets);
             if (p.imgbeds) setImgBedData(p.imgbeds);
             if (p.tombstones) setTombstones(p.tombstones);
             localStorage.setItem('toolbox_last_local_modified', new Date().toISOString());
