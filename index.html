@@ -186,6 +186,16 @@
             transition: transform 0.25s; width: 20px; text-align: center;
         }
         .card.collapsed .card-chevron { transform: rotate(-90deg); }
+        /* 同步状态小圆点 */
+        .sync-dot {
+            width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+            transition: background 0.3s, box-shadow 0.3s;
+        }
+        .sync-dot.sync-synced { background: var(--accent); opacity: 0.5; }
+        .sync-dot.sync-pending { background: var(--gold, #f0ad4e); box-shadow: 0 0 4px var(--gold, #f0ad4e); animation: sync-pulse 1s infinite; }
+        .sync-dot.sync-error { background: var(--red); box-shadow: 0 0 4px var(--red); }
+        .sync-dot.sync-conflict { background: var(--gold, #f0ad4e); }
+        @keyframes sync-pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
         .btn-quick-delete {
             flex-shrink: 0; width: 22px; height: 22px;
@@ -789,6 +799,9 @@
 
         /* 集合展示 */
         .collection-sub-list { display: flex; flex-direction: column; gap: 6px; overflow: visible; }
+        .sub-sort-bar { display:flex; align-items:center; gap:4px; margin-bottom:6px; }
+        .sub-sort-btn { padding:2px 8px; font-size:10px; border:1px solid var(--card-border); border-radius:10px; background:transparent; color:var(--text-muted); cursor:pointer; transition:all 0.2s; white-space:nowrap; }
+        .sub-sort-btn.active { background:var(--accent-light); color:var(--accent-mid); border-color:var(--accent-mid); font-weight:600; }
         .collection-sub-item {
             display: flex; align-items: flex-start; gap: 8px;
             background: var(--card-inner); border-radius: 8px; padding: 8px 12px;
@@ -1161,12 +1174,12 @@
             <div class="modal-body">
                 <!-- 同步方式选择 -->
                 <div style="display:flex;gap:6px;margin-bottom:14px">
-                    <button class="type-btn" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
-                    <button class="type-btn active" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
+                    <button class="type-btn active" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
+                    <button class="type-btn" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
                 </div>
 
                 <!-- GitHub Gist 配置 -->
-                <div id="syncGistFields" style="display: none;">
+                <div id="syncGistFields" style="display: block;">
                     <div id="gistGuide" style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('gistGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 首次配置步骤</b>
@@ -1193,7 +1206,7 @@
                 </div>
 
                 <!-- Cloudflare KV 配置 -->
-                <div id="syncCFFields" style="display: block;">
+                <div id="syncCFFields" style="display:none">
                     <div style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('cfGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 配置说明</b>
@@ -1214,7 +1227,7 @@
                     </div>
                 </div>
 
-                <div id="gistStatus" style="font-size: 12px; color: var(--text-muted); margin-top: 6px; min-height: 18px;"></div>
+                <div id="gistStatus" style="font-size:12px;color:var(--text-muted);margin-top:6px;min-height:18px"></div>
                 <div id="gistLastSync" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
 
                 <div id="deploySection" style="display: none; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--card-border);">
@@ -1228,20 +1241,20 @@
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                         <button class="btn-save" onclick="deployToGitHub()" style="flex:none;padding:8px 20px">🚀 部署</button>
-                        <span id="deployStatus" style="font-size: 12px; color: var(--text-muted);"></span>
+                        <span id="deployStatus" style="font-size:12px;color:var(--text-muted)"></span>
                     </div>
                     <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5">💡 请确保仓库已在 Settings → Pages 中启用对应分支</div>
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:10px;padding:14px 24px 20px">
-                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：1.78 MB / ~50 MB（4%）</div>
+                <div id="storageUsageInfo" style="font-size:11px;color:var(--text-muted);text-align:center;padding:4px 0">💾 本地存储：1.14 MB / ~50 MB（2%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
                 </div>
                 <div style="display:flex;gap:8px">
                     <button class="btn-cancel" onclick="closeGistModal()">关闭</button>
-                    <button class="btn-save" id="gistSaveBtn" onclick="syncSaveConfig()">连接</button>
+                    <button class="btn-save" id="gistSaveBtn" onclick="syncSaveConfig()">重新连接</button>
                 </div>
             </div>
         </div>
@@ -1349,17 +1362,17 @@
             <input type="text" id="snipSearchInput" placeholder="搜索标题、标签、内容..." oninput="renderSnippets()">
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">22</span></div>
-            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">2</span></div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">31</span></div>
+            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">6</span></div>
             <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">2</span></div>
             <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">6</span></div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">12</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">17</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
             <span class="sort-label">排序：</span>
             <!-- chips will be rendered by JS in saved order -->
-        <div class="sort-chip" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip active" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
+        <div class="sort-chip active" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
         <div class="toolbar">
             <div class="toolbar-btn" id="snipExpandBtn" onclick="toggleAllSnippets()">📂 展开</div>
         </div>
@@ -2331,6 +2344,7 @@
                         (item.group ? '<div class="card-group">' + esc(item.group) + '</div>' : '') +
                         (item.website ? '<a class="btn-header-visit" href="' + esc(item.website) + '" target="_blank" onclick="event.stopPropagation()" title="直达官网">🌐</a>' : '') +
                         ((item.website || item.url) ? '<a class="btn-header-visit" href="' + esc((item.website || item.url).replace(/\/v1\/?$/, '').replace(/\/$/, '') + '/log') + '" target="_blank" onclick="event.stopPropagation()" title="消耗记录">📊</a>' : '') +
+                        (activeSyncProvider === 'cf' ? '<span class="sync-dot sync-' + getSyncStatus(item.id) + '" data-sync-id="' + item.id + '" title="' + (getSyncStatus(item.id) === 'synced' ? '已同步' : getSyncStatus(item.id) === 'pending' ? '同步中…' : '同步失败') + '"></span>' : '') +
                         '<div class="card-chevron">▼</div>' +
                     '</div>' +
                     '<div class="card-body">' +
@@ -3313,7 +3327,22 @@
                 if (item.type === 'collection') {
                     typeIcon = '📦';
                     var subItems = item.items || [];
-                    var subHtml = subItems.map(function(sub, idx) {
+                    // 子条目排序（仅显示，不改数据）
+                    var subSortMode = getSubSort(item.id);
+                    var indexed = subItems.map(function(sub, idx) { return { sub: sub, origIdx: idx }; });
+                    if (subSortMode === 'updated') {
+                        indexed.sort(function(a, b) { return (b.sub.updatedAt || b.sub.createdAt || '').localeCompare(a.sub.updatedAt || a.sub.createdAt || ''); });
+                    } else if (subSortMode === 'created') {
+                        indexed.sort(function(a, b) { return (b.sub.createdAt || '').localeCompare(a.sub.createdAt || ''); });
+                    }
+                    var sortBar = subItems.length > 1 ? '<div class="sub-sort-bar">' +
+                        '<span style="font-size:10px;color:var(--text-muted);margin-right:2px">排序</span>' +
+                        '<button class="sub-sort-btn' + (subSortMode === 'default' ? ' active' : '') + '" onclick="event.stopPropagation();setSubSort(\'' + item.id + '\',\'default\')">手动</button>' +
+                        '<button class="sub-sort-btn' + (subSortMode === 'updated' ? ' active' : '') + '" onclick="event.stopPropagation();setSubSort(\'' + item.id + '\',\'updated\')">最近编辑</button>' +
+                        '<button class="sub-sort-btn' + (subSortMode === 'created' ? ' active' : '') + '" onclick="event.stopPropagation();setSubSort(\'' + item.id + '\',\'created\')">最近创建</button>' +
+                        '</div>' : '';
+                    var subHtml = indexed.map(function(w) {
+                        var sub = w.sub, idx = w.origIdx;
                         var icon = sub.type === 'link' ? '🔗' : sub.type === 'text' ? '📄' : '💻';
                         var actions = '';
                         var editBtn = '<button class="btn-copy" onclick="event.stopPropagation();openSubEdit(\'' + item.id + '\',' + idx + ')" style="font-size:11px" title="编辑">✏️</button>';
@@ -3334,7 +3363,7 @@
                         var isImgLink = sub.type === 'link' && isImageUrl(sub.url);
                         if (isImgLink) {
                             return '<div class="sub-img-layout" data-sub-idx="' + idx + '">' +
-                                '<div class="sub-img-drag-strip collection-sub-drag" title="拖动排序">⋮⋮</div>' +
+                                (subSortMode === 'default' ? '<div class="sub-img-drag-strip collection-sub-drag" title="拖动排序">⋮⋮</div>' : '') +
                                 '<div class="sub-img-left">' +
                                     '<div class="sub-img-header">' +
                                         '<span class="sub-icon">🔗</span>' +
@@ -3353,7 +3382,7 @@
                             '</div>';
                         }
                         return '<div class="collection-sub-item" data-sub-idx="' + idx + '" style="flex-wrap:wrap">' +
-                            '<span class="collection-sub-drag" title="拖动排序">⋮⋮</span>' +
+                            (subSortMode === 'default' ? '<span class="collection-sub-drag" title="拖动排序">⋮⋮</span>' : '') +
                             '<span class="collection-sub-icon">' + icon + '</span>' +
                             '<span class="collection-sub-title">' + esc(sub.title || (sub.url || sub.content || '').substring(0, 40)) + '</span>' +
                             '<div class="collection-sub-actions">' + actions + '</div>' +
@@ -3368,7 +3397,7 @@
                             '</div>' +
                             '</div>';
                     }).join('');
-                    contentHtml = '<div class="collection-sub-list" data-card-id="' + item.id + '">' + subHtml + '</div>';
+                    contentHtml = sortBar + '<div class="collection-sub-list" data-card-id="' + item.id + '">' + subHtml + '</div>';
                 } else if (item.type === 'link') {
                     typeIcon = '🔗';
                     var imgPreview = isImageUrl(item.url) ? '<div class="img-preview"><img src="' + esc(item.url) + '" onclick="event.stopPropagation();window.open(\'' + escAttr(item.url) + '\',\'_blank\')" onerror="this.parentNode.innerHTML=\'<div class=img-preview-fail>图片加载失败</div>\'" loading="lazy"></div>' : '';
@@ -3432,6 +3461,7 @@
                             : item.type === 'collection'
                                 ? '<span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:6px;background:var(--accent-light);color:var(--accent-mid);font-weight:600">' + (item.items || []).length + ' 项</span>'
                                 : '<span style="font-size:14px;flex-shrink:0">' + typeIcon + '</span>') +
+                        (activeSyncProvider === 'cf' ? '<span class="sync-dot sync-' + getSyncStatus(item.id) + '" data-sync-id="' + item.id + '" title="' + (getSyncStatus(item.id) === 'synced' ? '已同步' : getSyncStatus(item.id) === 'pending' ? '同步中…' : '同步失败') + '"></span>' : '') +
                         '<div class="card-chevron">▼</div>' +
                     '</div>' +
                     '<div class="card-time-preview">' +
@@ -3455,6 +3485,23 @@
                     '</div></div>';
             }
             list.innerHTML = html;
+        }
+
+        /* 子条目排序偏好（仅影响显示，不改数据） */
+        var _subSortCache = null;
+        function _loadSubSort() {
+            if (!_subSortCache) {
+                try { _subSortCache = JSON.parse(localStorage.getItem('toolbox_sub_sort') || '{}'); } catch(e) { _subSortCache = {}; }
+            }
+            return _subSortCache;
+        }
+        function getSubSort(cardId) { return _loadSubSort()[cardId] || 'default'; }
+        function setSubSort(cardId, mode) {
+            var s = _loadSubSort();
+            if (mode === 'default') { delete s[cardId]; } else { s[cardId] = mode; }
+            _subSortCache = s;
+            localStorage.setItem('toolbox_sub_sort', JSON.stringify(s));
+            renderSnippetsKeepState(cardId);
         }
 
         /* 带状态保持的渲染：保存展开状态、子条目预览状态、滚动位置，渲染后恢复 */
@@ -5380,6 +5427,111 @@
             };
         }
 
+        // ---- 同步状态追踪 ----
+        // status: 'synced' | 'pending' | 'error' | 'conflict'
+        var _cardSyncStatus = {};
+        var _cardCloudHash = {}; // id → 上次拉取时的 JSON hash
+
+        function setSyncStatus(id, status) {
+            _cardSyncStatus[id] = status;
+            // 更新对应卡片上的小图标
+            var dot = document.querySelector('[data-sync-id="' + id + '"]');
+            if (dot) {
+                dot.className = 'sync-dot sync-' + status;
+                dot.title = status === 'synced' ? '已同步' : status === 'pending' ? '同步中…' : status === 'error' ? '同步失败' : '存在冲突';
+            }
+        }
+        function getSyncStatus(id) { return _cardSyncStatus[id] || 'synced'; }
+
+        function computeCardHash(card) {
+            return JSON.stringify(card);
+        }
+
+        // 标记一批卡片为已同步并记录 hash
+        function markSynced(cards) {
+            cards.forEach(function(c) {
+                if (c && c.id) {
+                    _cardSyncStatus[c.id] = 'synced';
+                    _cardCloudHash[c.id] = computeCardHash(c);
+                }
+            });
+        }
+
+        // ---- 智能合并 ----
+        function mergeCards(local, cloud) {
+            // 集合类型：子条目级别合并
+            if (local.type === 'collection' && cloud.type === 'collection') {
+                var merged = JSON.parse(JSON.stringify(cloud));
+                var localSubs = local.items || [];
+                var cloudSubs = cloud.items || [];
+                var subMap = {};
+                cloudSubs.forEach(function(s) { subMap[s.id] = s; });
+                var changed = false;
+                localSubs.forEach(function(ls) {
+                    var cs = subMap[ls.id];
+                    if (!cs) {
+                        // 本地有但云端没有 → 本地新增的
+                        subMap[ls.id] = ls; changed = true;
+                    } else if (ls.updatedAt && cs.updatedAt && ls.updatedAt > cs.updatedAt) {
+                        // 本地更新 → 用本地的
+                        subMap[ls.id] = ls; changed = true;
+                    }
+                });
+                if (changed) {
+                    merged.items = Object.keys(subMap).map(function(k) { return subMap[k]; });
+                    merged.items.sort(function(a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
+                }
+                // 卡片级字段用更新的
+                if (local.updatedAt > cloud.updatedAt) {
+                    merged.title = local.title;
+                    merged.tag = local.tag;
+                    merged.note = local.note;
+                    merged.pinned = local.pinned;
+                }
+                merged.updatedAt = new Date().toISOString();
+                return merged;
+            }
+            // 非集合类型：用 updatedAt 更新的
+            if (local.updatedAt && cloud.updatedAt) {
+                return local.updatedAt >= cloud.updatedAt ? local : cloud;
+            }
+            return local;
+        }
+
+        // 单卡推送：先检查冲突再推
+        function cfPushCardSafe(prefix, card) {
+            var key = prefix + card.id;
+            setSyncStatus(card.id, 'pending');
+
+            var lastHash = _cardCloudHash[card.id];
+
+            return cfReq('GET', key).then(function(cloudCard) {
+                if (cloudCard && cloudCard.id && lastHash) {
+                    var cloudHash = computeCardHash(cloudCard);
+                    if (cloudHash !== lastHash) {
+                        // 云端被别的设备改过了 → 智能合并
+                        var merged = mergeCards(card, cloudCard);
+                        // 更新本地数据
+                        var storeKey = prefix === 'k_' ? KEY_STORE : SNIP_STORE;
+                        var data = idbGet(storeKey) || [];
+                        for (var i = 0; i < data.length; i++) {
+                            if (data[i].id === card.id) { data[i] = merged; break; }
+                        }
+                        idbSet(storeKey, data);
+                        card = merged;
+                    }
+                }
+                return cfReq('PUT', key, card);
+            }).then(function() {
+                _cardCloudHash[card.id] = computeCardHash(card);
+                setSyncStatus(card.id, 'synced');
+            }).catch(function(e) {
+                console.warn('Push failed for', card.id, e);
+                setSyncStatus(card.id, 'error');
+                throw e;
+            });
+        }
+
         // Diff 同步：比较新旧数组，只推变化的卡片
         var _cfSyncTimer = null;
         function cfSyncCards(prefix, oldArr, newArr) {
@@ -5393,16 +5545,23 @@
             newArr.forEach(function(d) { newMap[d.id] = JSON.stringify(d); });
 
             var promises = [];
-            // 新增或修改的卡片
+            // 新增或修改的卡片 → 走冲突检测
             newArr.forEach(function(d) {
                 if (!oldMap[d.id] || oldMap[d.id] !== newMap[d.id]) {
-                    promises.push(cfReq('PUT', prefix + d.id, d));
+                    promises.push(cfPushCardSafe(prefix, d));
                 }
             });
             // 被删除的卡片
             oldArr.forEach(function(d) {
                 if (!newMap[d.id]) {
-                    promises.push(cfReq('DELETE', prefix + d.id));
+                    setSyncStatus(d.id, 'pending');
+                    promises.push(cfReq('DELETE', prefix + d.id).then(function() {
+                        delete _cardSyncStatus[d.id];
+                        delete _cardCloudHash[d.id];
+                    }).catch(function(e) {
+                        setSyncStatus(d.id, 'error');
+                        throw e;
+                    }));
                 }
             });
 
@@ -5448,6 +5607,9 @@
                     });
                     setKeyDataSilent(keys);
                     setSnipDataSilent(snips);
+                    // 记录云端 hash，用于后续冲突检测
+                    markSynced(keys);
+                    markSynced(snips);
                 });
             });
         }
@@ -5527,8 +5689,20 @@
 
         function cfPushAllCards() {
             var keyData = getKeyData(), snipData = getSnipData(), promises = [];
-            keyData.forEach(function(c) { promises.push(cfReq('PUT', 'k_' + c.id, c)); });
-            snipData.forEach(function(c) { promises.push(cfReq('PUT', 's_' + c.id, c)); });
+            keyData.forEach(function(c) {
+                setSyncStatus(c.id, 'pending');
+                promises.push(cfReq('PUT', 'k_' + c.id, c).then(function() {
+                    _cardCloudHash[c.id] = computeCardHash(c);
+                    setSyncStatus(c.id, 'synced');
+                }).catch(function(e) { setSyncStatus(c.id, 'error'); throw e; }));
+            });
+            snipData.forEach(function(c) {
+                setSyncStatus(c.id, 'pending');
+                promises.push(cfReq('PUT', 's_' + c.id, c).then(function() {
+                    _cardCloudHash[c.id] = computeCardHash(c);
+                    setSyncStatus(c.id, 'synced');
+                }).catch(function(e) { setSyncStatus(c.id, 'error'); throw e; }));
+            });
             promises.push(cfPutManifest(cfBuildManifest()));
             return Promise.all(promises);
         }
