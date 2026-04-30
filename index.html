@@ -1488,8 +1488,8 @@
     <!-- ===== 密钥编辑弹窗 ===== -->
     <div class="modal-overlay" id="keyModalOverlay" onclick="if(event.target===this)closeKeyModal()">
         <div class="modal">
-            <h2 id="keyModalTitle">✏️ 编辑 API</h2>
-            <input type="hidden" id="keyEditId" value="mnvpkmvaivmff">
+            <h2 id="keyModalTitle">➕ 添加 API</h2>
+            <input type="hidden" id="keyEditId">
             <div class="modal-body">
                 <div class="form-group">
                     <label>名称 *</label>
@@ -1509,7 +1509,7 @@
                 </div>
                 <div class="form-group">
                     <label>密钥列表 *</label>
-                    <div id="keyEntriesList"><div class="model-entry"><input type="text" placeholder="分组名（可选）" value="" class="ke-label" style="flex:1;min-width:0"><input type="text" placeholder="sk-xxx" value="sk-ekVixkmq2xwbdSdtrc074YlBjR86QcVrJYCbJGiFJ6kRDsy4" class="ke-key" style="flex:2;min-width:0"><button class="btn-remove-model" onclick="this.parentElement.remove()">×</button></div></div>
+                    <div id="keyEntriesList"></div>
                     <button class="btn-add-model" onclick="addKeyEntryRow()">+ 添加密钥</button>
                 </div>
                 <div class="form-group">
@@ -2331,12 +2331,8 @@
 
                 var urlCopyBtn = item.url ? '<button class="btn-copy" onclick="copyText(\'' + escAttr(item.url) + '\', this)">复制</button>' : '';
                 var websiteHtml = '';
-                var pricingBtn = '';
                 if (item.website) {
                     websiteHtml = '<div class="card-field"><div class="card-field-label">官网</div><div class="card-field-value"><div class="text">' + esc(item.website) + '</div><a class="btn-visit" href="' + esc(item.website) + '" target="_blank">访问</a><button class="btn-copy" onclick="copyText(\'' + escAttr(item.website) + '\', this)">复制</button></div></div>';
-                    // 提取域名根路径 → /pricing
-                    var pricingUrl = item.website.replace(/^(https?:\/\/[^\/]+).*$/, '$1') + '/pricing';
-                    pricingBtn = '<a class="key-diag-btn" href="' + esc(pricingUrl) + '" target="_blank" onclick="event.stopPropagation()" style="text-decoration:none">💲 模型广场</a>';
                 }
 
                 html += '<div class="card collapsed" data-kid="' + item.id + '">' +
@@ -2371,7 +2367,6 @@
                                 (item.url ? '<button class="key-diag-btn" onclick="event.stopPropagation();pickKeyThen(\'' + item.id + '\',checkKeyBalance)">💰 查余额</button>' : '') +
                                 (item.url ? '<button class="key-diag-btn" onclick="event.stopPropagation();pickKeyThen(\'' + item.id + '\',pingKeyApi)">🚀 测速</button>' : '') +
                                 (item.url ? '<button class="key-diag-btn" onclick="event.stopPropagation();pickKeyThen(\'' + item.id + '\',fetchKeyModels)">📋 拉取模型</button>' : '') +
-                                pricingBtn +
                             '</div>' +
                             '<div class="key-diag-result" id="diag-' + item.id + '"></div>' +
                             '<div id="chat-test-' + item.id + '"></div>' +
@@ -2514,12 +2509,13 @@
         }
 
         // 多密钥选择器：如果只有一个密钥直接执行，多个则弹出选择
+        var _activeKeyMap = {}; // cardId → selected key string
         function pickKeyThen(id, callback) {
             var item = getKeyItemById(id);
             if (!item) return;
             var keys = getItemKeys(item);
             if (keys.length <= 1) {
-                item._activeKey = keys[0] ? keys[0].key : item.key;
+                _activeKeyMap[id] = keys[0] ? keys[0].key : item.key;
                 callback(id);
                 return;
             }
@@ -2529,7 +2525,7 @@
             var btnsHtml = '<div class="diag-row" style="flex-wrap:wrap;gap:4px"><span style="font-size:12px;color:var(--text-muted)">选择密钥：</span>';
             for (var i = 0; i < keys.length; i++) {
                 var label = keys[i].label || maskKey(keys[i].key);
-                btnsHtml += '<button class="key-diag-btn" style="font-size:11px" data-pick-idx="' + i + '" onclick="event.stopPropagation();doPick(\'' + escAttr(id) + '\',' + i + ',\'' + escAttr(callback.name) + '\')">' + esc(label) + '</button>';
+                btnsHtml += '<button class="key-diag-btn" style="font-size:11px" onclick="event.stopPropagation();doPick(\'' + escAttr(id) + '\',' + i + ',\'' + escAttr(callback.name) + '\')">' + esc(label) + '</button>';
             }
             btnsHtml += '</div>';
             diagEl.innerHTML = btnsHtml;
@@ -2538,15 +2534,14 @@
             var item = getKeyItemById(id);
             if (!item) return;
             var keys = getItemKeys(item);
-            item._activeKey = keys[idx] ? keys[idx].key : item.key;
-            // 找到对应函数并执行
+            _activeKeyMap[id] = keys[idx] ? keys[idx].key : item.key;
             var fns = { checkKeyBalance: checkKeyBalance, pingKeyApi: pingKeyApi, fetchKeyModels: fetchKeyModels };
             if (fns[fnName]) fns[fnName](id);
         }
 
         // 获取当前活跃密钥（兼容新旧）
         function getActiveKey(item) {
-            if (item._activeKey) return item._activeKey;
+            if (_activeKeyMap[item.id]) return _activeKeyMap[item.id];
             var keys = getItemKeys(item);
             return keys.length > 0 ? keys[0].key : (item.key || '');
         }
