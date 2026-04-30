@@ -6264,33 +6264,32 @@
         idbInit().then(function() {
             migrateOldUrlBookmarks();
 
-            // 云端优先：CF 模式下先从云端加载全部数据再渲染
-            var cfCfg = cfGetConfig();
-            var loadPromise;
-            if (activeSyncProvider === 'cf' && cfCfg.url && cfCfg.token) {
-                loadPromise = cfCloudFirstLoad().catch(function(e) {
-                    console.warn('Cloud load failed, using local cache:', e);
-                });
-            } else {
-                loadPromise = Promise.resolve();
-            }
+            // 立即用本地缓存渲染（零延迟）
+            renderKeyFilters();
+            renderKeyCards();
+            initKeyDrag();
+            renderSnipFilters();
+            renderSnippets();
+            updateFabPositions();
+            document.body.classList.add('on-snippets');
+            checkBackupReminder();
+            checkStorageUsage();
 
-            loadPromise.then(function() {
-                renderKeyFilters();
-                renderKeyCards();
-                initKeyDrag();
-                renderSnipFilters();
-                renderSnippets();
-                updateFabPositions();
-                document.body.classList.add('on-snippets');
-                checkBackupReminder();
-                checkStorageUsage();
-                // Gist 模式下后台静默拉取
-                if (activeSyncProvider !== 'cf') {
-                    var cfg = gistGetConfig();
-                    if (cfg.token && cfg.gistId) gistPull(false);
+            // 后台静默拉取云端数据，有变化再刷新
+            if (activeSyncProvider === 'cf') {
+                var cfCfg = cfGetConfig();
+                if (cfCfg.url && cfCfg.token) {
+                    cfCloudFirstLoad().then(function() {
+                        renderKeyFilters(); renderKeyCards();
+                        renderSnipFilters(); renderSnippets();
+                    }).catch(function(e) {
+                        console.warn('Background cloud sync failed:', e);
+                    });
                 }
-            });
+            } else {
+                var cfg = gistGetConfig();
+                if (cfg.token && cfg.gistId) gistPull(false);
+            }
         });
         /* ===== 一键部署到 GitHub Pages ===== */
         function deployGetCleanHtml() {
