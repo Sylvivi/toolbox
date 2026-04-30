@@ -1439,9 +1439,6 @@
                             <button class="editor-search-btn" onclick="jumpEditorMatch(1)">▼</button>
                         </div>
                         <div class="editor-ops-bar" id="editorOpsBar">
-                            <button class="eop" onclick="editorUndo()" title="撤销">↩</button>
-                            <button class="eop" onclick="editorRedo()" title="重做">↪</button>
-                            <span class="eop-sep"></span>
                             <button class="eop" onclick="editorOp('indent')" title="缩进 (Tab)">→⎵</button>
                             <button class="eop" onclick="editorOp('outdent')" title="取消缩进 (Shift+Tab)">⎵←</button>
                             <span class="eop-sep"></span>
@@ -1668,9 +1665,6 @@
                         <button class="code-search-btn" onclick="jumpSubEditMatch(1)">▼</button>
                     </div>
                     <div class="editor-ops-bar" id="subEditOpsBar">
-                        <button class="eop" onclick="subEditorUndo()">↩</button>
-                        <button class="eop" onclick="subEditorRedo()">↪</button>
-                        <span class="eop-sep"></span>
                         <button class="eop" onclick="subEditorOp('indent')">→⎵</button>
                         <button class="eop" onclick="subEditorOp('outdent')">⎵←</button>
                         <span class="eop-sep"></span>
@@ -3632,9 +3626,6 @@
             document.getElementById('snipFormUrl').value = item ? (item.url || '') : '';
 
             var type = item ? (item.type || 'code') : 'text';
-            // 重置撤销/重做栈
-            _undoStack = []; _redoStack = [];
-            editorSnapshot();
             // 编辑集合时显示集合按钮，新建时隐藏
             document.getElementById('typeCollection').style.display = (type === 'collection') ? '' : 'none';
             setEditorType(type, true);
@@ -3814,9 +3805,6 @@
                     var subInfoBar = document.getElementById('subEditorWrap').nextElementSibling;
                     if (subInfoBar) subInfoBar.style.display = '';
                     document.getElementById('subMdPreviewBtn').classList.remove('active');
-                    // 重置撤销/重做栈
-                    _subUndoStack = []; _subRedoStack = [];
-                    subEditorSnapshot();
                     document.getElementById('subEditOverlay').classList.add('show');
                     syncSubEditLines();
                     return;
@@ -4443,70 +4431,6 @@
         }
 
         /* ===== 编辑器文本操作 ===== */
-        /* ===== 编辑器撤销/重做 ===== */
-        var _undoStack = [], _redoStack = [], _undoTimer = null;
-        function editorSnapshot() {
-            var ta = document.getElementById('snipFormCode');
-            if (!ta) return;
-            var snap = { val: ta.value, sel: ta.selectionStart };
-            if (_undoStack.length > 0 && _undoStack[_undoStack.length - 1].val === snap.val) return;
-            _undoStack.push(snap);
-            if (_undoStack.length > 100) _undoStack.shift();
-            _redoStack = [];
-        }
-        function editorScheduleSnap() {
-            if (_undoTimer) clearTimeout(_undoTimer);
-            _undoTimer = setTimeout(editorSnapshot, 400);
-        }
-        function editorUndo() {
-            var ta = document.getElementById('snipFormCode');
-            if (_undoStack.length === 0) return;
-            _redoStack.push({ val: ta.value, sel: ta.selectionStart });
-            var snap = _undoStack.pop();
-            ta.value = snap.val; ta.selectionStart = ta.selectionEnd = snap.sel;
-            ta.dispatchEvent(new Event('input'));
-        }
-        function editorRedo() {
-            var ta = document.getElementById('snipFormCode');
-            if (_redoStack.length === 0) return;
-            _undoStack.push({ val: ta.value, sel: ta.selectionStart });
-            var snap = _redoStack.pop();
-            ta.value = snap.val; ta.selectionStart = ta.selectionEnd = snap.sel;
-            ta.dispatchEvent(new Event('input'));
-        }
-
-        /* 子条目编辑器撤销/重做 */
-        var _subUndoStack = [], _subRedoStack = [], _subUndoTimer = null;
-        function subEditorSnapshot() {
-            var ta = document.getElementById('subEditContent');
-            if (!ta) return;
-            var snap = { val: ta.value, sel: ta.selectionStart };
-            if (_subUndoStack.length > 0 && _subUndoStack[_subUndoStack.length - 1].val === snap.val) return;
-            _subUndoStack.push(snap);
-            if (_subUndoStack.length > 100) _subUndoStack.shift();
-            _subRedoStack = [];
-        }
-        function subEditorScheduleSnap() {
-            if (_subUndoTimer) clearTimeout(_subUndoTimer);
-            _subUndoTimer = setTimeout(subEditorSnapshot, 400);
-        }
-        function subEditorUndo() {
-            var ta = document.getElementById('subEditContent');
-            if (_subUndoStack.length === 0) return;
-            _subRedoStack.push({ val: ta.value, sel: ta.selectionStart });
-            var snap = _subUndoStack.pop();
-            ta.value = snap.val; ta.selectionStart = ta.selectionEnd = snap.sel;
-            ta.dispatchEvent(new Event('input'));
-        }
-        function subEditorRedo() {
-            var ta = document.getElementById('subEditContent');
-            if (_subRedoStack.length === 0) return;
-            _subUndoStack.push({ val: ta.value, sel: ta.selectionStart });
-            var snap = _subRedoStack.pop();
-            ta.value = snap.val; ta.selectionStart = ta.selectionEnd = snap.sel;
-            ta.dispatchEvent(new Event('input'));
-        }
-
         function editorOp(op) {
             var ta = document.getElementById('snipFormCode');
             var s = ta.selectionStart, e = ta.selectionEnd;
@@ -4704,11 +4628,7 @@
                     e.preventDefault();
                     editorOp(e.shiftKey ? 'outdent' : 'indent');
                 }
-                if (e.key === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey) { e.preventDefault(); editorUndo(); }
-                if ((e.key === 'z' && (e.ctrlKey || e.metaKey) && e.shiftKey) || (e.key === 'y' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); editorRedo(); }
             });
-            ta.addEventListener('input', editorScheduleSnap);
-            ta.addEventListener('focus', function() { if (_undoStack.length === 0) editorSnapshot(); });
 
             // 子条目编辑器：光标位置 + Tab快捷键
             var subTa = document.getElementById('subEditContent');
@@ -4719,11 +4639,7 @@
                     e.preventDefault();
                     subEditorOp(e.shiftKey ? 'outdent' : 'indent');
                 }
-                if (e.key === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey) { e.preventDefault(); subEditorUndo(); }
-                if ((e.key === 'z' && (e.ctrlKey || e.metaKey) && e.shiftKey) || (e.key === 'y' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); subEditorRedo(); }
             });
-            subTa.addEventListener('input', subEditorScheduleSnap);
-            subTa.addEventListener('focus', function() { if (_subUndoStack.length === 0) subEditorSnapshot(); });
         });
 
         /* ============================================================
