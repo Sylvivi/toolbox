@@ -2538,17 +2538,28 @@
                 if (k) keys.push({ id: generateId(), label: l, key: k });
             }
             if (keys.length === 0) { showToast('⚠️ 请至少填写一个密钥'); return; }
+            var editId = document.getElementById('keyEditId').value;
+            var data = getKeyData();
+            var oldItem = null;
+            if (editId) { for (var i = 0; i < data.length; i++) { if (data[i].id === editId) { oldItem = data[i]; break; } } }
             var entry = {
-                id: document.getElementById('keyEditId').value || generateId(),
+                id: editId || generateId(),
                 name: name, group: document.getElementById('keyFormGroup').value.trim(),
                 url: document.getElementById('keyFormUrl').value.trim(),
                 website: document.getElementById('keyFormWebsite').value.trim(),
                 keys: keys,
-                key: keys[0].key, // 兼容旧代码
+                key: keys[0].key,
                 note: document.getElementById('keyFormNote').value.trim(),
-                models: [], updatedAt: new Date().toISOString()
+                models: [],
+                updatedAt: (oldItem && oldItem.updatedAt) ? oldItem.updatedAt : new Date().toISOString()
             };
-            var data = getKeyData();
+            // 只在有实际改动时才更新 updatedAt
+            if (!oldItem || entry.name !== oldItem.name || entry.group !== (oldItem.group || '') ||
+                entry.url !== (oldItem.url || '') || entry.website !== (oldItem.website || '') ||
+                entry.note !== (oldItem.note || '') || entry.key !== (oldItem.key || '') ||
+                JSON.stringify(keys.map(function(k){return k.label+':'+k.key})) !== JSON.stringify((getItemKeys(oldItem)).map(function(k){return k.label+':'+k.key}))) {
+                entry.updatedAt = new Date().toISOString();
+            }
             var idx = -1;
             for (var i = 0; i < data.length; i++) { if (data[i].id === entry.id) { idx = i; break; } }
             if (idx >= 0) data[idx] = entry; else data.unshift(entry);
@@ -3796,8 +3807,13 @@
                     note: document.getElementById('snipFormNote').value.trim(),
                     code: '', url: '',
                     createdAt: (oldItem && oldItem.createdAt) ? oldItem.createdAt : now,
-                    updatedAt: now, pinned: oldItem ? !!oldItem.pinned : false
+                    updatedAt: (oldItem && oldItem.updatedAt) ? oldItem.updatedAt : now,
+                    pinned: oldItem ? !!oldItem.pinned : false
                 };
+                // 只在有实际改动时才更新 updatedAt
+                if (!oldItem || JSON.stringify(entry) !== JSON.stringify(oldItem)) {
+                    entry.updatedAt = now;
+                }
                 var idx = -1;
                 for (var i = 0; i < data.length; i++) { if (data[i].id === entry.id) { idx = i; break; } }
                 if (idx >= 0) data[idx] = entry; else data.unshift(entry);
@@ -3834,9 +3850,15 @@
                 note: document.getElementById('snipFormNote').value.trim(),
                 type: currentEditorType,
                 createdAt: (oldItem && oldItem.createdAt) ? oldItem.createdAt : now,
-                updatedAt: now,
+                updatedAt: (oldItem && oldItem.updatedAt) ? oldItem.updatedAt : now,
                 pinned: oldItem ? !!oldItem.pinned : false
             };
+            // 只在有实际改动时才更新 updatedAt
+            if (!oldItem || entry.title !== oldItem.title || entry.tag !== (oldItem.tag || '') ||
+                entry.code !== (oldItem.code || '') || entry.url !== (oldItem.url || '') ||
+                entry.note !== (oldItem.note || '') || entry.type !== oldItem.type) {
+                entry.updatedAt = now;
+            }
 
             var idx = -1;
             for (var i = 0; i < data.length; i++) { if (data[i].id === entry.id) { idx = i; break; } }
@@ -3991,18 +4013,27 @@
                 if (data[i].id === _subEditCtx.cardId && data[i].items) {
                     var sub = data[i].items[_subEditCtx.subIdx];
                     if (!sub) return;
-                    sub.title = document.getElementById('subEditName').value.trim();
-                    sub.type = document.getElementById('subEditType').value;
+                    var newTitle = document.getElementById('subEditName').value.trim();
+                    var newType = document.getElementById('subEditType').value;
+                    var newUrl = newType === 'link' ? document.getElementById('subEditUrl').value.trim() : '';
+                    var newContent = newType !== 'link' ? document.getElementById('subEditContent').value : '';
+                    // 检查是否有实际改动
+                    var changed = sub.title !== newTitle || sub.type !== newType ||
+                        (sub.url || '') !== newUrl || (sub.content || '') !== newContent;
+                    sub.title = newTitle;
+                    sub.type = newType;
                     if (sub.type === 'link') {
-                        sub.url = document.getElementById('subEditUrl').value.trim();
+                        sub.url = newUrl;
                         sub.content = '';
                     } else {
-                        sub.content = document.getElementById('subEditContent').value;
+                        sub.content = newContent;
                         sub.url = '';
                     }
-                    sub.updatedAt = new Date().toISOString();
-                    if (!sub.createdAt) sub.createdAt = sub.updatedAt;
-                    data[i].updatedAt = new Date().toISOString();
+                    if (changed) {
+                        sub.updatedAt = new Date().toISOString();
+                        if (!sub.createdAt) sub.createdAt = sub.updatedAt;
+                        data[i].updatedAt = new Date().toISOString();
+                    }
 
                     // 保存当前展开的卡片ID和滚动位置
                     var expandedIds = {};
