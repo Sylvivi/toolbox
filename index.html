@@ -1129,7 +1129,7 @@
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body class="on-snippets theme-warm modal-open">
+<body class="on-snippets modal-open">
 
     <!-- ===== 密码锁屏 ===== -->
     <div class="lock-screen hidden" id="lockScreen">
@@ -1272,7 +1272,7 @@
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:10px;padding:14px 24px 20px">
-                <div id="storageUsageInfo" style="font-size:11px;color:var(--text-muted);text-align:center;padding:4px 0">💾 本地存储：1.14 MB / ~50 MB（2%）</div>
+                <div id="storageUsageInfo" style="font-size:11px;color:var(--text-muted);text-align:center;padding:4px 0">💾 本地存储：0.90 MB / ~50 MB（2%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
@@ -1368,7 +1368,7 @@
             <div class="motto">Tomorrow is another day.</div>
         </div>
         <div class="search-bar">
-            <input type="text" id="keySearchInput" placeholder="搜索名称、分组、密钥..." oninput="renderKeyCards();toggleSearchClear(this)">
+            <input type="text" id="keySearchInput" placeholder="搜索名称、分组、密钥..." oninput="debouncedRenderKeyCards();toggleSearchClear(this)">
             <button class="search-clear" onclick="clearSearch('keySearchInput')">✕</button>
         </div>
         <div class="filter-bar" id="keyFilterBar"></div>
@@ -1385,15 +1385,15 @@
             <div class="motto">Tomorrow is another day.</div>
         </div>
         <div class="search-bar">
-            <input type="text" id="snipSearchInput" placeholder="搜索标题、标签、内容..." oninput="renderSnippets();toggleSearchClear(this)">
+            <input type="text" id="snipSearchInput" placeholder="搜索标题、标签、内容..." oninput="debouncedRenderSnippets();toggleSearchClear(this)">
             <button class="search-clear" onclick="clearSearch('snipSearchInput')">✕</button>
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">31</span></div>
-            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">6</span></div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">21</span></div>
+            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">2</span></div>
             <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">2</span></div>
             <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">6</span></div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">17</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">11</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
@@ -1730,13 +1730,14 @@
         </button>
     </div>
 
-    <div class="toast" id="toast">🔵 蔚蓝金</div>
+    <div class="toast" id="toast"></div>
 
     <script>
         /* ===== IndexedDB 存储引擎 ===== */
         var _idbCache = {};
         var _idb = null;
         var _idbKeys = ['api_manager_data', 'css_snippets_data', 'toolbox_imgbeds', 'toolbox_tombstones', 'toolbox_sort_order', 'toolbox_snapshots'];
+        var _idbPendingWrites = 0;
 
         function idbInit() {
             return new Promise(function(resolve) {
@@ -1787,11 +1788,27 @@
             _idbCache[key] = value;
             if (_idb) {
                 try {
+                    _idbPendingWrites++;
                     var tx = _idb.transaction('data', 'readwrite');
                     tx.objectStore('data').put(value, key);
-                } catch(e) {}
+                    tx.oncomplete = function() { _idbPendingWrites--; };
+                    tx.onerror = function() { _idbPendingWrites--; };
+                    tx.onabort = function() { _idbPendingWrites--; };
+                } catch(e) { _idbPendingWrites--; }
             }
         }
+
+        window.addEventListener('beforeunload', function() {
+            if (_idbPendingWrites > 0 && _idb) {
+                try {
+                    var tx = _idb.transaction('data', 'readwrite');
+                    var store = tx.objectStore('data');
+                    _idbKeys.forEach(function(key) {
+                        if (_idbCache[key] !== undefined) store.put(_idbCache[key], key);
+                    });
+                } catch(e) {}
+            }
+        });
 
         /* ===== 密码锁 ===== */
         var LOCK_HASH_KEY = 'toolbox_lock_hash';
@@ -1994,7 +2011,10 @@
             showToast('🔒 已上锁');
         }
 
-        function generateId() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 5); }
+        function generateId() {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+            return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+        }
         function esc(s) {
             if (!s) return '';
             return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -2086,6 +2106,18 @@
             else renderSnippets();
             input.focus();
         }
+
+        function debounce(fn, wait) {
+            var timer = null;
+            return function() {
+                var ctx = this, args = arguments;
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(function() { fn.apply(ctx, args); }, wait || 120);
+            };
+        }
+
+        var debouncedRenderKeyCards = debounce(renderKeyCards, 120);
+        var debouncedRenderSnippets = debounce(renderSnippets, 120);
 
         function openCalcModal() { document.getElementById('calcModalOverlay').classList.add('show'); }
         function closeCalcModal() { document.getElementById('calcModalOverlay').classList.remove('show'); }
@@ -3779,6 +3811,9 @@
                     updatedAt: (oldItem && oldItem.updatedAt) ? oldItem.updatedAt : now,
                     pinned: oldItem ? !!oldItem.pinned : false
                 };
+                if (oldItem && oldItem._deletedSubIds && oldItem._deletedSubIds.length) {
+                    entry._deletedSubIds = oldItem._deletedSubIds.slice();
+                }
                 // 只在有实际改动时才更新 updatedAt
                 if (!oldItem || JSON.stringify(entry) !== JSON.stringify(oldItem)) {
                     entry.updatedAt = now;
@@ -4417,6 +4452,11 @@
                 var data = getSnipData();
                 for (var i = 0; i < data.length; i++) {
                     if (data[i].id === p.cardId && data[i].items) {
+                        var deletedSub = data[i].items[p.subIdx];
+                        if (deletedSub && deletedSub.id) {
+                            data[i]._deletedSubIds = data[i]._deletedSubIds || [];
+                            if (data[i]._deletedSubIds.indexOf(deletedSub.id) === -1) data[i]._deletedSubIds.push(deletedSub.id);
+                        }
                         data[i].items.splice(p.subIdx, 1);
                         data[i].updatedAt = new Date().toISOString();
                         setSnipData(data);
@@ -5195,10 +5235,13 @@
                                     // 集合类型：子条目级别合并
                                     var localSubs = localItem.items || [];
                                     var remoteSubs = d.items || [];
+                                    var deletedIds = {};
+                                    (localItem._deletedSubIds || []).concat(d._deletedSubIds || []).forEach(function(id) { deletedIds[id] = true; });
                                     var subMap = {};
                                     var changed = false;
-                                    localSubs.forEach(function(s) { subMap[s.id] = s; });
+                                    localSubs.forEach(function(s) { if (!deletedIds[s.id]) subMap[s.id] = s; });
                                     remoteSubs.forEach(function(rs) {
+                                        if (deletedIds[rs.id]) return;
                                         var ls = subMap[rs.id];
                                         if (!ls) {
                                             subMap[rs.id] = rs; changed = true;
@@ -5206,10 +5249,11 @@
                                             subMap[rs.id] = rs; changed = true;
                                         }
                                     });
-                                    if (changed) {
+                                    if (changed || (localItem._deletedSubIds || []).length !== Object.keys(deletedIds).length) {
                                         var mergedSubs = Object.keys(subMap).map(function(k) { return subMap[k]; });
                                         mergedSubs.sort(function(a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
                                         localItem.items = mergedSubs;
+                                        localItem._deletedSubIds = Object.keys(deletedIds);
                                         if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
                                             localItem.updatedAt = d.updatedAt;
                                         }
@@ -5608,23 +5652,24 @@
                 var merged = JSON.parse(JSON.stringify(cloud));
                 var localSubs = local.items || [];
                 var cloudSubs = cloud.items || [];
+                var deletedIds = {};
+                (local._deletedSubIds || []).concat(cloud._deletedSubIds || []).forEach(function(id) { deletedIds[id] = true; });
                 var subMap = {};
-                cloudSubs.forEach(function(s) { subMap[s.id] = s; });
-                var changed = false;
+                cloudSubs.forEach(function(s) { if (!deletedIds[s.id]) subMap[s.id] = s; });
                 localSubs.forEach(function(ls) {
+                    if (deletedIds[ls.id]) return;
                     var cs = subMap[ls.id];
                     if (!cs) {
                         // 本地有但云端没有 → 本地新增的
-                        subMap[ls.id] = ls; changed = true;
+                        subMap[ls.id] = ls;
                     } else if (ls.updatedAt && cs.updatedAt && ls.updatedAt > cs.updatedAt) {
                         // 本地更新 → 用本地的
-                        subMap[ls.id] = ls; changed = true;
+                        subMap[ls.id] = ls;
                     }
                 });
-                if (changed) {
-                    merged.items = Object.keys(subMap).map(function(k) { return subMap[k]; });
-                    merged.items.sort(function(a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
-                }
+                merged.items = Object.keys(subMap).map(function(k) { return subMap[k]; });
+                merged.items.sort(function(a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
+                merged._deletedSubIds = Object.keys(deletedIds);
                 // 卡片级字段用更新的
                 if (local.updatedAt > cloud.updatedAt) {
                     merged.title = local.title;
@@ -6324,25 +6369,31 @@
                         if (localItem.type === 'collection' && d.type === 'collection') {
                             var localSubs = localItem.items || [];
                             var remoteSubs = d.items || [];
+                            var deletedIds = {};
+                            (localItem._deletedSubIds || []).concat(d._deletedSubIds || []).forEach(function(id) { deletedIds[id] = true; });
                             var subMap = {};
                             var changed = false;
-                            localSubs.forEach(function(s) { subMap[s.id] = s; });
+                            localSubs.forEach(function(s) { if (!deletedIds[s.id]) subMap[s.id] = s; });
                             remoteSubs.forEach(function(rs) {
+                                if (deletedIds[rs.id]) return;
                                 var ls = subMap[rs.id];
                                 if (!ls) { subMap[rs.id] = rs; changed = true; }
                                 else if (rs.updatedAt && (!ls.updatedAt || rs.updatedAt > ls.updatedAt)) { subMap[rs.id] = rs; changed = true; }
                             });
-                            if (changed) {
+                            if (changed || (localItem._deletedSubIds || []).length !== Object.keys(deletedIds).length) {
                                 var mergedSubs = Object.keys(subMap).map(function(k) { return subMap[k]; });
                                 mergedSubs.sort(function(a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
                                 localItem.items = mergedSubs;
+                                localItem._deletedSubIds = Object.keys(deletedIds);
                                 if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) { localItem.updatedAt = d.updatedAt; }
                                 sUpdated++;
                             }
                             if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
                                 var mergedItems = localItem.items;
+                                var mergedDeletedSubIds = localItem._deletedSubIds;
                                 sData[sIds[d.id]] = d;
                                 sData[sIds[d.id]].items = mergedItems;
+                                sData[sIds[d.id]]._deletedSubIds = mergedDeletedSubIds;
                             }
                         } else {
                             if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
