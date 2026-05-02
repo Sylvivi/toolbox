@@ -144,7 +144,7 @@
 
         .search-bar { position: relative; margin-bottom: 16px; }
         .search-bar input {
-            width: 100%; padding: 12px 16px 12px 42px;
+            width: 100%; padding: 12px 36px 12px 42px;
             background: var(--card-bg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
             border: 1px solid var(--card-border); border-radius: 12px;
             color: var(--text); font-size: 14px; outline: none;
@@ -152,6 +152,14 @@
         .search-bar input:focus { border-color: var(--accent-mid); }
         .search-bar input::placeholder { color: var(--text-light); }
         .search-bar::before { content: '🔍'; position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 16px; }
+        .search-clear {
+            position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+            width: 22px; height: 22px; border: none; border-radius: 50%;
+            background: var(--accent-light); color: var(--text-muted); font-size: 13px;
+            cursor: pointer; display: none; align-items: center; justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .search-clear.show { display: flex; }
 
         .filter-bar {
             display: flex; gap: 8px; overflow-x: auto;
@@ -671,30 +679,6 @@
         .fab-search:hover { transform: scale(1.1); border-color: var(--accent-mid); }
         .fab-search.active { background: var(--accent-chip); color: #fff; border-color: var(--accent); }
 
-        .float-search-bar {
-            position: fixed; bottom: 64px; left: 12px; right: 80px; z-index: 156;
-            display: none; align-items: center; gap: 8px;
-            background: var(--modal-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--card-border); border-radius: 14px;
-            padding: 8px 12px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.12);
-            animation: fadeIn 0.2s;
-        }
-        .float-search-bar.show { display: flex; }
-        .float-search-bar input {
-            flex: 1; padding: 8px 12px; min-width: 0;
-            background: var(--input-bg); border: 1px solid var(--input-border);
-            border-radius: 10px; color: var(--text); font-size: 14px; outline: none;
-        }
-        .float-search-bar input:focus { border-color: var(--accent-mid); }
-        .float-search-bar input::placeholder { color: var(--text-muted); }
-        .float-search-bar .float-search-clear {
-            flex-shrink: 0; width: 32px; height: 32px;
-            background: var(--red-bg); border: none; border-radius: 8px;
-            color: var(--red); font-size: 16px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-        }
-
         /* ===== 编辑器 ===== */
         .editor-wrap {
             display: flex; border: 1px solid var(--input-border); border-radius: 10px;
@@ -1145,7 +1129,7 @@
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body class="on-snippets modal-open">
+<body class="on-snippets theme-warm modal-open">
 
     <!-- ===== 密码锁屏 ===== -->
     <div class="lock-screen hidden" id="lockScreen">
@@ -1384,7 +1368,8 @@
             <div class="motto">Tomorrow is another day.</div>
         </div>
         <div class="search-bar">
-            <input type="text" id="keySearchInput" placeholder="搜索名称、分组、模型..." oninput="renderKeyCards()">
+            <input type="text" id="keySearchInput" placeholder="搜索名称、分组、密钥..." oninput="renderKeyCards();toggleSearchClear(this)">
+            <button class="search-clear" onclick="clearSearch('keySearchInput')">✕</button>
         </div>
         <div class="filter-bar" id="keyFilterBar"></div>
         <div class="toolbar">
@@ -1400,7 +1385,8 @@
             <div class="motto">Tomorrow is another day.</div>
         </div>
         <div class="search-bar">
-            <input type="text" id="snipSearchInput" placeholder="搜索标题、标签、内容..." oninput="renderSnippets()">
+            <input type="text" id="snipSearchInput" placeholder="搜索标题、标签、内容..." oninput="renderSnippets();toggleSearchClear(this)">
+            <button class="search-clear" onclick="clearSearch('snipSearchInput')">✕</button>
         </div>
         <div class="type-filter-bar">
             <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">31</span></div>
@@ -1563,13 +1549,8 @@
         </div>
     </div>
 
-    <button class="fab-search" id="fabSearch" onclick="toggleFloatSearch()" style="display: flex;">🔍</button>
+    <button class="fab-search" id="fabSearch" onclick="focusSearch()" style="display: flex;">🔍</button>
     <button class="fab-add" id="fabAdd" onclick="handleFabTap()" style="display: flex;">+</button>
-
-    <div class="float-search-bar" id="floatSearchBar">
-        <input type="text" id="floatSearchInput" placeholder="搜索标题、标签、内容..." oninput="doFloatSearch(this.value)">
-        <button class="float-search-clear" onclick="clearFloatSearch()">✕</button>
-    </div>
 
     <div class="batch-bar" id="batchBar">
         <span class="batch-cancel-btn" onclick="exitSelectMode()">取消</span>
@@ -1749,7 +1730,7 @@
         </button>
     </div>
 
-    <div class="toast" id="toast"></div>
+    <div class="toast" id="toast">🔵 蔚蓝金</div>
 
     <script>
         /* ===== IndexedDB 存储引擎 ===== */
@@ -2072,50 +2053,38 @@
             btn.classList.add('active');
             document.body.classList.remove('on-keys', 'on-snippets');
             document.body.classList.add('on-' + tab);
-            closeFloatSearch();
             updateFabPositions();
             window.scrollTo(0, 0);
         }
 
         function updateFabPositions() {
             document.getElementById('fabAdd').style.display = 'flex';
-            // 搜索 FAB 只在收藏页显示
-            document.getElementById('fabSearch').style.display = (currentTab === 'snippets') ? 'flex' : 'none';
+            document.getElementById('fabSearch').style.display = 'flex';
         }
 
-        /* ===== 浮动搜索栏 ===== */
-        function toggleFloatSearch() {
-            var bar = document.getElementById('floatSearchBar');
-            var btn = document.getElementById('fabSearch');
-            var isOpen = bar.classList.contains('show');
-            if (isOpen) {
-                closeFloatSearch();
-            } else {
-                bar.classList.add('show');
-                btn.classList.add('active');
-                document.getElementById('floatSearchInput').focus();
-                // 同步已有搜索内容
-                var existing = document.getElementById('snipSearchInput').value;
-                if (existing) document.getElementById('floatSearchInput').value = existing;
+        /* ===== 搜索辅助 ===== */
+        function focusSearch() {
+            var inputId = currentTab === 'keys' ? 'keySearchInput' : 'snipSearchInput';
+            var input = document.getElementById(inputId);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            setTimeout(function() { input.focus(); }, 350);
+        }
+
+        function toggleSearchClear(input) {
+            var btn = input.parentElement.querySelector('.search-clear');
+            if (btn) {
+                if (input.value.length > 0) btn.classList.add('show');
+                else btn.classList.remove('show');
             }
         }
 
-        function closeFloatSearch() {
-            document.getElementById('floatSearchBar').classList.remove('show');
-            document.getElementById('fabSearch').classList.remove('active');
-        }
-
-        function doFloatSearch(val) {
-            // 同步到原来的搜索框并触发渲染
-            document.getElementById('snipSearchInput').value = val;
-            renderSnippets();
-        }
-
-        function clearFloatSearch() {
-            document.getElementById('floatSearchInput').value = '';
-            document.getElementById('snipSearchInput').value = '';
-            renderSnippets();
-            closeFloatSearch();
+        function clearSearch(inputId) {
+            var input = document.getElementById(inputId);
+            input.value = '';
+            input.parentElement.querySelector('.search-clear').classList.remove('show');
+            if (inputId === 'keySearchInput') renderKeyCards();
+            else renderSnippets();
+            input.focus();
         }
 
         function openCalcModal() { document.getElementById('calcModalOverlay').classList.add('show'); }
@@ -2241,7 +2210,7 @@
         // 点击空白处折叠所有展开的卡片
         document.addEventListener('click', function(e) {
             if (selectModeOn) return;
-            if (e.target.closest('.card') || e.target.closest('.modal-overlay') || e.target.closest('.fab-add') || e.target.closest('.fab-search') || e.target.closest('.bottom-nav') || e.target.closest('.global-bar') || e.target.closest('.float-search') || e.target.closest('.header') || e.target.closest('.filter-chip') || e.target.closest('.type-filter-chip') || e.target.closest('.sort-chip') || e.target.closest('.type-filter-bar') || e.target.closest('.sort-bar') || e.target.closest('.sub-sort-bar') || e.target.closest('.batch-bar') || e.target.closest('.toast')) return;
+            if (e.target.closest('.card') || e.target.closest('.modal-overlay') || e.target.closest('.fab-add') || e.target.closest('.fab-search') || e.target.closest('.bottom-nav') || e.target.closest('.global-bar') || e.target.closest('.header') || e.target.closest('.search-bar') || e.target.closest('.filter-chip') || e.target.closest('.type-filter-chip') || e.target.closest('.sort-chip') || e.target.closest('.type-filter-bar') || e.target.closest('.sort-bar') || e.target.closest('.sub-sort-bar') || e.target.closest('.batch-bar') || e.target.closest('.toast')) return;
             document.querySelectorAll('.card:not(.collapsed)').forEach(function(card) {
                 card.classList.remove('expanded');
                 card.classList.add('collapsed');
