@@ -6748,12 +6748,11 @@ body {
                     return toBase64(PWA_SW).then(function(swB64) {
                         var icon192 = generateAppIcon(192);
                         var icon512 = generateAppIcon(512);
-                        return Promise.all([
-                            pushIfMissing('manifest.json', manifestB64, deployMsg + ' [manifest]'),
-                            pushIfMissing('sw.js', swB64, deployMsg + ' [sw]'),
-                            pushFile('icon-192.png', icon192, deployMsg + ' [icon192]'),
-                            pushFile('icon-512.png', icon512, deployMsg + ' [icon512]')
-                        ]);
+                        // 依次推送，避免并行推送导致 SHA 冲突
+                        return pushIfMissing('manifest.json', manifestB64, deployMsg + ' [manifest]')
+                            .then(function() { return pushIfMissing('sw.js', swB64, deployMsg + ' [sw]'); })
+                            .then(function() { return pushFile('icon-192.png', icon192, deployMsg + ' [icon192]'); })
+                            .then(function() { return pushFile('icon-512.png', icon512, deployMsg + ' [icon512]'); });
                     });
                 });
             })
