@@ -1387,7 +1387,7 @@ body {
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:10px;padding:14px 24px 20px">
-                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：1.57 MB / ~50 MB（3%）</div>
+                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：3.13 MB / ~50 MB（6%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
@@ -1757,7 +1757,7 @@ body {
                 <div style="font-size:12px;color:var(--text-sub);margin-bottom:12px;line-height:1.7;background:var(--card-inner);padding:10px 12px;border-radius:8px">
                     每次<b>拉取、推送、导入</b>操作之前，系统会自动把当时的本地数据保存一份快照。最多保留最近 10 份。找不到数据时可以从这里恢复。
                 </div>
-                <div id="snapshotList"></div>
+                <div id="snapshotList"><div style="background:var(--card-inner);border:1px solid var(--card-border);border-radius:10px;padding:12px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px"><div style="flex:1;min-width:0"><div style="font-size:13px;color:var(--text);font-weight:600">🕐 2026-05-06 00:06</div><div style="font-size:11px;color:var(--text-muted);margin-top:3px">原因：定时自动备份  |  🔑 11 条  |  📝 48 条</div></div></div><div style="display:flex;gap:6px"><button onclick="toggleSnapshotPin(0)" style="padding:6px 12px;background:var(--card-inner);border:1px solid var(--card-border);border-radius:6px;color:var(--text-muted);font-size:12px;cursor:pointer">☆ 收藏</button><button onclick="restoreSnapshot(0)" style="flex:1;padding:6px;background:var(--accent-light);border:none;border-radius:6px;color:var(--accent);font-size:12px;cursor:pointer;font-weight:500">♻️ 恢复此版本</button><button onclick="downloadSnapshot(0)" style="padding:6px 12px;background:var(--blue-bg);border:none;border-radius:6px;color:var(--blue);font-size:12px;cursor:pointer">💾 下载</button></div></div></div>
                 <div style="margin-top:10px;text-align:center">
                     <a href="https://gist.github.com" target="_blank" style="font-size:12px;color:var(--accent);text-decoration:underline">🔗 打开 Gist.github.com 查看云端历史版本</a>
                 </div>
@@ -5167,6 +5167,7 @@ body {
             closeDeleteConfirm();
             var selected = document.querySelectorAll('.card.selected');
             if (selected.length === 0) return;
+            takeSnapshot('批量删除前');
             var count = selected.length;
             selected.forEach(function(card) {
                 var id = card.dataset.sid || card.dataset.kid;
@@ -6285,17 +6286,36 @@ body {
         /* ===== 本地快照系统 ===== */
         var SNAPSHOT_STORE = 'toolbox_snapshots';
         var SNAPSHOT_MAX = 10;
+        var SNAPSHOT_FAV_MAX = 3;
 
         function takeSnapshot(reason) {
             var list = idbGet(SNAPSHOT_STORE) || [];
             var snap = {
                 time: new Date().toISOString(),
                 reason: reason || '自动',
+                pinned: false,
                 payload: buildSyncPayload()
             };
             list.unshift(snap);
-            if (list.length > SNAPSHOT_MAX) list = list.slice(0, SNAPSHOT_MAX);
+            var pinned = list.filter(function(s) { return s.pinned; });
+            var unpinned = list.filter(function(s) { return !s.pinned; });
+            if (unpinned.length > SNAPSHOT_MAX) unpinned = unpinned.slice(0, SNAPSHOT_MAX);
+            list = pinned.concat(unpinned);
+            list.sort(function(a, b) { return new Date(b.time) - new Date(a.time); });
             idbSet(SNAPSHOT_STORE, list);
+        }
+
+        function toggleSnapshotPin(idx) {
+            var list = getSnapshots();
+            if (!list[idx]) return;
+            if (!list[idx].pinned) {
+                var pinnedCount = list.filter(function(s) { return s.pinned; }).length;
+                if (pinnedCount >= SNAPSHOT_FAV_MAX) { showToast('⚠️ 最多收藏 ' + SNAPSHOT_FAV_MAX + ' 份快照'); return; }
+            }
+            list[idx].pinned = !list[idx].pinned;
+            idbSet(SNAPSHOT_STORE, list);
+            renderSnapshotList();
+            showToast(list[idx].pinned ? '⭐ 已收藏' : '取消收藏');
         }
 
         function getSnapshots() {
@@ -6313,21 +6333,24 @@ body {
             var list = getSnapshots();
             var el = document.getElementById('snapshotList');
             if (!list.length) {
-                el.innerHTML = '<div style="text-align:center;padding:30px 20px;color:var(--text-muted);font-size:13px">📭 还没有快照<br><span style="font-size:11px">拉取/推送/导入时会自动创建</span></div>';
+                el.innerHTML = '<div style="text-align:center;padding:30px 20px;color:var(--text-muted);font-size:13px">📭 还没有快照<br><span style="font-size:11px">拉取/推送/导入/定时会自动创建</span></div>';
                 return;
             }
             el.innerHTML = list.map(function(s, i) {
                 var p = s.payload || {};
                 var keyCount = (p.api_keys || []).length;
                 var snipCount = (p.snippets || []).length;
-                return '<div style="background:var(--card-inner);border:1px solid var(--card-border);border-radius:10px;padding:12px;margin-bottom:8px">' +
+                var isPinned = s.pinned;
+                var borderColor = isPinned ? 'var(--gold)' : 'var(--card-border)';
+                return '<div style="background:var(--card-inner);border:1px solid ' + borderColor + ';border-radius:10px;padding:12px;margin-bottom:8px">' +
                     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">' +
                         '<div style="flex:1;min-width:0">' +
-                            '<div style="font-size:13px;color:var(--text);font-weight:600">🕐 ' + fmtTime(s.time) + '</div>' +
+                            '<div style="font-size:13px;color:var(--text);font-weight:600">' + (isPinned ? '⭐ ' : '🕐 ') + fmtTime(s.time) + '</div>' +
                             '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">原因：' + esc(s.reason) + '  |  🔑 ' + keyCount + ' 条  |  📝 ' + snipCount + ' 条</div>' +
                         '</div>' +
                     '</div>' +
                     '<div style="display:flex;gap:6px">' +
+                        '<button onclick="toggleSnapshotPin(' + i + ')" style="padding:6px 12px;background:' + (isPinned ? 'rgba(217,167,6,0.15)' : 'var(--card-inner)') + ';border:1px solid ' + (isPinned ? 'var(--gold)' : 'var(--card-border)') + ';border-radius:6px;color:' + (isPinned ? 'var(--gold)' : 'var(--text-muted)') + ';font-size:12px;cursor:pointer">' + (isPinned ? '⭐ 取消收藏' : '☆ 收藏') + '</button>' +
                         '<button onclick="restoreSnapshot(' + i + ')" style="flex:1;padding:6px;background:var(--accent-light);border:none;border-radius:6px;color:var(--accent);font-size:12px;cursor:pointer;font-weight:500">♻️ 恢复此版本</button>' +
                         '<button onclick="downloadSnapshot(' + i + ')" style="padding:6px 12px;background:var(--blue-bg);border:none;border-radius:6px;color:var(--blue);font-size:12px;cursor:pointer">💾 下载</button>' +
                     '</div>' +
@@ -6669,6 +6692,15 @@ body {
             updateFabPositions();
             checkBackupReminder();
             checkStorageUsage();
+
+            // 定时自动快照：距上次快照超过 12 小时则自动存一份
+            (function() {
+                var list = getSnapshots();
+                var last = list.length ? new Date(list[0].time).getTime() : 0;
+                if (Date.now() - last > 12 * 60 * 60 * 1000) {
+                    takeSnapshot('定时自动备份');
+                }
+            })();
 
             // 后台静默拉取云端数据，有变化再刷新
             if (activeSyncProvider === 'cf') {
