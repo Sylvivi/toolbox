@@ -1186,7 +1186,7 @@ body {
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body class="on-snippets theme-warm modal-open">
+<body class="on-snippets modal-open">
 
     <!-- =======================================================================
       [2.1] 顶级拦截层
@@ -1312,7 +1312,7 @@ body {
                     </div>
                 </div>
 
-                <div id="gistStatus" style="font-size:12px;color:var(--text-muted);margin-top:6px;min-height:18px"></div>
+                <div id="gistStatus" style="font-size: 12px; color: var(--text-muted); margin-top: 6px; min-height: 18px;"></div>
                 <div id="gistLastSync" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
 
                 <div id="deploySection" style="display: none; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--card-border);">
@@ -1326,13 +1326,13 @@ body {
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                         <button class="btn-save" onclick="deployToGitHub()" style="flex:none;padding:8px 20px">🚀 部署</button>
-                        <span id="deployStatus" style="font-size:12px;color:var(--text-muted)"></span>
+                        <span id="deployStatus" style="font-size: 12px; color: var(--text-muted);"></span>
                     </div>
                     <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5">💡 请确保仓库已在 Settings → Pages 中启用对应分支</div>
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:10px;padding:14px 24px 20px">
-                <div id="storageUsageInfo" style="font-size:11px;color:var(--text-muted);text-align:center;padding:4px 0">💾 本地存储：1.56 MB / ~50 MB（3%）</div>
+                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：1.78 MB / ~50 MB（4%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
@@ -1453,17 +1453,17 @@ body {
             <button class="search-clear" onclick="clearSearch('snipSearchInput')">✕</button>
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">46</span></div>
-            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">9</span></div>
-            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">0</span></div>
-            <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">2</span></div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">35</span></div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">22</span></div>
+            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">2</span></div>
+            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">2</span></div>
+            <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">6</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">12</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
             <span class="sort-label">排序：</span>
             <!-- chips will be rendered by JS in saved order -->
-        <div class="sort-chip active" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
+        <div class="sort-chip" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip active" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
         <div class="toolbar">
             <div class="toolbar-btn" id="snipExpandBtn" onclick="toggleAllSnippets()">📂 展开</div>
         </div>
@@ -6305,42 +6305,18 @@ body {
         function gistPushData() {
             var cfg = gistGetConfig();
             if (!cfg.token || !cfg.gistId) return;
-            var headers = { 'Authorization': 'token ' + cfg.token, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' };
-            var lastSync = localStorage.getItem('toolbox_gist_last_sync');
-            var lastSyncTime = lastSync ? new Date(lastSync).getTime() : 0;
-
-            // 先拉取云端，看是否有更新的数据需要合并
             fetch('https://api.github.com/gists/' + cfg.gistId, {
-                headers: headers
-            }).then(function(r) {
-                if (!r.ok) throw new Error('fetch-failed');
-                return r.json();
-            }).then(function(data) {
-                var file = data.files && data.files['toolbox_data.json'];
-                if (file && file.content && !file.truncated) {
-                    var remote = JSON.parse(file.content);
-                    var remoteTime = remote.lastModified ? new Date(remote.lastModified).getTime() : 0;
-                    // 云端比上次同步更新 → 先合并再推
-                    if (remoteTime > lastSyncTime + 5000) {
-                        applySyncData(remote, false);
-                        renderKeyFilters(); renderKeyCards();
-                        renderSnipFilters(); renderSnippets();
-                    }
-                }
-                // 合并完毕（或无需合并），推送最新本地数据
-                return fetch('https://api.github.com/gists/' + cfg.gistId, {
-                    method: 'PATCH',
-                    headers: headers,
-                    body: JSON.stringify({ files: { 'toolbox_data.json': { content: JSON.stringify(buildSyncPayload()) } } })
-                });
+                method: 'PATCH',
+                headers: { 'Authorization': 'token ' + cfg.token, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+                body: JSON.stringify({ files: { 'toolbox_data.json': { content: JSON.stringify(buildSyncPayload()) } } })
             }).then(function(r) {
                 if (!r.ok) throw new Error();
                 gistPushRetries = 0;
                 localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
-                localStorage.setItem('toolbox_last_local_modified', new Date().toISOString());
                 var sl = document.getElementById('gistStatusLine');
                 if (sl) sl.innerHTML = '☁️ ' + fmtTimeShort(new Date().toISOString()) + ' <span style="opacity:0.5">已同步</span>';
             }).catch(function() {
+                // 推送失败：显示提示，最多自动重试 2 次
                 var sl = document.getElementById('gistStatusLine');
                 if (gistPushRetries < 2) {
                     gistPushRetries++;
@@ -6440,14 +6416,7 @@ body {
             var localModTime = localModified ? new Date(localModified).getTime() : 0;
             var needPushBack = false;
 
-            // 统计本地数据量，如果本地有数据但云端要全量覆盖，需要更谨慎
-            var localKeyCount = (getKeyData() || []).length;
-            var localSnipCount = (getSnipData() || []).length;
-            var remoteKeyCount = (remote.api_keys || []).length;
-            var remoteSnipCount = (remote.snippets || []).length;
-
-            if (remoteTime > localTime + 60000 && localModTime <= localTime
-                && !(localKeyCount + localSnipCount > 0 && remoteKeyCount + remoteSnipCount === 0)) {
+            if (remoteTime > localTime + 60000 && localModTime <= localTime) {
                 if (remote.api_keys) setKeyDataSilent(remote.api_keys);
                 if (remote.snippets) setSnipDataSilent(remote.snippets);
                 if (remote.imgbeds) setImgBedData(remote.imgbeds);
@@ -6530,14 +6499,6 @@ body {
                 if (remote.imgbeds) setImgBedData(remote.imgbeds);
 
                 var totalChanges = kCount + sCount + kUpdated + sUpdated;
-
-                // 检测本地是否有云端不存在的条目（之前推送失败的）
-                var remoteKIds = {}; (remote.api_keys || []).forEach(function(d) { remoteKIds[d.id] = true; });
-                var remoteSIds = {}; (remote.snippets || []).forEach(function(d) { remoteSIds[d.id] = true; });
-                var localOnlyCount = 0;
-                kData.forEach(function(d) { if (!remoteKIds[d.id]) localOnlyCount++; });
-                sData.forEach(function(d) { if (!remoteSIds[d.id]) localOnlyCount++; });
-
                 if (manual && totalChanges > 0) {
                     var msgs = [];
                     if (kCount + sCount > 0) msgs.push('新增 ' + (kCount + sCount) + ' 条');
@@ -6545,7 +6506,7 @@ body {
                     showToast('☁️ 同步完成，' + msgs.join('，'));
                 } else if (manual) showToast('☁️ 已是最新');
 
-                needPushBack = totalChanges > 0 || localOnlyCount > 0;
+                needPushBack = totalChanges > 0;
             }
             return needPushBack;
         }
@@ -6592,52 +6553,6 @@ body {
                 if (cfg.token && cfg.gistId) gistPull(false);
             }
         });
-
-        /* ===== 页面可见性同步 ===== */
-        // 离开时立即推送待同步数据，回来时自动拉取云端
-        (function() {
-            var _lastVisiblePull = Date.now();   // 初始化时已拉过一次
-            var PULL_THROTTLE_MS = 30000;        // 30 秒节流
-
-            document.addEventListener('visibilitychange', function() {
-                if (document.visibilityState === 'hidden') {
-                    /* ---- 离开页面：立即刷新所有待推送 ---- */
-                    // Gist 模式：debounce 定时器可能还没触发，立刻执行
-                    if (gistPushTimer) {
-                        clearTimeout(gistPushTimer);
-                        gistPushTimer = null;
-                        try { syncPushData(); } catch(e) {}
-                    }
-                    // CF 模式：manifest 更新可能还在 debounce 中
-                    if (_cfSyncTimer) {
-                        clearTimeout(_cfSyncTimer);
-                        _cfSyncTimer = null;
-                        try {
-                            var _cfg = cfGetConfig();
-                            if (_cfg.url && _cfg.token) cfPutManifest(cfBuildManifest()).catch(function(){});
-                        } catch(e) {}
-                    }
-                } else if (document.visibilityState === 'visible') {
-                    /* ---- 回到页面：节流拉取云端数据 ---- */
-                    var now = Date.now();
-                    if (now - _lastVisiblePull < PULL_THROTTLE_MS) return;
-                    _lastVisiblePull = now;
-
-                    if (activeSyncProvider === 'cf') {
-                        var _cfCfg = cfGetConfig();
-                        if (_cfCfg.url && _cfCfg.token) {
-                            cfPullData(false).catch(function(e) {
-                                console.warn('Visibility pull failed:', e);
-                            });
-                        }
-                    } else {
-                        var _gCfg = gistGetConfig();
-                        if (_gCfg.token && _gCfg.gistId) gistPull(false);
-                    }
-                }
-            });
-        })();
-
         /* =========================================================================
          * [3.12] 部署与 PWA 支持
          * 说明：负责生成可部署 HTML 快照、推送 GitHub Pages 以及 PWA 资源定义。
@@ -6787,11 +6702,12 @@ body {
                     return toBase64(PWA_SW).then(function(swB64) {
                         var icon192 = generateAppIcon(192);
                         var icon512 = generateAppIcon(512);
-                        // 依次推送，避免并行推送导致 SHA 冲突
-                        return pushIfMissing('manifest.json', manifestB64, deployMsg + ' [manifest]')
-                            .then(function() { return pushIfMissing('sw.js', swB64, deployMsg + ' [sw]'); })
-                            .then(function() { return pushFile('icon-192.png', icon192, deployMsg + ' [icon192]'); })
-                            .then(function() { return pushFile('icon-512.png', icon512, deployMsg + ' [icon512]'); });
+                        return Promise.all([
+                            pushIfMissing('manifest.json', manifestB64, deployMsg + ' [manifest]'),
+                            pushIfMissing('sw.js', swB64, deployMsg + ' [sw]'),
+                            pushIfMissing('icon-192.png', icon192, deployMsg + ' [icon192]'),
+                            pushIfMissing('icon-512.png', icon512, deployMsg + ' [icon512]')
+                        ]);
                     });
                 });
             })
@@ -6866,95 +6782,64 @@ body {
             var c = document.createElement('canvas');
             c.width = size; c.height = size;
             var ctx = c.getContext('2d');
-            var s = size / 140;
-
-            function rr(x,y,w,h,r) {
-                ctx.beginPath();
-                ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y);
-                ctx.quadraticCurveTo(x+w,y,x+w,y+r); ctx.lineTo(x+w,y+h-r);
-                ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h); ctx.lineTo(x+r,y+h);
-                ctx.quadraticCurveTo(x,y+h,x,y+h-r); ctx.lineTo(x,y+r);
-                ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
-            }
-            function tri(x1,y1,x2,y2,x3,y3) {
-                ctx.beginPath();
-                ctx.moveTo(x1*s,y1*s); ctx.lineTo(x2*s,y2*s); ctx.lineTo(x3*s,y3*s); ctx.closePath();
-            }
-            function ell(cx,cy,rx,ry) { ctx.beginPath(); ctx.ellipse(cx*s,cy*s,rx*s,ry*s,0,0,Math.PI*2); }
-            function cir(cx,cy,r) { ctx.beginPath(); ctx.arc(cx*s,cy*s,r*s,0,Math.PI*2); }
-
-            // 暖阳黄渐变背景
-            var grad = ctx.createLinearGradient(0,0,size,size);
-            grad.addColorStop(0,'#f5dfa0'); grad.addColorStop(1,'#e4b84a');
+            // 圆角矩形背景
+            var r = size * 0.22;
+            var grad = ctx.createLinearGradient(0, 0, size, size);
+            grad.addColorStop(0, '#2d7a58');
+            grad.addColorStop(1, '#5aab8b');
             ctx.fillStyle = grad;
-            rr(0,0,size,size,size*0.22); ctx.fill();
-
-            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-
-            // 左耳
-            ctx.fillStyle = '#2a2226'; ctx.strokeStyle = '#3d2f33'; ctx.lineWidth = 2.2*s;
-            tri(29,50, 41,18, 57,44); ctx.fill(); ctx.stroke();
-            ctx.fillStyle = 'rgba(240,221,160,0.7)';
-            tri(37,44, 42,26, 53,42); ctx.fill();
-
-            // 右耳
-            ctx.fillStyle = '#2a2226'; ctx.strokeStyle = '#3d2f33';
-            tri(111,50, 99,18, 83,44); ctx.fill(); ctx.stroke();
-            ctx.fillStyle = 'rgba(240,221,160,0.7)';
-            tri(103,44, 98,26, 89,42); ctx.fill();
-
-            // 头部
-            ctx.fillStyle = '#2a2226'; ctx.strokeStyle = '#3d2f33'; ctx.lineWidth = 2.2*s;
-            ell(70,74,43,37); ctx.fill(); ctx.stroke();
-
-            // 左眼
-            ctx.fillStyle = '#f5f0e0'; ell(53,70,15,13); ctx.fill();
-            ctx.fillStyle = '#1a1518'; ell(56,72,9.5,10); ctx.fill();
-            ctx.fillStyle = 'rgba(255,255,255,0.9)'; cir(51,67,3.8); ctx.fill();
-            ctx.fillStyle = 'rgba(255,255,255,0.5)'; cir(59,74,1.8); ctx.fill();
-
-            // 右眼
-            ctx.fillStyle = '#f5f0e0'; ell(87,70,15,13); ctx.fill();
-            ctx.fillStyle = '#1a1518'; ell(84,72,9.5,10); ctx.fill();
-            ctx.fillStyle = 'rgba(255,255,255,0.9)'; cir(81,67,3.8); ctx.fill();
-            ctx.fillStyle = 'rgba(255,255,255,0.5)'; cir(87,74,1.8); ctx.fill();
-
-            // 鼻子
-            ctx.fillStyle = '#c0a040'; ell(70,82,2.8,1.8); ctx.fill();
-
-            // 嘴巴
-            ctx.strokeStyle = '#3d2f33'; ctx.lineWidth = 1.3*s;
             ctx.beginPath();
-            ctx.moveTo(63*s,87*s); ctx.quadraticCurveTo(66*s,91*s,70*s,87*s);
-            ctx.quadraticCurveTo(74*s,91*s,77*s,87*s); ctx.stroke();
-
-            // 腮红
-            ctx.fillStyle = 'rgba(230,160,100,0.25)';
-            ell(42,78,6,3.5); ctx.fill();
-            ell(98,78,6,3.5); ctx.fill();
-
-            // 头顶工具箱 - 箱体
-            ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.strokeStyle = '#3d2f33'; ctx.lineWidth = 1.1*s;
-            rr(59*s,30*s,22*s,13*s,3*s); ctx.fill(); ctx.stroke();
-            // 分隔线
-            ctx.lineWidth = 0.7*s; ctx.beginPath();
-            ctx.moveTo(59*s,37*s); ctx.lineTo(81*s,37*s); ctx.stroke();
+            ctx.moveTo(r, 0); ctx.lineTo(size - r, 0);
+            ctx.quadraticCurveTo(size, 0, size, r);
+            ctx.lineTo(size, size - r);
+            ctx.quadraticCurveTo(size, size, size - r, size);
+            ctx.lineTo(r, size);
+            ctx.quadraticCurveTo(0, size, 0, size - r);
+            ctx.lineTo(0, r);
+            ctx.quadraticCurveTo(0, 0, r, 0);
+            ctx.closePath();
+            ctx.fill();
+            // 工具箱图形
+            ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+            ctx.fillStyle = 'rgba(255,255,255,0.95)';
+            ctx.lineWidth = size * 0.03;
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            var cx = size / 2, cy = size * 0.53;
+            var bw = size * 0.48, bh = size * 0.3;
+            var bx = cx - bw / 2, by = cy - bh / 2;
+            // 箱体
+            ctx.beginPath();
+            var br = size * 0.04;
+            ctx.moveTo(bx + br, by); ctx.lineTo(bx + bw - br, by);
+            ctx.quadraticCurveTo(bx + bw, by, bx + bw, by + br);
+            ctx.lineTo(bx + bw, by + bh - br);
+            ctx.quadraticCurveTo(bx + bw, by + bh, bx + bw - br, by + bh);
+            ctx.lineTo(bx + br, by + bh);
+            ctx.quadraticCurveTo(bx, by + bh, bx, by + bh - br);
+            ctx.lineTo(bx, by + br);
+            ctx.quadraticCurveTo(bx, by, bx + br, by);
+            ctx.closePath();
+            ctx.stroke();
+            // 中间横线
+            ctx.beginPath();
+            ctx.moveTo(bx, cy); ctx.lineTo(bx + bw, cy);
+            ctx.stroke();
             // 提手
-            ctx.lineWidth = 1.1*s; ctx.beginPath();
-            ctx.moveTo(65*s,30*s); ctx.lineTo(65*s,27*s);
-            ctx.quadraticCurveTo(65*s,24*s,67*s,24*s); ctx.lineTo(73*s,24*s);
-            ctx.quadraticCurveTo(75*s,24*s,75*s,27*s); ctx.lineTo(75*s,30*s); ctx.stroke();
+            var hw = size * 0.2, hh = size * 0.1;
+            var hx = cx - hw / 2, hy = by - hh;
+            ctx.beginPath();
+            ctx.moveTo(hx, by);
+            ctx.lineTo(hx, hy + size * 0.03);
+            ctx.quadraticCurveTo(hx, hy, hx + size * 0.03, hy);
+            ctx.lineTo(hx + hw - size * 0.03, hy);
+            ctx.quadraticCurveTo(hx + hw, hy, hx + hw, hy + size * 0.03);
+            ctx.lineTo(hx + hw, by);
+            ctx.stroke();
             // 锁扣
-            ctx.fillStyle = '#3d2f33'; cir(70,37,1.3); ctx.fill();
-
-            // 小星星装饰
-            ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 1.5*s;
-            ctx.beginPath(); ctx.moveTo(112*s,22*s); ctx.lineTo(112*s,32*s); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(107*s,27*s); ctx.lineTo(117*s,27*s); ctx.stroke();
-            ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1*s;
-            ctx.beginPath(); ctx.moveTo(109*s,24*s); ctx.lineTo(115*s,30*s); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(115*s,24*s); ctx.lineTo(109*s,30*s); ctx.stroke();
-
+            ctx.fillStyle = 'rgba(255,255,255,0.95)';
+            ctx.beginPath();
+            ctx.arc(cx, cy, size * 0.035, 0, Math.PI * 2);
+            ctx.fill();
             return c.toDataURL('image/png').split(',')[1];
         }
     </script>
