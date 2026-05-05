@@ -1186,7 +1186,7 @@ body {
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body class="on-snippets modal-open">
+<body class="on-snippets theme-warm modal-open">
 
     <!-- =======================================================================
       [2.1] 顶级拦截层
@@ -1312,7 +1312,7 @@ body {
                     </div>
                 </div>
 
-                <div id="gistStatus" style="font-size: 12px; color: var(--text-muted); margin-top: 6px; min-height: 18px;"></div>
+                <div id="gistStatus" style="font-size:12px;color:var(--text-muted);margin-top:6px;min-height:18px"></div>
                 <div id="gistLastSync" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
 
                 <div id="deploySection" style="display: none; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--card-border);">
@@ -1326,13 +1326,13 @@ body {
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                         <button class="btn-save" onclick="deployToGitHub()" style="flex:none;padding:8px 20px">🚀 部署</button>
-                        <span id="deployStatus" style="font-size: 12px; color: var(--text-muted);"></span>
+                        <span id="deployStatus" style="font-size:12px;color:var(--text-muted)"></span>
                     </div>
                     <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5">💡 请确保仓库已在 Settings → Pages 中启用对应分支</div>
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:10px;padding:14px 24px 20px">
-                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：1.78 MB / ~50 MB（4%）</div>
+                <div id="storageUsageInfo" style="font-size:11px;color:var(--text-muted);text-align:center;padding:4px 0">💾 本地存储：1.56 MB / ~50 MB（3%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
@@ -1453,17 +1453,17 @@ body {
             <button class="search-clear" onclick="clearSearch('snipSearchInput')">✕</button>
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">22</span></div>
-            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">2</span></div>
-            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">2</span></div>
-            <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">6</span></div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">12</span></div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">46</span></div>
+            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">9</span></div>
+            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">0</span></div>
+            <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">2</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">35</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
             <span class="sort-label">排序：</span>
             <!-- chips will be rendered by JS in saved order -->
-        <div class="sort-chip" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip active" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
+        <div class="sort-chip active" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
         <div class="toolbar">
             <div class="toolbar-btn" id="snipExpandBtn" onclick="toggleAllSnippets()">📂 展开</div>
         </div>
@@ -6305,18 +6305,42 @@ body {
         function gistPushData() {
             var cfg = gistGetConfig();
             if (!cfg.token || !cfg.gistId) return;
+            var headers = { 'Authorization': 'token ' + cfg.token, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' };
+            var lastSync = localStorage.getItem('toolbox_gist_last_sync');
+            var lastSyncTime = lastSync ? new Date(lastSync).getTime() : 0;
+
+            // 先拉取云端，看是否有更新的数据需要合并
             fetch('https://api.github.com/gists/' + cfg.gistId, {
-                method: 'PATCH',
-                headers: { 'Authorization': 'token ' + cfg.token, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
-                body: JSON.stringify({ files: { 'toolbox_data.json': { content: JSON.stringify(buildSyncPayload()) } } })
+                headers: headers
+            }).then(function(r) {
+                if (!r.ok) throw new Error('fetch-failed');
+                return r.json();
+            }).then(function(data) {
+                var file = data.files && data.files['toolbox_data.json'];
+                if (file && file.content && !file.truncated) {
+                    var remote = JSON.parse(file.content);
+                    var remoteTime = remote.lastModified ? new Date(remote.lastModified).getTime() : 0;
+                    // 云端比上次同步更新 → 先合并再推
+                    if (remoteTime > lastSyncTime + 5000) {
+                        applySyncData(remote, false);
+                        renderKeyFilters(); renderKeyCards();
+                        renderSnipFilters(); renderSnippets();
+                    }
+                }
+                // 合并完毕（或无需合并），推送最新本地数据
+                return fetch('https://api.github.com/gists/' + cfg.gistId, {
+                    method: 'PATCH',
+                    headers: headers,
+                    body: JSON.stringify({ files: { 'toolbox_data.json': { content: JSON.stringify(buildSyncPayload()) } } })
+                });
             }).then(function(r) {
                 if (!r.ok) throw new Error();
                 gistPushRetries = 0;
                 localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
+                localStorage.setItem('toolbox_last_local_modified', new Date().toISOString());
                 var sl = document.getElementById('gistStatusLine');
                 if (sl) sl.innerHTML = '☁️ ' + fmtTimeShort(new Date().toISOString()) + ' <span style="opacity:0.5">已同步</span>';
             }).catch(function() {
-                // 推送失败：显示提示，最多自动重试 2 次
                 var sl = document.getElementById('gistStatusLine');
                 if (gistPushRetries < 2) {
                     gistPushRetries++;
@@ -6416,7 +6440,14 @@ body {
             var localModTime = localModified ? new Date(localModified).getTime() : 0;
             var needPushBack = false;
 
-            if (remoteTime > localTime + 60000 && localModTime <= localTime) {
+            // 统计本地数据量，如果本地有数据但云端要全量覆盖，需要更谨慎
+            var localKeyCount = (getKeyData() || []).length;
+            var localSnipCount = (getSnipData() || []).length;
+            var remoteKeyCount = (remote.api_keys || []).length;
+            var remoteSnipCount = (remote.snippets || []).length;
+
+            if (remoteTime > localTime + 60000 && localModTime <= localTime
+                && !(localKeyCount + localSnipCount > 0 && remoteKeyCount + remoteSnipCount === 0)) {
                 if (remote.api_keys) setKeyDataSilent(remote.api_keys);
                 if (remote.snippets) setSnipDataSilent(remote.snippets);
                 if (remote.imgbeds) setImgBedData(remote.imgbeds);
@@ -6499,6 +6530,14 @@ body {
                 if (remote.imgbeds) setImgBedData(remote.imgbeds);
 
                 var totalChanges = kCount + sCount + kUpdated + sUpdated;
+
+                // 检测本地是否有云端不存在的条目（之前推送失败的）
+                var remoteKIds = {}; (remote.api_keys || []).forEach(function(d) { remoteKIds[d.id] = true; });
+                var remoteSIds = {}; (remote.snippets || []).forEach(function(d) { remoteSIds[d.id] = true; });
+                var localOnlyCount = 0;
+                kData.forEach(function(d) { if (!remoteKIds[d.id]) localOnlyCount++; });
+                sData.forEach(function(d) { if (!remoteSIds[d.id]) localOnlyCount++; });
+
                 if (manual && totalChanges > 0) {
                     var msgs = [];
                     if (kCount + sCount > 0) msgs.push('新增 ' + (kCount + sCount) + ' 条');
@@ -6506,7 +6545,7 @@ body {
                     showToast('☁️ 同步完成，' + msgs.join('，'));
                 } else if (manual) showToast('☁️ 已是最新');
 
-                needPushBack = totalChanges > 0;
+                needPushBack = totalChanges > 0 || localOnlyCount > 0;
             }
             return needPushBack;
         }
