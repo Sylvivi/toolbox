@@ -136,6 +136,35 @@
             --dup-bg: rgba(212,86,122,0.08);
         }
 
+        .theme-clay {
+            --bg: linear-gradient(135deg, #EEF4FB 0%, #F0E8F5 25%, #E8F4F0 50%, #FBF0F3 75%, #EEF4FB 100%);
+            --text: #2e3440;
+            --text-sub: #6b7b8e;
+            --text-light: #8a9ab0;
+            --text-muted: #a8b4c4;
+            --accent: #5b8abf;
+            --accent-mid: #7aa3d4;
+            --accent-light: rgba(91,138,191,0.12);
+            --accent-chip: rgba(91,138,191,0.6);
+            --card-bg: rgba(255,255,255,0.65);
+            --card-border: rgba(255,255,255,0.7);
+            --card-inner: rgba(255,255,255,0.5);
+            --input-bg: rgba(255,255,255,0.6);
+            --input-border: rgba(91,138,191,0.18);
+            --modal-bg: rgba(245,248,255,0.9);
+            --overlay-bg: rgba(30,40,60,0.18);
+            --nav-bg: rgba(240,244,252,0.82);
+            --nav-border: rgba(255,255,255,0.5);
+            --code-bg: rgba(91,138,191,0.06);
+            --code-text: #3a5a7a;
+            --red: #e05670;
+            --red-bg: rgba(224,86,112,0.1);
+            --blue: #5b8abf;
+            --blue-bg: rgba(91,138,191,0.12);
+            --gold: #d4a056;
+            --dup-bg: rgba(91,138,191,0.08);
+        }
+
         
 /* =========================================================================
  * [1.3] 布局与导航
@@ -535,6 +564,7 @@ body {
         .dark .export-menu { background: rgba(35,50,42,0.95); }
         .theme-warm .export-menu { background: rgba(255,252,248,0.95); }
         .theme-sakura .export-menu { background: rgba(255,248,250,0.95); }
+        .theme-clay .export-menu { background: rgba(245,248,255,0.95); }
         .export-menu-item {
             display: block; width: 100%; padding: 9px 14px; border: none; background: transparent;
             color: var(--text); font-size: 13px; cursor: pointer; text-align: left; transition: background 0.15s;
@@ -627,6 +657,7 @@ body {
         .dark .modal { background: rgba(35,50,42,0.9); }
         .theme-warm .modal { background: rgba(255,252,248,0.92); }
         .theme-sakura .modal { background: rgba(255,248,250,0.92); }
+        .theme-clay .modal { background: rgba(245,248,255,0.92); }
         .modal h2 { font-size: 18px; padding: 24px 24px 0; margin-bottom: 16px; color: var(--accent); flex-shrink: 0; }
         .modal-body { flex: 1; overflow-y: auto; padding: 0 24px 8px; -webkit-overflow-scrolling: touch; }
         .modal-actions { display: flex; gap: 10px; padding: 12px 24px 20px; flex-shrink: 0; border-top: 1px solid var(--card-border); }
@@ -703,6 +734,7 @@ body {
         .dark .nav-item.active { background: linear-gradient(135deg, #2d7a58, #4a9a7a); }
         .theme-warm .nav-item.active { background: linear-gradient(135deg, #1E50A2, #3a70b8); }
         .theme-sakura .nav-item.active { background: linear-gradient(135deg, #d4567a, #ee7f9d); }
+        .theme-clay .nav-item.active { background: linear-gradient(135deg, #5b8abf, #7aa3d4); }
         .nav-item .nav-icon { font-size: 20px; }
         .nav-item .nav-label { font-size: 10px; }
 
@@ -716,6 +748,29 @@ body {
             line-height: 1;
         }
         .fab-add:hover { transform: scale(1.1); }
+
+        /* ===== 主题选择面板 ===== */
+        .theme-picker {
+            position: fixed; bottom: 136px; right: 16px; z-index: 160;
+            background: var(--modal-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border); border-radius: 14px;
+            padding: 10px; min-width: 140px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+            display: none; animation: fadeIn 0.2s;
+        }
+        .theme-picker.show { display: block; }
+        .theme-picker-title {
+            font-size: 11px; color: var(--text-muted); padding: 4px 10px 8px;
+            font-weight: 600;
+        }
+        .theme-picker-item {
+            display: block; width: 100%; padding: 9px 12px; border: none;
+            background: transparent; border-radius: 8px;
+            color: var(--text); font-size: 13px; cursor: pointer;
+            text-align: left; transition: background 0.15s;
+        }
+        .theme-picker-item:hover { background: var(--accent-light); }
+        .theme-picker-item.active { background: var(--accent-light); color: var(--accent); font-weight: 600; }
 
         .fab-search {
             position: fixed; bottom: 140px; right: 16px; z-index: 155;
@@ -1186,7 +1241,7 @@ body {
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body class="on-snippets modal-open">
+<body class="on-snippets theme-clay modal-open">
 
     <!-- =======================================================================
       [2.1] 顶级拦截层
@@ -1617,7 +1672,13 @@ body {
       [2.3] 全局悬浮与提示层
     ========================================================================= -->
     <button class="fab-search" id="fabSearch" onclick="focusSearch()" style="display: flex;">🔍</button>
-    <button class="fab-add" id="fabAdd" onclick="handleFabTap()" style="display: flex;">+</button>
+    <button class="fab-add" id="fabAdd" style="display: flex;">+</button>
+
+    <!-- 主题选择面板 -->
+    <div class="theme-picker" id="themePicker">
+        <div class="theme-picker-title">选择主题</div>
+        <div class="theme-picker-list" id="themePickerList"></div>
+    </div>
 
     <div class="batch-bar" id="batchBar">
         <span class="batch-cancel-btn" onclick="exitSelectMode()">取消</span>
@@ -2217,13 +2278,36 @@ body {
             }
         }
 
-        /* ===== FAB 多击手势 ===== */
+        /* ===== FAB 多击 + 长按手势 ===== */
         var fabTapCount = 0, fabTapTimer = null;
+        var fabLongTimer = null, fabLongFired = false;
+
+        (function() {
+            var fab = document.getElementById('fabAdd');
+            fab.addEventListener('pointerdown', function(e) {
+                fabLongFired = false;
+                fabLongTimer = setTimeout(function() {
+                    fabLongFired = true;
+                    fabTapCount = 0;
+                    if (fabTapTimer) { clearTimeout(fabTapTimer); fabTapTimer = null; }
+                    showThemePicker();
+                }, 500);
+            });
+            fab.addEventListener('pointerup', function(e) {
+                if (fabLongTimer) { clearTimeout(fabLongTimer); fabLongTimer = null; }
+                if (fabLongFired) return;
+                handleFabTap();
+            });
+            fab.addEventListener('pointerleave', function(e) {
+                if (fabLongTimer) { clearTimeout(fabLongTimer); fabLongTimer = null; }
+            });
+            fab.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+        })();
+
         function handleFabTap() {
             fabTapCount++;
             if (fabTapTimer) clearTimeout(fabTapTimer);
             if (fabTapCount === 3) {
-                // 三击立即触发上锁，不等延迟
                 clearTimeout(fabTapTimer);
                 fabTapCount = 0;
                 quickLock();
@@ -2240,6 +2324,42 @@ body {
             }, 350);
         }
 
+        function showThemePicker() {
+            var picker = document.getElementById('themePicker');
+            var list = document.getElementById('themePickerList');
+            var curIdx = getThemeIdx();
+            list.innerHTML = '';
+            for (var i = 0; i < THEMES.length; i++) {
+                (function(idx) {
+                    var btn = document.createElement('button');
+                    btn.className = 'theme-picker-item' + (idx === curIdx ? ' active' : '');
+                    btn.textContent = THEMES[idx].name;
+                    btn.onclick = function() {
+                        applyTheme(idx);
+                        hideThemePicker();
+                        showToast(THEMES[idx].name);
+                    };
+                    list.appendChild(btn);
+                })(i);
+            }
+            picker.classList.add('show');
+            setTimeout(function() {
+                document.addEventListener('pointerdown', closePickerOutside);
+            }, 10);
+        }
+
+        function hideThemePicker() {
+            document.getElementById('themePicker').classList.remove('show');
+            document.removeEventListener('pointerdown', closePickerOutside);
+        }
+
+        function closePickerOutside(e) {
+            var picker = document.getElementById('themePicker');
+            if (!picker.contains(e.target) && e.target.id !== 'fabAdd') {
+                hideThemePicker();
+            }
+        }
+
         function onFabAdd() {
             if (currentTab === 'keys') openKeyModal();
             else if (currentTab === 'snippets') openSnipModal();
@@ -2250,7 +2370,8 @@ body {
             { id: 'light', name: '☀️ 清新绿', cls: '' },
             { id: 'dark', name: '🌙 深林绿', cls: 'dark' },
             { id: 'warm', name: '🔵 蔚蓝金', cls: 'theme-warm' },
-            { id: 'sakura', name: '🌸 樱花粉', cls: 'theme-sakura' }
+            { id: 'sakura', name: '🌸 樱花粉', cls: 'theme-sakura' },
+            { id: 'clay', name: '🫧 粘土蓝', cls: 'theme-clay' }
         ];
         function getThemeIdx() {
             var saved = localStorage.getItem('toolbox_theme') || 'light';
@@ -2259,7 +2380,7 @@ body {
         }
         function applyTheme(idx) {
             var t = THEMES[idx];
-            document.body.classList.remove('dark', 'theme-warm', 'theme-sakura');
+            document.body.classList.remove('dark', 'theme-warm', 'theme-sakura', 'theme-clay');
             if (t.cls) document.body.classList.add(t.cls);
             localStorage.setItem('toolbox_theme', t.id);
         }
