@@ -1328,12 +1328,12 @@ body {
             <div class="modal-body">
                 <!-- 同步方式选择 -->
                 <div style="display:flex;gap:6px;margin-bottom:14px">
-                    <button class="type-btn" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
-                    <button class="type-btn active" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
+                    <button class="type-btn active" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
+                    <button class="type-btn" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
                 </div>
 
                 <!-- GitHub Gist 配置 -->
-                <div id="syncGistFields" style="display: none;">
+                <div id="syncGistFields" style="display: block;">
                     <div id="gistGuide" style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('gistGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 首次配置步骤</b>
@@ -1360,7 +1360,7 @@ body {
                 </div>
 
                 <!-- Cloudflare KV 配置 -->
-                <div id="syncCFFields" style="display: block;">
+                <div id="syncCFFields" style="display: none;">
                     <div style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('cfGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 配置说明</b>
@@ -5881,7 +5881,15 @@ body {
         function getSyncStatus(id) { return _cardSyncStatus[id] || 'synced'; }
 
         function computeCardHash(card) {
-            return JSON.stringify(card);
+            // 递归排序所有对象的 key，保证序列化结果稳定
+            return JSON.stringify(card, function(key, value) {
+                if (value && typeof value === 'object' && !Array.isArray(value)) {
+                    var sorted = {};
+                    Object.keys(value).sort().forEach(function(k) { sorted[k] = value[k]; });
+                    return sorted;
+                }
+                return value;
+            });
         }
 
         // 标记一批卡片为已同步并记录 hash
@@ -5904,6 +5912,7 @@ body {
                 var deletedIds = {};
                 (local._deletedSubIds || []).concat(cloud._deletedSubIds || []).forEach(function(id) { deletedIds[id] = true; });
                 var subMap = {};
+                var contentChanged = false;
                 cloudSubs.forEach(function(s) { if (!deletedIds[s.id]) subMap[s.id] = s; });
                 localSubs.forEach(function(ls) {
                     if (deletedIds[ls.id]) return;
@@ -5911,10 +5920,19 @@ body {
                     if (!cs) {
                         // 本地有但云端没有 → 本地新增的
                         subMap[ls.id] = ls;
+                        contentChanged = true;
                     } else if (ls.updatedAt && cs.updatedAt && ls.updatedAt > cs.updatedAt) {
                         // 本地更新 → 用本地的
                         subMap[ls.id] = ls;
+                        contentChanged = true;
                     }
+                });
+                // 检查云端是否有本地没有的子条目（也算变化）
+                cloudSubs.forEach(function(cs) {
+                    if (deletedIds[cs.id]) { contentChanged = true; return; }
+                    var found = false;
+                    localSubs.forEach(function(ls) { if (ls.id === cs.id) found = true; });
+                    if (!found) contentChanged = true;
                 });
                 merged.items = Object.keys(subMap).map(function(k) { return subMap[k]; });
                 merged.items.sort(function(a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
@@ -5926,7 +5944,12 @@ body {
                     merged.note = local.note;
                     merged.pinned = local.pinned;
                 }
-                merged.updatedAt = new Date().toISOString();
+                // 只有内容真正变化时才更新时间戳，否则保留原始较新的时间
+                if (contentChanged) {
+                    merged.updatedAt = new Date().toISOString();
+                } else {
+                    merged.updatedAt = (local.updatedAt || '') > (cloud.updatedAt || '') ? local.updatedAt : cloud.updatedAt;
+                }
                 return merged;
             }
             // 非集合类型：用 updatedAt 更新的
