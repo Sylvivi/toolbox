@@ -1255,7 +1255,7 @@ body {
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body class="on-snippets on-keys theme-clay modal-open">
+<body class="on-snippets on-keys theme-warm modal-open">
 
     <!-- =======================================================================
       [2.1] 顶级拦截层
@@ -1401,7 +1401,7 @@ body {
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:10px;padding:14px 24px 20px">
-                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：4.70 MB / ~50 MB（9%）</div>
+                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：4.69 MB / ~50 MB（9%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
@@ -1491,7 +1491,7 @@ body {
     </div>
 
     <!-- ==================== 页面二：密钥管理 ==================== -->
-    <div class="tab-content active" id="tab-keys">
+    <div class="tab-content" id="tab-keys">
         
 <!-- =======================================================================
   [2.2] 主体导航与视图区
@@ -1512,7 +1512,7 @@ body {
     </div>
 
     <!-- ==================== 页面三：收藏（代码/文本/链接） ==================== -->
-    <div class="tab-content" id="tab-snippets">
+    <div class="tab-content active" id="tab-snippets">
         <div class="header">
             <h1>📝 收藏夹</h1>
             <div class="motto">Tomorrow is another day.</div>
@@ -1522,11 +1522,11 @@ body {
             <button class="search-clear" onclick="clearSearch('snipSearchInput')">✕</button>
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">48</span></div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">46</span></div>
             <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">9</span></div>
             <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">0</span></div>
             <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">2</span></div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">37</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">35</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
@@ -1872,10 +1872,10 @@ body {
     </div>
 
     <div class="bottom-nav">
-        <button class="nav-item nav-keys active" onclick="switchTab('keys', this)">
+        <button class="nav-item nav-keys" onclick="switchTab('keys', this)">
             <span class="nav-icon">🔑</span><span class="nav-label">密钥</span>
         </button>
-        <button class="nav-item nav-snippets" onclick="switchTab('snippets', this)">
+        <button class="nav-item nav-snippets active" onclick="switchTab('snippets', this)">
             <span class="nav-icon">📝</span><span class="nav-label">收藏</span>
         </button>
     </div>
@@ -5851,22 +5851,7 @@ body {
         function cfPutManifest(manifest) {
             manifest.ver = CF_VER;
             manifest.lastModified = new Date().toISOString();
-            // 写之前先与云端 manifest 取并集，避免不同设备的 tombstones 互相覆盖
-            return cfReq('GET', '_manifest').then(function(remote) {
-                if (remote && remote.tombstones) {
-                    var merged = manifest.tombstones || {};
-                    Object.keys(remote.tombstones).forEach(function(k) {
-                        if (!merged[k] || remote.tombstones[k] > merged[k]) merged[k] = remote.tombstones[k];
-                    });
-                    manifest.tombstones = merged;
-                    // 把合并后的 tombstones 也写回本地
-                    setTombstones(merged);
-                }
-                return cfReq('PUT', '_manifest', manifest);
-            }).catch(function() {
-                // 网络/解析失败时降级直接写
-                return cfReq('PUT', '_manifest', manifest);
-            });
+            return cfReq('PUT', '_manifest', manifest);
         }
         function cfBuildManifest() {
             return {
@@ -5951,30 +5936,32 @@ body {
             return local;
         }
 
-        // 单卡推送：始终走 GET → 合并 → PUT，不依赖易失的内存 hash
+        // 单卡推送：先检查冲突再推
         function cfPushCardSafe(prefix, card) {
             var key = prefix + card.id;
             setSyncStatus(card.id, 'pending');
 
+            var lastHash = _cardCloudHash[card.id];
+
             return cfReq('GET', key).then(function(cloudCard) {
-                var toPush = card;
-                if (cloudCard && cloudCard.id) {
-                    // 云端已有这张卡：无条件走 mergeCards（基于 updatedAt 与子条目级合并）
-                    var merged = mergeCards(card, cloudCard);
-                    // 如果合并结果与本地不同，把合并版本回写本地，保证本地不丢云端独有的子条目
-                    if (JSON.stringify(merged) !== JSON.stringify(card)) {
+                if (cloudCard && cloudCard.id && lastHash) {
+                    var cloudHash = computeCardHash(cloudCard);
+                    if (cloudHash !== lastHash) {
+                        // 云端被别的设备改过了 → 智能合并
+                        var merged = mergeCards(card, cloudCard);
+                        // 更新本地数据
                         var storeKey = prefix === 'k_' ? KEY_STORE : SNIP_STORE;
                         var data = idbGet(storeKey) || [];
                         for (var i = 0; i < data.length; i++) {
                             if (data[i].id === card.id) { data[i] = merged; break; }
                         }
                         idbSet(storeKey, data);
+                        card = merged;
                     }
-                    toPush = merged;
                 }
-                return cfReq('PUT', key, toPush).then(function() { return toPush; });
-            }).then(function(pushed) {
-                _cardCloudHash[card.id] = computeCardHash(pushed);
+                return cfReq('PUT', key, card);
+            }).then(function() {
+                _cardCloudHash[card.id] = computeCardHash(card);
                 setSyncStatus(card.id, 'synced');
             }).catch(function(e) {
                 console.warn('Push failed for', card.id, e);
@@ -6035,127 +6022,155 @@ body {
             });
         }
 
-        // 云端优先加载（实际是双向合并：保留本地未同步的卡，合并两边都有的卡）
-        function cfCloudFirstLoad() {
+        /* ===== 双向智能合并（替代旧的云端覆盖） ===== */
+        function cfSmartSync() {
             return cfGetManifest().then(function(manifest) {
                 if (!manifest) return cfMigrateFromBlob();
 
-                // 先读本地，避免被覆盖
-                var localKeys = getKeyData() || [];
-                var localSnips = getSnipData() || [];
-                var localKeyMap = {}, localSnipMap = {};
-                localKeys.forEach(function(k) { localKeyMap[k.id] = k; });
-                localSnips.forEach(function(s) { localSnipMap[s.id] = s; });
-
-                // tombstones 取并集（manifest 与本地都保留）
-                var localTomb = getTombstones() || {};
-                var cloudTomb = manifest.tombstones || {};
-                var mergedTomb = {};
-                Object.keys(localTomb).forEach(function(k) { mergedTomb[k] = localTomb[k]; });
-                Object.keys(cloudTomb).forEach(function(k) {
-                    if (!mergedTomb[k] || cloudTomb[k] > mergedTomb[k]) mergedTomb[k] = cloudTomb[k];
+                // 1) 合并墓碑（双向取并集，时间取较新）
+                var localTombs = getTombstones();
+                var cloudTombs = manifest.tombstones || {};
+                var mergedTombs = JSON.parse(JSON.stringify(localTombs));
+                Object.keys(cloudTombs).forEach(function(id) {
+                    if (!mergedTombs[id] || cloudTombs[id] > mergedTombs[id]) mergedTombs[id] = cloudTombs[id];
                 });
-                setTombstones(mergedTomb);
-
-                // imgbeds 简单地以云端为准（如需精细合并可按 id 配对，这里保持原行为）
-                if (manifest.imgbeds) setImgBedData(manifest.imgbeds);
-
-                var manifestKeyIds = manifest.keyIds || [];
-                var manifestSnipIds = manifest.snipIds || [];
-                var fetchKeys = [];
-                manifestKeyIds.forEach(function(id) {
-                    if (!mergedTomb[id]) fetchKeys.push('k_' + id);
+                Object.keys(localTombs).forEach(function(id) {
+                    if (!mergedTombs[id] || localTombs[id] > mergedTombs[id]) mergedTombs[id] = localTombs[id];
                 });
-                manifestSnipIds.forEach(function(id) {
-                    if (!mergedTomb[id]) fetchKeys.push('s_' + id);
-                });
+                setTombstones(mergedTombs);
 
-                return cfBatchGet(fetchKeys).then(function(results) {
-                    var keys = [], snips = [];
-                    var pushQueue = []; // 需要回推到云端的：本地独有 或 本地比云端新
+                // imgbeds: 本地有就保留本地，否则用云端
+                if (manifest.imgbeds) {
+                    var localImgbeds = getImgBedData();
+                    if (!localImgbeds || localImgbeds.length === 0) setImgBedData(manifest.imgbeds);
+                }
 
-                    // ---- API Keys ----
-                    manifestKeyIds.forEach(function(id) {
-                        if (mergedTomb[id]) return; // 已被删除
-                        var c = results['k_' + id];
-                        var l = localKeyMap[id];
-                        if (c && c.id) {
-                            if (l) {
-                                var merged = mergeCards(l, c);
-                                keys.push(merged);
-                                if (JSON.stringify(merged) !== JSON.stringify(c)) {
-                                    pushQueue.push({ prefix: 'k_', card: merged });
-                                }
-                            } else {
-                                keys.push(c);
-                            }
-                        } else if (l) {
-                            // 云端 manifest 列出但 GET 不到，本地有 → 用本地的并回推
-                            keys.push(l);
-                            pushQueue.push({ prefix: 'k_', card: l });
-                        }
+                // 2) 拉取所有云端卡片
+                var allCloudKeys = [];
+                (manifest.keyIds || []).forEach(function(id) { allCloudKeys.push('k_' + id); });
+                (manifest.snipIds || []).forEach(function(id) { allCloudKeys.push('s_' + id); });
+
+                // 本地数据
+                var localKeys = getKeyData();
+                var localSnips = getSnipData();
+
+                if (allCloudKeys.length === 0 && localKeys.length === 0 && localSnips.length === 0) return;
+
+                var batchPromise = allCloudKeys.length > 0 ? cfBatchGet(allCloudKeys) : Promise.resolve({});
+
+                return batchPromise.then(function(cloudResults) {
+                    // 3) 解析云端卡片
+                    var cloudKeyMap = {}, cloudSnipMap = {};
+                    (manifest.keyIds || []).forEach(function(id) {
+                        var c = cloudResults['k_' + id]; if (c && c.id) cloudKeyMap[c.id] = c;
                     });
-                    // 本地有、manifest 没有 → 本地新增的，回推
-                    localKeys.forEach(function(l) {
-                        if (manifestKeyIds.indexOf(l.id) === -1 && !mergedTomb[l.id]) {
-                            keys.push(l);
-                            pushQueue.push({ prefix: 'k_', card: l });
-                        }
+                    (manifest.snipIds || []).forEach(function(id) {
+                        var c = cloudResults['s_' + id]; if (c && c.id) cloudSnipMap[c.id] = c;
                     });
 
-                    // ---- Snippets ----
-                    manifestSnipIds.forEach(function(id) {
-                        if (mergedTomb[id]) return;
-                        var c = results['s_' + id];
-                        var l = localSnipMap[id];
-                        if (c && c.id) {
-                            if (l) {
-                                var merged = mergeCards(l, c);
-                                snips.push(merged);
-                                if (JSON.stringify(merged) !== JSON.stringify(c)) {
-                                    pushQueue.push({ prefix: 's_', card: merged });
-                                }
-                            } else {
-                                snips.push(c);
-                            }
-                        } else if (l) {
-                            snips.push(l);
-                            pushQueue.push({ prefix: 's_', card: l });
-                        }
+                    // 4) 双向合并 keys
+                    var mergedKeys = _mergeCardArrays(localKeys, cloudKeyMap, mergedTombs);
+                    // 5) 双向合并 snips
+                    var mergedSnips = _mergeCardArrays(localSnips, cloudSnipMap, mergedTombs);
+
+                    // 6) 写回本地
+                    setKeyDataSilent(mergedKeys.cards);
+                    setSnipDataSilent(mergedSnips.cards);
+                    markSynced(mergedKeys.cards);
+                    markSynced(mergedSnips.cards);
+
+                    // 7) 将本地独有或合并后有变化的卡片推回云端
+                    var pushPromises = [];
+                    mergedKeys.toPush.forEach(function(card) {
+                        pushPromises.push(cfReq('PUT', 'k_' + card.id, card).then(function() {
+                            _cardCloudHash[card.id] = computeCardHash(card);
+                        }));
                     });
-                    localSnips.forEach(function(l) {
-                        if (manifestSnipIds.indexOf(l.id) === -1 && !mergedTomb[l.id]) {
-                            snips.push(l);
-                            pushQueue.push({ prefix: 's_', card: l });
-                        }
+                    mergedSnips.toPush.forEach(function(card) {
+                        pushPromises.push(cfReq('PUT', 's_' + card.id, card).then(function() {
+                            _cardCloudHash[card.id] = computeCardHash(card);
+                        }));
                     });
 
-                    // 写入合并后的本地数据
-                    setKeyDataSilent(keys);
-                    setSnipDataSilent(snips);
-                    markSynced(keys);
-                    markSynced(snips);
+                    // 云端有但本地已删（在墓碑中）的卡片，从云端也删掉
+                    mergedKeys.toDelete.forEach(function(id) {
+                        pushPromises.push(cfReq('DELETE', 'k_' + id).catch(function(){}));
+                    });
+                    mergedSnips.toDelete.forEach(function(id) {
+                        pushPromises.push(cfReq('DELETE', 's_' + id).catch(function(){}));
+                    });
 
-                    // 回推本地新增/较新的卡
-                    if (pushQueue.length > 0) {
-                        var pushes = pushQueue.map(function(item) {
-                            setSyncStatus(item.card.id, 'pending');
-                            return cfReq('PUT', item.prefix + item.card.id, item.card).then(function() {
-                                _cardCloudHash[item.card.id] = computeCardHash(item.card);
-                                setSyncStatus(item.card.id, 'synced');
-                            }).catch(function(e) {
-                                setSyncStatus(item.card.id, 'error');
-                                console.warn('Reconnect push failed for', item.card.id, e);
-                            });
-                        });
-                        return Promise.all(pushes).then(function() {
-                            // 回推完之后再写一次 manifest（含本次新增的 ID 与并集 tombstones）
-                            return cfPutManifest(cfBuildManifest()).catch(function() {});
-                        });
+                    // 8) 更新 manifest
+                    if (pushPromises.length > 0 || mergedKeys.manifestDirty || mergedSnips.manifestDirty) {
+                        var newManifest = cfBuildManifest();
+                        newManifest.tombstones = mergedTombs;
+                        pushPromises.push(cfPutManifest(newManifest));
                     }
+
+                    return Promise.all(pushPromises);
                 });
             });
         }
+
+        /**
+         * 双向合并卡片数组（通用，key 和 snip 共用）
+         * @param {Array} localArr   本地卡片数组
+         * @param {Object} cloudMap  云端卡片 { id → card }
+         * @param {Object} tombstones 合并后的墓碑
+         * @returns { cards: [], toPush: [], toDelete: [], manifestDirty: bool }
+         */
+        function _mergeCardArrays(localArr, cloudMap, tombstones) {
+            var result = { cards: [], toPush: [], toDelete: [], manifestDirty: false };
+            var processed = {}; // 已处理的 id
+
+            // 遍历本地卡片
+            localArr.forEach(function(local) {
+                if (tombstones[local.id]) return; // 已删除
+                processed[local.id] = true;
+                var cloud = cloudMap[local.id];
+
+                if (!cloud) {
+                    // 本地有、云端没有 → 本地新增，推上去
+                    result.cards.push(local);
+                    result.toPush.push(local);
+                    result.manifestDirty = true;
+                } else {
+                    // 两边都有 → 智能合并
+                    var localHash = computeCardHash(local);
+                    var cloudHash = computeCardHash(cloud);
+                    if (localHash === cloudHash) {
+                        // 完全一致，无需操作
+                        result.cards.push(local);
+                    } else {
+                        var merged = mergeCards(local, cloud);
+                        result.cards.push(merged);
+                        // 合并结果和云端不同 → 需要推回
+                        if (computeCardHash(merged) !== cloudHash) {
+                            result.toPush.push(merged);
+                        }
+                    }
+                }
+            });
+
+            // 遍历云端独有的卡片
+            Object.keys(cloudMap).forEach(function(id) {
+                if (processed[id]) return;
+                if (tombstones[id]) {
+                    // 本地已删但云端还在 → 从云端也删
+                    result.toDelete.push(id);
+                    result.manifestDirty = true;
+                    return;
+                }
+                // 云端有、本地没有 → 云端新增，拉下来
+                result.cards.push(cloudMap[id]);
+                result.manifestDirty = true;
+            });
+
+            return result;
+        }
+
+        // 向后兼容：旧名称仍可调用（页面初始化等处引用）
+        function cfCloudFirstLoad() { return cfSmartSync(); }
 
         // 旧 blob → 逐卡迁移
         function cfMigrateFromBlob() {
@@ -6195,11 +6210,11 @@ body {
                 localStorage.setItem('toolbox_sync_provider', 'cf');
                 activeSyncProvider = 'cf';
                 if (manifest) {
-                    gistSetStatus('✅ 连接成功，正在加载云端数据…', 'var(--accent)');
+                    gistSetStatus('✅ 连接成功，正在同步数据…', 'var(--accent)');
                     return cfCloudFirstLoad().then(function() {
                         renderKeyFilters(); renderKeyCards();
                         renderSnipFilters(); renderSnippets();
-                        gistSetStatus('✅ 云端数据已加载', 'var(--accent)');
+                        gistSetStatus('✅ 数据已双向合并', 'var(--accent)');
                     });
                 } else {
                     return cfReq('GET', 'toolbox_data').then(function(old) {
@@ -6231,10 +6246,13 @@ body {
         }
 
         function cfPushAllCards() {
-            // 始终经过 cfPushCardSafe 走 GET → 合并 → PUT，避免无脑覆盖云端
             var keyData = getKeyData(), snipData = getSnipData(), promises = [];
-            keyData.forEach(function(c) { promises.push(cfPushCardSafe('k_', c)); });
-            snipData.forEach(function(c) { promises.push(cfPushCardSafe('s_', c)); });
+            keyData.forEach(function(c) {
+                promises.push(cfPushCardSafe('k_', c));
+            });
+            snipData.forEach(function(c) {
+                promises.push(cfPushCardSafe('s_', c));
+            });
             promises.push(cfPutManifest(cfBuildManifest()));
             return Promise.all(promises);
         }
@@ -6260,10 +6278,38 @@ body {
             });
         }
 
+        // 强制云端覆盖（仅用于用户明确确认的"拉取云端"操作）
+        function cfCloudOverwrite() {
+            return cfGetManifest().then(function(manifest) {
+                if (!manifest) return cfMigrateFromBlob();
+                var allKeys = [];
+                (manifest.keyIds || []).forEach(function(id) { allKeys.push('k_' + id); });
+                (manifest.snipIds || []).forEach(function(id) { allKeys.push('s_' + id); });
+                if (manifest.tombstones) setTombstones(manifest.tombstones);
+                if (manifest.imgbeds) setImgBedData(manifest.imgbeds);
+                if (allKeys.length === 0) { setKeyDataSilent([]); setSnipDataSilent([]); return; }
+                return cfBatchGet(allKeys).then(function(results) {
+                    var keys = [], snips = [];
+                    (manifest.keyIds || []).forEach(function(id) {
+                        var c = results['k_' + id]; if (c && c.id) keys.push(c);
+                    });
+                    (manifest.snipIds || []).forEach(function(id) {
+                        var c = results['s_' + id]; if (c && c.id) snips.push(c);
+                    });
+                    setKeyDataSilent(keys);
+                    setSnipDataSilent(snips);
+                    markSynced(keys);
+                    markSynced(snips);
+                });
+            });
+        }
+
         function cfPullData(manual) {
             var cfg = cfGetConfig();
             if (!cfg.url || !cfg.token) return Promise.resolve();
-            return cfCloudFirstLoad().then(function() {
+            // 手动拉取 = 用户确认了覆盖；自动 = 智能合并
+            var syncFn = manual ? cfCloudOverwrite() : cfSmartSync();
+            return syncFn.then(function() {
                 localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
                 renderKeyFilters(); renderKeyCards();
                 renderSnipFilters(); renderSnippets();
