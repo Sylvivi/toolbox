@@ -681,6 +681,20 @@ body {
         .form-group textarea:focus { border-color: var(--accent-mid); }
         .form-group textarea::placeholder { color: var(--text-muted); font-family: -apple-system, sans-serif; }
 
+        .type-picker { display: flex; gap: 8px; }
+        .type-pick-btn {
+            flex: 1; padding: 10px 8px; background: var(--input-bg);
+            border: 1px solid var(--input-border); border-radius: 10px;
+            color: var(--text-sub); font-size: 13px; font-weight: 500;
+            cursor: pointer; outline: none; transition: all 0.15s ease;
+            font-family: inherit;
+        }
+        .type-pick-btn:hover { border-color: var(--accent-mid); color: var(--text); }
+        .type-pick-btn.active {
+            background: linear-gradient(135deg, var(--accent), var(--accent-mid));
+            border-color: var(--accent-mid); color: #fff; font-weight: 600;
+        }
+
         .btn-save {
             flex: 1; padding: 12px; background: linear-gradient(135deg, var(--accent), var(--accent-mid));
             border: none; border-radius: 10px; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
@@ -1528,8 +1542,8 @@ body {
     <!-- ===== 收藏编辑弹窗 ===== -->
     <div class="modal-overlay" id="snipModalOverlay" onclick="if(event.target===this)closeSnipModal()">
         <div class="modal snip-modal">
-            <h2 id="snipModalTitle">➕ 添加片段</h2>
-            <input type="hidden" id="snipEditId">
+            <h2 id="snipModalTitle">✏️ 编辑片段</h2>
+            <input type="hidden" id="snipEditId" value="c7d65be3-2694-4de0-af83-fe32249e89cc">
             <div class="modal-body">
                 <div class="form-group">
                     <label>标题 <span style="font-weight:400;color:var(--text-muted)">（留空则取第一行）</span></label>
@@ -1542,14 +1556,14 @@ body {
                 <div class="form-group">
                     <label>类型</label>
                     <div class="type-toggle">
-                        <button class="type-btn active" id="typeText" onclick="setEditorType('text')">📄 文本</button>
+                        <button class="type-btn" id="typeText" onclick="setEditorType('text')">📄 文本</button>
                         <button class="type-btn" id="typeCode" onclick="setEditorType('code')">💻 代码</button>
                         <button class="type-btn" id="typeLink" onclick="setEditorType('link')">🔗 链接</button>
-                        <button class="type-btn" id="typeCollection" onclick="setEditorType('collection')" style="display:none">📦 集合</button>
+                        <button class="type-btn active" id="typeCollection" onclick="setEditorType('collection')" style="">📦 集合</button>
                     </div>
                 </div>
 
-                <div class="collection-form-fields" id="collectionFormFields" style="display:none">
+                <div class="collection-form-fields" id="collectionFormFields" style="display: block;">
                     <div class="form-group">
                         <label>子条目</label>
                         <div id="collectionItems" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px"></div>
@@ -1564,12 +1578,12 @@ body {
                     </div>
                 </div>
 
-                <div class="code-form-fields" id="codeFormFields">
+                <div class="code-form-fields hide" id="codeFormFields">
                     <div class="form-group">
                         <label style="display:flex;justify-content:space-between;align-items:center;">
                             <span>内容 *</span>
                             <span style="display:flex;gap:6px;align-items:center;">
-                                <span class="editor-code-tools" id="editorCodeTools" style="display:flex;gap:6px;align-items:center;">
+                                <span class="editor-code-tools" id="editorCodeTools" style="display: none; gap: 6px; align-items: center;">
                                     <button class="editor-toolbar-btn" onclick="toggleEditorSearch()">🔍</button>
                                 </span>
                                 <span class="btn-upload" onclick="document.getElementById('formFileInput').click()" style="font-size:12px;color:var(--accent-mid);cursor:pointer;font-weight:400;">📂 导入</span>
@@ -1582,7 +1596,7 @@ body {
                             <button class="editor-search-btn" onclick="jumpEditorMatch(-1)">▲</button>
                             <button class="editor-search-btn" onclick="jumpEditorMatch(1)">▼</button>
                         </div>
-                        <div class="editor-ops-bar" id="editorOpsBar">
+                        <div class="editor-ops-bar" id="editorOpsBar" style="display: none;">
                             <button class="eop" onclick="editorOp('indent')" title="缩进 (Tab)">→⎵</button>
                             <button class="eop" onclick="editorOp('outdent')" title="取消缩进 (Shift+Tab)">⎵←</button>
                             <span class="eop-sep"></span>
@@ -1604,14 +1618,15 @@ body {
                         </div>
                         <div class="md-preview" id="mdPreview"></div>
                         <div class="editor-wrap" id="editorWrap">
-                            <div class="editor-line-nums" id="editorLineNums">1</div>
+                            <div class="editor-line-nums" id="editorLineNums">1
+</div>
                             <div class="ta-hl-wrap" style="flex:1;min-width:0;position:relative">
                                 <textarea id="snipFormCode" placeholder="粘贴代码或文本内容，或点击上方导入..." oninput="syncEditorLines();syncEditorHighlight()" onscroll="syncEditorScroll()"></textarea>
                                 <div class="ta-hl-layer" id="editorHlLayer"><div class="ta-hl-content" id="editorHlContent"></div></div>
                             </div>
                         </div>
-                        <div class="editor-info-bar" id="editorInfoBar">
-                            <span id="editorLineCount">共 1 行</span>
+                        <div class="editor-info-bar" id="editorInfoBar" style="display: none;">
+                            <span id="editorLineCount">共 1 行 · 0 字符</span>
                             <span id="editorCursorPos">行 1, 列 1</span>
                         </div>
                     </div>
@@ -1790,17 +1805,18 @@ body {
                 </div>
                 <div class="form-group">
                     <label>类型</label>
-                    <select id="subEditType" onchange="toggleSubEditFields()">
-                        <option value="text">📄 文本</option>
-                        <option value="code">💻 代码</option>
-                        <option value="link">🔗 链接</option>
-                    </select>
+                    <div class="type-picker" id="subEditTypePicker">
+                        <button type="button" class="type-pick-btn" data-type="text" onclick="setSubEditType('text')">📄 文本</button>
+                        <button type="button" class="type-pick-btn" data-type="code" onclick="setSubEditType('code')">💻 代码</button>
+                        <button type="button" class="type-pick-btn active" data-type="link" onclick="setSubEditType('link')">🔗 链接</button>
+                    </div>
+                    <input type="hidden" id="subEditType" value="link">
                 </div>
                 <div class="form-group" id="subEditUrlGroup" style="display: block;">
                     <label>链接地址</label>
                     <input type="text" id="subEditUrl" placeholder="https://...">
                 </div>
-                <div class="form-group" id="subEditContentGroup" style="display:none">
+                <div class="form-group" id="subEditContentGroup" style="display: none;">
                     <label style="display:flex;justify-content:space-between;align-items:center">
                         <span>内容</span>
                         <div style="display:flex;gap:6px;align-items:center">
@@ -1866,7 +1882,7 @@ body {
         </button>
     </div>
 
-    <div class="toast" id="toast">✅ 子条目已更新</div>
+    <div class="toast" id="toast"></div>
 
     <script>
         /* =========================================================================
@@ -4159,7 +4175,7 @@ body {
                     if (!sub) return;
                     _subEditCtx = { cardId: cardId, subIdx: subIdx, isNew: !!isNew };
                     document.getElementById('subEditName').value = sub.title || '';
-                    document.getElementById('subEditType').value = sub.type || 'text';
+                    setSubEditType(sub.type || 'text');
                     document.getElementById('subEditUrl').value = sub.url || '';
                     document.getElementById('subEditContent').value = sub.content || '';
                     toggleSubEditFields();
@@ -4201,6 +4217,15 @@ body {
             }
             document.getElementById('subEditOverlay').classList.remove('show');
             _subEditCtx = null;
+        }
+
+        function setSubEditType(type) {
+            document.getElementById('subEditType').value = type;
+            var btns = document.querySelectorAll('#subEditTypePicker .type-pick-btn');
+            for (var i = 0; i < btns.length; i++) {
+                btns[i].classList.toggle('active', btns[i].getAttribute('data-type') === type);
+            }
+            toggleSubEditFields();
         }
 
         function toggleSubEditFields() {
