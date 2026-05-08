@@ -1328,12 +1328,12 @@ body {
             <div class="modal-body">
                 <!-- 同步方式选择 -->
                 <div style="display:flex;gap:6px;margin-bottom:14px">
-                    <button class="type-btn active" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
-                    <button class="type-btn" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
+                    <button class="type-btn" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
+                    <button class="type-btn active" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
                 </div>
 
                 <!-- GitHub Gist 配置 -->
-                <div id="syncGistFields" style="display: block;">
+                <div id="syncGistFields" style="display: none;">
                     <div id="gistGuide" style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('gistGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 首次配置步骤</b>
@@ -1360,7 +1360,7 @@ body {
                 </div>
 
                 <!-- Cloudflare KV 配置 -->
-                <div id="syncCFFields" style="display: none;">
+                <div id="syncCFFields" style="display: block;">
                     <div style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('cfGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 配置说明</b>
@@ -2663,10 +2663,15 @@ body {
                 return true;
             });
 
-            // 排序
-            if (keySort === 'newest') filtered.sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
-            else if (keySort === 'edited') filtered.sort(function(a, b) { return (b.updatedAt || '').localeCompare(a.updatedAt || ''); });
-            else if (keySort === 'created') filtered.sort(function(a, b) { return (a.createdAt || '').localeCompare(b.createdAt || ''); });
+            // 排序（置顶优先）
+            filtered.sort(function(a, b) {
+                if (a.pinned && !b.pinned) return -1;
+                if (!a.pinned && b.pinned) return 1;
+                if (keySort === 'newest') return (b.createdAt || '').localeCompare(a.createdAt || '');
+                if (keySort === 'edited') return (b.updatedAt || '').localeCompare(a.updatedAt || '');
+                if (keySort === 'created') return (a.createdAt || '').localeCompare(b.createdAt || '');
+                return 0;
+            });
 
             if (filtered.length === 0) {
                 list.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>还没有数据，点击右下角 + 添加</p></div>';
@@ -2706,7 +2711,7 @@ body {
                     '<div class="card-header" onclick="toggleCard(this)">' +
                         '<div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div>' +
                         '<div class="drag-handle key-drag" title="长按拖动排序" onclick="event.stopPropagation()">⋮⋮</div>' +
-                        '<div class="card-title" style="flex:1">' + esc(item.name) + '</div>' +
+                        '<div class="card-title" style="flex:1">' + (item.pinned ? '📌 ' : '') + esc(item.name) + '</div>' +
                         (item.group ? '<div class="card-group">' + esc(item.group) + '</div>' : '') +
                         (item.website ? '<a class="btn-header-visit" href="' + esc(item.website) + '" target="_blank" onclick="event.stopPropagation()" title="直达官网">🌐</a>' : '') +
                         ((item.website || item.url) ? '<a class="btn-header-visit" href="' + esc((item.website || item.url).replace(/^(https?:\/\/[^\/]+).*$/, '$1') + (item.logPath || '/console/log')) + '" target="_blank" onclick="event.stopPropagation()" title="消耗记录">📊</a>' : '') +
@@ -2721,7 +2726,7 @@ body {
                     '</div>' +
                     '<div class="card-body">' +
                         '<div class="card-actions" style="margin-top:0;margin-bottom:8px;padding-top:0;border-top:none">' +
-                            '<button class="btn-duplicate" onclick="duplicateKeyEntry(\'' + item.id + '\')">📋 复制</button>' +
+                            '<button class="btn-edit" onclick="toggleKeyPin(\'' + item.id + '\')">' + (item.pinned ? '📌 取消置顶' : '📌 置顶') + '</button>' +
                             '<button class="btn-edit" onclick="editKeyEntry(\'' + item.id + '\')">✏️ 编辑</button>' +
                             '<button class="sub-more-btn" onclick="event.stopPropagation();toggleSubMoreMenu(this)">⋯</button>' +
                             '<div class="sub-more-menu">' +
@@ -2871,6 +2876,15 @@ body {
                     return;
                 }
             }
+        }
+
+        function toggleKeyPin(id) {
+            var data = getKeyData();
+            for (var i = 0; i < data.length; i++) {
+                if (data[i].id === id) { data[i].pinned = !data[i].pinned; break; }
+            }
+            setKeyData(data); renderKeyFilters(); renderKeyCards();
+            showToast(data.find(function(d){return d.id===id}).pinned ? '📌 已置顶' : '📌 已取消置顶');
         }
 
         /* ===== 密钥诊断功能 ===== */
