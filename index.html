@@ -1687,6 +1687,10 @@ body {
                     <label>备注</label>
                     <input type="text" id="keyFormNote" placeholder="可选的备注信息">
                 </div>
+                <div class="form-group">
+                    <label>余额 (¥)</label>
+                    <input type="number" id="keyFormBalance" placeholder="选填，如 12.50" step="0.01" min="0">
+                </div>
             </div>
             <div class="modal-actions">
                 <button class="btn-cancel" onclick="closeKeyModal()">取消</button>
@@ -2712,6 +2716,7 @@ body {
                         '<div class="card-select-circle" onclick="event.stopPropagation();toggleCardSelect(this)"></div>' +
                         '<div class="drag-handle key-drag" title="长按拖动排序" onclick="event.stopPropagation()">⋮⋮</div>' +
                         '<div class="card-title" style="flex:1">' + (item.pinned ? '📌 ' : '') + esc(item.name) + '</div>' +
+                        (item.balance > 0 ? '<span style="font-size:11px;color:var(--accent-mid);white-space:nowrap;margin-right:4px">¥' + Number(item.balance).toFixed(2) + '</span>' : '') +
                         (item.group ? '<div class="card-group">' + esc(item.group) + '</div>' : '') +
                         (item.website ? '<a class="btn-header-visit" href="' + esc(item.website) + '" target="_blank" onclick="event.stopPropagation()" title="直达官网">🌐</a>' : '') +
                         ((item.website || item.url) ? '<a class="btn-header-visit" href="' + esc((item.website || item.url).replace(/^(https?:\/\/[^\/]+).*$/, '$1') + (item.logPath || '/console/log')) + '" target="_blank" onclick="event.stopPropagation()" title="消耗记录">📊</a>' : '') +
@@ -2749,6 +2754,8 @@ body {
                             '<div id="chat-test-' + item.id + '"></div>' +
                             '<div id="model-list-' + item.id + '"></div>' +
                         '</div>' +
+                        (item.balance > 0 ? '<div class="card-field"><div class="card-field-label">余额</div><div class="card-field-value"><div class="text balance-display" onclick="event.stopPropagation();inlineEditBalance(\'' + item.id + '\', this)" style="cursor:pointer" title="点击修改">¥' + Number(item.balance).toFixed(2) + '<span style="font-size:10px;color:var(--text-muted);opacity:0.6">' + (item.balanceUpdatedAt ? ' · ' + fmtTimeShort(item.balanceUpdatedAt) : '') + '</span></div></div></div>'
+                            : '<div class="card-field"><div class="card-field-value"><button class="btn-copy" onclick="event.stopPropagation();inlineEditBalance(\'' + item.id + '\', this)" style="font-size:11px;opacity:0.5">+ 填写余额</button></div></div>') +
                         '<div class="time-info"><span>🕐 创建：' + fmtTime(item.createdAt) + '</span><span>✏️ 编辑：' + fmtTime(item.updatedAt) + '</span></div>' +
                     '</div></div>';
             }
@@ -2776,6 +2783,7 @@ body {
             document.getElementById('keyFormLogPath').value = item ? (item.logPath || '') : '';
             document.getElementById('keyFormPricingPath').value = item ? (item.pricingPath || '') : '';
             document.getElementById('keyFormNote').value = item ? (item.note || '') : '';
+            document.getElementById('keyFormBalance').value = item && item.balance ? item.balance : '';
             document.getElementById('keyEntriesList').innerHTML = '';
             if (item) {
                 var keys = getItemKeys(item);
@@ -2823,6 +2831,7 @@ body {
             var data = getKeyData();
             var oldItem = null;
             if (editId) { for (var i = 0; i < data.length; i++) { if (data[i].id === editId) { oldItem = data[i]; break; } } }
+            var newBalance = parseFloat(document.getElementById('keyFormBalance').value) || 0;
             var entry = {
                 id: editId || generateId(),
                 name: name, group: document.getElementById('keyFormGroup').value.trim(),
@@ -2833,15 +2842,22 @@ body {
                 keys: keys,
                 key: keys[0].key,
                 note: document.getElementById('keyFormNote').value.trim(),
+                balance: newBalance,
+                balanceUpdatedAt: (oldItem && oldItem.balanceUpdatedAt) ? oldItem.balanceUpdatedAt : null,
                 models: [],
                 createdAt: (oldItem && oldItem.createdAt) ? oldItem.createdAt : new Date().toISOString(),
                 updatedAt: (oldItem && oldItem.updatedAt) ? oldItem.updatedAt : new Date().toISOString()
             };
+            // 余额变了就更新余额时间
+            if (!oldItem || newBalance !== (oldItem.balance || 0)) {
+                entry.balanceUpdatedAt = new Date().toISOString();
+            }
             // 只在有实际改动时才更新 updatedAt
             if (!oldItem || entry.name !== oldItem.name || entry.group !== (oldItem.group || '') ||
                 entry.url !== (oldItem.url || '') || entry.website !== (oldItem.website || '') ||
                 entry.logPath !== (oldItem.logPath || '') || entry.pricingPath !== (oldItem.pricingPath || '') ||
                 entry.note !== (oldItem.note || '') || entry.key !== (oldItem.key || '') ||
+                newBalance !== (oldItem.balance || 0) ||
                 JSON.stringify(keys.map(function(k){return k.label+':'+k.key})) !== JSON.stringify((getItemKeys(oldItem)).map(function(k){return k.label+':'+k.key}))) {
                 entry.updatedAt = new Date().toISOString();
             }
@@ -2885,6 +2901,48 @@ body {
             }
             setKeyData(data); renderKeyFilters(); renderKeyCards();
             showToast(data.find(function(d){return d.id===id}).pinned ? '📌 已置顶' : '📌 已取消置顶');
+        }
+
+        function inlineEditBalance(id, el) {
+            var field = el.closest('.card-field');
+            var data = getKeyData();
+            var item = null;
+            for (var i = 0; i < data.length; i++) { if (data[i].id === id) { item = data[i]; break; } }
+            var oldVal = item && item.balance ? Number(item.balance).toFixed(2) : '';
+            field.innerHTML = '<div class="card-field-value" style="gap:6px">' +
+                '<span style="font-size:13px;color:var(--accent-mid)">¥</span>' +
+                '<input type="number" class="balance-input" value="' + oldVal + '" placeholder="输入余额" step="0.01" min="0" ' +
+                'style="flex:1;padding:6px 8px;border:1.5px solid var(--accent-mid);border-radius:8px;font-size:14px;background:var(--card);outline:none" ' +
+                'onkeydown="if(event.key===\'Enter\'){event.preventDefault();saveInlineBalance(\'' + id + '\',this)}">' +
+                '<button class="btn-copy" onclick="event.stopPropagation();saveInlineBalance(\'' + id + '\',this.previousElementSibling)" style="font-size:12px">✓</button>' +
+                '</div>';
+            var input = field.querySelector('input');
+            input.focus();
+            input.select();
+            input.addEventListener('blur', function(e) {
+                // 避免点击确认按钮时触发 blur 保存两次
+                if (e.relatedTarget && e.relatedTarget.closest('.card-field')) return;
+                setTimeout(function() { saveInlineBalance(id, input); }, 150);
+            });
+        }
+
+        function saveInlineBalance(id, inputEl) {
+            if (inputEl._saved) return;
+            inputEl._saved = true;
+            var val = parseFloat(inputEl.value) || 0;
+            var data = getKeyData();
+            for (var i = 0; i < data.length; i++) {
+                if (data[i].id === id) {
+                    if (val !== (data[i].balance || 0)) {
+                        data[i].balance = val;
+                        data[i].balanceUpdatedAt = new Date().toISOString();
+                        data[i].updatedAt = new Date().toISOString();
+                    }
+                    break;
+                }
+            }
+            setKeyData(data);
+            renderKeyCards();
         }
 
         /* ===== 密钥诊断功能 ===== */
