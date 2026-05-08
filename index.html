@@ -1255,7 +1255,7 @@ body {
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body class="theme-clay on-keys modal-open">
+<body class="theme-clay on-snippets modal-open">
 
     <!-- =======================================================================
       [2.1] 顶级拦截层
@@ -1491,7 +1491,7 @@ body {
     </div>
 
     <!-- ==================== 页面二：密钥管理 ==================== -->
-    <div class="tab-content active" id="tab-keys">
+    <div class="tab-content" id="tab-keys">
         
 <!-- =======================================================================
   [2.2] 主体导航与视图区
@@ -1512,7 +1512,7 @@ body {
     </div>
 
     <!-- ==================== 页面三：收藏（代码/文本/链接） ==================== -->
-    <div class="tab-content" id="tab-snippets">
+    <div class="tab-content active" id="tab-snippets">
         <div class="header">
             <h1>📝 收藏夹</h1>
             <div class="motto">Tomorrow is another day.</div>
@@ -1872,10 +1872,10 @@ body {
     </div>
 
     <div class="bottom-nav">
-        <button class="nav-item nav-keys active" onclick="switchTab('keys', this)">
+        <button class="nav-item nav-keys" onclick="switchTab('keys', this)">
             <span class="nav-icon">🔑</span><span class="nav-label">密钥</span>
         </button>
-        <button class="nav-item nav-snippets" onclick="switchTab('snippets', this)">
+        <button class="nav-item nav-snippets active" onclick="switchTab('snippets', this)">
             <span class="nav-icon">📝</span><span class="nav-label">收藏</span>
         </button>
     </div>
@@ -2462,10 +2462,25 @@ body {
             }
         }
 
-        // 点击空白处折叠所有展开的卡片
+        // 点击空白处折叠卡片
         document.addEventListener('click', function(e) {
             if (selectModeOn) return;
-            if (e.target.closest('.card') || e.target.closest('.modal-overlay') || e.target.closest('.fab-add') || e.target.closest('.fab-search') || e.target.closest('.bottom-nav') || e.target.closest('.global-bar') || e.target.closest('.header') || e.target.closest('.search-bar') || e.target.closest('.toolbar') || e.target.closest('.filter-chip') || e.target.closest('.type-filter-chip') || e.target.closest('.sort-chip') || e.target.closest('.type-filter-bar') || e.target.closest('.sort-bar') || e.target.closest('.sub-sort-bar') || e.target.closest('.batch-bar') || e.target.closest('.toast')) return;
+            // 点击展开卡片的空白内边距区域 → 折叠该卡片
+            var card = e.target.closest('.card');
+            if (card) {
+                if (!card.classList.contains('collapsed')) {
+                    // e.target 是 .card 本身（18px padding 区域）或 .card-body 的空隙
+                    if (e.target === card || e.target.classList.contains('card-body')) {
+                        card.classList.remove('expanded');
+                        card.classList.add('collapsed');
+                        card.querySelectorAll('.sub-content-preview').forEach(function(p) { p.style.display = 'none'; });
+                        card.querySelectorAll('.sub-char-count').forEach(function(c) { c.style.display = 'none'; });
+                    }
+                }
+                return;
+            }
+            // 点击卡片外的空白 → 折叠所有
+            if (e.target.closest('.modal-overlay') || e.target.closest('.fab-add') || e.target.closest('.fab-search') || e.target.closest('.bottom-nav') || e.target.closest('.global-bar') || e.target.closest('.header') || e.target.closest('.search-bar') || e.target.closest('.toolbar') || e.target.closest('.filter-chip') || e.target.closest('.type-filter-chip') || e.target.closest('.sort-chip') || e.target.closest('.type-filter-bar') || e.target.closest('.sort-bar') || e.target.closest('.sub-sort-bar') || e.target.closest('.batch-bar') || e.target.closest('.toast')) return;
             document.querySelectorAll('.card:not(.collapsed)').forEach(function(card) {
                 card.classList.remove('expanded');
                 card.classList.add('collapsed');
@@ -3723,7 +3738,8 @@ body {
                             '<button class="sub-more-menu-item danger" onclick="event.stopPropagation();deleteCollectionSub(\'' + item.id + '\',' + idx + ')">🗑️ 删除</button>' +
                             '</div>';
                         if (sub.type === 'link' && sub.url) {
-                            actions = '<a class="btn-copy" href="' + esc(sub.url) + '" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;text-decoration:none">🔗</a>' +
+                            actions = '<a class="btn-copy" href="' + esc(sub.url) + '" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;text-decoration:none" title="访问链接">🔗</a>' +
+                                '<button class="btn-copy" onclick="event.stopPropagation();copyText(\'' + escAttr(sub.url) + '\', this)" style="font-size:11px" title="复制链接">📋</button>' +
                                 editBtn +
                                 '<button class="sub-more-btn" onclick="event.stopPropagation();toggleSubMoreMenu(this)">⋯</button>' + moreMenu;
                         } else {
