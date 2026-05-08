@@ -1491,7 +1491,7 @@ body {
     </div>
 
     <!-- ==================== 页面二：密钥管理 ==================== -->
-    <div class="tab-content" id="tab-keys">
+    <div class="tab-content active" id="tab-keys">
         
 <!-- =======================================================================
   [2.2] 主体导航与视图区
@@ -1508,11 +1508,17 @@ body {
         <div class="toolbar">
             <div class="toolbar-btn" id="keyExpandBtn" onclick="toggleAllKeys()">📂 展开</div>
         </div>
+        <div class="sort-bar" id="keySortBar">
+            <span class="sort-label">排序：</span>
+            <div class="sort-chip active" data-sort-key="edited" onclick="setKeySort('edited')">最近编辑</div>
+            <div class="sort-chip" data-sort-key="newest" onclick="setKeySort('newest')">最新创建</div>
+            <div class="sort-chip" data-sort-key="created" onclick="setKeySort('created')">最早创建</div>
+        </div>
         <div class="card-list" id="keyCardList"></div>
     </div>
 
     <!-- ==================== 页面三：收藏（代码/文本/链接） ==================== -->
-    <div class="tab-content active" id="tab-snippets">
+    <div class="tab-content" id="tab-snippets">
         <div class="header">
             <h1>📝 收藏夹</h1>
             <div class="motto">Tomorrow is another day.</div>
@@ -1872,10 +1878,10 @@ body {
     </div>
 
     <div class="bottom-nav">
-        <button class="nav-item nav-keys" onclick="switchTab('keys', this)">
+        <button class="nav-item nav-keys active" onclick="switchTab('keys', this)">
             <span class="nav-icon">🔑</span><span class="nav-label">密钥</span>
         </button>
-        <button class="nav-item nav-snippets active" onclick="switchTab('snippets', this)">
+        <button class="nav-item nav-snippets" onclick="switchTab('snippets', this)">
             <span class="nav-icon">📝</span><span class="nav-label">收藏</span>
         </button>
     </div>
@@ -2589,6 +2595,7 @@ body {
         var KEY_STORE = 'api_manager_data';
         var keyFilter = '全部';
         var keyAllExpanded = false;
+        var keySort = localStorage.getItem('toolbox_key_sort_mode') || 'edited';
         var keyVisible = {};
 
         function getKeyData() { var d = idbGet(KEY_STORE); return d ? JSON.parse(JSON.stringify(d)) : []; }
@@ -2626,10 +2633,24 @@ body {
             }).join('');
         }
 
+        function setKeySort(mode) {
+            keySort = mode;
+            localStorage.setItem('toolbox_key_sort_mode', mode);
+            document.querySelectorAll('#keySortBar .sort-chip').forEach(function(c) {
+                c.classList.toggle('active', c.dataset.sortKey === mode);
+            });
+            renderKeyCards();
+        }
+
         function renderKeyCards() {
             var data = getKeyData();
             var search = document.getElementById('keySearchInput').value.toLowerCase();
             var list = document.getElementById('keyCardList');
+
+            // 初始化排序 chip 状态
+            document.querySelectorAll('#keySortBar .sort-chip').forEach(function(c) {
+                c.classList.toggle('active', c.dataset.sortKey === keySort);
+            });
 
             var filtered = data.filter(function(item) {
                 if (keyFilter !== '全部' && item.group !== keyFilter) return false;
@@ -2641,6 +2662,11 @@ body {
                 }
                 return true;
             });
+
+            // 排序
+            if (keySort === 'newest') filtered.sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+            else if (keySort === 'edited') filtered.sort(function(a, b) { return (b.updatedAt || '').localeCompare(a.updatedAt || ''); });
+            else if (keySort === 'created') filtered.sort(function(a, b) { return (a.createdAt || '').localeCompare(b.createdAt || ''); });
 
             if (filtered.length === 0) {
                 list.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>还没有数据，点击右下角 + 添加</p></div>';
@@ -2683,10 +2709,15 @@ body {
                         '<div class="card-title" style="flex:1">' + esc(item.name) + '</div>' +
                         (item.group ? '<div class="card-group">' + esc(item.group) + '</div>' : '') +
                         (item.website ? '<a class="btn-header-visit" href="' + esc(item.website) + '" target="_blank" onclick="event.stopPropagation()" title="直达官网">🌐</a>' : '') +
-                        ((item.website || item.url) ? '<a class="btn-header-visit" href="' + esc((item.website || item.url).replace(/^(https?:\/\/[^\/]+).*$/, '$1') + (item.logPath || '/log')) + '" target="_blank" onclick="event.stopPropagation()" title="消耗记录">📊</a>' : '') +
+                        ((item.website || item.url) ? '<a class="btn-header-visit" href="' + esc((item.website || item.url).replace(/^(https?:\/\/[^\/]+).*$/, '$1') + (item.logPath || '/console/log')) + '" target="_blank" onclick="event.stopPropagation()" title="消耗记录">📊</a>' : '') +
                         (item.website ? '<a class="btn-header-visit" href="' + esc(item.website.replace(/^(https?:\/\/[^\/]+).*$/, '$1') + (item.pricingPath || '/pricing')) + '" target="_blank" onclick="event.stopPropagation()" title="模型广场">💲</a>' : '') +
                         (activeSyncProvider === 'cf' ? '<span class="sync-dot sync-' + getSyncStatus(item.id) + '" data-sync-id="' + item.id + '" title="' + (getSyncStatus(item.id) === 'synced' ? '已同步' : getSyncStatus(item.id) === 'pending' ? '同步中…' : '同步失败') + '"></span>' : '') +
                         '<div class="card-chevron">▼</div>' +
+                    '</div>' +
+                    '<div class="card-time-preview">' +
+                        '<span>🕐 ' + fmtTimeShort(item.createdAt) + '</span>' +
+                        '<div class="dot"></div>' +
+                        '<span>✏️ ' + fmtTimeShort(item.updatedAt) + '</span>' +
                     '</div>' +
                     '<div class="card-body">' +
                         '<div class="card-actions" style="margin-top:0;margin-bottom:8px;padding-top:0;border-top:none">' +
@@ -2713,6 +2744,7 @@ body {
                             '<div id="chat-test-' + item.id + '"></div>' +
                             '<div id="model-list-' + item.id + '"></div>' +
                         '</div>' +
+                        '<div class="time-info"><span>🕐 创建：' + fmtTime(item.createdAt) + '</span><span>✏️ 编辑：' + fmtTime(item.updatedAt) + '</span></div>' +
                     '</div></div>';
             }
             list.innerHTML = html;
@@ -2797,6 +2829,7 @@ body {
                 key: keys[0].key,
                 note: document.getElementById('keyFormNote').value.trim(),
                 models: [],
+                createdAt: (oldItem && oldItem.createdAt) ? oldItem.createdAt : new Date().toISOString(),
                 updatedAt: (oldItem && oldItem.updatedAt) ? oldItem.updatedAt : new Date().toISOString()
             };
             // 只在有实际改动时才更新 updatedAt
@@ -3007,7 +3040,7 @@ body {
             var url = item.website || item.url || '';
             if (!url) { showToast('⚠️ 请先配置官网或 API 地址'); return; }
             var base = url.replace(/\/v1\/?$/, '').replace(/\/$/, '');
-            window.open(base + '/log', '_blank');
+            window.open(base + (item.logPath || '/console/log'), '_blank');
         }
 
         // 🚀 测速 Ping — 用 /v1/models 接口
