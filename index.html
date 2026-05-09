@@ -2651,6 +2651,26 @@ body {
             renderKeyCards();
         }
 
+        function getExpandedCardIds() {
+            var ids = [];
+            document.querySelectorAll('.card:not(.collapsed)').forEach(function(c) {
+                var id = c.dataset.kid || c.dataset.sid;
+                if (id) ids.push(id);
+            });
+            return ids;
+        }
+
+        function restoreExpandedCards(ids) {
+            if (!ids || ids.length === 0) return;
+            ids.forEach(function(id) {
+                var card = document.querySelector('.card[data-kid="' + id + '"]') || document.querySelector('.card[data-sid="' + id + '"]');
+                if (card && card.classList.contains('collapsed')) {
+                    card.classList.remove('collapsed');
+                    card.classList.add('expanded');
+                }
+            });
+        }
+
         function renderKeyCards() {
             var data = getKeyData();
             var search = document.getElementById('keySearchInput').value.toLowerCase();
@@ -7055,9 +7075,17 @@ body {
             if (activeSyncProvider === 'cf') {
                 var cfCfg = cfGetConfig();
                 if (cfCfg.url && cfCfg.token) {
+                    var beforeKeys = JSON.stringify(getKeyData());
+                    var beforeSnips = JSON.stringify(getSnipData());
                     cfCloudFirstLoad().then(function() {
-                        renderKeyFilters(); renderKeyCards();
-                        renderSnipFilters(); renderSnippets();
+                        var keysChanged = JSON.stringify(getKeyData()) !== beforeKeys;
+                        var snipsChanged = JSON.stringify(getSnipData()) !== beforeSnips;
+                        if (keysChanged || snipsChanged) {
+                            var expanded = getExpandedCardIds();
+                            if (keysChanged) { renderKeyFilters(); renderKeyCards(); }
+                            if (snipsChanged) { renderSnipFilters(); renderSnippets(); }
+                            restoreExpandedCards(expanded);
+                        }
                     }).catch(function(e) {
                         console.warn('Background cloud sync failed:', e);
                     });
