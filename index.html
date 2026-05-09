@@ -3700,7 +3700,7 @@ body {
             var item = null;
             for (var i = 0; i < data.length; i++) { if (data[i].id === cardId) { item = data[i]; break; } }
             if (!item) return;
-            if (!keyword) { textEl.innerHTML = esc(item.code); info.textContent = ''; delete codeSearchState[cardId]; return; }
+            if (!keyword) { textEl.innerHTML = (item.type || 'code') === 'text' ? parseMd(item.code) : esc(item.code); info.textContent = ''; delete codeSearchState[cardId]; return; }
             var escaped = esc(item.code), kw = esc(keyword), kwLower = kw.toLowerCase();
             var count = 0, result = '', lower = escaped.toLowerCase(), pos = 0;
             while (pos < escaped.length) {
@@ -3768,7 +3768,7 @@ body {
                     var pre = card.querySelector('pre');
                     if (pre) pre.innerHTML = esc(data[i].code);
                     var textEl = card.querySelector('.text-block[data-text-id]');
-                    if (textEl) textEl.innerHTML = esc(data[i].code);
+                    if (textEl) textEl.innerHTML = (data[i].type || 'code') === 'text' ? parseMd(data[i].code) : esc(data[i].code);
                     break;
                 }
             }
@@ -3913,7 +3913,7 @@ body {
                             '<button class="code-search-btn" onclick="jumpMatch(\'' + item.id + '\',-1)">▲</button>' +
                             '<button class="code-search-btn" onclick="jumpMatch(\'' + item.id + '\',1)">▼</button>' +
                         '</div>' +
-                        '<div class="text-block" data-text-id="' + item.id + '">' + esc(item.code) + '</div>' +
+                        '<div class="text-block md-preview show" data-text-id="' + item.id + '">' + parseMd(item.code) + '</div>' +
                         '<div style="padding:4px 0;font-size:10px;color:var(--text-muted);opacity:0.6">' + (item.code || '').length + ' 字符</div>' +
                         '</div>';
                 } else {
