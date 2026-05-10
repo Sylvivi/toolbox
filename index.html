@@ -1260,7 +1260,7 @@ body {
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body class="on-snippets on-keys theme-warm modal-open">
+<body class="on-snippets on-keys theme-clay modal-open">
 
     <!-- =======================================================================
       [2.1] 顶级拦截层
@@ -1406,7 +1406,7 @@ body {
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:10px;padding:14px 24px 20px">
-                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：7.82 MB / ~50 MB（16%）</div>
+                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：6.28 MB / ~50 MB（13%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
@@ -1533,11 +1533,11 @@ body {
             <button class="search-clear" onclick="clearSearch('snipSearchInput')">✕</button>
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">46</span></div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">48</span></div>
             <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">9</span></div>
             <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">0</span></div>
             <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">2</span></div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">35</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">37</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
@@ -1681,7 +1681,8 @@ body {
                 </div>
                 <div class="form-group">
                     <label>API 地址 (填到APP里用的)</label>
-                    <input type="text" id="keyFormUrl" placeholder="https://xxx.com/v1">
+                    <div id="keyUrlsList"></div>
+                    <button class="btn-add-model" onclick="addUrlRow()">+ 添加地址</button>
                 </div>
                 <div class="form-group">
                     <label>密钥列表 *</label>
@@ -2730,7 +2731,20 @@ body {
                     noteHtml = '<div class="card-field"><div class="card-field-label">备注</div><div class="card-field-value"><div class="text">' + esc(item.note) + '</div></div></div>';
                 }
 
-                var urlCopyBtn = item.url ? '<button class="btn-copy" onclick="copyText(\'' + escAttr(item.url) + '\', this)">复制</button>' : '';
+                var urlsArr = item.urls || (item.url ? [{ label: '', url: item.url }] : []);
+                var urlsHtml = '';
+                if (urlsArr.length > 0) {
+                    urlsHtml = '<div class="card-field"><div class="card-field-label">API 地址' + (urlsArr.length > 1 ? ' (' + urlsArr.length + ')' : '') + '</div></div>';
+                    urlsArr.forEach(function(u) {
+                        urlsHtml += '<div class="card-field" style="padding-left:8px"><div class="card-field-value">' +
+                            (u.label ? '<span style="font-size:10px;color:var(--accent-mid);margin-right:6px;white-space:nowrap">' + esc(u.label) + '</span>' : '') +
+                            '<div class="text" style="font-size:12px">' + esc(u.url) + '</div>' +
+                            '<button class="btn-copy" onclick="copyText(\'' + escAttr(u.url) + '\', this)">复制</button>' +
+                            '</div></div>';
+                    });
+                } else {
+                    urlsHtml = '<div class="card-field"><div class="card-field-label">API 地址</div><div class="card-field-value"><div class="text">未设置</div></div></div>';
+                }
                 var websiteHtml = '';
                 if (item.website) {
                     websiteHtml = '<div class="card-field"><div class="card-field-label">官网</div><div class="card-field-value"><div class="text">' + esc(item.website) + '</div><a class="btn-visit" href="' + esc(item.website) + '" target="_blank">访问</a><button class="btn-copy" onclick="copyText(\'' + escAttr(item.website) + '\', this)">复制</button></div></div>';
@@ -2760,7 +2774,7 @@ body {
                             '<button class="btn-edit" onclick="editKeyEntry(\'' + item.id + '\')">✏️ 编辑</button>' +
                         '</div>' +
                         websiteHtml +
-                        '<div class="card-field"><div class="card-field-label">API 地址</div><div class="card-field-value"><div class="text">' + esc(item.url || '未设置') + '</div>' + urlCopyBtn + '</div></div>' +
+                        urlsHtml +
                         '<div class="card-field"><div class="card-field-label">密钥' + (itemKeys.length > 1 ? ' (' + itemKeys.length + ')' : '') + '</div></div>' +
                         keysHtml +
                         noteHtml +
@@ -2799,7 +2813,10 @@ body {
             document.getElementById('keyEditId').value = item ? item.id : '';
             document.getElementById('keyFormName').value = item ? item.name : '';
             document.getElementById('keyFormGroup').value = item ? item.group : '';
-            document.getElementById('keyFormUrl').value = item ? item.url : '';
+            document.getElementById('keyUrlsList').innerHTML = '';
+            var urls = item ? (item.urls || (item.url ? [{ label: '', url: item.url }] : [])) : [];
+            if (urls.length === 0) urls.push({ label: '', url: '' });
+            urls.forEach(function(u) { addUrlRow(u.label, u.url); });
             document.getElementById('keyFormWebsite').value = item ? (item.website || '') : '';
             document.getElementById('keyFormLogPath').value = item ? (item.logPath || '') : '';
             document.getElementById('keyFormPricingPath').value = item ? (item.pricingPath || '') : '';
@@ -2837,6 +2854,18 @@ body {
             container.appendChild(div);
         }
 
+        function addUrlRow(label, url) {
+            label = label || ''; url = url || '';
+            var container = document.getElementById('keyUrlsList');
+            var div = document.createElement('div');
+            div.className = 'model-entry';
+            div.innerHTML =
+                '<input type="text" placeholder="名称（如 国内/美国）" value="' + esc(label) + '" class="url-label" style="flex:1;min-width:0">' +
+                '<input type="text" placeholder="https://xxx.com/v1" value="' + esc(url) + '" class="url-value" style="flex:2;min-width:0">' +
+                '<button class="btn-remove-model" onclick="this.parentElement.remove()">×</button>';
+            container.appendChild(div);
+        }
+
         function saveKeyEntry() {
             var name = document.getElementById('keyFormName').value.trim();
             if (!name) { showToast('⚠️ 请填写名称'); return; }
@@ -2852,11 +2881,19 @@ body {
             var data = getKeyData();
             var oldItem = null;
             if (editId) { for (var i = 0; i < data.length; i++) { if (data[i].id === editId) { oldItem = data[i]; break; } } }
+            var urlRows = document.querySelectorAll('#keyUrlsList .model-entry');
+            var urls = [];
+            for (var j = 0; j < urlRows.length; j++) {
+                var u = urlRows[j].querySelector('.url-value').value.trim();
+                var ul = urlRows[j].querySelector('.url-label').value.trim();
+                if (u) urls.push({ label: ul, url: u });
+            }
             var newBalance = parseFloat(document.getElementById('keyFormBalance').value) || 0;
             var entry = {
                 id: editId || generateId(),
                 name: name, group: document.getElementById('keyFormGroup').value.trim(),
-                url: document.getElementById('keyFormUrl').value.trim(),
+                url: urls.length > 0 ? urls[0].url : '',
+                urls: urls,
                 website: document.getElementById('keyFormWebsite').value.trim(),
                 logPath: document.getElementById('keyFormLogPath').value.trim(),
                 pricingPath: document.getElementById('keyFormPricingPath').value.trim(),
@@ -3140,30 +3177,38 @@ body {
         // 🚀 测速 Ping — 用 /v1/models 接口
         function pingKeyApi(id) {
             var item = getKeyItemById(id);
-            if (!item || !item.url) return;
+            if (!item) return;
+            var urlsArr = item.urls || (item.url ? [{ label: '', url: item.url }] : []);
+            if (urlsArr.length === 0) return;
             diagClear(id);
             diagAppend(id, '<div class="diag-row">🚀 正在测速…</div>');
 
-            var baseUrl = getBaseUrl(item.url);
             var headers = { 'Authorization': 'Bearer ' + getActiveKey(item) };
-            var t0 = performance.now();
+            var promises = urlsArr.map(function(u) {
+                var baseUrl = getBaseUrl(u.url);
+                var t0 = performance.now();
+                return fetch(baseUrl + '/models', { headers: headers })
+                    .then(function(r) {
+                        var ms = Math.round(performance.now() - t0);
+                        if (!r.ok) throw new Error('HTTP ' + r.status);
+                        return r.json().then(function(json) {
+                            var modelCount = (json.data || []).length;
+                            var speedClass = ms < 500 ? 'diag-ok' : ms < 1500 ? 'diag-val' : 'diag-fail';
+                            var speedIcon = ms < 500 ? '🟢' : ms < 1500 ? '🟡' : '🔴';
+                            var label = u.label ? '<span style="color:var(--accent-mid)">' + esc(u.label) + '</span> ' : '';
+                            return '<div class="diag-row">🚀 ' + label + '<span class="diag-label">延迟</span>' + speedIcon + ' <span class="' + speedClass + '">' + ms + 'ms</span>  |  ✅  |  模型: ' + modelCount + ' 个</div>';
+                        });
+                    })
+                    .catch(function(e) {
+                        var ms = Math.round(performance.now() - t0);
+                        var label = u.label ? '<span style="color:var(--accent-mid)">' + esc(u.label) + '</span> ' : '';
+                        return '<div class="diag-row">🚀 ' + label + '<span class="diag-label">测速</span><span class="diag-fail">❌ 不可达 (' + ms + 'ms) ' + esc(e.message || '') + '</span></div>';
+                    });
+            });
 
-            fetch(baseUrl + '/models', { headers: headers })
-            .then(function(r) {
-                var ms = Math.round(performance.now() - t0);
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                return r.json().then(function(json) {
-                    var modelCount = (json.data || []).length;
-                    var speedClass = ms < 500 ? 'diag-ok' : ms < 1500 ? 'diag-val' : 'diag-fail';
-                    var speedIcon = ms < 500 ? '🟢' : ms < 1500 ? '🟡' : '🔴';
-                    diagClear(id);
-                    diagAppend(id, '<div class="diag-row">🚀 <span class="diag-label">延迟</span>' + speedIcon + ' <span class="' + speedClass + '">' + ms + 'ms</span>  |  节点存活 ✅  |  可用模型: ' + modelCount + ' 个</div>');
-                });
-            })
-            .catch(function(e) {
-                var ms = Math.round(performance.now() - t0);
+            Promise.all(promises).then(function(results) {
                 diagClear(id);
-                diagAppend(id, '<div class="diag-row">🚀 <span class="diag-label">测速</span><span class="diag-fail">❌ 节点不可达 (' + ms + 'ms) ' + esc(e.message || '') + '</span></div>');
+                results.forEach(function(r) { diagAppend(id, r); });
             });
         }
 
