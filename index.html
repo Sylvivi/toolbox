@@ -915,6 +915,12 @@ body {
         }
         .editor-wrap.text-mode .editor-line-nums { display: none; }
 
+        /* 手机上编辑器高度自适应 */
+        @media (max-width: 639px) {
+            .snip-modal .editor-wrap { min-height: 30vh; max-height: 45vh; }
+            .snip-modal #subEditorWrap { min-height: 28vh; max-height: 40vh; }
+        }
+
         /* 电脑上文本编辑器体验优化 */
         @media (min-width: 640px) {
             .modal.snip-modal { max-width: 80vw; max-height: 90vh; }
@@ -924,6 +930,17 @@ body {
 
         .link-form-fields { display: none; }
         .link-form-fields.show { display: block; }
+
+        /* ===== 标签折叠按钮 ===== */
+        .btn-tag-toggle {
+            width: 36px; height: 36px; flex-shrink: 0;
+            border: 1px solid var(--input-border); border-radius: 8px;
+            background: var(--input-bg); color: var(--text-muted);
+            font-size: 16px; cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; padding: 0;
+        }
+        .btn-tag-toggle:hover { border-color: var(--accent-mid); color: var(--accent); }
+        .btn-tag-toggle.active { background: var(--accent-light); border-color: var(--accent-mid); color: var(--accent); }
         .code-form-fields { display: block; }
         .code-form-fields.hide { display: none; }
 
@@ -1561,16 +1578,22 @@ body {
     <!-- ===== 收藏编辑弹窗 ===== -->
     <div class="modal-overlay" id="snipModalOverlay" onclick="if(event.target===this)closeSnipModal()">
         <div class="modal snip-modal">
-            <h2 id="snipModalTitle">➕ 添加片段</h2>
-            <input type="hidden" id="snipEditId">
+            <h2 id="snipModalTitle">✏️ 编辑片段</h2>
+            <input type="hidden" id="snipEditId" value="mol1ad9u58xt9">
             <div class="modal-body">
                 <div class="form-group">
                     <label>标题 <span style="font-weight:400;color:var(--text-muted)">（留空则取第一行）</span></label>
-                    <input type="text" id="snipFormTitle" placeholder="例如：聊天气泡样式、提示词模板">
-                </div>
-                <div class="form-group">
-                    <label>标签</label>
-                    <input type="text" id="snipFormTag" placeholder="例如：CSS / 提示词 / 笔记 / 链接">
+                    <div style="display:flex;gap:6px;align-items:center">
+                        <input type="text" id="snipFormTitle" placeholder="例如：聊天气泡样式、提示词模板" style="flex:1">
+                        <button type="button" class="btn-tag-toggle" id="btnTagToggle" onclick="toggleTagInput()" title="添加标签">🏷</button>
+                        <button type="button" class="btn-tag-toggle" id="btnNoteToggle" onclick="toggleNoteInput()" title="添加备注">📝</button>
+                    </div>
+                    <div class="tag-input-row" id="tagInputRow" style="display:none;margin-top:6px">
+                        <input type="text" id="snipFormTag" placeholder="例如：CSS / 提示词 / 笔记 / 链接">
+                    </div>
+                    <div class="tag-input-row" id="noteInputRow" style="display:none;margin-top:6px">
+                        <input type="text" id="snipFormNote" placeholder="用途说明等">
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>类型</label>
@@ -1602,7 +1625,7 @@ body {
                         <label style="display:flex;justify-content:space-between;align-items:center;">
                             <span>内容 *</span>
                             <span style="display:flex;gap:6px;align-items:center;">
-                                <span class="editor-code-tools" id="editorCodeTools" style="display:flex;gap:6px;align-items:center;">
+                                <span class="editor-code-tools" id="editorCodeTools" style="gap: 6px; align-items: center;">
                                     <button class="editor-toolbar-btn" onclick="toggleEditorSearch()">🔍</button>
                                 </span>
                                 <span class="btn-upload" onclick="document.getElementById('formFileInput').click()" style="font-size:12px;color:var(--accent-mid);cursor:pointer;font-weight:400;">📂 导入</span>
@@ -1642,24 +1665,66 @@ body {
                             <button class="eop" id="mdPreviewBtn" onclick="toggleMdPreview()" title="Markdown预览">👁 预览</button>
                         </div>
                         <div class="md-preview" id="mdPreview"></div>
-                        <div class="editor-wrap" id="editorWrap">
-                            <div class="editor-line-nums" id="editorLineNums">1</div>
+                        <div class="editor-wrap text-mode" id="editorWrap">
+                            <div class="editor-line-nums" id="editorLineNums">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+</div>
                             <div class="ta-hl-wrap" style="flex:1;min-width:0;position:relative">
                                 <textarea id="snipFormCode" placeholder="粘贴代码或文本内容，或点击上方导入..." oninput="syncEditorLines();syncEditorHighlight()" onscroll="syncEditorScroll()"></textarea>
-                                <div class="ta-hl-layer" id="editorHlLayer"><div class="ta-hl-content" id="editorHlContent"></div></div>
+                                <div class="ta-hl-layer text-mode-hl" id="editorHlLayer"><div class="ta-hl-content" id="editorHlContent"></div></div>
                             </div>
                         </div>
-                        <div class="editor-info-bar" id="editorInfoBar">
-                            <span id="editorLineCount">共 1 行</span>
-                            <span id="editorCursorPos">行 1, 列 1</span>
+                        <div class="editor-info-bar" id="editorInfoBar" style="display: none;">
+                            <span id="editorLineCount">共 46 行 · 915 字符</span>
+                            <span id="editorCursorPos">行 46, 列 64</span>
                         </div>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>备注</label>
-                    <input type="text" id="snipFormNote" placeholder="用途说明等">
-                </div>
             </div>
             <div class="modal-actions">
                 <button class="btn-cancel" onclick="closeSnipModal()">取消</button>
@@ -3588,6 +3653,26 @@ body {
             });
         }
 
+        /* ===== 标签输入框折叠切换 ===== */
+        function toggleTagInput() {
+            var row = document.getElementById('tagInputRow');
+            var btn = document.getElementById('btnTagToggle');
+            var isHidden = row.style.display === 'none';
+            row.style.display = isHidden ? 'block' : 'none';
+            btn.classList.toggle('active', isHidden);
+            if (isHidden) document.getElementById('snipFormTag').focus();
+        }
+
+        /* ===== 备注输入框折叠切换 ===== */
+        function toggleNoteInput() {
+            var row = document.getElementById('noteInputRow');
+            var btn = document.getElementById('btnNoteToggle');
+            var isHidden = row.style.display === 'none';
+            row.style.display = isHidden ? 'block' : 'none';
+            btn.classList.toggle('active', isHidden);
+            if (isHidden) document.getElementById('snipFormNote').focus();
+        }
+
         function setEditorType(type, isInit) {
             // When switching TO collection, preserve existing content as first sub-item
             if (type === 'collection' && !isInit) {
@@ -4267,8 +4352,16 @@ body {
             document.getElementById('snipEditId').value = item ? item.id : '';
             document.getElementById('snipFormTitle').value = item ? item.title : '';
             document.getElementById('snipFormTag').value = item ? (item.tag || '') : '';
+            // 标签栏：有标签时自动展开，否则收起
+            var hasTag = item && item.tag && item.tag.trim();
+            document.getElementById('tagInputRow').style.display = hasTag ? 'block' : 'none';
+            document.getElementById('btnTagToggle').classList.toggle('active', !!hasTag);
             document.getElementById('snipFormCode').value = item ? (item.code || '') : '';
             document.getElementById('snipFormNote').value = item ? (item.note || '') : '';
+            // 备注栏：有备注时自动展开，否则收起
+            var hasNote = item && item.note && item.note.trim();
+            document.getElementById('noteInputRow').style.display = hasNote ? 'block' : 'none';
+            document.getElementById('btnNoteToggle').classList.toggle('active', !!hasNote);
             document.getElementById('snipFormUrl').value = item ? (item.url || '') : '';
 
             var type = item ? (item.type || 'code') : 'text';
@@ -4508,7 +4601,9 @@ body {
             document.getElementById('subEditContentGroup').style.display = type === 'link' ? 'none' : 'block';
             var ta = document.getElementById('subEditContent');
             var hl = document.getElementById('subEditHlLayer');
+            var wrap = document.getElementById('subEditorWrap');
             if (type === 'text') {
+                wrap.classList.add('text-mode');
                 ta.style.fontFamily = "-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif";
                 ta.style.whiteSpace = 'pre-wrap';
                 ta.style.overflowX = 'hidden';
@@ -4517,6 +4612,7 @@ body {
                 hl.style.whiteSpace = 'pre-wrap';
                 hl.style.wordBreak = 'break-word';
             } else {
+                wrap.classList.remove('text-mode');
                 ta.style.fontFamily = "'SF Mono','Fira Code','Consolas',monospace";
                 ta.style.whiteSpace = 'pre';
                 ta.style.overflowX = 'auto';
