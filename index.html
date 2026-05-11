@@ -1627,6 +1627,8 @@ body {
                             <button class="eop" onclick="mdInsert('link')" title="链接">🔗</button>
                             <button class="eop" onclick="mdInsert('list')" title="列表">•</button>
                             <button class="eop" onclick="mdInsert('quote')" title="引用">❝</button>
+                            <button class="eop" onclick="mdInsert('timestamp')" title="插入时间戳">🕐</button>
+                            <button class="eop" onclick="editorSelectLine()" title="选中当前行">▬</button>
                             <span class="eop-sep"></span>
                             <button class="eop" id="mdPreviewBtn" onclick="toggleMdPreview()" title="Markdown预览">👁 预览</button>
                         </div>
@@ -1866,6 +1868,8 @@ body {
                         <button class="eop" onclick="subMdInsert('link')">🔗</button>
                         <button class="eop" onclick="subMdInsert('list')">•</button>
                         <button class="eop" onclick="subMdInsert('quote')">❝</button>
+                        <button class="eop" onclick="subMdInsert('timestamp')" title="插入时间戳">🕐</button>
+                        <button class="eop" onclick="subEditorSelectLine()" title="选中当前行">▬</button>
                         <span class="eop-sep"></span>
                         <button class="eop" id="subMdPreviewBtn" onclick="toggleSubMdPreview()">👁 预览</button>
                     </div>
@@ -4803,6 +4807,10 @@ body {
                 var items = sel ? sel.split('\n') : ['']; insert = items.map(function(l) { return '- ' + l; }).join('\n'); cursorOffset = 2;
             } else if (type === 'quote') {
                 var items = sel ? sel.split('\n') : ['']; insert = items.map(function(l) { return '> ' + l; }).join('\n'); cursorOffset = 2;
+            } else if (type === 'timestamp') {
+                var now = new Date();
+                insert = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+                cursorOffset = insert.length;
             }
             ta.value = before + insert + after;
             ta.selectionStart = ta.selectionEnd = before.length + cursorOffset;
@@ -4810,6 +4818,18 @@ body {
         }
 
         var subMdPreviewOn = false;
+
+        function subEditorSelectLine() {
+            var ta = document.getElementById('subEditContent');
+            var pos = ta.selectionStart;
+            var text = ta.value;
+            var start = text.lastIndexOf('\n', pos - 1) + 1;
+            var end = text.indexOf('\n', pos);
+            if (end === -1) end = text.length;
+            ta.selectionStart = start;
+            ta.selectionEnd = end;
+            ta.focus();
+        }
         function toggleSubMdPreview() {
             subMdPreviewOn = !subMdPreviewOn;
             var preview = document.getElementById('subMdPreview');
@@ -5193,6 +5213,10 @@ body {
                 var items = sel ? sel.split('\n') : [''];
                 insert = items.map(function(l) { return '> ' + l; }).join('\n');
                 cursorOffset = 2;
+            } else if (type === 'timestamp') {
+                var now = new Date();
+                insert = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+                cursorOffset = insert.length;
             }
 
             ta.value = before + insert + after;
@@ -5203,6 +5227,18 @@ body {
 
         /* ===== Markdown 预览 ===== */
         var mdPreviewOn = false;
+
+        function editorSelectLine() {
+            var ta = document.getElementById('snipFormCode');
+            var pos = ta.selectionStart;
+            var text = ta.value;
+            var start = text.lastIndexOf('\n', pos - 1) + 1;
+            var end = text.indexOf('\n', pos);
+            if (end === -1) end = text.length;
+            ta.selectionStart = start;
+            ta.selectionEnd = end;
+            ta.focus();
+        }
 
         function toggleMdPreview() {
             mdPreviewOn = !mdPreviewOn;
