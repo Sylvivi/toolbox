@@ -1263,7 +1263,7 @@ body {
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body class="on-snippets on-keys theme-clay modal-open">
+<body class="theme-warm on-snippets modal-open">
 
     <!-- =======================================================================
       [2.1] 顶级拦截层
@@ -1409,14 +1409,14 @@ body {
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:10px;padding:14px 24px 20px">
-                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：3.61 MB / ~50 MB（7%）</div>
+                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：10.95 MB / ~50 MB（22%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
                 </div>
                 <div style="display:flex;gap:8px">
                     <button class="btn-cancel" onclick="closeGistModal()">关闭</button>
-                    <button class="btn-save" id="gistSaveBtn" onclick="syncSaveConfig()">连接</button>
+                    <button class="btn-save" id="gistSaveBtn" onclick="syncSaveConfig()">重新连接</button>
                 </div>
             </div>
         </div>
@@ -1536,17 +1536,17 @@ body {
             <button class="search-clear" onclick="clearSearch('snipSearchInput')">✕</button>
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">22</span></div>
-            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">2</span></div>
-            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">2</span></div>
-            <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">6</span></div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">12</span></div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">46</span></div>
+            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">9</span></div>
+            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">0</span></div>
+            <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">2</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">35</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
             <span class="sort-label">排序：</span>
             <!-- chips will be rendered by JS in saved order -->
-        <div class="sort-chip" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip active" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
+        <div class="sort-chip active" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
         <div class="toolbar">
             <div class="toolbar-btn" id="snipExpandBtn" onclick="toggleAllSnippets()">📂 展开</div>
         </div>
@@ -2480,6 +2480,36 @@ body {
                 }, 450);
             }
         }
+
+        // 左右滑动切换页面
+        (function() {
+            var touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+            document.addEventListener('touchstart', function(e) {
+                if (e.target.closest('.modal-overlay, .sub-sort-bar, .collection-sub-drag, .code-search-bar')) return;
+                var t = e.touches[0];
+                touchStartX = t.clientX;
+                touchStartY = t.clientY;
+                touchStartTime = Date.now();
+            }, { passive: true });
+            document.addEventListener('touchend', function(e) {
+                if (!touchStartTime) return;
+                var t = e.changedTouches[0];
+                var dx = t.clientX - touchStartX;
+                var dy = t.clientY - touchStartY;
+                var dt = Date.now() - touchStartTime;
+                touchStartTime = 0;
+                // 水平滑动距离 > 80px，垂直偏移 < 水平的一半，时间 < 400ms
+                if (Math.abs(dx) > 80 && Math.abs(dy) < Math.abs(dx) * 0.5 && dt < 400) {
+                    if (dx < 0 && currentTab === 'keys') {
+                        // 左滑 → 切到收藏
+                        switchTab('snippets', document.querySelector('.nav-snippets'));
+                    } else if (dx > 0 && currentTab === 'snippets') {
+                        // 右滑 → 切到密钥
+                        switchTab('keys', document.querySelector('.nav-keys'));
+                    }
+                }
+            }, { passive: true });
+        })();
 
         // 点击空白处折叠卡片
         document.addEventListener('click', function(e) {
