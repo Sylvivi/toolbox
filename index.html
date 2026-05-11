@@ -399,7 +399,7 @@ body {
         .time-info span { white-space: nowrap; }
 
         .text-block {
-            padding: 14px; font-size: 14px; line-height: 1.7; color: var(--text);
+            padding: 14px; font-size: 14px; line-height: 1.4; color: var(--text);
             background: var(--card-inner); border-radius: 10px;
             white-space: pre-wrap; word-break: break-word;
             max-height: 260px; overflow-y: auto; -webkit-overflow-scrolling: touch;
@@ -866,10 +866,15 @@ body {
         .sub-content-preview .md-preview {
             min-height: unset; max-height: unset; overflow: visible;
             border: none; background: none; padding: 0;
-            display: block; font-size: 12px; line-height: 1.6;
+            display: block; font-size: 12px; line-height: 1.4;
         }
         .text-block.md-preview {
-            min-height: unset;
+            min-height: unset; line-height: 1.4;
+            white-space: normal;
+        }
+        .text-block.md-preview p,
+        .sub-content-preview .md-preview p {
+            margin: 0;
         }
         .md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4 { color: var(--accent); margin: 16px 0 8px; }
         .md-preview h1 { font-size: 20px; border-bottom: 1px solid var(--card-border); padding-bottom: 6px; }
@@ -1336,12 +1341,12 @@ body {
             <div class="modal-body">
                 <!-- 同步方式选择 -->
                 <div style="display:flex;gap:6px;margin-bottom:14px">
-                    <button class="type-btn active" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
-                    <button class="type-btn" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
+                    <button class="type-btn" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
+                    <button class="type-btn active" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
                 </div>
 
                 <!-- GitHub Gist 配置 -->
-                <div id="syncGistFields" style="display: block;">
+                <div id="syncGistFields" style="display: none;">
                     <div id="gistGuide" style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('gistGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 首次配置步骤</b>
@@ -1368,7 +1373,7 @@ body {
                 </div>
 
                 <!-- Cloudflare KV 配置 -->
-                <div id="syncCFFields" style="display: none;">
+                <div id="syncCFFields" style="display: block;">
                     <div style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('cfGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 配置说明</b>
@@ -1622,13 +1627,17 @@ body {
                             <button class="eop" onclick="mdInsert('heading')" title="标题">H</button>
                             <button class="eop" onclick="mdInsert('bold')" title="加粗">B</button>
                             <button class="eop" onclick="mdInsert('italic')" title="斜体">I</button>
+                            <button class="eop" onclick="mdInsert('underline')" title="下划线"><u>U</u></button>
                             <button class="eop" onclick="mdInsert('code')" title="行内代码">`</button>
                             <button class="eop" onclick="mdInsert('codeblock')" title="代码块">```</button>
-                            <button class="eop" onclick="mdInsert('link')" title="链接">🔗</button>
                             <button class="eop" onclick="mdInsert('list')" title="列表">•</button>
                             <button class="eop" onclick="mdInsert('quote')" title="引用">❝</button>
                             <button class="eop" onclick="mdInsert('timestamp')" title="插入时间戳">🕐</button>
+                            <button class="eop" onclick="mdInsert('todo')" title="插入待办">☑</button>
                             <button class="eop" onclick="editorSelectLine()" title="选中当前行">▬</button>
+                            <button class="eop" onclick="editorCopyLine()" title="复制当前行">📋</button>
+                            <button class="eop" onclick="editorJump('start')" title="跳到开头">⬆</button>
+                            <button class="eop" onclick="editorJump('end')" title="跳到末尾">⬇</button>
                             <span class="eop-sep"></span>
                             <button class="eop" id="mdPreviewBtn" onclick="toggleMdPreview()" title="Markdown预览">👁 预览</button>
                         </div>
@@ -1863,13 +1872,17 @@ body {
                         <button class="eop" onclick="subMdInsert('heading')">H</button>
                         <button class="eop" onclick="subMdInsert('bold')">B</button>
                         <button class="eop" onclick="subMdInsert('italic')">I</button>
+                        <button class="eop" onclick="subMdInsert('underline')"><u>U</u></button>
                         <button class="eop" onclick="subMdInsert('code')">`</button>
                         <button class="eop" onclick="subMdInsert('codeblock')">```</button>
-                        <button class="eop" onclick="subMdInsert('link')">🔗</button>
                         <button class="eop" onclick="subMdInsert('list')">•</button>
                         <button class="eop" onclick="subMdInsert('quote')">❝</button>
                         <button class="eop" onclick="subMdInsert('timestamp')" title="插入时间戳">🕐</button>
+                        <button class="eop" onclick="subMdInsert('todo')" title="插入待办">☑</button>
                         <button class="eop" onclick="subEditorSelectLine()" title="选中当前行">▬</button>
+                        <button class="eop" onclick="subEditorCopyLine()" title="复制当前行">📋</button>
+                        <button class="eop" onclick="subEditorJump('start')" title="跳到开头">⬆</button>
+                        <button class="eop" onclick="subEditorJump('end')" title="跳到末尾">⬇</button>
                         <span class="eop-sep"></span>
                         <button class="eop" id="subMdPreviewBtn" onclick="toggleSubMdPreview()">👁 预览</button>
                     </div>
@@ -3948,7 +3961,12 @@ body {
                         } else if (solo.type === 'code') {
                             contentHtml = '<pre class="code-block"><code>' + esc(solo.content || '') + '</code></pre>';
                         } else {
-                            contentHtml = '<div class="text-block md-preview show" data-text-id="' + item.id + '">' + renderText(solo.content || '') + '</div>';
+                            var soloContent = solo.content || '';
+                            if (hasMdSyntax(soloContent)) {
+                                contentHtml = '<div class="text-block md-preview show" data-text-id="' + item.id + '">' + parseMd(soloContent) + '</div>';
+                            } else {
+                                contentHtml = '<div class="text-block" data-text-id="' + item.id + '">' + esc(soloContent) + '</div>';
+                            }
                         }
                         if ((solo.content || '').length > 0 || (solo.url || '').length > 0) {
                             contentHtml += '<div style="font-size:10px;color:var(--text-muted);opacity:0.5;margin-top:4px">' + (solo.content || solo.url || '').length + ' 字符</div>';
@@ -4794,9 +4812,11 @@ body {
                 insert = hashes + restOfLine + sel;
                 cursorOffset = hashes.length + restOfLine.length + sel.length;
             } else if (type === 'bold') {
-                insert = '**' + (sel || '粗体') + '**'; cursorOffset = sel ? insert.length : 2;
+                insert = '**' + sel + '**'; cursorOffset = sel ? insert.length : 2;
             } else if (type === 'italic') {
-                insert = '*' + (sel || '斜体') + '*'; cursorOffset = sel ? insert.length : 1;
+                insert = '*' + sel + '*'; cursorOffset = sel ? insert.length : 1;
+            } else if (type === 'underline') {
+                insert = '<u>' + sel + '</u>'; cursorOffset = sel ? insert.length : 3;
             } else if (type === 'code') {
                 insert = '`' + (sel || '代码') + '`'; cursorOffset = sel ? insert.length : 1;
             } else if (type === 'codeblock') {
@@ -4811,6 +4831,10 @@ body {
                 var now = new Date();
                 insert = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
                 cursorOffset = insert.length;
+            } else if (type === 'todo') {
+                var items = sel ? sel.split('\n') : [''];
+                insert = items.map(function(l) { return '- [ ] ' + l; }).join('\n');
+                cursorOffset = 6;
             }
             ta.value = before + insert + after;
             ta.selectionStart = ta.selectionEnd = before.length + cursorOffset;
@@ -4828,6 +4852,29 @@ body {
             if (end === -1) end = text.length;
             ta.selectionStart = start;
             ta.selectionEnd = end;
+            ta.focus();
+        }
+
+        function subEditorCopyLine() {
+            var ta = document.getElementById('subEditContent');
+            var pos = ta.selectionStart;
+            var text = ta.value;
+            var start = text.lastIndexOf('\n', pos - 1) + 1;
+            var end = text.indexOf('\n', pos);
+            if (end === -1) end = text.length;
+            var line = text.substring(start, end);
+            copyText(line);
+        }
+
+        function subEditorJump(where) {
+            var ta = document.getElementById('subEditContent');
+            if (where === 'end') {
+                ta.selectionStart = ta.selectionEnd = ta.value.length;
+                ta.scrollTop = ta.scrollHeight;
+            } else {
+                ta.selectionStart = ta.selectionEnd = 0;
+                ta.scrollTop = 0;
+            }
             ta.focus();
         }
         function toggleSubMdPreview() {
@@ -5191,11 +5238,14 @@ body {
                 insert = hashes + restOfLine + sel;
                 cursorOffset = hashes.length + restOfLine.length + sel.length;
             } else if (type === 'bold') {
-                insert = '**' + (sel || '粗体') + '**';
+                insert = '**' + sel + '**';
                 cursorOffset = sel ? insert.length : 2;
             } else if (type === 'italic') {
-                insert = '*' + (sel || '斜体') + '*';
+                insert = '*' + sel + '*';
                 cursorOffset = sel ? insert.length : 1;
+            } else if (type === 'underline') {
+                insert = '<u>' + sel + '</u>';
+                cursorOffset = sel ? insert.length : 3;
             } else if (type === 'code') {
                 insert = '`' + (sel || '代码') + '`';
                 cursorOffset = sel ? insert.length : 1;
@@ -5217,6 +5267,10 @@ body {
                 var now = new Date();
                 insert = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
                 cursorOffset = insert.length;
+            } else if (type === 'todo') {
+                var items = sel ? sel.split('\n') : [''];
+                insert = items.map(function(l) { return '- [ ] ' + l; }).join('\n');
+                cursorOffset = 6;
             }
 
             ta.value = before + insert + after;
@@ -5238,6 +5292,29 @@ body {
             ta.selectionStart = start;
             ta.selectionEnd = end;
             ta.focus();
+        }
+
+        function editorCopyLine() {
+            var ta = document.getElementById('snipFormCode');
+            var pos = ta.selectionStart;
+            var text = ta.value;
+            var start = text.lastIndexOf('\n', pos - 1) + 1;
+            var end = text.indexOf('\n', pos);
+            if (end === -1) end = text.length;
+            var line = text.substring(start, end);
+            copyText(line);
+        }
+
+        function editorJump(where) {
+            var ta = document.getElementById('snipFormCode');
+            if (where === 'end') {
+                ta.selectionStart = ta.selectionEnd = ta.value.length;
+                ta.scrollTop = ta.scrollHeight;
+            } else {
+                ta.selectionStart = ta.selectionEnd = 0;
+                ta.scrollTop = 0;
+            }
+            ta.focus(); syncEditorLines();
         }
 
         function toggleMdPreview() {
