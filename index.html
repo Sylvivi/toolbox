@@ -1263,7 +1263,7 @@ body {
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body class="theme-warm on-snippets modal-open">
+<body class="on-snippets on-keys theme-warm modal-open">
 
     <!-- =======================================================================
       [2.1] 顶级拦截层
@@ -1336,12 +1336,12 @@ body {
             <div class="modal-body">
                 <!-- 同步方式选择 -->
                 <div style="display:flex;gap:6px;margin-bottom:14px">
-                    <button class="type-btn" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
-                    <button class="type-btn active" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
+                    <button class="type-btn active" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
+                    <button class="type-btn" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
                 </div>
 
                 <!-- GitHub Gist 配置 -->
-                <div id="syncGistFields" style="display: none;">
+                <div id="syncGistFields" style="display: block;">
                     <div id="gistGuide" style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('gistGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 首次配置步骤</b>
@@ -1368,7 +1368,7 @@ body {
                 </div>
 
                 <!-- Cloudflare KV 配置 -->
-                <div id="syncCFFields" style="display: block;">
+                <div id="syncCFFields" style="display: none;">
                     <div style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('cfGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 配置说明</b>
@@ -2251,7 +2251,8 @@ body {
             document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.remove('active'); });
             document.querySelectorAll('.nav-item').forEach(function(b) { b.classList.remove('active'); });
             document.getElementById('tab-' + tab).classList.add('active');
-            btn.classList.add('active');
+            if (btn) btn.classList.add('active');
+            else document.querySelector('.nav-' + tab).classList.add('active');
             document.body.classList.remove('on-keys', 'on-snippets');
             document.body.classList.add('on-' + tab);
             updateFabPositions();
@@ -2485,7 +2486,7 @@ body {
         (function() {
             var touchStartX = 0, touchStartY = 0, touchStartTime = 0;
             document.addEventListener('touchstart', function(e) {
-                if (e.target.closest('.modal-overlay, .sub-sort-bar, .collection-sub-drag, .code-search-bar')) return;
+                if (e.target.closest('.modal-overlay, .collection-sub-drag, .code-search-bar')) return;
                 var t = e.touches[0];
                 touchStartX = t.clientX;
                 touchStartY = t.clientY;
@@ -2498,18 +2499,26 @@ body {
                 var dy = t.clientY - touchStartY;
                 var dt = Date.now() - touchStartTime;
                 touchStartTime = 0;
-                // 水平滑动距离 > 80px，垂直偏移 < 水平的一半，时间 < 400ms
-                if (Math.abs(dx) > 80 && Math.abs(dy) < Math.abs(dx) * 0.5 && dt < 400) {
+                if (Math.abs(dx) > 60 && Math.abs(dy) < Math.abs(dx) * 0.5 && dt < 500) {
                     if (dx < 0 && currentTab === 'keys') {
-                        // 左滑 → 切到收藏
                         switchTab('snippets', document.querySelector('.nav-snippets'));
                     } else if (dx > 0 && currentTab === 'snippets') {
-                        // 右滑 → 切到密钥
                         switchTab('keys', document.querySelector('.nav-keys'));
                     }
                 }
             }, { passive: true });
         })();
+
+        // 输入法弹出时自动滚动，避免输入框被遮挡
+        document.addEventListener('focusin', function(e) {
+            var el = e.target;
+            if (!(el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')) return;
+            var modal = el.closest('.modal-overlay');
+            if (!modal) return;
+            setTimeout(function() {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 350);
+        });
 
         // 点击空白处折叠卡片
         document.addEventListener('click', function(e) {
