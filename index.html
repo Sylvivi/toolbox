@@ -3892,7 +3892,25 @@ body {
                 if (item.type === 'collection') {
                     typeIcon = '📦';
                     var subItems = item.items || [];
-                    // 子条目排序（仅显示，不改数据）
+
+                    // 单子条目时：直接展示内容，不显示集合嵌套结构
+                    if (subItems.length === 1) {
+                        var solo = subItems[0];
+                        if (solo.type === 'link' && solo.url) {
+                            var soloImgPreview = isImageUrl(solo.url) ? '<div class="img-preview"><img src="' + esc(solo.url) + '" onclick="event.stopPropagation();window.open(\'' + escAttr(solo.url) + '\',\'_blank\')" onerror="this.parentNode.innerHTML=\'<div class=img-preview-fail>图片加载失败</div>\'" loading="lazy"></div>' : '';
+                            contentHtml = '<div class="link-block"><div class="link-block-url"><span class="url-text">' + esc(solo.url) + '</span>' +
+                                '<a class="btn-visit" href="' + esc(solo.url) + '" target="_blank" onclick="event.stopPropagation()">访问</a>' +
+                                '<button class="btn-copy" onclick="event.stopPropagation();copyText(\'' + escAttr(solo.url) + '\', this)">复制</button>' +
+                                '</div>' + soloImgPreview + '</div>';
+                        } else if (solo.type === 'code') {
+                            contentHtml = '<pre class="code-block"><code>' + esc(solo.content || '') + '</code></pre>';
+                        } else {
+                            contentHtml = '<div class="text-block md-preview show" data-text-id="' + item.id + '">' + renderText(solo.content || '') + '</div>';
+                        }
+                        if ((solo.content || '').length > 0 || (solo.url || '').length > 0) {
+                            contentHtml += '<div style="font-size:10px;color:var(--text-muted);opacity:0.5;margin-top:4px">' + (solo.content || solo.url || '').length + ' 字符</div>';
+                        }
+                    } else {
                     var subSortMode = getSubSort(item.id);
                     var indexed = subItems.map(function(sub, idx) { return { sub: sub, origIdx: idx }; });
                     if (subSortMode === 'updated') {
@@ -3966,6 +3984,7 @@ body {
                             '</div>';
                     }).join('');
                     contentHtml = sortBar + '<div class="collection-sub-list" data-card-id="' + item.id + '">' + subHtml + '</div>';
+                    } // end of multi sub-item else
                 } else if (item.type === 'link') {
                     typeIcon = '🔗';
                     var imgPreview = isImageUrl(item.url) ? '<div class="img-preview"><img src="' + esc(item.url) + '" onclick="event.stopPropagation();window.open(\'' + escAttr(item.url) + '\',\'_blank\')" onerror="this.parentNode.innerHTML=\'<div class=img-preview-fail>图片加载失败</div>\'" loading="lazy"></div>' : '';
