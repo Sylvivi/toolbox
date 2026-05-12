@@ -977,7 +977,8 @@ body {
         .sub-sort-btn.active { background:var(--accent-light); color:var(--accent-mid); border-color:var(--accent-mid); font-weight:600; }
         .collection-sub-item {
             display: flex; align-items: flex-start; gap: 8px;
-            background: var(--card-inner); border-radius: 8px; padding: 8px 12px;
+            background: var(--card-inner); border-radius: 8px; padding: 10px 12px;
+            min-height: 44px; box-sizing: border-box;
             position: relative; overflow: visible;
             -webkit-tap-highlight-color: transparent; transition: background 0.15s;
         }
@@ -1285,7 +1286,7 @@ body {
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body class="on-snippets on-keys theme-warm modal-open">
+<body class="on-snippets on-keys theme-clay modal-open">
 
     <!-- =======================================================================
       [2.1] 顶级拦截层
@@ -1431,14 +1432,14 @@ body {
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:10px;padding:14px 24px 20px">
-                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：10.95 MB / ~50 MB（22%）</div>
+                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：4.53 MB / ~50 MB（9%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
                 </div>
                 <div style="display:flex;gap:8px">
                     <button class="btn-cancel" onclick="closeGistModal()">关闭</button>
-                    <button class="btn-save" id="gistSaveBtn" onclick="syncSaveConfig()">重新连接</button>
+                    <button class="btn-save" id="gistSaveBtn" onclick="syncSaveConfig()">连接</button>
                 </div>
             </div>
         </div>
@@ -1558,17 +1559,17 @@ body {
             <button class="search-clear" onclick="clearSearch('snipSearchInput')">✕</button>
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">46</span></div>
-            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">9</span></div>
-            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">0</span></div>
-            <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">2</span></div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">35</span></div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">22</span></div>
+            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">2</span></div>
+            <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">2</span></div>
+            <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">6</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">12</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
             <span class="sort-label">排序：</span>
             <!-- chips will be rendered by JS in saved order -->
-        <div class="sort-chip active" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
+        <div class="sort-chip" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip active" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
         <div class="toolbar">
             <div class="toolbar-btn" id="snipExpandBtn" onclick="toggleAllSnippets()">📂 展开</div>
         </div>
@@ -4112,13 +4113,13 @@ body {
                                 '</div>' +
                             '</div>';
                         }
-                        return '<div class="collection-sub-item" data-sub-idx="' + idx + '" style="flex-wrap:wrap">' +
-                            (subSortMode === 'default' ? '<span class="collection-sub-drag" title="拖动排序">⋮⋮</span>' : '') +
-                            (sub.type !== 'link' ? '<span class="collection-sub-icon" style="cursor:pointer" onclick="toggleSubPreview(\'' + item.id + '\',' + idx + ',this)">' + icon + '</span>' : '<span class="collection-sub-icon">' + icon + '</span>') +
-                            (sub.type !== 'link' ? '<span class="collection-sub-title" style="cursor:pointer" onclick="toggleSubPreview(\'' + item.id + '\',' + idx + ',this)">' : '<span class="collection-sub-title">') + esc(sub.title || (sub.url || sub.content || '').substring(0, 40)) + '</span>' +
+                        return '<div class="collection-sub-item" data-sub-idx="' + idx + '" style="flex-wrap:wrap' + (sub.type !== 'link' ? ';cursor:pointer' : '') + '"' + (sub.type !== 'link' ? ' onclick="toggleSubPreview(\'' + item.id + '\',' + idx + ',this)"' : '') + '>' +
+                            (subSortMode === 'default' ? '<span class="collection-sub-drag" title="拖动排序" onclick="event.stopPropagation()">⋮⋮</span>' : '') +
+                            '<span class="collection-sub-icon">' + icon + '</span>' +
+                            '<span class="collection-sub-title">' + esc(sub.title || (sub.url || sub.content || '').substring(0, 40)) + '</span>' +
                             '<div class="collection-sub-actions">' + actions + '</div>' +
                             (sub.createdAt ? '<div style="width:100%;font-size:10px;color:var(--text-muted);opacity:0.5;padding-left:28px;margin-top:2px">🕐 ' + fmtTimeShort(sub.createdAt) + (sub.updatedAt && sub.updatedAt !== sub.createdAt ? '  ✏️ ' + fmtTimeShort(sub.updatedAt) : '') + '</div>' : '') +
-                            '<div class="sub-content-preview" style="display:none;width:100%;margin-top:6px;' + (sub.type === 'code' ? '' : 'padding:8px 10px;') + 'background:var(--code-bg);border-radius:8px;font-size:12px;line-height:1.6;color:var(--code-text);max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch;' + (sub.type === 'code' ? '' : 'word-break:break-word;font-family:inherit') + '">' +
+                            '<div class="sub-content-preview" onclick="event.stopPropagation()" style="display:none;width:100%;margin-top:6px;' + (sub.type === 'code' ? '' : 'padding:8px 10px;') + 'background:var(--code-bg);border-radius:8px;font-size:12px;line-height:1.6;color:var(--code-text);max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch;' + (sub.type === 'code' ? '' : 'word-break:break-word;font-family:inherit') + '">' +
                             (sub.type === 'code' ? (function() {
                                 var cLines = (sub.content || '').split('\n');
                                 var cNums = '';
@@ -4126,7 +4127,7 @@ body {
                                 return '<div style="display:flex"><div style="flex-shrink:0;padding:8px 6px 8px 8px;text-align:right;font-size:12px;line-height:1.6;width:38px;font-family:\'SF Mono\',\'Fira Code\',\'Consolas\',monospace;color:var(--text-muted);opacity:0.4;user-select:none;white-space:pre;border-right:1px solid var(--card-border)">' + cNums + '</div><pre style="margin:0;padding:8px 10px;font-size:12px;line-height:1.6;font-family:\'SF Mono\',\'Fira Code\',\'Consolas\',monospace;color:var(--code-text);white-space:pre;flex:1;overflow-x:auto">' + esc(sub.content || '') + '</pre></div><div style="padding:4px 10px;font-size:10px;color:var(--text-muted);opacity:0.6;border-top:1px solid var(--card-border)">共 ' + cLines.length + ' 行 · ' + (sub.content || '').length + ' 字符</div>';
                             })() : '<div class="md-preview show">' + renderText(sub.content || '') + '</div>') +
                             '</div>' +
-                            '<div class="sub-char-count" style="display:none;font-size:10px;color:var(--text-muted);opacity:0.6;padding:2px 12px 0;margin-left:28px">' + (sub.content || '').length + ' 字符</div>' +
+                            '<div class="sub-char-count" onclick="event.stopPropagation()" style="display:none;font-size:10px;color:var(--text-muted);opacity:0.6;padding:2px 12px 0;margin-left:28px">' + (sub.content || '').length + ' 字符</div>' +
                             '</div>';
                     }).join('');
                     contentHtml = sortBar + '<div class="collection-sub-list" data-card-id="' + item.id + '">' + subHtml + '</div>';
