@@ -1363,12 +1363,12 @@ body {
             <div class="modal-body">
                 <!-- 同步方式选择 -->
                 <div style="display:flex;gap:6px;margin-bottom:14px">
-                    <button class="type-btn" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
-                    <button class="type-btn active" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
+                    <button class="type-btn active" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
+                    <button class="type-btn" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
                 </div>
 
                 <!-- GitHub Gist 配置 -->
-                <div id="syncGistFields" style="display: none;">
+                <div id="syncGistFields" style="display: block;">
                     <div id="gistGuide" style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('gistGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 首次配置步骤</b>
@@ -1395,7 +1395,7 @@ body {
                 </div>
 
                 <!-- Cloudflare KV 配置 -->
-                <div id="syncCFFields" style="display: block;">
+                <div id="syncCFFields" style="display: none;">
                     <div style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('cfGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 配置说明</b>
@@ -5904,10 +5904,36 @@ body {
         /* ===== 展开卡片内子条目拖拽排序 ===== */
         (function initSubItemDrag() {
             var dragEl = null, placeholder = null, listEl = null, cardId = null;
+            var pendingTimer = null, pendingHandle = null, startY = 0, dragActivated = false;
+            var LONG_PRESS_MS = 260, SCROLL_THRESHOLD = 10;
 
-            function start(e) {
+            function tryStart(e) {
                 var handle = e.target.closest('.collection-sub-drag');
                 if (!handle) return;
+                if (e.type === 'mousedown') { activate(handle); return; }
+                // touch: 长按判定
+                pendingHandle = handle;
+                startY = e.touches[0].clientY;
+                dragActivated = false;
+                pendingTimer = setTimeout(function() {
+                    if (pendingHandle) {
+                        dragActivated = true;
+                        activate(pendingHandle);
+                        if (navigator.vibrate) navigator.vibrate(20);
+                    }
+                }, LONG_PRESS_MS);
+            }
+            function cancelPending() {
+                clearTimeout(pendingTimer);
+                pendingHandle = null;
+            }
+            function onTouchMoveGuard(e) {
+                if (!pendingHandle || dragActivated) return;
+                var dy = Math.abs(e.touches[0].clientY - startY);
+                if (dy > SCROLL_THRESHOLD) cancelPending();
+            }
+
+            function activate(handle) {
                 dragEl = handle.closest('.collection-sub-item') || handle.closest('.sub-img-layout');
                 listEl = dragEl.closest('.collection-sub-list');
                 cardId = listEl.dataset.cardId;
@@ -5933,7 +5959,8 @@ body {
                 else listEl.appendChild(placeholder);
             }
             function end() {
-                if (!dragEl) return;
+                cancelPending();
+                if (!dragEl) { dragActivated = false; return; }
                 listEl.insertBefore(dragEl, placeholder);
                 placeholder.remove();
                 dragEl.style.opacity = '';
@@ -5951,15 +5978,18 @@ body {
                 }
                 setSnipData(data);
                 renderSnippetsKeepState(cardId);
-                dragEl = null; listEl = null; cardId = null;
+                dragEl = null; listEl = null; cardId = null; dragActivated = false;
                 document.removeEventListener('mousemove', onDrag);
                 document.removeEventListener('touchmove', onDrag);
                 document.removeEventListener('mouseup', end);
                 document.removeEventListener('touchend', end);
             }
 
-            document.addEventListener('mousedown', start);
-            document.addEventListener('touchstart', start, { passive: true });
+            document.addEventListener('mousedown', tryStart);
+            document.addEventListener('touchstart', tryStart, { passive: true });
+            document.addEventListener('touchmove', onTouchMoveGuard, { passive: true });
+            document.addEventListener('touchend', cancelPending);
+            document.addEventListener('touchcancel', cancelPending);
         })();
 
         /* ----- 全量导出与导入 ----- */
