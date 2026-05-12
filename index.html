@@ -852,6 +852,8 @@ body {
         .editor-ops-bar .eop-sep {
             width: 1px; height: 16px; background: var(--card-border); margin: 0 2px; flex-shrink: 0;
         }
+        .editor-ops-bar .md-ops-group { display: contents; }
+        .eop-search-mob { display: none !important; }
         .editor-ops-bar .eop.active { background: var(--accent-chip); color: #fff; }
         .editor-ops-bar .code-ops-toggle { background: var(--card-inner); border: 1px solid var(--card-border); }
         .editor-ops-bar .code-ops-toggle.active { background: var(--accent-chip); color: #fff; border-color: var(--accent-chip); }
@@ -921,8 +923,57 @@ body {
 
         /* 手机上编辑器高度自适应 */
         @media (max-width: 639px) {
-            .snip-modal .editor-wrap { min-height: 30vh; max-height: 45vh; }
-            .snip-modal #subEditorWrap { min-height: 28vh; max-height: 40vh; }
+            /* 编辑弹窗在手机上近全屏 */
+            .modal-overlay:has(.snip-modal) { padding: 0; align-items: stretch; }
+            .modal.snip-modal {
+                max-height: 100vh; max-height: 100dvh;
+                height: 100%; border-radius: 0;
+                box-shadow: none; border: none;
+            }
+            .snip-modal .modal-body {
+                padding: 0 16px 8px;
+                display: flex; flex-direction: column;
+            }
+            .snip-modal .modal-body > .form-group { flex-shrink: 0; }
+            .snip-modal .code-form-fields {
+                flex: 1; display: flex; flex-direction: column; min-height: 0;
+            }
+            .snip-modal .code-form-fields > .form-group {
+                flex: 1; display: flex; flex-direction: column; min-height: 0;
+            }
+            .snip-modal .editor-wrap {
+                flex: 1; min-height: 120px; max-height: none;
+            }
+            .snip-modal #subEditorWrap {
+                flex: 1; min-height: 120px; max-height: none;
+            }
+            .snip-modal #subEditContentGroup {
+                flex: 1; display: flex; flex-direction: column; min-height: 0;
+            }
+            .snip-modal .md-preview { max-height: 50vh; }
+            .snip-modal h2 { padding: 16px 16px 0; flex-shrink: 0; }
+            .snip-modal .modal-actions { padding: 10px 16px env(safe-area-inset-bottom, 16px); }
+            /* 集合编辑区也撑满 */
+            .snip-modal .collection-form-fields {
+                flex: 1; display: flex; flex-direction: column; min-height: 0; overflow-y: auto;
+            }
+            /* ===== 手机端编辑工具栏 sticky bottom ===== */
+            .snip-modal .editor-ops-bar {
+                position: sticky; bottom: 0; z-index: 5;
+                background: var(--modal-bg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+                padding: 6px 0 calc(6px + env(safe-area-inset-bottom, 0px));
+                border-top: 1px solid var(--card-border); margin: 0 -16px; padding-left: 16px; padding-right: 16px;
+            }
+            /* 隐藏预览按钮 */
+            .editor-ops-bar #mdPreviewBtn,
+            .editor-ops-bar #subMdPreviewBtn { display: none; }
+            /* 折叠 markdown 按钮组 */
+            .editor-ops-bar .md-ops-group { display: none; }
+            .editor-ops-bar .md-ops-group.show { display: contents; }
+            /* 隐藏预览按钮前的分隔线 */
+            .editor-ops-bar .eop-sep-preview { display: none; }
+            /* 手机上显示搜索按钮 */
+            .eop-search-mob { display: inline-flex !important; }
         }
 
         /* 电脑上文本编辑器体验优化 */
@@ -1290,7 +1341,7 @@ body {
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body class="on-snippets on-keys theme-warm modal-open">
+<body class="on-snippets on-keys theme-clay modal-open">
 
     <!-- =======================================================================
       [2.1] 顶级拦截层
@@ -1363,12 +1414,12 @@ body {
             <div class="modal-body">
                 <!-- 同步方式选择 -->
                 <div style="display:flex;gap:6px;margin-bottom:14px">
-                    <button class="type-btn active" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
-                    <button class="type-btn" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
+                    <button class="type-btn" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
+                    <button class="type-btn active" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
                 </div>
 
                 <!-- GitHub Gist 配置 -->
-                <div id="syncGistFields" style="display: block;">
+                <div id="syncGistFields" style="display: none;">
                     <div id="gistGuide" style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('gistGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 首次配置步骤</b>
@@ -1395,7 +1446,7 @@ body {
                 </div>
 
                 <!-- Cloudflare KV 配置 -->
-                <div id="syncCFFields" style="display: none;">
+                <div id="syncCFFields" style="display: block;">
                     <div style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('cfGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 配置说明</b>
@@ -1436,7 +1487,7 @@ body {
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:10px;padding:14px 24px 20px">
-                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：12.52 MB / ~50 MB（25%）</div>
+                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：7.92 MB / ~50 MB（16%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
@@ -1563,11 +1614,11 @@ body {
             <button class="search-clear" onclick="clearSearch('snipSearchInput')">✕</button>
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">46</span></div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">51</span></div>
             <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">9</span></div>
             <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">0</span></div>
-            <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">2</span></div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">35</span></div>
+            <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">4</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">38</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
@@ -1583,8 +1634,8 @@ body {
     <!-- ===== 收藏编辑弹窗 ===== -->
     <div class="modal-overlay" id="snipModalOverlay" onclick="if(event.target===this)closeSnipModal()">
         <div class="modal snip-modal">
-            <h2 id="snipModalTitle">✏️ 编辑片段</h2>
-            <input type="hidden" id="snipEditId" value="mol1ad9u58xt9">
+            <h2 id="snipModalTitle">➕ 添加片段</h2>
+            <input type="hidden" id="snipEditId" value="">
             <div class="modal-body">
                 <div class="form-group">
                     <label>标题 <span style="font-weight:400;color:var(--text-muted)">（留空则取第一行）</span></label>
@@ -1654,79 +1705,37 @@ body {
                             <button class="eop" onclick="editorOp('moveDown')" title="下移行">↓行</button>
                             <span class="eop-sep"></span>
                             </span>
+                            <button class="eop eop-search-mob" onclick="toggleEditorSearch()">🔍</button>
                             <button class="eop" onclick="editorSelectLine()" title="选中当前行">▬</button>
                             <button class="eop" onclick="editorCopyLine()" title="复制当前行">📋</button>
                             <button class="eop" onclick="editorJump('start')" title="跳到开头">⬆</button>
                             <button class="eop" onclick="editorJump('end')" title="跳到末尾">⬇</button>
                             <span class="eop-sep"></span>
+                            <button class="eop" onclick="mdInsert('underline')" title="下划线"><u>U</u></button>
+                            <button class="eop" onclick="mdInsert('quote')" title="引用">❝</button>
+                            <button class="eop" onclick="mdInsert('timestamp')" title="插入时间戳">🕐</button>
+                            <span class="md-ops-group">
                             <button class="eop" onclick="mdInsert('heading')" title="标题">H</button>
                             <button class="eop" onclick="mdInsert('bold')" title="加粗">B</button>
                             <button class="eop" onclick="mdInsert('italic')" title="斜体">I</button>
-                            <button class="eop" onclick="mdInsert('underline')" title="下划线"><u>U</u></button>
                             <button class="eop" onclick="mdInsert('codeblock')" title="代码块">```</button>
                             <button class="eop" onclick="mdInsert('list')" title="列表">•</button>
-                            <button class="eop" onclick="mdInsert('quote')" title="引用">❝</button>
-                            <button class="eop" onclick="mdInsert('timestamp')" title="插入时间戳">🕐</button>
-                            <span class="eop-sep"></span>
+                            </span>
+                            <span class="eop-sep eop-sep-preview"></span>
                             <button class="eop" id="mdPreviewBtn" onclick="toggleMdPreview()" title="Markdown预览">👁 预览</button>
                         </div>
                         <div class="md-preview" id="mdPreview"></div>
                         <div class="editor-wrap text-mode" id="editorWrap">
                             <div class="editor-line-nums" id="editorLineNums">1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
 </div>
                             <div class="ta-hl-wrap" style="flex:1;min-width:0;position:relative">
                                 <textarea id="snipFormCode" placeholder="粘贴代码或文本内容，或点击上方导入..." oninput="syncEditorLines();syncEditorHighlight()" onscroll="syncEditorScroll()"></textarea>
                                 <div class="ta-hl-layer text-mode-hl" id="editorHlLayer"><div class="ta-hl-content" id="editorHlContent"></div></div>
                             </div>
                         </div>
-                        <div class="editor-info-bar" id="editorInfoBar" style="display: none;">
-                            <span id="editorLineCount">共 46 行 · 915 字符</span>
-                            <span id="editorCursorPos">行 46, 列 64</span>
+                        <div class="editor-info-bar" id="editorInfoBar" style="">
+                            <span id="editorLineCount">共 1 行 · 0 字符</span>
+                            <span id="editorCursorPos">行 1, 列 1</span>
                         </div>
                     </div>
                 </div>
@@ -1942,20 +1951,23 @@ body {
                         <button class="eop" onclick="subEditorOp('moveDown')">↓行</button>
                         <span class="eop-sep"></span>
                         </span>
+                        <button class="eop eop-search-mob" onclick="toggleSubEditSearch()">🔍</button>
                         <button class="eop" onclick="subEditorSelectLine()" title="选中当前行">▬</button>
                         <button class="eop" onclick="subEditorCopyLine()" title="复制当前行">📋</button>
                         <button class="eop" onclick="subEditorJump('start')" title="跳到开头">⬆</button>
                         <button class="eop" onclick="subEditorJump('end')" title="跳到末尾">⬇</button>
                         <span class="eop-sep"></span>
+                        <button class="eop" onclick="subMdInsert('underline')"><u>U</u></button>
+                        <button class="eop" onclick="subMdInsert('quote')">❝</button>
+                        <button class="eop" onclick="subMdInsert('timestamp')" title="插入时间戳">🕐</button>
+                        <span class="md-ops-group">
                         <button class="eop" onclick="subMdInsert('heading')">H</button>
                         <button class="eop" onclick="subMdInsert('bold')">B</button>
                         <button class="eop" onclick="subMdInsert('italic')">I</button>
-                        <button class="eop" onclick="subMdInsert('underline')"><u>U</u></button>
                         <button class="eop" onclick="subMdInsert('codeblock')">```</button>
                         <button class="eop" onclick="subMdInsert('list')">•</button>
-                        <button class="eop" onclick="subMdInsert('quote')">❝</button>
-                        <button class="eop" onclick="subMdInsert('timestamp')" title="插入时间戳">🕐</button>
-                        <span class="eop-sep"></span>
+                        </span>
+                        <span class="eop-sep eop-sep-preview"></span>
                         <button class="eop" id="subMdPreviewBtn" onclick="toggleSubMdPreview()">👁 预览</button>
                     </div>
                     <div class="md-preview" id="subMdPreview"></div>
@@ -3720,20 +3732,15 @@ body {
             if (type === 'code' || type === 'text') {
                 codeTools.style.display = '';
                 opsBar.style.display = '';
-                infoBar.style.display = type === 'code' ? '' : 'none';
+                infoBar.style.display = (type === 'code' || type === 'text') ? '' : 'none';
             } else {
                 codeTools.style.display = 'none';
                 opsBar.style.display = 'none';
                 infoBar.style.display = 'none';
             }
             // 切换类型时清除搜索和关闭预览
-            document.getElementById('editorSearchBar').classList.remove('show');
-            document.getElementById('editorSearchInput').value = '';
-            document.getElementById('editorSearchInfo').textContent = '';
-            editorSearchState = { matches: [], current: -1 };
-            clearEditorHighlight();
-            // 关闭MD预览
-            if (mdPreviewOn) { mdPreviewOn = false; document.getElementById('mdPreview').classList.remove('show'); document.getElementById('editorWrap').style.display = ''; document.getElementById('mdPreviewBtn').classList.remove('active'); }
+            _mainEditor.resetSearch();
+            _mainEditor.resetPreview();
             syncEditorLines();
         }
 
@@ -4382,16 +4389,8 @@ body {
                 item.items.forEach(function(sub) { addCollectionItem(sub); });
             }
 
-            document.getElementById('editorSearchBar').classList.remove('show');
-            document.getElementById('editorSearchInput').value = '';
-            document.getElementById('editorSearchInfo').textContent = '';
-            editorSearchState = { matches: [], current: -1 };
-            clearEditorHighlight();
-            // 重置MD预览
-            mdPreviewOn = false;
-            document.getElementById('mdPreview').classList.remove('show');
-            document.getElementById('editorWrap').style.display = '';
-            document.getElementById('mdPreviewBtn').classList.remove('active');
+            _mainEditor.resetSearch();
+            _mainEditor.resetPreview();
             syncEditorLines();
         }
 
@@ -4581,18 +4580,8 @@ body {
                     document.getElementById('subEditUrl').value = sub.url || '';
                     document.getElementById('subEditContent').value = sub.content || '';
                     toggleSubEditFields();
-                    // 重置搜索栏
-                    document.getElementById('subEditSearchBar').classList.remove('show');
-                    document.getElementById('subEditSearch').value = '';
-                    document.getElementById('subEditSearchInfo').textContent = '';
-                    subEditSearchState = { matches: [], current: -1 };
-                    // 重置MD预览
-                    subMdPreviewOn = false;
-                    document.getElementById('subMdPreview').classList.remove('show');
-                    document.getElementById('subEditorWrap').style.display = '';
-                    var subInfoBar = document.getElementById('subEditorWrap').nextElementSibling;
-                    if (subInfoBar) subInfoBar.style.display = '';
-                    document.getElementById('subMdPreviewBtn').classList.remove('active');
+                    _subEditor.resetSearch();
+                    _subEditor.resetPreview();
                     document.getElementById('subEditOverlay').classList.add('show');
                     syncSubEditLines();
                     return;
@@ -4633,7 +4622,7 @@ body {
         function toggleSubEditFields() {
             var type = document.getElementById('subEditType').value;
             document.getElementById('subEditUrlGroup').style.display = type === 'link' ? 'block' : 'none';
-            document.getElementById('subEditContentGroup').style.display = type === 'link' ? 'none' : 'block';
+            document.getElementById('subEditContentGroup').style.display = type === 'link' ? 'none' : '';
             var ta = document.getElementById('subEditContent');
             var hl = document.getElementById('subEditHlLayer');
             var wrap = document.getElementById('subEditorWrap');
@@ -4742,126 +4731,180 @@ body {
             }
         }
 
-        var subEditSearchState = { matches: [], current: -1 };
-
-        function toggleSubEditSearch() {
-            var bar = document.getElementById('subEditSearchBar');
-            bar.classList.toggle('show');
-            if (bar.classList.contains('show')) {
-                document.getElementById('subEditSearch').focus();
-            } else {
-                document.getElementById('subEditSearch').value = '';
-                document.getElementById('subEditSearchInfo').textContent = '';
-                subEditSearchState = { matches: [], current: -1 };
-                clearSubEditHighlight();
-            }
+        /* =========================================================================
+         * 共享编辑器引擎 — 主编辑器 / 子条目编辑器共用
+         * ========================================================================= */
+        function _editorEngine(cfg) {
+            var _ss = { matches: [], current: -1 };
+            var _pvOn = false;
+            function _el(id) { return document.getElementById(id); }
+            function _ta() { return _el(cfg.ta); }
+            function _wrap() { return _el(cfg.editorWrap); }
+            function _hlWrap() { return _wrap().querySelector('.ta-hl-wrap'); }
+            var E = {};
+            E.syncLines = function() {
+                var ta = _ta(), nums = _el(cfg.lineNums), lines = ta.value.split('\n'), ln = '';
+                for (var i = 1; i <= lines.length; i++) ln += i + '\n';
+                nums.textContent = ln;
+                _el(cfg.lineCount).textContent = '共 ' + lines.length + ' 行 · ' + ta.value.length + ' 字符';
+                E.updateCursorPos();
+            };
+            E.syncScroll = function() {
+                var ta = _ta(); _el(cfg.lineNums).scrollTop = ta.scrollTop;
+                var hl = _el(cfg.hlLayer); hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft;
+            };
+            E.syncHighlight = function() { if (_ss.matches.length > 0) E.doSearch(); };
+            E.updateCursorPos = function() {
+                var ta = _ta(), pos = ta.selectionStart, text = ta.value.substring(0, pos);
+                var line = text.split('\n').length, col = pos - text.lastIndexOf('\n');
+                _el(cfg.cursorPos).textContent = '行 ' + line + ', 列 ' + col;
+            };
+            E.toggleSearch = function() {
+                var bar = _el(cfg.searchBar); bar.classList.toggle('show');
+                if (bar.classList.contains('show')) _el(cfg.searchInput).focus();
+                else { _el(cfg.searchInput).value = ''; _el(cfg.searchInfo).textContent = ''; _ss = { matches: [], current: -1 }; E.clearHighlight(); }
+            };
+            E.doSearch = function() {
+                var keyword = _el(cfg.searchInput).value, info = _el(cfg.searchInfo);
+                if (!keyword) { info.textContent = ''; _ss = { matches: [], current: -1 }; E.clearHighlight(); return; }
+                var text = _ta().value.toLowerCase(), kw = keyword.toLowerCase(), matches = [], pos = 0;
+                while (pos < text.length) { var idx = text.indexOf(kw, pos); if (idx === -1) break; matches.push(idx); pos = idx + kw.length; }
+                _ss.matches = matches;
+                if (matches.length > 0) { _ss.current = 0; info.textContent = '1 / ' + matches.length; E.renderHighlight(); E.scrollToMatch(); }
+                else { _ss.current = -1; info.textContent = '无匹配'; E.clearHighlight(); }
+            };
+            E.jumpMatch = function(dir) {
+                if (_ss.matches.length === 0) return;
+                _ss.current = (_ss.current + dir + _ss.matches.length) % _ss.matches.length;
+                _el(cfg.searchInfo).textContent = (_ss.current + 1) + ' / ' + _ss.matches.length;
+                E.renderHighlight(); E.scrollToMatch();
+            };
+            E.renderHighlight = function() {
+                var hlContent = _el(cfg.hlContent), wrap = _hlWrap(), kw = _el(cfg.searchInput).value;
+                if (!kw || _ss.matches.length === 0) { hlContent.innerHTML = ''; wrap.classList.remove('hl-active'); return; }
+                wrap.classList.add('hl-active');
+                var escaped = esc(_ta().value), kwEsc = esc(kw), kwLower = kwEsc.toLowerCase();
+                var result = '', lower = escaped.toLowerCase(), pos = 0, mi = 0;
+                while (pos < escaped.length) {
+                    var idx = lower.indexOf(kwLower, pos);
+                    if (idx === -1) { result += escaped.slice(pos); break; }
+                    var cls = mi === _ss.current ? 'code-hl current' : 'code-hl';
+                    result += escaped.slice(pos, idx) + '<mark class="' + cls + '">' + escaped.slice(idx, idx + kwEsc.length) + '</mark>';
+                    mi++; pos = idx + kwEsc.length;
+                }
+                hlContent.innerHTML = result + '\n';
+            };
+            E.clearHighlight = function() { _el(cfg.hlContent).innerHTML = ''; var w = _hlWrap(); if (w) w.classList.remove('hl-active'); };
+            E.scrollToMatch = function() {
+                if (_ss.current < 0 || _ss.matches.length === 0) return;
+                var ta = _ta(), start = _ss.matches[_ss.current];
+                var lineNum = ta.value.substring(0, start).split('\n').length;
+                var lh = parseFloat(getComputedStyle(ta).lineHeight) || 20;
+                ta.scrollTop = Math.max(0, (lineNum - 3) * lh); E.syncScroll();
+            };
+            E.op = function(op) {
+                var ta = _ta(), s = ta.selectionStart, e = ta.selectionEnd, text = ta.value, lines = text.split('\n');
+                var startLine = text.substring(0, s).split('\n').length - 1;
+                var endLine = text.substring(0, e).split('\n').length - 1;
+                if (op === 'indent') {
+                    for (var i = startLine; i <= endLine; i++) lines[i] = '    ' + lines[i];
+                    ta.value = lines.join('\n'); ta.selectionStart = s + 4; ta.selectionEnd = e + (endLine - startLine + 1) * 4;
+                } else if (op === 'outdent') {
+                    var removed = 0, firstRemoved = 0;
+                    for (var i = startLine; i <= endLine; i++) { var m = lines[i].match(/^( {1,4}|\t)/); if (m) { var len = m[0].length; lines[i] = lines[i].substring(len); removed += len; if (i === startLine) firstRemoved = len; } }
+                    ta.value = lines.join('\n'); ta.selectionStart = Math.max(0, s - firstRemoved); ta.selectionEnd = Math.max(0, e - removed);
+                } else if (op === 'dupLine') {
+                    var line = lines[startLine]; lines.splice(startLine + 1, 0, line); ta.value = lines.join('\n');
+                    var ns = text.split('\n').slice(0, startLine + 1).join('\n').length + 1; ta.selectionStart = ns; ta.selectionEnd = ns + line.length;
+                } else if (op === 'delLine') {
+                    lines.splice(startLine, 1); if (lines.length === 0) lines = [''];
+                    ta.value = lines.join('\n'); var p = lines.slice(0, startLine).join('\n').length + (startLine > 0 ? 1 : 0);
+                    ta.selectionStart = ta.selectionEnd = Math.min(p, ta.value.length);
+                } else if (op === 'moveUp' && startLine > 0) {
+                    var moved = lines.splice(startLine, 1)[0]; lines.splice(startLine - 1, 0, moved); ta.value = lines.join('\n');
+                    var np = lines.slice(0, startLine - 1).join('\n').length + (startLine > 1 ? 1 : 0); ta.selectionStart = np; ta.selectionEnd = np + moved.length;
+                } else if (op === 'moveDown' && startLine < lines.length - 1) {
+                    var moved = lines.splice(startLine, 1)[0]; lines.splice(startLine + 1, 0, moved); ta.value = lines.join('\n');
+                    var np = lines.slice(0, startLine + 1).join('\n').length + 1; ta.selectionStart = np; ta.selectionEnd = np + moved.length;
+                }
+                ta.focus(); E.syncLines(); E.syncHighlight();
+            };
+            E.mdInsert = function(type) {
+                var ta = _ta(), s = ta.selectionStart, e = ta.selectionEnd;
+                var sel = ta.value.substring(s, e), before = ta.value.substring(0, s), after = ta.value.substring(e);
+                var insert = '', cur = 0;
+                if (type === 'heading') {
+                    var ls = before.lastIndexOf('\n') + 1, lt = before.substring(ls);
+                    var m = lt.match(/^(#{0,5})\s*/), lv = m ? m[1].length + 1 : 1; if (lv > 6) lv = 1;
+                    var h = '#'.repeat(lv) + ' '; before = before.substring(0, ls);
+                    var rest = lt.replace(/^#{0,6}\s*/, ''); insert = h + rest + sel; cur = h.length + rest.length + sel.length;
+                } else if (type === 'bold') { insert = '**' + sel + '**'; cur = sel ? insert.length : 2;
+                } else if (type === 'italic') { insert = '*' + sel + '*'; cur = sel ? insert.length : 1;
+                } else if (type === 'underline') { insert = '<u>' + sel + '</u>'; cur = sel ? insert.length : 3;
+                } else if (type === 'code') { insert = '`' + (sel || '代码') + '`'; cur = sel ? insert.length : 1;
+                } else if (type === 'codeblock') { insert = '\n```\n' + (sel || '') + '\n```\n'; cur = 5 + (sel ? sel.length + 5 : 0);
+                } else if (type === 'link') { insert = '[' + (sel || '链接文字') + '](url)'; cur = sel ? insert.length - 4 : 1;
+                } else if (type === 'list') { var it = sel ? sel.split('\n') : ['']; insert = it.map(function(l){return '- '+l;}).join('\n'); cur = 2;
+                } else if (type === 'quote') { var it = sel ? sel.split('\n') : ['']; insert = it.map(function(l){return '> '+l;}).join('\n'); cur = 2;
+                } else if (type === 'timestamp') {
+                    var now = new Date(); insert = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0')+' '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'); cur = insert.length;
+                } else if (type === 'todo') { var it = sel ? sel.split('\n') : ['']; insert = it.map(function(l){return '- [ ] '+l;}).join('\n'); cur = 6; }
+                ta.value = before + insert + after; ta.selectionStart = ta.selectionEnd = before.length + cur;
+                ta.focus(); E.syncLines(); E.syncHighlight();
+            };
+            E.selectLine = function() {
+                var ta = _ta(), pos = ta.selectionStart, text = ta.value;
+                var start = text.lastIndexOf('\n', pos - 1) + 1, end = text.indexOf('\n', pos); if (end === -1) end = text.length;
+                ta.selectionStart = start; ta.selectionEnd = end; ta.focus();
+            };
+            E.copyLine = function() {
+                var ta = _ta(), pos = ta.selectionStart, text = ta.value;
+                var start = text.lastIndexOf('\n', pos - 1) + 1, end = text.indexOf('\n', pos); if (end === -1) end = text.length;
+                copyText(text.substring(start, end));
+            };
+            E.jump = function(where) {
+                var ta = _ta();
+                if (where === 'end') { ta.selectionStart = ta.selectionEnd = ta.value.length; ta.scrollTop = ta.scrollHeight; }
+                else { ta.selectionStart = ta.selectionEnd = 0; ta.scrollTop = 0; }
+                ta.focus(); E.syncLines();
+            };
+            E.togglePreview = function() {
+                _pvOn = !_pvOn;
+                var preview = _el(cfg.previewEl), wrap = _wrap(), infoBar = wrap.nextElementSibling, btn = _el(cfg.previewBtn);
+                if (_pvOn) { preview.innerHTML = parseMd(_ta().value); preview.classList.add('show'); wrap.style.display = 'none'; if (infoBar) infoBar.style.display = 'none'; btn.classList.add('active'); }
+                else { preview.classList.remove('show'); wrap.style.display = ''; if (infoBar && (!cfg.infoBarCheck || cfg.infoBarCheck())) infoBar.style.display = ''; btn.classList.remove('active'); }
+            };
+            E.resetSearch = function() { _ss = { matches: [], current: -1 }; _el(cfg.searchBar).classList.remove('show'); _el(cfg.searchInput).value = ''; _el(cfg.searchInfo).textContent = ''; E.clearHighlight(); };
+            E.resetPreview = function() { _pvOn = false; _el(cfg.previewEl).classList.remove('show'); _wrap().style.display = ''; var ib = _wrap().nextElementSibling; if (ib) ib.style.display = ''; _el(cfg.previewBtn).classList.remove('active'); };
+            E.isPreviewOn = function() { return _pvOn; };
+            return E;
         }
 
-        function doSubEditSearch() {
-            var ta = document.getElementById('subEditContent');
-            var keyword = document.getElementById('subEditSearch').value;
-            var info = document.getElementById('subEditSearchInfo');
-            if (!keyword) { info.textContent = ''; subEditSearchState = { matches: [], current: -1 }; clearSubEditHighlight(); return; }
-            var text = ta.value.toLowerCase(), kw = keyword.toLowerCase();
-            var matches = [], pos = 0;
-            while ((pos = text.indexOf(kw, pos)) !== -1) {
-                matches.push(pos);
-                pos += kw.length;
-            }
-            subEditSearchState.matches = matches;
-            if (matches.length > 0) {
-                subEditSearchState.current = 0;
-                info.textContent = '1 / ' + matches.length;
-                renderSubEditHighlight();
-                scrollSubEditToMatch();
-            } else {
-                subEditSearchState.current = -1;
-                info.textContent = '无匹配';
-                clearSubEditHighlight();
-            }
-        }
+        var _mainEditor = _editorEngine({
+            ta: 'snipFormCode', lineNums: 'editorLineNums', lineCount: 'editorLineCount', cursorPos: 'editorCursorPos',
+            hlLayer: 'editorHlLayer', hlContent: 'editorHlContent', editorWrap: 'editorWrap',
+            searchBar: 'editorSearchBar', searchInput: 'editorSearchInput', searchInfo: 'editorSearchInfo',
+            previewEl: 'mdPreview', previewBtn: 'mdPreviewBtn',
+            infoBarCheck: function() { return currentEditorType === 'code' || currentEditorType === 'text'; }
+        });
+        var _subEditor = _editorEngine({
+            ta: 'subEditContent', lineNums: 'subEditLineNums', lineCount: 'subEditLineCount', cursorPos: 'subEditCursorPos',
+            hlLayer: 'subEditHlLayer', hlContent: 'subEditHlContent', editorWrap: 'subEditorWrap',
+            searchBar: 'subEditSearchBar', searchInput: 'subEditSearch', searchInfo: 'subEditSearchInfo',
+            previewEl: 'subMdPreview', previewBtn: 'subMdPreviewBtn'
+        });
 
-        function jumpSubEditMatch(dir) {
-            var state = subEditSearchState;
-            if (state.matches.length === 0) return;
-            state.current = (state.current + dir + state.matches.length) % state.matches.length;
-            var info = document.getElementById('subEditSearchInfo');
-            info.textContent = (state.current + 1) + ' / ' + state.matches.length;
-            renderSubEditHighlight();
-            scrollSubEditToMatch();
-        }
-
-        function renderSubEditHighlight() {
-            var s = subEditSearchState;
-            var ta = document.getElementById('subEditContent');
-            var hlContent = document.getElementById('subEditHlContent');
-            var wrap = document.getElementById('subEditHlWrap');
-            var kw = document.getElementById('subEditSearch').value;
-            if (!kw || s.matches.length === 0) { hlContent.innerHTML = ''; wrap.classList.remove('hl-active'); return; }
-            wrap.classList.add('hl-active');
-            var text = ta.value;
-            var escaped = esc(text), kwEsc = esc(kw), kwLower = kwEsc.toLowerCase();
-            var result = '', lower = escaped.toLowerCase(), pos = 0, mi = 0;
-            while (pos < escaped.length) {
-                var idx = lower.indexOf(kwLower, pos);
-                if (idx === -1) { result += escaped.slice(pos); break; }
-                var cls = mi === s.current ? 'code-hl current' : 'code-hl';
-                result += escaped.slice(pos, idx) + '<mark class="' + cls + '">' + escaped.slice(idx, idx + kwEsc.length) + '</mark>';
-                mi++; pos = idx + kwEsc.length;
-            }
-            hlContent.innerHTML = result + '\n';
-        }
-
-        function clearSubEditHighlight() {
-            document.getElementById('subEditHlContent').innerHTML = '';
-            var wrap = document.getElementById('subEditHlWrap');
-            if (wrap) wrap.classList.remove('hl-active');
-        }
-
-        function scrollSubEditToMatch() {
-            var s = subEditSearchState;
-            if (s.current < 0 || s.matches.length === 0) return;
-            var ta = document.getElementById('subEditContent');
-            var keyword = document.getElementById('subEditSearch').value;
-            var start = s.matches[s.current];
-            var textBefore = ta.value.substring(0, start);
-            var lineNum = textBefore.split('\n').length;
-            var lineHeight = parseFloat(getComputedStyle(ta).lineHeight) || 20;
-            ta.scrollTop = Math.max(0, (lineNum - 3) * lineHeight);
-            syncSubEditScroll();
-        }
-
-        function syncSubEditScroll() {
-            var ta = document.getElementById('subEditContent');
-            document.getElementById('subEditLineNums').scrollTop = ta.scrollTop;
-            var hl = document.getElementById('subEditHlLayer');
-            hl.scrollTop = ta.scrollTop;
-            hl.scrollLeft = ta.scrollLeft;
-        }
-
-        function syncSubEditHighlight() {
-            if (subEditSearchState.matches.length > 0) doSubEditSearch();
-        }
-
-        function syncSubEditLines() {
-            var ta = document.getElementById('subEditContent');
-            var nums = document.getElementById('subEditLineNums');
-            var lines = ta.value.split('\n');
-            var lineNums = '';
-            for (var i = 1; i <= lines.length; i++) { lineNums += i + '\n'; }
-            nums.textContent = lineNums;
-            document.getElementById('subEditLineCount').textContent = '共 ' + lines.length + ' 行 · ' + ta.value.length + ' 字符';
-            updateSubEditCursorPos();
-        }
-
-        function updateSubEditCursorPos() {
-            var ta = document.getElementById('subEditContent');
-            var pos = ta.selectionStart;
-            var text = ta.value.substring(0, pos);
-            var line = text.split('\n').length;
-            var col = pos - text.lastIndexOf('\n');
-            document.getElementById('subEditCursorPos').textContent = '行 ' + line + ', 列 ' + col;
-        }
+        /* ----- 子编辑器代理函数 ----- */
+        function toggleSubEditSearch() { _subEditor.toggleSearch(); }
+        function doSubEditSearch() { _subEditor.doSearch(); }
+        function jumpSubEditMatch(dir) { _subEditor.jumpMatch(dir); }
+        function renderSubEditHighlight() { _subEditor.renderHighlight(); }
+        function clearSubEditHighlight() { _subEditor.clearHighlight(); }
+        function scrollSubEditToMatch() { _subEditor.scrollToMatch(); }
+        function syncSubEditScroll() { _subEditor.syncScroll(); }
+        function syncSubEditHighlight() { _subEditor.syncHighlight(); }
+        function syncSubEditLines() { _subEditor.syncLines(); }
+        function updateSubEditCursorPos() { _subEditor.updateCursorPos(); }
 
         function loadFileToSubEdit(event) {
             var file = event.target.files[0]; if (!file) return;
@@ -4875,165 +4918,13 @@ body {
             reader.readAsText(file); event.target.value = '';
         }
 
-        /* ===== 子条目编辑器操作 ===== */
-        function subEditorOp(op) {
-            var ta = document.getElementById('subEditContent');
-            var s = ta.selectionStart, e = ta.selectionEnd;
-            var text = ta.value;
-            var lines = text.split('\n');
-            var startLine = text.substring(0, s).split('\n').length - 1;
-            var endLine = text.substring(0, e).split('\n').length - 1;
-
-            if (op === 'indent') {
-                for (var i = startLine; i <= endLine; i++) lines[i] = '    ' + lines[i];
-                ta.value = lines.join('\n');
-                ta.selectionStart = s + 4; ta.selectionEnd = e + (endLine - startLine + 1) * 4;
-            } else if (op === 'outdent') {
-                var removed = 0, firstRemoved = 0;
-                for (var i = startLine; i <= endLine; i++) {
-                    var m = lines[i].match(/^( {1,4}|\t)/);
-                    if (m) { var len = m[0].length; lines[i] = lines[i].substring(len); removed += len; if (i === startLine) firstRemoved = len; }
-                }
-                ta.value = lines.join('\n');
-                ta.selectionStart = Math.max(0, s - firstRemoved); ta.selectionEnd = Math.max(0, e - removed);
-            } else if (op === 'dupLine') {
-                var line = lines[startLine];
-                lines.splice(startLine + 1, 0, line);
-                ta.value = lines.join('\n');
-                var newStart = text.split('\n').slice(0, startLine + 1).join('\n').length + 1;
-                ta.selectionStart = newStart; ta.selectionEnd = newStart + line.length;
-            } else if (op === 'delLine') {
-                lines.splice(startLine, 1);
-                if (lines.length === 0) lines = [''];
-                ta.value = lines.join('\n');
-                var pos = lines.slice(0, startLine).join('\n').length + (startLine > 0 ? 1 : 0);
-                ta.selectionStart = ta.selectionEnd = Math.min(pos, ta.value.length);
-            } else if (op === 'moveUp' && startLine > 0) {
-                var moved = lines.splice(startLine, 1)[0];
-                lines.splice(startLine - 1, 0, moved);
-                ta.value = lines.join('\n');
-                var newPos = lines.slice(0, startLine - 1).join('\n').length + (startLine > 1 ? 1 : 0);
-                ta.selectionStart = newPos; ta.selectionEnd = newPos + moved.length;
-            } else if (op === 'moveDown' && startLine < lines.length - 1) {
-                var moved = lines.splice(startLine, 1)[0];
-                lines.splice(startLine + 1, 0, moved);
-                ta.value = lines.join('\n');
-                var newPos = lines.slice(0, startLine + 1).join('\n').length + 1;
-                ta.selectionStart = newPos; ta.selectionEnd = newPos + moved.length;
-            }
-            ta.focus(); syncSubEditHighlight();
-        }
-
-        function subMdInsert(type) {
-            var ta = document.getElementById('subEditContent');
-            var s = ta.selectionStart, e = ta.selectionEnd;
-            var sel = ta.value.substring(s, e);
-            var before = ta.value.substring(0, s), after = ta.value.substring(e);
-            var insert = '', cursorOffset = 0;
-
-            if (type === 'heading') {
-                var lineStart = before.lastIndexOf('\n') + 1;
-                var lineText = before.substring(lineStart);
-                var m = lineText.match(/^(#{0,5})\s*/);
-                var level = m ? m[1].length + 1 : 1;
-                if (level > 6) level = 1;
-                var hashes = '#'.repeat(level) + ' ';
-                before = before.substring(0, lineStart);
-                var restOfLine = lineText.replace(/^#{0,6}\s*/, '');
-                insert = hashes + restOfLine + sel;
-                cursorOffset = hashes.length + restOfLine.length + sel.length;
-            } else if (type === 'bold') {
-                insert = '**' + sel + '**'; cursorOffset = sel ? insert.length : 2;
-            } else if (type === 'italic') {
-                insert = '*' + sel + '*'; cursorOffset = sel ? insert.length : 1;
-            } else if (type === 'underline') {
-                insert = '<u>' + sel + '</u>'; cursorOffset = sel ? insert.length : 3;
-            } else if (type === 'code') {
-                insert = '`' + (sel || '代码') + '`'; cursorOffset = sel ? insert.length : 1;
-            } else if (type === 'codeblock') {
-                insert = '\n```\n' + (sel || '') + '\n```\n'; cursorOffset = 5 + (sel ? sel.length + 5 : 0);
-            } else if (type === 'link') {
-                insert = '[' + (sel || '链接文字') + '](url)'; cursorOffset = sel ? insert.length - 4 : 1;
-            } else if (type === 'list') {
-                var items = sel ? sel.split('\n') : ['']; insert = items.map(function(l) { return '- ' + l; }).join('\n'); cursorOffset = 2;
-            } else if (type === 'quote') {
-                var items = sel ? sel.split('\n') : ['']; insert = items.map(function(l) { return '> ' + l; }).join('\n'); cursorOffset = 2;
-            } else if (type === 'timestamp') {
-                var now = new Date();
-                insert = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
-                cursorOffset = insert.length;
-            } else if (type === 'todo') {
-                var items = sel ? sel.split('\n') : [''];
-                insert = items.map(function(l) { return '- [ ] ' + l; }).join('\n');
-                cursorOffset = 6;
-            }
-            ta.value = before + insert + after;
-            ta.selectionStart = ta.selectionEnd = before.length + cursorOffset;
-            ta.focus(); syncSubEditHighlight();
-        }
-
-        var subMdPreviewOn = false;
-
-        function subEditorSelectLine() {
-            var ta = document.getElementById('subEditContent');
-            var pos = ta.selectionStart;
-            var text = ta.value;
-            var start = text.lastIndexOf('\n', pos - 1) + 1;
-            var end = text.indexOf('\n', pos);
-            if (end === -1) end = text.length;
-            ta.selectionStart = start;
-            ta.selectionEnd = end;
-            ta.focus();
-        }
-
-        function subEditorCopyLine() {
-            var ta = document.getElementById('subEditContent');
-            var pos = ta.selectionStart;
-            var text = ta.value;
-            var start = text.lastIndexOf('\n', pos - 1) + 1;
-            var end = text.indexOf('\n', pos);
-            if (end === -1) end = text.length;
-            var line = text.substring(start, end);
-            copyText(line);
-        }
-
-        function subEditorJump(where) {
-            var ta = document.getElementById('subEditContent');
-            if (where === 'end') {
-                ta.selectionStart = ta.selectionEnd = ta.value.length;
-                ta.scrollTop = ta.scrollHeight;
-            } else {
-                ta.selectionStart = ta.selectionEnd = 0;
-                ta.scrollTop = 0;
-            }
-            ta.focus();
-        }
-        function toggleSubMdPreview() {
-            subMdPreviewOn = !subMdPreviewOn;
-            var preview = document.getElementById('subMdPreview');
-            var editorWrap = document.getElementById('subEditorWrap');
-            var infoBar = editorWrap.nextElementSibling; // editor-info-bar
-            var btn = document.getElementById('subMdPreviewBtn');
-            if (subMdPreviewOn) {
-                preview.innerHTML = parseMd(document.getElementById('subEditContent').value);
-                preview.classList.add('show');
-                editorWrap.style.display = 'none';
-                if (infoBar) infoBar.style.display = 'none';
-                btn.classList.add('active');
-            } else {
-                preview.classList.remove('show');
-                editorWrap.style.display = '';
-                if (infoBar) infoBar.style.display = '';
-                btn.classList.remove('active');
-            }
-        }
-
-        // 子条目Tab快捷键
-        (function() {
-            document.getElementById('subEditContent').addEventListener('keydown', function(e) {
-                if (e.key === 'Tab') { e.preventDefault(); subEditorOp(e.shiftKey ? 'outdent' : 'indent'); }
-            });
-        })();
+        /* ----- 子编辑器操作代理 ----- */
+        function subEditorOp(op) { _subEditor.op(op); }
+        function subMdInsert(type) { _subEditor.mdInsert(type); }
+        function subEditorSelectLine() { _subEditor.selectLine(); }
+        function subEditorCopyLine() { _subEditor.copyLine(); }
+        function subEditorJump(where) { _subEditor.jump(where); }
+        function toggleSubMdPreview() { _subEditor.togglePreview(); }
 
         function addSubToCard(cardId) {
             var data = getSnipData();
@@ -5177,108 +5068,17 @@ body {
             renderSnipFilters(); renderSnippets(); showToast('🗑️ 已删除');
         }
 
-        function syncEditorLines() {
-            var ta = document.getElementById('snipFormCode');
-            var nums = document.getElementById('editorLineNums');
-            var lines = ta.value.split('\n');
-            var lineNums = '';
-            for (var i = 1; i <= lines.length; i++) { lineNums += i + '\n'; }
-            nums.textContent = lineNums;
-            document.getElementById('editorLineCount').textContent = '共 ' + lines.length + ' 行 · ' + ta.value.length + ' 字符';
-            updateCursorPos();
-        }
-
-        function syncEditorScroll() {
-            var ta = document.getElementById('snipFormCode');
-            document.getElementById('editorLineNums').scrollTop = ta.scrollTop;
-            var hl = document.getElementById('editorHlLayer');
-            hl.scrollTop = ta.scrollTop;
-            hl.scrollLeft = ta.scrollLeft;
-        }
-
-        function updateCursorPos() {
-            var ta = document.getElementById('snipFormCode');
-            var pos = ta.selectionStart;
-            var text = ta.value.substring(0, pos);
-            var line = text.split('\n').length;
-            var col = pos - text.lastIndexOf('\n');
-            document.getElementById('editorCursorPos').textContent = '行 ' + line + ', 列 ' + col;
-        }
-
-        var editorSearchState = { matches: [], current: -1 };
-
-        function toggleEditorSearch() {
-            var bar = document.getElementById('editorSearchBar');
-            bar.classList.toggle('show');
-            if (bar.classList.contains('show')) document.getElementById('editorSearchInput').focus();
-            else { document.getElementById('editorSearchInput').value = ''; document.getElementById('editorSearchInfo').textContent = ''; editorSearchState = { matches: [], current: -1 }; clearEditorHighlight(); }
-        }
-
-        function doEditorSearch() {
-            var keyword = document.getElementById('editorSearchInput').value;
-            var ta = document.getElementById('snipFormCode');
-            var info = document.getElementById('editorSearchInfo');
-            if (!keyword) { info.textContent = ''; editorSearchState = { matches: [], current: -1 }; clearEditorHighlight(); return; }
-            var text = ta.value.toLowerCase(), kw = keyword.toLowerCase();
-            var matches = [], pos = 0;
-            while (pos < text.length) { var idx = text.indexOf(kw, pos); if (idx === -1) break; matches.push(idx); pos = idx + kw.length; }
-            editorSearchState.matches = matches;
-            if (matches.length > 0) { editorSearchState.current = 0; info.textContent = '1 / ' + matches.length; renderEditorHighlight(); scrollEditorToMatch(); }
-            else { editorSearchState.current = -1; info.textContent = '无匹配'; clearEditorHighlight(); }
-        }
-
-        function jumpEditorMatch(dir) {
-            var s = editorSearchState;
-            if (s.matches.length === 0) return;
-            s.current = (s.current + dir + s.matches.length) % s.matches.length;
-            document.getElementById('editorSearchInfo').textContent = (s.current + 1) + ' / ' + s.matches.length;
-            renderEditorHighlight();
-            scrollEditorToMatch();
-        }
-
-        function renderEditorHighlight() {
-            var s = editorSearchState;
-            var ta = document.getElementById('snipFormCode');
-            var hlContent = document.getElementById('editorHlContent');
-            var wrap = document.querySelector('#editorWrap .ta-hl-wrap');
-            var kw = document.getElementById('editorSearchInput').value;
-            if (!kw || s.matches.length === 0) { hlContent.innerHTML = ''; wrap.classList.remove('hl-active'); return; }
-            wrap.classList.add('hl-active');
-            var text = ta.value;
-            var escaped = esc(text), kwEsc = esc(kw), kwLower = kwEsc.toLowerCase();
-            var result = '', lower = escaped.toLowerCase(), pos = 0, mi = 0;
-            while (pos < escaped.length) {
-                var idx = lower.indexOf(kwLower, pos);
-                if (idx === -1) { result += escaped.slice(pos); break; }
-                var cls = mi === s.current ? 'code-hl current' : 'code-hl';
-                result += escaped.slice(pos, idx) + '<mark class="' + cls + '">' + escaped.slice(idx, idx + kwEsc.length) + '</mark>';
-                mi++; pos = idx + kwEsc.length;
-            }
-            hlContent.innerHTML = result + '\n';
-        }
-
-        function clearEditorHighlight() {
-            document.getElementById('editorHlContent').innerHTML = '';
-            var wrap = document.querySelector('#editorWrap .ta-hl-wrap');
-            if (wrap) wrap.classList.remove('hl-active');
-        }
-
-        function scrollEditorToMatch() {
-            var s = editorSearchState;
-            if (s.current < 0 || s.matches.length === 0) return;
-            var ta = document.getElementById('snipFormCode');
-            var kw = document.getElementById('editorSearchInput').value;
-            var start = s.matches[s.current];
-            var textBefore = ta.value.substring(0, start);
-            var lineNum = textBefore.split('\n').length;
-            var lineHeight = parseFloat(getComputedStyle(ta).lineHeight) || 20;
-            ta.scrollTop = Math.max(0, (lineNum - 3) * lineHeight);
-            syncEditorScroll();
-        }
-
-        function syncEditorHighlight() {
-            if (editorSearchState.matches.length > 0) doEditorSearch();
-        }
+        /* ----- 主编辑器代理函数 ----- */
+        function syncEditorLines() { _mainEditor.syncLines(); }
+        function syncEditorScroll() { _mainEditor.syncScroll(); }
+        function updateCursorPos() { _mainEditor.updateCursorPos(); }
+        function toggleEditorSearch() { _mainEditor.toggleSearch(); }
+        function doEditorSearch() { _mainEditor.doSearch(); }
+        function jumpEditorMatch(dir) { _mainEditor.jumpMatch(dir); }
+        function renderEditorHighlight() { _mainEditor.renderHighlight(); }
+        function clearEditorHighlight() { _mainEditor.clearHighlight(); }
+        function scrollEditorToMatch() { _mainEditor.scrollToMatch(); }
+        function syncEditorHighlight() { _mainEditor.syncHighlight(); }
 
         function loadFileToForm(event) {
             var file = event.target.files[0]; if (!file) return;
@@ -5300,183 +5100,31 @@ body {
         }
 
         /* ===== 编辑器文本操作 ===== */
-        function editorOp(op) {
-            var ta = document.getElementById('snipFormCode');
-            var s = ta.selectionStart, e = ta.selectionEnd;
-            var text = ta.value;
-            var lines = text.split('\n');
-            // 找出光标所在行范围
-            var startLine = text.substring(0, s).split('\n').length - 1;
-            var endLine = text.substring(0, e).split('\n').length - 1;
-
-            if (op === 'indent') {
-                for (var i = startLine; i <= endLine; i++) lines[i] = '    ' + lines[i];
-                ta.value = lines.join('\n');
-                ta.selectionStart = s + 4; ta.selectionEnd = e + (endLine - startLine + 1) * 4;
-            } else if (op === 'outdent') {
-                var removed = 0, firstRemoved = 0;
-                for (var i = startLine; i <= endLine; i++) {
-                    var m = lines[i].match(/^( {1,4}|\t)/);
-                    if (m) { var len = m[0].length; lines[i] = lines[i].substring(len); removed += len; if (i === startLine) firstRemoved = len; }
-                }
-                ta.value = lines.join('\n');
-                ta.selectionStart = Math.max(0, s - firstRemoved); ta.selectionEnd = Math.max(0, e - removed);
-            } else if (op === 'dupLine') {
-                var line = lines[startLine];
-                lines.splice(startLine + 1, 0, line);
-                ta.value = lines.join('\n');
-                var newStart = text.split('\n').slice(0, startLine + 1).join('\n').length + 1;
-                ta.selectionStart = newStart; ta.selectionEnd = newStart + line.length;
-            } else if (op === 'delLine') {
-                lines.splice(startLine, 1);
-                if (lines.length === 0) lines = [''];
-                ta.value = lines.join('\n');
-                var pos = lines.slice(0, startLine).join('\n').length + (startLine > 0 ? 1 : 0);
-                ta.selectionStart = ta.selectionEnd = Math.min(pos, ta.value.length);
-            } else if (op === 'moveUp' && startLine > 0) {
-                var moved = lines.splice(startLine, 1)[0];
-                lines.splice(startLine - 1, 0, moved);
-                ta.value = lines.join('\n');
-                var newPos = lines.slice(0, startLine - 1).join('\n').length + (startLine > 1 ? 1 : 0);
-                ta.selectionStart = newPos; ta.selectionEnd = newPos + moved.length;
-            } else if (op === 'moveDown' && startLine < lines.length - 1) {
-                var moved = lines.splice(startLine, 1)[0];
-                lines.splice(startLine + 1, 0, moved);
-                ta.value = lines.join('\n');
-                var newPos = lines.slice(0, startLine + 1).join('\n').length + 1;
-                ta.selectionStart = newPos; ta.selectionEnd = newPos + moved.length;
-            }
-            ta.focus(); syncEditorLines(); syncEditorHighlight();
-        }
+        function editorOp(op) { _mainEditor.op(op); }
 
         /* ===== Markdown 快捷插入 ===== */
-        function mdInsert(type) {
-            var ta = document.getElementById('snipFormCode');
-            var s = ta.selectionStart, e = ta.selectionEnd;
-            var sel = ta.value.substring(s, e);
-            var before = ta.value.substring(0, s), after = ta.value.substring(e);
-            var insert = '', cursorOffset = 0;
-
-            if (type === 'heading') {
-                var lineStart = before.lastIndexOf('\n') + 1;
-                var lineText = before.substring(lineStart);
-                var m = lineText.match(/^(#{0,5})\s*/);
-                var level = m ? m[1].length + 1 : 1;
-                if (level > 6) level = 1;
-                var hashes = '#'.repeat(level) + ' ';
-                before = before.substring(0, lineStart);
-                var restOfLine = lineText.replace(/^#{0,6}\s*/, '');
-                insert = hashes + restOfLine + sel;
-                cursorOffset = hashes.length + restOfLine.length + sel.length;
-            } else if (type === 'bold') {
-                insert = '**' + sel + '**';
-                cursorOffset = sel ? insert.length : 2;
-            } else if (type === 'italic') {
-                insert = '*' + sel + '*';
-                cursorOffset = sel ? insert.length : 1;
-            } else if (type === 'underline') {
-                insert = '<u>' + sel + '</u>';
-                cursorOffset = sel ? insert.length : 3;
-            } else if (type === 'code') {
-                insert = '`' + (sel || '代码') + '`';
-                cursorOffset = sel ? insert.length : 1;
-            } else if (type === 'codeblock') {
-                insert = '\n```\n' + (sel || '') + '\n```\n';
-                cursorOffset = 5 + (sel ? sel.length + 5 : 0);
-            } else if (type === 'link') {
-                insert = '[' + (sel || '链接文字') + '](url)';
-                cursorOffset = sel ? insert.length - 4 : 1;
-            } else if (type === 'list') {
-                var items = sel ? sel.split('\n') : [''];
-                insert = items.map(function(l) { return '- ' + l; }).join('\n');
-                cursorOffset = 2;
-            } else if (type === 'quote') {
-                var items = sel ? sel.split('\n') : [''];
-                insert = items.map(function(l) { return '> ' + l; }).join('\n');
-                cursorOffset = 2;
-            } else if (type === 'timestamp') {
-                var now = new Date();
-                insert = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
-                cursorOffset = insert.length;
-            } else if (type === 'todo') {
-                var items = sel ? sel.split('\n') : [''];
-                insert = items.map(function(l) { return '- [ ] ' + l; }).join('\n');
-                cursorOffset = 6;
-            }
-
-            ta.value = before + insert + after;
-            var newPos = before.length + cursorOffset;
-            ta.selectionStart = ta.selectionEnd = newPos;
-            ta.focus(); syncEditorLines(); syncEditorHighlight();
-        }
+        function mdInsert(type) { _mainEditor.mdInsert(type); }
 
         /* ===== Markdown 预览 ===== */
-        var mdPreviewOn = false;
 
         function toggleCodeOps(btn) {
-            var group = btn.parentElement.querySelector('.code-ops-group');
+            var parent = btn.parentElement;
+            var group = parent.querySelector('.code-ops-group');
             if (!group) return;
             var show = !group.classList.contains('show');
             group.classList.toggle('show', show);
             btn.classList.toggle('active', show);
+            var mdGroup = parent.querySelector('.md-ops-group');
+            if (mdGroup) mdGroup.classList.toggle('show', show);
         }
 
-        function editorSelectLine() {
-            var ta = document.getElementById('snipFormCode');
-            var pos = ta.selectionStart;
-            var text = ta.value;
-            var start = text.lastIndexOf('\n', pos - 1) + 1;
-            var end = text.indexOf('\n', pos);
-            if (end === -1) end = text.length;
-            ta.selectionStart = start;
-            ta.selectionEnd = end;
-            ta.focus();
-        }
+        function editorSelectLine() { _mainEditor.selectLine(); }
 
-        function editorCopyLine() {
-            var ta = document.getElementById('snipFormCode');
-            var pos = ta.selectionStart;
-            var text = ta.value;
-            var start = text.lastIndexOf('\n', pos - 1) + 1;
-            var end = text.indexOf('\n', pos);
-            if (end === -1) end = text.length;
-            var line = text.substring(start, end);
-            copyText(line);
-        }
+        function editorCopyLine() { _mainEditor.copyLine(); }
 
-        function editorJump(where) {
-            var ta = document.getElementById('snipFormCode');
-            if (where === 'end') {
-                ta.selectionStart = ta.selectionEnd = ta.value.length;
-                ta.scrollTop = ta.scrollHeight;
-            } else {
-                ta.selectionStart = ta.selectionEnd = 0;
-                ta.scrollTop = 0;
-            }
-            ta.focus(); syncEditorLines();
-        }
+        function editorJump(where) { _mainEditor.jump(where); }
 
-        function toggleMdPreview() {
-            mdPreviewOn = !mdPreviewOn;
-            var preview = document.getElementById('mdPreview');
-            var wrap = document.getElementById('editorWrap');
-            var infoBar = document.getElementById('editorInfoBar');
-            var btn = document.getElementById('mdPreviewBtn');
-
-            if (mdPreviewOn) {
-                var text = document.getElementById('snipFormCode').value;
-                preview.innerHTML = parseMd(text);
-                preview.classList.add('show');
-                wrap.style.display = 'none';
-                if (infoBar) infoBar.style.display = 'none';
-                btn.classList.add('active');
-            } else {
-                preview.classList.remove('show');
-                wrap.style.display = '';
-                if (infoBar && currentEditorType === 'code') infoBar.style.display = '';
-                btn.classList.remove('active');
-            }
-        }
+        function toggleMdPreview() { _mainEditor.togglePreview(); }
 
         /* =========================================================================
          * [3.6] Markdown 解析与编辑器增强
@@ -5574,23 +5222,14 @@ body {
             var ta = document.getElementById('snipFormCode');
             ta.addEventListener('click', updateCursorPos);
             ta.addEventListener('keyup', updateCursorPos);
-            // Tab/Shift+Tab 快捷键
             ta.addEventListener('keydown', function(e) {
-                if (e.key === 'Tab') {
-                    e.preventDefault();
-                    editorOp(e.shiftKey ? 'outdent' : 'indent');
-                }
+                if (e.key === 'Tab') { e.preventDefault(); editorOp(e.shiftKey ? 'outdent' : 'indent'); }
             });
-
-            // 子条目编辑器：光标位置 + Tab快捷键
             var subTa = document.getElementById('subEditContent');
             subTa.addEventListener('click', updateSubEditCursorPos);
             subTa.addEventListener('keyup', updateSubEditCursorPos);
             subTa.addEventListener('keydown', function(e) {
-                if (e.key === 'Tab') {
-                    e.preventDefault();
-                    subEditorOp(e.shiftKey ? 'outdent' : 'indent');
-                }
+                if (e.key === 'Tab') { e.preventDefault(); subEditorOp(e.shiftKey ? 'outdent' : 'indent'); }
             });
         });
 
