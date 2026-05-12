@@ -4419,7 +4419,35 @@ body {
                     entry._deletedSubIds = oldItem._deletedSubIds.slice();
                 }
                 // 只在有实际改动时才更新 updatedAt
-                if (!oldItem || JSON.stringify(entry) !== JSON.stringify(oldItem)) {
+                var _changed = false;
+                if (!oldItem) {
+                    _changed = true;
+                } else {
+                    // 卡片级字段比较
+                    if (entry.title !== (oldItem.title || '') ||
+                        entry.tag !== (oldItem.tag || '') ||
+                        entry.note !== (oldItem.note || '')) {
+                        _changed = true;
+                    }
+                    // 子条目：数量、顺序、内容是否有变
+                    if (!_changed) {
+                        var _oldSubs = oldItem.items || [];
+                        if (items.length !== _oldSubs.length) {
+                            _changed = true;
+                        } else {
+                            for (var _j = 0; _j < items.length; _j++) {
+                                var _n = items[_j], _o = _oldSubs[_j];
+                                if (_n.id !== _o.id || _n.type !== _o.type ||
+                                    (_n.title || '') !== (_o.title || '') ||
+                                    (_n.content || '') !== (_o.content || '') ||
+                                    (_n.url || '') !== (_o.url || '')) {
+                                    _changed = true; break;
+                                }
+                            }
+                        }
+                    }
+                }
+                if (_changed) {
                     entry.updatedAt = now;
                 }
                 var idx = -1;
