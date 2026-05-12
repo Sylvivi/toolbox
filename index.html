@@ -5561,8 +5561,11 @@ body {
 
             // 段落：非标签行包裹 <p>
             html = html.replace(/^(?!<[a-z/])((?!^\s*$).+)$/gm, '<p>$1</p>');
-            // 清理多余空行
-            html = html.replace(/\n{2,}/g, '\n');
+            // 保留空行为可见间距
+            html = html.replace(/\n{2,}/g, function(m) {
+                var count = m.length - 1; // 连续空行数
+                return '\n<div style="height:' + (count * 0.5) + 'em"></div>\n';
+            });
 
             return html;
         }
