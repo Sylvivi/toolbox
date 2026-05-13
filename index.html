@@ -1411,12 +1411,12 @@ body {
             <div class="modal-body">
                 <!-- 同步方式选择 -->
                 <div style="display:flex;gap:6px;margin-bottom:14px">
-                    <button class="type-btn active" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
-                    <button class="type-btn" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
+                    <button class="type-btn" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
+                    <button class="type-btn active" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
                 </div>
 
                 <!-- GitHub Gist 配置 -->
-                <div id="syncGistFields" style="display: block;">
+                <div id="syncGistFields" style="display: none;">
                     <div id="gistGuide" style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('gistGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 首次配置步骤</b>
@@ -1443,7 +1443,7 @@ body {
                 </div>
 
                 <!-- Cloudflare KV 配置 -->
-                <div id="syncCFFields" style="display: none;">
+                <div id="syncCFFields" style="display: block;">
                     <div style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('cfGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 配置说明</b>
@@ -1722,7 +1722,7 @@ body {
                             <button class="eop" id="mdPreviewBtn" onclick="toggleMdPreview()" title="Markdown预览">👁 预览</button>
                         </div>
                         <div class="md-preview" id="mdPreview"></div>
-                        <div class="editor-wrap text-mode" id="editorWrap" style="">
+                        <div class="editor-wrap text-mode" id="editorWrap">
                             <div class="editor-line-nums" id="editorLineNums">1
 2
 3
@@ -1775,15 +1775,15 @@ body {
                                 <div class="ta-hl-layer text-mode-hl" id="editorHlLayer"><div class="ta-hl-content" id="editorHlContent"></div></div>
                             </div>
                         </div>
-                        <div class="editor-info-bar" id="editorInfoBar" style="">
-                            <span id="editorLineCount">共 46 行 · 917 字符</span>
-                            <span id="editorCursorPos">行 41, 列 33</span>
+                        <div class="editor-info-bar" id="editorInfoBar" style="display: none;">
+                            <span id="editorLineCount">共 46 行 · 915 字符</span>
+                            <span id="editorCursorPos">行 46, 列 64</span>
                         </div>
                     </div>
                 </div>
 
             </div>
-            <div class="modal-actions" style="">
+            <div class="modal-actions">
                 <button class="btn-cancel" onclick="closeSnipModal()">取消</button>
                 <button class="btn-save" onclick="saveSnipEntry()">保存</button>
             </div>
@@ -5311,12 +5311,15 @@ body {
             // 链接
             html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
 
-            // 无序列表
-            html = html.replace(/^[\-\*] (.+)$/gm, '<li>$1</li>');
-            html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
-
-            // 有序列表
-            html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+            // 列表（先标记，再分别包装 ul/ol）
+            html = html.replace(/^[\-\*] (.+)$/gm, '<u-li>$1</u-li>');
+            html = html.replace(/^\d+\. (.+)$/gm, '<o-li>$1</o-li>');
+            html = html.replace(/((?:<u-li>.*?<\/u-li>\n?)+)/g, function(m) {
+                return '<ul>' + m.replace(/<u-li>/g, '<li>').replace(/<\/u-li>/g, '</li>') + '</ul>';
+            });
+            html = html.replace(/((?:<o-li>.*?<\/o-li>\n?)+)/g, function(m) {
+                return '<ol>' + m.replace(/<o-li>/g, '<li>').replace(/<\/o-li>/g, '</li>') + '</ol>';
+            });
 
             // 表格
             html = html.replace(/^(\|.+\|)\n(\|[\-\|: ]+\|)\n((?:\|.+\|\n?)*)/gm, function(m, header, sep, body) {
