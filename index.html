@@ -942,10 +942,10 @@ body {
                 flex: 1; display: flex; flex-direction: column; min-height: 0;
             }
             .snip-modal .editor-wrap {
-                flex: 1; min-height: 120px; max-height: 48vh; max-height: 48dvh;
+                flex: 1; min-height: 120px; max-height: none;
             }
             .snip-modal #subEditorWrap {
-                flex: 1; min-height: 120px; max-height: 48vh; max-height: 48dvh;
+                flex: 1; min-height: 120px; max-height: none;
             }
             .snip-modal #subEditContentGroup {
                 flex: 1; display: flex; flex-direction: column; min-height: 0;
@@ -1484,7 +1484,7 @@ body {
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:10px;padding:14px 24px 20px">
-                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：12.52 MB / ~50 MB（25%）</div>
+                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：14.08 MB / ~50 MB（28%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
@@ -1692,8 +1692,8 @@ body {
                             <button class="editor-search-btn" onclick="jumpEditorMatch(1)">▼</button>
                         </div>
                         <div class="editor-ops-bar" id="editorOpsBar">
-                            <button class="eop code-ops-toggle active" onclick="toggleCodeOps(this)" title="代码编辑工具">🔧</button>
-                            <span class="code-ops-group show" id="codeOpsGroup">
+                            <button class="eop code-ops-toggle" onclick="toggleCodeOps(this)" title="代码编辑工具">🔧</button>
+                            <span class="code-ops-group" id="codeOpsGroup">
                             <button class="eop" onclick="editorOp('indent')" title="缩进 (Tab)">→⎵</button>
                             <button class="eop" onclick="editorOp('outdent')" title="取消缩进 (Shift+Tab)">⎵←</button>
                             <button class="eop" onclick="editorOp('dupLine')" title="复制行">⊕行</button>
@@ -1711,7 +1711,7 @@ body {
                             <button class="eop" onclick="mdInsert('underline')" title="下划线"><u>U</u></button>
                             <button class="eop" onclick="mdInsert('quote')" title="引用">❝</button>
                             <button class="eop" onclick="mdInsert('timestamp')" title="插入时间戳">🕐</button>
-                            <span class="md-ops-group show">
+                            <span class="md-ops-group">
                             <button class="eop" onclick="mdInsert('heading')" title="标题">H</button>
                             <button class="eop" onclick="mdInsert('bold')" title="加粗">B</button>
                             <button class="eop" onclick="mdInsert('italic')" title="斜体">I</button>
@@ -1722,7 +1722,7 @@ body {
                             <button class="eop" id="mdPreviewBtn" onclick="toggleMdPreview()" title="Markdown预览">👁 预览</button>
                         </div>
                         <div class="md-preview" id="mdPreview"></div>
-                        <div class="editor-wrap text-mode" id="editorWrap">
+                        <div class="editor-wrap text-mode" id="editorWrap" style="">
                             <div class="editor-line-nums" id="editorLineNums">1
 2
 3
@@ -1777,13 +1777,13 @@ body {
                         </div>
                         <div class="editor-info-bar" id="editorInfoBar" style="">
                             <span id="editorLineCount">共 46 行 · 917 字符</span>
-                            <span id="editorCursorPos">行 11, 列 32</span>
+                            <span id="editorCursorPos">行 41, 列 33</span>
                         </div>
                     </div>
                 </div>
 
             </div>
-            <div class="modal-actions">
+            <div class="modal-actions" style="">
                 <button class="btn-cancel" onclick="closeSnipModal()">取消</button>
                 <button class="btn-save" onclick="saveSnipEntry()">保存</button>
             </div>
@@ -2652,36 +2652,95 @@ body {
             }, { passive: true });
         })();
 
-        // 输入法弹出时自动滚动，避免输入框被遮挡
+        // ===== 手机端键盘弹出时：动态计算编辑器高度 =====
+        var _kbState = null;
+        var _noKbHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+
+        function _kbRestoreStyle() {
+            if (!_kbState) return;
+            if (_kbState.wrap) _kbState.wrap.style.maxHeight = '';
+            if (_kbState.actions) _kbState.actions.style.display = '';
+        }
+        function _kbClear() {
+            _kbRestoreStyle();
+            _kbState = null;
+        }
+
+        function _kbAdjust() {
+            if (!_kbState) return;
+            var s = _kbState;
+            var vv = window.visualViewport;
+            var curH = vv ? vv.height : window.innerHeight;
+
+            if (curH > _noKbHeight) _noKbHeight = curH;
+
+            if (curH > _noKbHeight * 0.85) {
+                _kbRestoreStyle();
+                return;
+            }
+
+            if (s.actions) s.actions.style.display = 'none';
+
+            var bar = document.getElementById(s.barId);
+            if (!bar || !s.scrollBox) return;
+
+            var boxRect = s.scrollBox.getBoundingClientRect();
+            var barRect = bar.getBoundingClientRect();
+            var barOffset = barRect.top - boxRect.top;
+            if (barOffset > 8) {
+                s.scrollBox.scrollTop += barOffset - 8;
+            }
+
+            barRect = bar.getBoundingClientRect();
+            var infoBar = s.wrap.parentElement && s.wrap.parentElement.querySelector('.editor-info-bar');
+            var infoH = infoBar ? infoBar.offsetHeight : 20;
+            var available = curH - barRect.bottom - infoH - 8;
+            if (vv) available = vv.height + vv.offsetTop - barRect.bottom - infoH - 8;
+            s.wrap.style.maxHeight = Math.max(available, 120) + 'px';
+        }
+
         document.addEventListener('focusin', function(e) {
             var el = e.target;
             if (!(el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')) return;
             var modal = el.closest('.modal-overlay');
             if (!modal) return;
 
-            // 编辑器 textarea：把工具栏滚到 modal-body 可视区顶部
             var opsBarId = el.id === 'snipFormCode' ? 'editorOpsBar' : el.id === 'subEditContent' ? 'subEditOpsBar' : null;
             if (opsBarId) {
-                var bar = document.getElementById(opsBarId);
+                var wrap = el.closest('.editor-wrap') || document.getElementById('subEditorWrap');
+                var actions = el.closest('.modal') && el.closest('.modal').querySelector('.modal-actions');
                 var scrollBox = el.closest('.modal-body');
-                if (bar && scrollBox) {
-                    var doAlign = function() {
-                        var barRect = bar.getBoundingClientRect();
-                        // 确保工具栏不被浏览器地址栏/状态栏遮住
-                        // 如果工具栏顶部在视口 80px 以内，说明可能被遮住了
-                        if (barRect.top < 80) {
-                            scrollBox.scrollTop += barRect.top - 80;
-                        }
-                    };
-                    setTimeout(doAlign, 300);
-                    setTimeout(doAlign, 600); // 键盘弹出后二次校准
-                }
+                _kbState = { wrap: wrap, actions: actions, barId: opsBarId, scrollBox: scrollBox };
+                setTimeout(_kbAdjust, 300);
+                setTimeout(_kbAdjust, 600);
                 return;
             }
             setTimeout(function() {
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }, 350);
         });
+
+        document.addEventListener('focusout', function(e) {
+            var el = e.target;
+            if (el.id !== 'snipFormCode' && el.id !== 'subEditContent') return;
+            setTimeout(function() {
+                var active = document.activeElement;
+                if (active && active.closest && active.closest('.editor-ops-bar')) return;
+                if (active === el) return;
+                _kbClear();
+            }, 200);
+        });
+
+        if (window.visualViewport) {
+            var _kbRaf = 0;
+            window.visualViewport.addEventListener('resize', function() {
+                var h = window.visualViewport.height;
+                if (h > _noKbHeight) _noKbHeight = h;
+                if (!_kbState) return;
+                if (_kbRaf) return;
+                _kbRaf = requestAnimationFrame(function() { _kbRaf = 0; _kbAdjust(); });
+            });
+        }
 
         // 点击空白处折叠卡片
         document.addEventListener('click', function(e) {
