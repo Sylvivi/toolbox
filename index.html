@@ -747,6 +747,7 @@ body {
             padding: 10px 12px; flex-shrink: 0;
             border-bottom: 1px solid var(--card-border);
             background: var(--card-bg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+            position: relative; z-index: 20;
         }
         .chat-close-btn {
             width: 32px; height: 32px; border: none; border-radius: 8px;
@@ -881,7 +882,7 @@ body {
         .chat-bubble img { max-width: 100%; border-radius: 8px; margin: 6px 0; }
 
         .chat-copy-btn {
-            position: absolute; top: 6px; right: 6px;
+            position: absolute; bottom: 6px; right: 6px;
             width: 24px; height: 24px; border: none; border-radius: 6px;
             background: rgba(0,0,0,0.06); color: var(--text-muted);
             font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center;
@@ -889,6 +890,16 @@ body {
         }
         .chat-bubble:hover .chat-copy-btn { opacity: 1; }
         .chat-copy-btn.copied { background: rgba(34,197,94,0.2); color: #16a34a; opacity: 1; }
+
+        .chat-more-btn {
+            position: absolute; top: 6px; right: 6px;
+            width: 24px; height: 24px; border: none; border-radius: 6px;
+            background: rgba(0,0,0,0.06); color: var(--text-muted);
+            font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            opacity: 0; transition: opacity 0.15s;
+        }
+        .chat-bubble:hover .chat-more-btn { opacity: 1; }
+        .chat-msg.user .chat-more-btn { right: 6px; }
 
         .chat-msg-time {
             font-size: 10px; color: var(--text-muted); margin-top: 4px; padding: 0 4px;
@@ -949,6 +960,122 @@ body {
         }
         .chat-clear-btn:hover { background: var(--red-bg); color: var(--red); }
 
+
+        /* ===== 思维链折叠 ===== */
+        .chat-thinking {
+            border: 1px solid var(--card-border); border-radius: 10px;
+            margin: 0 0 8px; overflow: hidden; background: var(--card-inner);
+        }
+        .chat-thinking-hd {
+            padding: 7px 12px; cursor: pointer; font-size: 12px; color: var(--text-muted);
+            display: flex; align-items: center; gap: 6px; user-select: none;
+            transition: background 0.1s;
+        }
+        .chat-thinking-hd:hover { background: var(--accent-light); }
+        .chat-thinking-hd .arrow { transition: transform 0.2s; display: inline-block; font-size: 10px; }
+        .chat-thinking.open .chat-thinking-hd .arrow { transform: rotate(90deg); }
+        .chat-thinking-bd {
+            display: none; padding: 8px 12px; border-top: 1px solid var(--card-border);
+            font-size: 12px; line-height: 1.6; color: var(--text-sub);
+            max-height: 300px; overflow-y: auto;
+        }
+        .chat-thinking.open .chat-thinking-bd { display: block; }
+
+        /* ===== 上下文轮数控制 ===== */
+        .chat-ctx-bar {
+            display: flex; align-items: center; gap: 8px;
+            padding: 6px 12px; font-size: 11px; color: var(--text-muted);
+            border-top: 1px solid var(--card-border);
+        }
+        .chat-ctx-bar input[type=range] {
+            flex: 1; height: 4px; accent-color: var(--accent);
+        }
+        .chat-ctx-bar .ctx-label { white-space: nowrap; min-width: 60px; text-align: right; }
+
+        /* ===== 长按操作面板 ===== */
+        .chat-action-sheet {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 999;
+            background: var(--modal-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid var(--card-border); border-radius: 16px 16px 0 0;
+            box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
+            transform: translateY(100%); transition: transform 0.25s ease;
+            padding-bottom: max(12px, env(safe-area-inset-bottom));
+        }
+        .chat-action-sheet.show { transform: translateY(0); }
+        .chat-action-sheet-bg {
+            position: fixed; inset: 0; z-index: 998;
+            background: rgba(0,0,0,0.3); opacity: 0;
+            transition: opacity 0.25s; pointer-events: none;
+        }
+        .chat-action-sheet-bg.show { opacity: 1; pointer-events: auto; }
+        .chat-action-sheet .sheet-handle {
+            width: 36px; height: 4px; border-radius: 2px;
+            background: var(--text-muted); opacity: 0.3;
+            margin: 10px auto 6px;
+        }
+        .chat-action-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 14px 20px; font-size: 15px; color: var(--text);
+            border: none; background: none; width: 100%; text-align: left;
+            cursor: pointer; transition: background 0.1s;
+        }
+        .chat-action-item:hover, .chat-action-item:active { background: var(--accent-light); }
+        .chat-action-item.danger { color: var(--red); }
+        .chat-action-item .act-icon { font-size: 18px; width: 24px; text-align: center; }
+
+        /* ===== 消息编辑 ===== */
+        .chat-edit-area {
+            width: 100%; padding: 8px 12px; border: 2px solid var(--accent);
+            border-radius: 12px; background: var(--input-bg); color: var(--text);
+            font-size: 14px; line-height: 1.5; resize: none; outline: none;
+            font-family: inherit; min-height: 60px;
+        }
+        .chat-edit-btns {
+            display: flex; gap: 8px; margin-top: 8px; justify-content: flex-end;
+        }
+        .chat-edit-btns button {
+            padding: 6px 16px; border: none; border-radius: 8px;
+            font-size: 13px; cursor: pointer; font-weight: 500;
+        }
+        .chat-edit-btns .edit-cancel { background: var(--input-bg); color: var(--text-sub); border: 1px solid var(--input-border); }
+        .chat-edit-btns .edit-confirm { background: linear-gradient(135deg, var(--accent), var(--accent-mid)); color: #fff; }
+
+        /* ===== 图片预览 ===== */
+        .chat-img-preview {
+            display: flex; gap: 6px; padding: 6px 0; flex-wrap: wrap; align-items: flex-start;
+        }
+        .chat-img-preview-item {
+            position: relative; width: 60px; height: 60px; border-radius: 8px;
+            overflow: hidden; border: 1px solid var(--card-border);
+        }
+        .chat-img-preview-item img { width: 100%; height: 100%; object-fit: cover; }
+        .chat-img-preview-item .img-remove {
+            position: absolute; top: 2px; right: 2px; width: 18px; height: 18px;
+            border-radius: 50%; background: rgba(0,0,0,0.5); color: #fff;
+            border: none; font-size: 10px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .chat-img-btn {
+            width: 36px; height: 36px; border: none; border-radius: 10px;
+            background: transparent; color: var(--text-muted); font-size: 18px;
+            cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+            transition: color 0.15s;
+        }
+        .chat-img-btn:hover { color: var(--accent); }
+        .chat-bubble img.chat-user-img {
+            max-width: 200px; max-height: 200px; border-radius: 8px; margin: 4px 0;
+            display: block;
+        }
+
+        /* ===== 列表导出按钮 ===== */
+        .chat-hist-export {
+            flex-shrink: 0; width: 28px; height: 28px; border: none; border-radius: 7px;
+            background: transparent; color: var(--text-muted); font-size: 13px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            opacity: 0.4; transition: opacity 0.15s, background 0.15s;
+        }
+        .chat-hist-export:hover { opacity: 1; background: var(--accent-light); color: var(--accent); }
+
         /* ===== 对话历史列表 ===== */
         .chat-hist-item {
             display: flex; align-items: center; gap: 10px;
@@ -983,6 +1110,34 @@ body {
             background: linear-gradient(135deg, var(--accent), var(--accent-mid));
             color: #fff; font-size: 14px; font-weight: 500; cursor: pointer;
         }
+
+        /* ===== 重新生成按钮（气泡内） ===== */
+        .chat-reroll-btn {
+            position: absolute; bottom: 6px; right: 32px;
+            width: 24px; height: 24px; border: none; border-radius: 6px;
+            background: rgba(0,0,0,0.06); color: var(--text-muted);
+            font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            opacity: 0; transition: opacity 0.15s;
+        }
+        .chat-bubble:hover .chat-reroll-btn { opacity: 1; }
+        .chat-reroll-btn:hover { background: var(--accent-light); color: var(--accent); }
+
+        /* ===== SP预设工具栏 ===== */
+        .chat-sp-toolbar {
+            display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+        }
+        .chat-sp-toolbar select {
+            flex: 1; min-width: 0; padding: 5px 8px;
+            background: var(--input-bg); border: 1px solid var(--input-border);
+            border-radius: 6px; color: var(--text); font-size: 11px; outline: none;
+        }
+        .chat-sp-toolbar button {
+            padding: 4px 10px; border: 1px solid var(--input-border); border-radius: 6px;
+            background: var(--input-bg); color: var(--text-sub); font-size: 11px;
+            cursor: pointer; white-space: nowrap; transition: background 0.12s;
+        }
+        .chat-sp-toolbar button:hover { background: var(--accent-light); color: var(--accent); }
+        .chat-sp-toolbar .sp-del-btn:hover { background: var(--red-bg); color: var(--red); }
 
 /* =========================================================================
  * [1.6] 底部导航、悬浮按钮与编辑器
@@ -1667,12 +1822,12 @@ body {
             <div class="modal-body">
                 <!-- 同步方式选择 -->
                 <div style="display:flex;gap:6px;margin-bottom:14px">
-                    <button class="type-btn active" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
-                    <button class="type-btn" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
+                    <button class="type-btn" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
+                    <button class="type-btn active" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
                 </div>
 
                 <!-- GitHub Gist 配置 -->
-                <div id="syncGistFields" style="display: block;">
+                <div id="syncGistFields" style="display: none;">
                     <div id="gistGuide" style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('gistGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 首次配置步骤</b>
@@ -1699,7 +1854,7 @@ body {
                 </div>
 
                 <!-- Cloudflare KV 配置 -->
-                <div id="syncCFFields" style="display: none;">
+                <div id="syncCFFields" style="display: block;">
                     <div style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('cfGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 配置说明</b>
@@ -1740,7 +1895,7 @@ body {
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:10px;padding:14px 24px 20px">
-                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：15.65 MB / ~50 MB（31%）</div>
+                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：21.88 MB / ~50 MB（44%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
@@ -1754,7 +1909,7 @@ body {
     </div>
 
     <!-- ===== 图床弹窗 ===== -->
-    <div class="modal-overlay" id="imgBedModalOverlay" onclick="if(event.target===this)closeImgBedModal()">
+    <div class="modal-overlay" id="imgBedModalOverlay" style="z-index:1100" onclick="if(event.target===this)closeImgBedModal()">
         <div class="modal" style="max-width:420px;width:100%">
             <h2>🖼️ 图床管理</h2>
             <div class="modal-body">
@@ -1937,6 +2092,7 @@ body {
                                 <span class="editor-code-tools" id="editorCodeTools" style="gap: 6px; align-items: center;">
                                     <button class="editor-toolbar-btn" onclick="toggleEditorSearch()">🔍</button>
                                 </span>
+                                <span class="btn-upload" onclick="quickOpenImgBed()" style="font-size:12px;color:var(--accent-mid);cursor:pointer;font-weight:400;">🖼️ 图床</span>
                                 <span class="btn-upload" onclick="document.getElementById('formFileInput').click()" style="font-size:12px;color:var(--accent-mid);cursor:pointer;font-weight:400;">📂 导入</span>
                             </span>
                         </label>
@@ -2227,6 +2383,7 @@ body {
                     <label style="display:flex;justify-content:space-between;align-items:center">
                         <span>内容</span>
                         <div style="display:flex;gap:6px;align-items:center">
+                            <button onclick="quickOpenImgBed()" style="padding:3px 10px;background:var(--accent-light);border:none;border-radius:6px;color:var(--accent-mid);font-size:12px;cursor:pointer">🖼️</button>
                             <button onclick="toggleSubEditSearch()" style="padding:3px 10px;background:var(--accent-light);border:none;border-radius:6px;color:var(--accent-mid);font-size:12px;cursor:pointer">🔍</button>
                             <span onclick="document.getElementById('subEditFileInput').click()" style="font-size:12px;color:var(--accent-mid);cursor:pointer;font-weight:400">📂 导入</span>
                             <input type="file" id="subEditFileInput" accept=".txt,.css,.html,.htm,.js,.json,.md,.xml,.svg,.py,.java,.c,.cpp,.h,.ts,.tsx,.jsx,.vue,.sh,.bat,.yaml,.yml,.toml,.ini,.cfg,.log,.sql,.php,.rb,.go,.rs,.swift,.kt,.dart,.r,.lua,.pl,.scss,.sass,.less,.csv,.tsv,.env" style="display:none" onchange="loadFileToSubEdit(event)">
@@ -2311,27 +2468,53 @@ body {
             <!-- 对话视图顶栏 -->
             <div class="chat-topbar" id="chatTopbarConv" style="display: none;">
                 <button class="chat-close-btn" onclick="chatBackToList()">←</button>
-                <select id="chatProviderSelect" onchange="onChatProviderChange()"><option value="">选择中转站…</option><option value="654709a3-2ef5-447b-86b8-b00b8a0b5b4d">Youkies</option><option value="2f9aa576-f063-4ac6-9f35-f52bb12daa23">玖时</option><option value="mnugm58s1h0b1">VSLLM～</option><option value="mnvpkmvaivmff">ekan8</option><option value="mnug6cxc6peoj">西瓜🍉</option><option value="mnue7bkvnxd58">空悲切💜</option><option value="mnudmq7bpnnhc">刺猬🦔</option><option value="moe905o67sjbh">宅恋</option><option value="mnufzmh8j7ua4">大肘子</option><option value="mnui26bcd7nw9">蛋壳🥚</option></select>
-                <select id="chatKeySelect" onchange="onChatKeyChange()" style=""><option value="">选择分组…</option><option value="sk-71m6F3LadFTSHB4bu5kQq9CgyZaf9AcC4mC3adxgl5oRxVvL">生图</option><option value="sk-mVdK4LhFGtBEZrlhPHkJMtDg5qeVVM7W44ldhXldZAqyrXD4">刺客</option><option value="sk-BhFyL4L5tjPuaS4j8lYmu7DQIGQEwqdGRPbah9Cyq44pHGVG">vscode</option></select>
-                <div class="chat-model-wrap">
-                    <input type="text" id="chatModelInput" placeholder="选择模型…" autocomplete="off" onfocus="chatShowModelDropdown()" oninput="chatFilterModels()">
-                    <div class="chat-model-dropdown" id="chatModelDropdown"><div class="chat-model-item active"><span class="fav-star on">⭐</span><span class="model-name">gpt-5.5</span></div><div class="chat-model-item"><span class="fav-star">⭐</span><span class="model-name">gpt-5.5-fast</span></div><div class="chat-model-item"><span class="fav-star">⭐</span><span class="model-name">gpt-5.5-free</span></div></div>
-                </div>
-                <button class="chat-sp-btn" id="chatSpBtn" onclick="toggleChatSp()" title="系统提示词">📝</button>
+                <span id="chatModelLabel" style="flex:1;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;cursor:pointer" onclick="toggleChatSp()">gpt-5.5</span>
+                <button class="chat-sp-btn" id="chatSpBtn" onclick="toggleChatSp()" title="设置">⚙️</button>
                 <button class="chat-close-btn" onclick="closeChatModal()" style="font-size:14px">✕</button>
             </div>
             <div class="chat-sp-area" id="chatSpArea" style="display: none;">
+                <div style="display:flex;gap:6px;margin-bottom:6px">
+                    <select id="chatProviderSelect" onchange="onChatProviderChange()" style="flex:1;min-width:0;padding:7px 10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:12px;outline:none"><option value="">选择中转站…</option><option value="654709a3-2ef5-447b-86b8-b00b8a0b5b4d">Youkies</option><option value="2f9aa576-f063-4ac6-9f35-f52bb12daa23">玖时</option><option value="mnugm58s1h0b1">VSLLM～</option><option value="mnvpkmvaivmff">ekan8</option><option value="mnug6cxc6peoj">西瓜🍉</option><option value="mnue7bkvnxd58">空悲切💜</option><option value="mnudmq7bpnnhc">刺猬🦔</option><option value="moe905o67sjbh">宅恋</option><option value="mnufzmh8j7ua4">大肘子</option><option value="mnui26bcd7nw9">蛋壳🥚</option></select>
+                    <select id="chatKeySelect" onchange="onChatKeyChange()" style="flex: 1 1 0%; min-width: 0px; padding: 7px 10px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 8px; color: var(--text); font-size: 12px; outline: none;"><option value="">选择分组…</option><option value="sk-71m6F3LadFTSHB4bu5kQq9CgyZaf9AcC4mC3adxgl5oRxVvL">生图</option><option value="sk-mVdK4LhFGtBEZrlhPHkJMtDg5qeVVM7W44ldhXldZAqyrXD4">刺客</option><option value="sk-BhFyL4L5tjPuaS4j8lYmu7DQIGQEwqdGRPbah9Cyq44pHGVG">vscode</option></select>
+                </div>
+                <div class="chat-model-wrap" style="position:relative;margin-bottom:6px">
+                    <input type="text" id="chatModelInput" placeholder="搜索模型…" autocomplete="off" onfocus="chatShowModelDropdown()" oninput="chatFilterModels()" style="width:100%;padding:7px 10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:12px;outline:none">
+                    <div class="chat-model-dropdown" id="chatModelDropdown"><div class="chat-model-item active"><span class="fav-star on">⭐</span><span class="model-name">gpt-5.5</span></div><div class="chat-model-item"><span class="fav-star">⭐</span><span class="model-name">gpt-5.5-fast</span></div><div class="chat-model-item"><span class="fav-star">⭐</span><span class="model-name">gpt-5.5-free</span></div></div>
+                </div>
+                <div class="chat-sp-toolbar">
+                    <select id="chatSpPresetSel" onchange="chatLoadSpPreset()"><option value="">选择预设…</option><option value="0">英语翻译</option></select>
+                    <button onclick="chatSaveSpPreset()">💾 保存</button>
+                    <button class="sp-del-btn" onclick="chatDelSpPreset()">🗑️</button>
+                </div>
                 <textarea id="chatSysPrompt" placeholder="输入系统提示词（可选）…" rows="3"></textarea>
+                <div class="chat-ctx-bar" style="margin-top:6px;padding:6px 0;border-top:1px solid var(--card-border)">
+                    <span>上下文</span>
+                    <input type="range" id="chatCtxRange" min="0" max="50" value="0" oninput="chatUpdateCtxLabel()">
+                    <span class="ctx-label" id="chatCtxLabel">全部</span>
+                </div>
             </div>
-            <div class="chat-messages" id="chatMessages"><div class="chat-hist-empty"><div style="font-size:36px">💬</div><div>还没有对话记录</div><button class="new-btn" onclick="chatNewConv()">开始新对话</button></div></div>
+            <div class="chat-messages" id="chatMessages"><div class="chat-hist-item" onclick="chatLoadConv('chat_1778714014914_4t1cj0')"><div class="chat-hist-info"><div class="chat-hist-title">Redraw the attached image in the most cl…</div><div class="chat-hist-meta">VSLLM～ · gpt-5.5 · 刚刚 · 4条</div></div><button class="chat-hist-export" onclick="chatExportConv('chat_1778714014914_4t1cj0');event.stopPropagation()" title="导出">📥</button><button class="chat-hist-del" onclick="chatDeleteConv('chat_1778714014914_4t1cj0', event)" title="删除">🗑️</button></div></div>
             <div class="chat-input-area" id="chatInputArea" style="display: none;">
-                <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this)" style="height: auto;"></textarea>
-                <button class="chat-send-btn" id="chatSendBtn" onclick="chatSend()">➤</button>
+                <div class="chat-img-preview" id="chatImgPreview" style="display:none"></div>
+                <div style="display:flex;align-items:flex-end;gap:8px;width:100%">
+                    <button class="chat-img-btn" onclick="document.getElementById('chatImgFile').click()" title="发送图片">🖼️</button>
+                    <input type="file" id="chatImgFile" accept="image/*" multiple="" style="display:none" onchange="chatOnImgSelect(this)">
+                    <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this)"></textarea>
+                    <button class="chat-send-btn" id="chatSendBtn" onclick="chatSend()">➤</button>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="toast" id="toast">✅ 已复制到剪贴板</div>
+
+    <!-- 聊天长按操作面板 -->
+    <div class="chat-action-sheet-bg" id="chatSheetBg" onclick="chatCloseSheet()"></div>
+    <div class="chat-action-sheet" id="chatSheet">
+        <div class="sheet-handle"></div>
+        <div id="chatSheetItems"><button class="chat-action-item"><span class="act-icon">📋</span>复制内容</button><button class="chat-action-item"><span class="act-icon">✏️</span>编辑消息</button><button class="chat-action-item danger"><span class="act-icon">✂️</span>从此处截断</button><button class="chat-action-item danger"><span class="act-icon">🗑️</span>删除此消息</button></div>
+    </div>
+
+    <div class="toast" id="toast"></div>
 
     <script>
         /* =========================================================================
@@ -6257,6 +6440,15 @@ body {
             renderImgBedList();
             document.getElementById('imgBedModalOverlay').classList.add('show');
         }
+        function quickOpenImgBed() {
+            var data = getImgBedData();
+            if (data.length > 0 && data[0].url) {
+                window.open(data[0].url, '_blank');
+            } else {
+                showToast('⚠️ 还没有添加图床，请先在工具菜单中配置');
+                openImgBedModal();
+            }
+        }
         function closeImgBedModal() {
             document.getElementById('imgBedModalOverlay').classList.remove('show');
         }
@@ -7505,6 +7697,9 @@ body {
         var chatFavModels = JSON.parse(localStorage.getItem('chat_fav_models') || '[]');
         var chatCurrentConvId = null; // 当前对话 ID
         var chatView = 'list';       // 'list' | 'conv'
+        var chatContextMax = 0;      // 上下文轮数限制，0=全部
+        var chatPendingImages = [];  // 待发送图片 [{base64, type}]
+        var chatActionMsgIdx = -1;   // 长按操作的消息索引
         var CHAT_STORE = 'chat_history';
         var CHAT_MAX = 30;           // 最多保留对话数
 
@@ -7629,6 +7824,7 @@ body {
                 h += '<div class="chat-hist-title">' + esc(c.title || '新对话') + '</div>';
                 h += '<div class="chat-hist-meta">' + esc(meta) + '</div>';
                 h += '</div>';
+                h += '<button class="chat-hist-export" onclick="chatExportConv(\'' + c.id + '\');event.stopPropagation()" title="导出">📥</button>';
                 h += '<button class="chat-hist-del" onclick="chatDeleteConv(\'' + c.id + '\', event)" title="删除">🗑️</button>';
                 h += '</div>';
             }
@@ -7665,15 +7861,19 @@ body {
             chatSelectedModel = '';
             chatSelectedKeyStr = '';
             chatCurrentConvId = null;
+            chatPendingImages = [];
             document.getElementById('chatInput').value = '';
             document.getElementById('chatSendBtn').disabled = true;
             document.getElementById('chatModelInput').value = '';
+            document.getElementById('chatModelLabel').textContent = '未选择模型';
             document.getElementById('chatModelDropdown').innerHTML = '';
             document.getElementById('chatModelDropdown').classList.remove('show');
             document.getElementById('chatKeySelect').style.display = 'none';
             document.getElementById('chatSysPrompt').value = '';
             document.getElementById('chatSpArea').style.display = 'none';
             document.getElementById('chatSpBtn').classList.remove('active');
+            document.getElementById('chatImgPreview').style.display = 'none';
+            document.getElementById('chatImgPreview').innerHTML = '';
         }
 
         /* ===== 新建对话 ===== */
@@ -7755,6 +7955,7 @@ body {
             document.getElementById('chatModelInput').value = conv.model || '';
             chatSelectedModel = conv.model || '';
             document.getElementById('chatSendBtn').disabled = !chatSelectedModel;
+            document.getElementById('chatModelLabel').textContent = conv.model || '未选择模型';
             // 后台拉取模型列表
             chatFetchModels(item);
         }
@@ -7770,24 +7971,50 @@ body {
                 var msg = chatMessages[i];
                 var role = msg.role === 'assistant' ? 'ai' : (msg.role === 'user' ? 'user' : null);
                 if (!role) continue;
-                var el = chatBuildMsgEl(role, msg.content);
+                var el = chatBuildMsgEl(role, msg.content, msg.thinking, i);
                 container.appendChild(el);
             }
             chatScrollBottom();
         }
 
-        function chatBuildMsgEl(role, text) {
+        function chatBuildMsgEl(role, text, thinking, msgIdx) {
             var div = document.createElement('div');
             div.className = 'chat-msg ' + role;
+            if (typeof msgIdx === 'number') div.setAttribute('data-idx', msgIdx);
             var bubble = document.createElement('div');
             bubble.className = 'chat-bubble';
             if (role === 'user') {
-                bubble.innerHTML = '<div style="white-space:pre-wrap;word-break:break-word">' + esc(text) + '</div>';
+                if (Array.isArray(text)) {
+                    var ih = '';
+                    for (var k = 0; k < text.length; k++) {
+                        if (text[k].type === 'text') ih += '<div style="white-space:pre-wrap;word-break:break-word">' + esc(text[k].text) + '</div>';
+                        else if (text[k].type === 'image_url') ih += '<img class="chat-user-img" src="' + text[k].image_url.url + '">';
+                    }
+                    bubble.innerHTML = ih;
+                } else {
+                    bubble.innerHTML = '<div style="white-space:pre-wrap;word-break:break-word">' + esc(text) + '</div>';
+                }
             } else {
-                bubble.innerHTML = text ? renderText(text) : '';
+                var h = '';
+                if (thinking) {
+                    h += '<div class="chat-thinking"><div class="chat-thinking-hd" onclick="this.parentElement.classList.toggle(\'open\')">';
+                    h += '<span class="arrow">▶</span> 💭 思考过程</div>';
+                    h += '<div class="chat-thinking-bd">' + renderText(thinking) + '</div></div>';
+                }
+                h += text ? renderText(text) : '';
+                bubble.innerHTML = h;
                 if (text) chatAddCopyBtn(bubble, text);
             }
             div.appendChild(bubble);
+            // ⋯ 操作按钮
+            if (typeof msgIdx === 'number') {
+                bubble.style.position = 'relative';
+                var moreBtn = document.createElement('button');
+                moreBtn.className = 'chat-more-btn';
+                moreBtn.textContent = '⋯';
+                moreBtn.onclick = function(e) { e.stopPropagation(); chatShowSheet(msgIdx); };
+                bubble.appendChild(moreBtn);
+            }
             return div;
         }
 
@@ -7875,6 +8102,7 @@ body {
                     chatSelectedModel = lastModel;
                     document.getElementById('chatModelInput').value = lastModel;
                     document.getElementById('chatSendBtn').disabled = false;
+                    document.getElementById('chatModelLabel').textContent = lastModel;
                 }
             }
             chatFetchModels(item);
@@ -7990,6 +8218,7 @@ body {
             if (chatAllModels.indexOf(val) !== -1) {
                 chatSelectedModel = val;
                 document.getElementById('chatSendBtn').disabled = false;
+                document.getElementById('chatModelLabel').textContent = val;
                 var provId = document.getElementById('chatProviderSelect').value;
                 if (provId) localStorage.setItem('chat_last_model_' + provId, val);
             } else {
@@ -8003,6 +8232,7 @@ body {
             document.getElementById('chatModelInput').value = model;
             document.getElementById('chatModelDropdown').classList.remove('show');
             document.getElementById('chatSendBtn').disabled = false;
+            document.getElementById('chatModelLabel').textContent = model;
             var provId = document.getElementById('chatProviderSelect').value;
             if (provId) localStorage.setItem('chat_last_model_' + provId, model);
         }
@@ -8020,6 +8250,7 @@ body {
             if (area.style.display === 'none') {
                 area.style.display = 'block';
                 btn.classList.add('active');
+                chatRenderSpPresets();
                 document.getElementById('chatSysPrompt').focus();
             } else {
                 area.style.display = 'none';
@@ -8027,13 +8258,82 @@ body {
             }
         }
 
+        /* ----- SP 预设存档 ----- */
+        var CHAT_SP_KEY = 'chat_sp_presets';
+        function chatGetSpPresets() {
+            try { return JSON.parse(localStorage.getItem(CHAT_SP_KEY) || '[]'); } catch(e) { return []; }
+        }
+        function chatRenderSpPresets() {
+            var sel = document.getElementById('chatSpPresetSel');
+            var presets = chatGetSpPresets();
+            sel.innerHTML = '<option value="">选择预设…</option>';
+            for (var i = 0; i < presets.length; i++) {
+                var opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = presets[i].name;
+                sel.appendChild(opt);
+            }
+        }
+        function chatSaveSpPreset() {
+            var content = document.getElementById('chatSysPrompt').value.trim();
+            if (!content) { showToast('⚠️ 提示词为空'); return; }
+            var name = prompt('为这条提示词命名：');
+            if (!name || !name.trim()) return;
+            var presets = chatGetSpPresets();
+            presets.push({ name: name.trim(), content: content });
+            localStorage.setItem(CHAT_SP_KEY, JSON.stringify(presets));
+            chatRenderSpPresets();
+            showToast('✅ 已保存');
+        }
+        function chatLoadSpPreset() {
+            var sel = document.getElementById('chatSpPresetSel');
+            var idx = parseInt(sel.value);
+            if (isNaN(idx)) return;
+            var presets = chatGetSpPresets();
+            if (presets[idx]) {
+                document.getElementById('chatSysPrompt').value = presets[idx].content;
+            }
+            sel.value = '';
+        }
+        function chatDelSpPreset() {
+            var sel = document.getElementById('chatSpPresetSel');
+            var idx = parseInt(sel.value);
+            if (isNaN(idx)) { showToast('⚠️ 先选择一个预设'); return; }
+            var presets = chatGetSpPresets();
+            if (!presets[idx]) return;
+            if (!confirm('删除预设「' + presets[idx].name + '」？')) return;
+            presets.splice(idx, 1);
+            localStorage.setItem(CHAT_SP_KEY, JSON.stringify(presets));
+            chatRenderSpPresets();
+            showToast('🗑️ 已删除');
+        }
+
+        /* ----- 停止生成 ----- */
+        function chatSetStopMode(on) {
+            var btn = document.getElementById('chatSendBtn');
+            if (on) {
+                btn.textContent = '■';
+                btn.disabled = false;
+                btn.onclick = chatStop;
+                btn.style.background = 'var(--red)';
+            } else {
+                btn.textContent = '➤';
+                btn.onclick = chatSend;
+                btn.style.background = '';
+                btn.disabled = !chatSelectedModel;
+            }
+        }
+        function chatStop() {
+            if (chatAbortCtrl) chatAbortCtrl.abort();
+        }
+
         /* ----- 输入区自动增高 ----- */
         function chatAutoGrow(el) {
             el.style.height = 'auto';
             el.style.height = Math.min(el.scrollHeight, 120) + 'px';
             var hasModel = !!chatSelectedModel;
-            var hasText = el.value.trim().length > 0;
-            document.getElementById('chatSendBtn').disabled = !(hasModel && hasText);
+            var hasContent = el.value.trim().length > 0 || chatPendingImages.length > 0;
+            document.getElementById('chatSendBtn').disabled = !(hasModel && hasContent);
         }
 
         /* ----- 键盘事件 ----- */
@@ -8049,13 +8349,13 @@ body {
         async function chatSend() {
             var input = document.getElementById('chatInput');
             var text = input.value.trim();
-            if (!text || !chatSelectedModel || chatStreaming) return;
+            var hasImages = chatPendingImages.length > 0;
+            if ((!text && !hasImages) || !chatSelectedModel || chatStreaming) return;
 
             var provId = document.getElementById('chatProviderSelect').value;
             var item = getKeyItemById(provId);
             if (!item) { showToast('⚠️ 未找到中转站信息'); return; }
 
-            // 确保有对话 ID
             if (!chatCurrentConvId) {
                 chatCurrentConvId = 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
             }
@@ -8064,21 +8364,72 @@ body {
             input.style.height = 'auto';
             document.getElementById('chatSendBtn').disabled = true;
 
-            // 清空占位文字
             var emptyEl = document.getElementById('chatMessages').querySelector('.chat-empty');
             if (emptyEl) emptyEl.remove();
+            var oldReroll = document.getElementById('chatRerollBtn');
+            if (oldReroll) oldReroll.remove();
 
-            chatMessages.push({ role: 'user', content: text });
+            // 构建用户消息内容
+            var msgContent;
+            if (hasImages) {
+                msgContent = [];
+                for (var img = 0; img < chatPendingImages.length; img++) {
+                    msgContent.push({ type: 'image_url', image_url: { url: chatPendingImages[img].base64 } });
+                }
+                if (text) msgContent.push({ type: 'text', text: text });
+                chatPendingImages = [];
+                chatRenderImgPreview();
+            } else {
+                msgContent = text;
+            }
+
+            chatMessages.push({ role: 'user', content: msgContent });
             var container = document.getElementById('chatMessages');
-            container.appendChild(chatBuildMsgEl('user', text));
+            container.appendChild(chatBuildMsgEl('user', msgContent, null, chatMessages.length - 1));
             chatScrollBottom();
 
+            await chatDoRequest();
+        }
+
+        function chatReroll() {
+            if (chatStreaming || chatMessages.length === 0) return;
+            // 移除重roll按钮
+            var btn = document.getElementById('chatRerollBtn');
+            if (btn) btn.remove();
+            // 移除最后一条AI消息
+            if (chatMessages[chatMessages.length - 1].role === 'assistant') {
+                chatMessages.pop();
+                var aiMsgs = document.getElementById('chatMessages').querySelectorAll('.chat-msg.ai');
+                if (aiMsgs.length > 0) aiMsgs[aiMsgs.length - 1].remove();
+            }
+            chatDoRequest();
+        }
+
+        async function chatDoRequest() {
+            var provId = document.getElementById('chatProviderSelect').value;
+            var item = getKeyItemById(provId);
+            if (!item || !chatSelectedModel) return;
+
+            var container = document.getElementById('chatMessages');
+            // 构建请求messages（上下文限制）
             var reqMsgs = [];
             var sp = document.getElementById('chatSysPrompt').value.trim();
             if (sp) reqMsgs.push({ role: 'system', content: sp });
-            for (var i = 0; i < chatMessages.length; i++) reqMsgs.push(chatMessages[i]);
+            var src = chatMessages;
+            if (chatContextMax > 0) {
+                // 只取最近N轮（一轮=user+assistant）
+                var turns = 0, startIdx = src.length;
+                for (var j = src.length - 1; j >= 0; j--) {
+                    if (src[j].role === 'user') turns++;
+                    if (turns > chatContextMax) break;
+                    startIdx = j;
+                }
+                src = src.slice(startIdx);
+            }
+            for (var i = 0; i < src.length; i++) {
+                reqMsgs.push({ role: src[i].role, content: src[i].content });
+            }
 
-            // AI占位
             var aiDiv = document.createElement('div');
             aiDiv.className = 'chat-msg ai';
             var bubbleEl = document.createElement('div');
@@ -8093,7 +8444,10 @@ body {
 
             chatStreaming = true;
             chatAbortCtrl = new AbortController();
+            chatSetStopMode(true);
             var fullContent = '';
+            var thinkContent = '';
+            var inThinkTag = false;
 
             try {
                 var resp = await fetch(baseUrl + '/chat/completions', {
@@ -8135,9 +8489,32 @@ body {
                         try {
                             var chunk = JSON.parse(payload);
                             var delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
-                            if (delta && delta.content) {
-                                fullContent += delta.content;
-                                bubbleEl.innerHTML = renderText(fullContent);
+                            if (!delta) continue;
+                            // reasoning_content 字段（部分API）
+                            if (delta.reasoning_content) {
+                                thinkContent += delta.reasoning_content;
+                                chatRenderStreamBubble(bubbleEl, thinkContent, fullContent, true);
+                                chatScrollBottom();
+                            }
+                            if (delta.content) {
+                                var txt = delta.content;
+                                // 处理 <think> 标签
+                                if (!inThinkTag && txt.indexOf('<think>') !== -1) {
+                                    var parts = txt.split('<think>');
+                                    fullContent += parts[0];
+                                    thinkContent += parts.slice(1).join('<think>');
+                                    inThinkTag = true;
+                                } else if (inThinkTag && txt.indexOf('</think>') !== -1) {
+                                    var parts2 = txt.split('</think>');
+                                    thinkContent += parts2[0];
+                                    fullContent += parts2.slice(1).join('</think>');
+                                    inThinkTag = false;
+                                } else if (inThinkTag) {
+                                    thinkContent += txt;
+                                } else {
+                                    fullContent += txt;
+                                }
+                                chatRenderStreamBubble(bubbleEl, thinkContent, fullContent, inThinkTag);
                                 chatScrollBottom();
                             }
                         } catch(pe) { /* skip */ }
@@ -8149,40 +8526,282 @@ body {
                     if (remaining.startsWith('data: ') && remaining.substring(6) !== '[DONE]') {
                         try {
                             var lastChunk = JSON.parse(remaining.substring(6));
-                            var lastDelta = lastChunk.choices && lastChunk.choices[0] && lastChunk.choices[0].delta;
-                            if (lastDelta && lastDelta.content) fullContent += lastDelta.content;
+                            var ld = lastChunk.choices && lastChunk.choices[0] && lastChunk.choices[0].delta;
+                            if (ld && ld.reasoning_content) thinkContent += ld.reasoning_content;
+                            if (ld && ld.content) fullContent += ld.content;
                         } catch(x) {}
                     }
                 }
 
-                if (fullContent) {
-                    bubbleEl.innerHTML = renderText(fullContent);
-                    chatMessages.push({ role: 'assistant', content: fullContent });
+                if (fullContent || thinkContent) {
+                    chatRenderStreamBubble(bubbleEl, thinkContent, fullContent, false);
+                    chatMessages.push({ role: 'assistant', content: fullContent, thinking: thinkContent || undefined });
                 } else {
                     bubbleEl.innerHTML = '<span style="color:var(--text-muted)">（无回复内容）</span>';
                 }
 
             } catch(err) {
                 if (err.name === 'AbortError') {
-                    if (fullContent) {
-                        bubbleEl.innerHTML = renderText(fullContent);
-                        chatMessages.push({ role: 'assistant', content: fullContent });
+                    if (fullContent || thinkContent) {
+                        chatRenderStreamBubble(bubbleEl, thinkContent, fullContent, false);
+                        chatMessages.push({ role: 'assistant', content: fullContent, thinking: thinkContent || undefined });
                     } else {
                         bubbleEl.innerHTML = '<span style="color:var(--text-muted)">（已中断）</span>';
                     }
                 } else {
-                    var errMsg = err.message || '请求失败';
-                    bubbleEl.innerHTML = '<div class="chat-error">❌ ' + esc(errMsg) + '</div>';
+                    bubbleEl.innerHTML = '<div class="chat-error">❌ ' + esc(err.message || '请求失败') + '</div>';
                 }
             }
 
             chatStreaming = false;
             chatAbortCtrl = null;
+            chatSetStopMode(false);
             if (fullContent) chatAddCopyBtn(bubbleEl, fullContent);
+            chatAddRerollBtn();
             chatScrollBottom();
             document.getElementById('chatSendBtn').disabled = !chatSelectedModel;
-            // 自动保存
             chatSaveCurrentConv();
+        }
+
+        function chatRenderStreamBubble(el, thinking, content, isThinking) {
+            var h = '';
+            if (thinking) {
+                h += '<div class="chat-thinking' + (isThinking ? ' open' : '') + '">';
+                h += '<div class="chat-thinking-hd" onclick="this.parentElement.classList.toggle(\'open\')">';
+                h += '<span class="arrow">▶</span> ' + (isThinking ? '💭 思考中…' : '💭 思考过程');
+                h += '</div>';
+                h += '<div class="chat-thinking-bd">' + renderText(thinking) + '</div>';
+                h += '</div>';
+            }
+            if (content) {
+                h += renderText(content);
+            } else if (isThinking) {
+                // 还在思考，不显示正文loading
+            } else if (!thinking) {
+                h += '<div class="chat-typing"><span></span><span></span><span></span></div>';
+            }
+            el.innerHTML = h;
+        }
+
+        function chatAddRerollBtn() {
+            var old = document.getElementById('chatRerollBtn');
+            if (old) old.remove();
+            // 找到最后一条AI气泡
+            var aiMsgs = document.getElementById('chatMessages').querySelectorAll('.chat-msg.ai');
+            if (aiMsgs.length === 0) return;
+            var lastAi = aiMsgs[aiMsgs.length - 1];
+            var bubble = lastAi.querySelector('.chat-bubble');
+            if (!bubble) return;
+            bubble.style.position = 'relative';
+            var btn = document.createElement('button');
+            btn.id = 'chatRerollBtn';
+            btn.className = 'chat-reroll-btn';
+            btn.textContent = '🔄';
+            btn.title = '重新生成';
+            btn.onclick = function(e) { e.stopPropagation(); chatReroll(); };
+            bubble.appendChild(btn);
+        }
+
+        /* ===== 长按操作面板 ===== */
+        function chatAttachLongPress(el, msgIdx) {
+            if (typeof msgIdx !== 'number') return;
+            var timer = null, didLong = false;
+            function down(e) {
+                didLong = false;
+                timer = setTimeout(function() { didLong = true; timer = null; chatShowSheet(msgIdx); }, 400);
+            }
+            function up(e) { if (timer) { clearTimeout(timer); timer = null; } if (didLong) { e.preventDefault(); e.stopPropagation(); } }
+            function cancel() { if (timer) { clearTimeout(timer); timer = null; } didLong = false; }
+            el.addEventListener('touchstart', down, { passive: true });
+            el.addEventListener('touchend', up);
+            el.addEventListener('touchcancel', cancel);
+            el.addEventListener('mousedown', down);
+            el.addEventListener('mouseup', up);
+            el.addEventListener('mouseleave', cancel);
+        }
+
+        function chatShowSheet(idx) {
+            chatActionMsgIdx = idx;
+            var msg = chatMessages[idx];
+            if (!msg) return;
+            var items = document.getElementById('chatSheetItems');
+            items.innerHTML = '';
+            var isUser = msg.role === 'user';
+            var isAi = msg.role === 'assistant';
+            var actions = [];
+            actions.push({ icon: '📋', label: '复制内容', fn: function() { chatSheetCopy(idx); } });
+            if (isUser) actions.push({ icon: '✏️', label: '编辑消息', fn: function() { chatSheetEdit(idx); } });
+            if (isAi) actions.push({ icon: '🔄', label: '重新生成', fn: function() { chatSheetRegenFrom(idx); } });
+            actions.push({ icon: '✂️', label: '从此处截断', fn: function() { chatSheetTruncate(idx); }, danger: true });
+            actions.push({ icon: '🗑️', label: '删除此消息', fn: function() { chatSheetDelete(idx); }, danger: true });
+
+            for (var i = 0; i < actions.length; i++) {
+                (function(act) {
+                    var btn = document.createElement('button');
+                    btn.className = 'chat-action-item' + (act.danger ? ' danger' : '');
+                    btn.innerHTML = '<span class="act-icon">' + act.icon + '</span>' + act.label;
+                    btn.onclick = function() { chatCloseSheet(); setTimeout(act.fn, 200); };
+                    items.appendChild(btn);
+                })(actions[i]);
+            }
+            document.getElementById('chatSheetBg').classList.add('show');
+            document.getElementById('chatSheet').classList.add('show');
+        }
+
+        function chatCloseSheet() {
+            document.getElementById('chatSheetBg').classList.remove('show');
+            document.getElementById('chatSheet').classList.remove('show');
+        }
+
+        function chatSheetCopy(idx) {
+            var msg = chatMessages[idx];
+            var text = Array.isArray(msg.content)
+                ? msg.content.filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('\n')
+                : (msg.content || '');
+            copyText(text);
+            showToast('✅ 已复制');
+        }
+
+        function chatSheetEdit(idx) {
+            var msg = chatMessages[idx];
+            var text = Array.isArray(msg.content)
+                ? msg.content.filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('\n')
+                : (msg.content || '');
+            var msgEl = document.querySelector('.chat-msg[data-idx="' + idx + '"]');
+            if (!msgEl) return;
+            var bubble = msgEl.querySelector('.chat-bubble');
+            bubble.innerHTML = '<textarea class="chat-edit-area">' + esc(text) + '</textarea>' +
+                '<div class="chat-edit-btns">' +
+                '<button class="edit-cancel" onclick="chatEditCancel(' + idx + ')">取消</button>' +
+                '<button class="edit-confirm" onclick="chatEditConfirm(' + idx + ')">确认并重新生成</button>' +
+                '</div>';
+            var ta = bubble.querySelector('textarea');
+            ta.focus();
+            ta.setSelectionRange(ta.value.length, ta.value.length);
+        }
+
+        function chatEditCancel(idx) {
+            chatRenderAllMessages();
+        }
+
+        function chatEditConfirm(idx) {
+            var msgEl = document.querySelector('.chat-msg[data-idx="' + idx + '"]');
+            var ta = msgEl && msgEl.querySelector('.chat-edit-area');
+            if (!ta) return;
+            var newText = ta.value.trim();
+            if (!newText) { showToast('⚠️ 内容不能为空'); return; }
+            // 更新消息并截断后续
+            chatMessages[idx].content = newText;
+            chatMessages.splice(idx + 1);
+            // 移除重roll按钮
+            var rb = document.getElementById('chatRerollBtn');
+            if (rb) rb.remove();
+            chatRenderAllMessages();
+            chatDoRequest();
+        }
+
+        function chatSheetRegenFrom(idx) {
+            // 删除此AI消息，重新生成
+            chatMessages.splice(idx);
+            var rb = document.getElementById('chatRerollBtn');
+            if (rb) rb.remove();
+            chatRenderAllMessages();
+            chatDoRequest();
+        }
+
+        function chatSheetTruncate(idx) {
+            chatMessages.splice(idx);
+            chatRenderAllMessages();
+            chatSaveCurrentConv();
+            showToast('✂️ 已截断');
+        }
+
+        function chatSheetDelete(idx) {
+            chatMessages.splice(idx, 1);
+            chatRenderAllMessages();
+            chatSaveCurrentConv();
+            showToast('🗑️ 已删除');
+        }
+
+        /* ===== 对话导出 ===== */
+        function chatExportConv(id) {
+            var list = chatGetHistory();
+            var conv = null;
+            for (var i = 0; i < list.length; i++) { if (list[i].id === id) { conv = list[i]; break; } }
+            if (!conv || !conv.messages) { showToast('⚠️ 对话为空'); return; }
+            var md = '# ' + (conv.title || '对话') + '\n\n';
+            md += '> 模型：' + (conv.model || '未知') + '  \n';
+            md += '> 时间：' + new Date(conv.created || Date.now()).toLocaleString('zh-CN') + '\n\n---\n\n';
+            if (conv.systemPrompt) md += '**System Prompt：**\n\n' + conv.systemPrompt + '\n\n---\n\n';
+            for (var j = 0; j < conv.messages.length; j++) {
+                var m = conv.messages[j];
+                if (m.role === 'user') {
+                    var userText = Array.isArray(m.content)
+                        ? m.content.filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('\n')
+                        : m.content;
+                    md += '### 🧑 用户\n\n' + userText + '\n\n';
+                } else if (m.role === 'assistant') {
+                    if (m.thinking) md += '<details><summary>💭 思考过程</summary>\n\n' + m.thinking + '\n\n</details>\n\n';
+                    md += '### 🤖 助手\n\n' + (m.content || '') + '\n\n';
+                }
+                md += '---\n\n';
+            }
+            var blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = (conv.title || 'chat').replace(/[^\w\u4e00-\u9fff]/g, '_').substring(0, 40) + '.md';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('📥 已导出');
+        }
+
+        /* ===== 图片输入 ===== */
+        function chatOnImgSelect(input) {
+            var files = input.files;
+            if (!files || files.length === 0) return;
+            for (var i = 0; i < files.length; i++) {
+                (function(file) {
+                    var reader = new FileReader();
+                    reader.onload = function(e) {
+                        chatPendingImages.push({ base64: e.target.result, type: file.type || 'image/jpeg' });
+                        chatRenderImgPreview();
+                    };
+                    reader.readAsDataURL(file);
+                })(files[i]);
+            }
+            input.value = '';
+        }
+
+        function chatRenderImgPreview() {
+            var container = document.getElementById('chatImgPreview');
+            if (chatPendingImages.length === 0) { container.style.display = 'none'; container.innerHTML = ''; return; }
+            container.style.display = 'flex';
+            container.innerHTML = '';
+            for (var i = 0; i < chatPendingImages.length; i++) {
+                (function(idx) {
+                    var wrap = document.createElement('div');
+                    wrap.className = 'chat-img-preview-item';
+                    wrap.innerHTML = '<img src="' + chatPendingImages[idx].base64 + '"><button class="img-remove" onclick="chatRemoveImg(' + idx + ')">✕</button>';
+                    container.appendChild(wrap);
+                })(i);
+            }
+            // 有图片时也启用发送
+            if (chatSelectedModel) document.getElementById('chatSendBtn').disabled = false;
+        }
+
+        function chatRemoveImg(idx) {
+            chatPendingImages.splice(idx, 1);
+            chatRenderImgPreview();
+        }
+
+        /* ===== 上下文轮数控制 ===== */
+        function chatUpdateCtxLabel() {
+            var val = parseInt(document.getElementById('chatCtxRange').value);
+            chatContextMax = val;
+            document.getElementById('chatCtxLabel').textContent = val === 0 ? '全部' : val + ' 轮';
         }
 
         function chatAddCopyBtn(bubbleEl, text) {
