@@ -728,6 +728,262 @@ body {
         /* 大标题 (D) */
         .header h1 { font-size: 26px; }
 
+
+/* =========================================================================
+ * [1.7] AI 聊天面板样式
+ * ========================================================================= */
+        /* ===== 聊天 modal 全屏 ===== */
+        .modal-overlay:has(.chat-modal) { padding: 0; align-items: stretch; }
+        .modal.chat-modal {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            max-height: none; height: 100%;
+            max-width: 100%; border-radius: 0;
+            box-shadow: none; border: none;
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+
+        .chat-topbar {
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 12px; flex-shrink: 0;
+            border-bottom: 1px solid var(--card-border);
+            background: var(--card-bg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+        }
+        .chat-close-btn {
+            width: 32px; height: 32px; border: none; border-radius: 8px;
+            background: transparent; color: var(--text-muted); font-size: 18px;
+            cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+            transition: background 0.15s, color 0.15s;
+        }
+        .chat-close-btn:hover { background: var(--red-bg); color: var(--red); }
+
+        .chat-topbar select {
+            flex: 1; min-width: 0; padding: 7px 10px;
+            background: var(--input-bg); border: 1px solid var(--input-border);
+            border-radius: 8px; color: var(--text); font-size: 12px;
+            outline: none; appearance: none; -webkit-appearance: none;
+            text-overflow: ellipsis; cursor: pointer;
+        }
+        .chat-topbar select:focus { border-color: var(--accent-mid); }
+
+        .chat-model-wrap {
+            flex: 2; min-width: 0; position: relative;
+        }
+        .chat-model-wrap input {
+            width: 100%; padding: 7px 30px 7px 10px;
+            background: var(--input-bg); border: 1px solid var(--input-border);
+            border-radius: 8px; color: var(--text); font-size: 12px; outline: none;
+        }
+        .chat-model-wrap input:focus { border-color: var(--accent-mid); }
+        .chat-model-wrap input::placeholder { color: var(--text-muted); }
+        .chat-model-dropdown {
+            position: absolute; top: 100%; right: 0; left: auto; z-index: 10;
+            min-width: 280px; max-width: calc(100vw - 24px);
+            max-height: 240px; overflow-y: auto; margin-top: 4px;
+            background: var(--modal-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border); border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            display: none;
+        }
+        .chat-model-dropdown.show { display: block; }
+        .chat-model-item {
+            padding: 9px 12px; font-size: 12px; color: var(--text);
+            cursor: pointer; display: flex; align-items: center; gap: 6px;
+            transition: background 0.1s; border-bottom: 1px solid var(--card-border);
+        }
+        .chat-model-item:last-child { border-bottom: none; }
+        .chat-model-item:hover, .chat-model-item.active { background: var(--accent-light); }
+        .chat-model-item .fav-star {
+            flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;
+            transition: opacity 0.15s;
+        }
+        .chat-model-item .fav-star.on { opacity: 1; }
+        .chat-model-item .model-name { flex: 1; min-width: 0; word-break: break-all; }
+
+        .chat-sp-btn {
+            width: 32px; height: 32px; border: none; border-radius: 8px;
+            background: transparent; color: var(--text-muted); font-size: 16px;
+            cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+            transition: background 0.15s, color 0.15s;
+        }
+        .chat-sp-btn:hover { background: var(--accent-light); color: var(--accent); }
+        .chat-sp-btn.active { background: var(--accent-light); color: var(--accent); }
+
+        .chat-sp-area {
+            padding: 0 12px 8px; flex-shrink: 0;
+        }
+        .chat-sp-area textarea {
+            width: 100%; height: 60px; padding: 8px 12px;
+            background: var(--input-bg); border: 1px solid var(--input-border);
+            border-radius: 8px; color: var(--text); font-size: 13px;
+            outline: none; resize: none; font-family: inherit; line-height: 1.5;
+        }
+        .chat-sp-area textarea:focus { border-color: var(--accent-mid); }
+        .chat-sp-area textarea::placeholder { color: var(--text-muted); }
+
+        /* ===== 消息区 ===== */
+        .chat-messages {
+            flex: 1; overflow-y: auto; padding: 12px;
+            -webkit-overflow-scrolling: touch;
+            display: flex; flex-direction: column; gap: 12px;
+        }
+        .chat-empty {
+            flex: 1; display: flex; align-items: center; justify-content: center;
+            color: var(--text-muted); font-size: 13px;
+        }
+        .chat-msg {
+            display: flex; flex-direction: column; max-width: 88%;
+        }
+        .chat-msg.user { align-self: flex-end; align-items: flex-end; }
+        .chat-msg.ai { align-self: flex-start; align-items: flex-start; }
+
+        .chat-bubble {
+            padding: 10px 14px; border-radius: 14px;
+            font-size: 14px; line-height: 1.6; word-break: break-word;
+            position: relative;
+        }
+        .chat-msg.user .chat-bubble {
+            background: linear-gradient(135deg, var(--accent), var(--accent-mid));
+            color: #fff; border-bottom-right-radius: 4px;
+        }
+        .chat-msg.ai .chat-bubble {
+            background: var(--card-bg); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--card-border);
+            color: var(--text); border-bottom-left-radius: 4px;
+        }
+
+        /* AI 回复内的 Markdown 样式 */
+        .chat-bubble p { margin: 0 0 8px; }
+        .chat-bubble p:last-child { margin-bottom: 0; }
+        .chat-bubble pre {
+            background: var(--code-bg); border: 1px solid var(--card-border);
+            border-radius: 8px; padding: 10px 12px; overflow-x: auto;
+            font-size: 12px; line-height: 1.5; margin: 8px 0;
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        }
+        .chat-bubble code {
+            background: var(--code-bg); padding: 1px 5px; border-radius: 4px;
+            font-size: 12px; font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        }
+        .chat-bubble pre code { background: none; padding: 0; border-radius: 0; }
+        .chat-bubble h1,.chat-bubble h2,.chat-bubble h3,.chat-bubble h4 {
+            font-size: 14px; font-weight: 600; margin: 10px 0 6px; color: var(--accent);
+        }
+        .chat-bubble ul,.chat-bubble ol { margin: 6px 0; padding-left: 20px; }
+        .chat-bubble li { margin-bottom: 4px; }
+        .chat-bubble blockquote {
+            border-left: 3px solid var(--accent-mid); padding: 4px 12px;
+            margin: 6px 0; color: var(--text-sub); font-style: italic;
+        }
+        .chat-bubble table { border-collapse: collapse; margin: 8px 0; font-size: 12px; width: 100%; }
+        .chat-bubble th, .chat-bubble td { border: 1px solid var(--card-border); padding: 5px 8px; text-align: left; }
+        .chat-bubble th { background: var(--card-inner); font-weight: 600; }
+        .chat-bubble a { color: var(--accent); text-decoration: underline; }
+        .chat-bubble img { max-width: 100%; border-radius: 8px; margin: 6px 0; }
+
+        .chat-copy-btn {
+            position: absolute; top: 6px; right: 6px;
+            width: 24px; height: 24px; border: none; border-radius: 6px;
+            background: rgba(0,0,0,0.06); color: var(--text-muted);
+            font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            opacity: 0; transition: opacity 0.15s;
+        }
+        .chat-bubble:hover .chat-copy-btn { opacity: 1; }
+        .chat-copy-btn.copied { background: rgba(34,197,94,0.2); color: #16a34a; opacity: 1; }
+
+        .chat-msg-time {
+            font-size: 10px; color: var(--text-muted); margin-top: 4px; padding: 0 4px;
+        }
+
+        .chat-typing {
+            display: inline-flex; gap: 4px; padding: 6px 0;
+        }
+        .chat-typing span {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: var(--text-muted); animation: chatTyping 1.2s infinite;
+        }
+        .chat-typing span:nth-child(2) { animation-delay: 0.2s; }
+        .chat-typing span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes chatTyping {
+            0%,60%,100% { opacity: 0.3; transform: scale(0.8); }
+            30% { opacity: 1; transform: scale(1); }
+        }
+
+        .chat-error {
+            font-size: 12px; color: var(--red); padding: 6px 10px;
+            background: var(--red-bg); border-radius: 8px; margin-top: 4px;
+        }
+
+        /* ===== 输入区 ===== */
+        .chat-input-area {
+            display: flex; align-items: flex-end; gap: 8px;
+            padding: 10px 12px; flex-shrink: 0;
+            border-top: 1px solid var(--card-border);
+            background: var(--card-bg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+            padding-bottom: max(10px, env(safe-area-inset-bottom));
+        }
+        .chat-input-area textarea {
+            flex: 1; min-height: 36px; max-height: 120px; padding: 8px 12px;
+            background: var(--input-bg); border: 1px solid var(--input-border);
+            border-radius: 12px; color: var(--text); font-size: 14px;
+            outline: none; resize: none; font-family: inherit; line-height: 1.5;
+            overflow-y: auto;
+        }
+        .chat-input-area textarea:focus { border-color: var(--accent-mid); }
+        .chat-input-area textarea::placeholder { color: var(--text-muted); }
+
+        .chat-send-btn {
+            width: 36px; height: 36px; border: none; border-radius: 10px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-mid));
+            color: #fff; font-size: 16px; cursor: pointer; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            transition: opacity 0.15s, transform 0.1s;
+        }
+        .chat-send-btn:hover { transform: scale(1.05); }
+        .chat-send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+        .chat-clear-btn {
+            width: 32px; height: 32px; border: none; border-radius: 8px;
+            background: transparent; color: var(--text-muted); font-size: 15px;
+            cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+            transition: background 0.15s, color 0.15s;
+        }
+        .chat-clear-btn:hover { background: var(--red-bg); color: var(--red); }
+
+        /* ===== 对话历史列表 ===== */
+        .chat-hist-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 14px 16px; cursor: pointer;
+            border-bottom: 1px solid var(--card-border);
+            transition: background 0.12s;
+        }
+        .chat-hist-item:last-child { border-bottom: none; }
+        .chat-hist-item:hover, .chat-hist-item:active { background: var(--accent-light); }
+        .chat-hist-info { flex: 1; min-width: 0; }
+        .chat-hist-title {
+            font-size: 14px; font-weight: 500; color: var(--text);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .chat-hist-meta {
+            font-size: 11px; color: var(--text-muted); margin-top: 3px;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .chat-hist-del {
+            flex-shrink: 0; width: 28px; height: 28px; border: none; border-radius: 7px;
+            background: transparent; color: var(--text-muted); font-size: 14px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            opacity: 0.4; transition: opacity 0.15s, background 0.15s, color 0.15s;
+        }
+        .chat-hist-del:hover { opacity: 1; background: var(--red-bg); color: var(--red); }
+        .chat-hist-empty {
+            flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: var(--text-muted); font-size: 13px; gap: 12px;
+        }
+        .chat-hist-empty .new-btn {
+            padding: 10px 24px; border: none; border-radius: 10px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-mid));
+            color: #fff; font-size: 14px; font-weight: 500; cursor: pointer;
+        }
+
 /* =========================================================================
  * [1.6] 底部导航、悬浮按钮与编辑器
  * ========================================================================= */
@@ -1411,12 +1667,12 @@ body {
             <div class="modal-body">
                 <!-- 同步方式选择 -->
                 <div style="display:flex;gap:6px;margin-bottom:14px">
-                    <button class="type-btn" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
-                    <button class="type-btn active" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
+                    <button class="type-btn active" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
+                    <button class="type-btn" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare KV</button>
                 </div>
 
                 <!-- GitHub Gist 配置 -->
-                <div id="syncGistFields" style="display: none;">
+                <div id="syncGistFields" style="display: block;">
                     <div id="gistGuide" style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('gistGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 首次配置步骤</b>
@@ -1443,7 +1699,7 @@ body {
                 </div>
 
                 <!-- Cloudflare KV 配置 -->
-                <div id="syncCFFields" style="display: block;">
+                <div id="syncCFFields" style="display: none;">
                     <div style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:14px;overflow:hidden">
                         <div onclick="var c=document.getElementById('cfGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
                             <b style="color:var(--accent)">📖 配置说明</b>
@@ -1484,7 +1740,7 @@ body {
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:10px;padding:14px 24px 20px">
-                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：14.08 MB / ~50 MB（28%）</div>
+                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 4px 0px;">💾 本地存储：15.65 MB / ~50 MB（31%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
@@ -2042,7 +2298,40 @@ body {
         </button>
     </div>
 
-    <div class="toast" id="toast"></div>
+
+    <!-- ===== AI 聊天面板 ===== -->
+    <div class="modal-overlay" id="chatModalOverlay" onclick="if(event.target===this)closeChatModal()">
+        <div class="modal chat-modal" style="">
+            <!-- 列表视图顶栏 -->
+            <div class="chat-topbar" id="chatTopbarList" style="">
+                <button class="chat-close-btn" onclick="closeChatModal()">✕</button>
+                <div style="flex:1;font-size:15px;font-weight:600;color:var(--accent)">对话</div>
+                <button class="chat-sp-btn" onclick="chatNewConv()" title="新对话">➕</button>
+            </div>
+            <!-- 对话视图顶栏 -->
+            <div class="chat-topbar" id="chatTopbarConv" style="display: none;">
+                <button class="chat-close-btn" onclick="chatBackToList()">←</button>
+                <select id="chatProviderSelect" onchange="onChatProviderChange()"><option value="">选择中转站…</option><option value="654709a3-2ef5-447b-86b8-b00b8a0b5b4d">Youkies</option><option value="2f9aa576-f063-4ac6-9f35-f52bb12daa23">玖时</option><option value="mnugm58s1h0b1">VSLLM～</option><option value="mnvpkmvaivmff">ekan8</option><option value="mnug6cxc6peoj">西瓜🍉</option><option value="mnue7bkvnxd58">空悲切💜</option><option value="mnudmq7bpnnhc">刺猬🦔</option><option value="moe905o67sjbh">宅恋</option><option value="mnufzmh8j7ua4">大肘子</option><option value="mnui26bcd7nw9">蛋壳🥚</option></select>
+                <select id="chatKeySelect" onchange="onChatKeyChange()" style=""><option value="">选择分组…</option><option value="sk-71m6F3LadFTSHB4bu5kQq9CgyZaf9AcC4mC3adxgl5oRxVvL">生图</option><option value="sk-mVdK4LhFGtBEZrlhPHkJMtDg5qeVVM7W44ldhXldZAqyrXD4">刺客</option><option value="sk-BhFyL4L5tjPuaS4j8lYmu7DQIGQEwqdGRPbah9Cyq44pHGVG">vscode</option></select>
+                <div class="chat-model-wrap">
+                    <input type="text" id="chatModelInput" placeholder="选择模型…" autocomplete="off" onfocus="chatShowModelDropdown()" oninput="chatFilterModels()">
+                    <div class="chat-model-dropdown" id="chatModelDropdown"><div class="chat-model-item active"><span class="fav-star on">⭐</span><span class="model-name">gpt-5.5</span></div><div class="chat-model-item"><span class="fav-star">⭐</span><span class="model-name">gpt-5.5-fast</span></div><div class="chat-model-item"><span class="fav-star">⭐</span><span class="model-name">gpt-5.5-free</span></div></div>
+                </div>
+                <button class="chat-sp-btn" id="chatSpBtn" onclick="toggleChatSp()" title="系统提示词">📝</button>
+                <button class="chat-close-btn" onclick="closeChatModal()" style="font-size:14px">✕</button>
+            </div>
+            <div class="chat-sp-area" id="chatSpArea" style="display: none;">
+                <textarea id="chatSysPrompt" placeholder="输入系统提示词（可选）…" rows="3"></textarea>
+            </div>
+            <div class="chat-messages" id="chatMessages"><div class="chat-hist-empty"><div style="font-size:36px">💬</div><div>还没有对话记录</div><button class="new-btn" onclick="chatNewConv()">开始新对话</button></div></div>
+            <div class="chat-input-area" id="chatInputArea" style="display: none;">
+                <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this)" style="height: auto;"></textarea>
+                <button class="chat-send-btn" id="chatSendBtn" onclick="chatSend()">➤</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">✅ 已复制到剪贴板</div>
 
     <script>
         /* =========================================================================
@@ -2393,9 +2682,13 @@ body {
             localStorage.setItem('toolbox_active_tab', tab);
             document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.remove('active'); });
             document.querySelectorAll('.nav-item').forEach(function(b) { b.classList.remove('active'); });
-            document.getElementById('tab-' + tab).classList.add('active');
+            var tabEl = document.getElementById('tab-' + tab);
+            if (tabEl) tabEl.classList.add('active');
             if (btn) btn.classList.add('active');
-            else document.querySelector('.nav-' + tab).classList.add('active');
+            else {
+                var navBtn = document.querySelector('.nav-' + tab);
+                if (navBtn) navBtn.classList.add('active');
+            }
             document.body.classList.remove('on-keys', 'on-snippets');
             document.body.classList.add('on-' + tab);
             updateFabPositions();
@@ -7197,6 +7490,779 @@ body {
             }
             return needPushBack;
         }
+
+
+        /* =========================================================================
+         * [3.10.5] AI 聊天功能
+         * 说明：全屏聊天面板，对话历史列表，中转站/分组/模型选择，流式输出。
+         * ========================================================================= */
+        var chatMessages = [];       // 当前对话的 {role, content} 数组
+        var chatStreaming = false;
+        var chatAbortCtrl = null;
+        var chatAllModels = [];
+        var chatSelectedModel = '';
+        var chatSelectedKeyStr = '';
+        var chatFavModels = JSON.parse(localStorage.getItem('chat_fav_models') || '[]');
+        var chatCurrentConvId = null; // 当前对话 ID
+        var chatView = 'list';       // 'list' | 'conv'
+        var CHAT_STORE = 'chat_history';
+        var CHAT_MAX = 30;           // 最多保留对话数
+
+        /* ===== 对话存储 ===== */
+        function chatGetHistory() {
+            try { return JSON.parse(localStorage.getItem(CHAT_STORE) || '[]'); }
+            catch(e) { return []; }
+        }
+        function chatSetHistory(list) {
+            // 超出上限则删最旧的
+            while (list.length > CHAT_MAX) list.pop();
+            localStorage.setItem(CHAT_STORE, JSON.stringify(list));
+        }
+        function chatSaveCurrentConv() {
+            if (!chatCurrentConvId || chatMessages.length === 0) return;
+            var list = chatGetHistory();
+            var found = false;
+            for (var i = 0; i < list.length; i++) {
+                if (list[i].id === chatCurrentConvId) {
+                    list[i].messages = chatMessages;
+                    list[i].systemPrompt = document.getElementById('chatSysPrompt').value || '';
+                    list[i].title = chatConvTitle(chatMessages);
+                    list[i].model = chatSelectedModel;
+                    list[i].providerId = document.getElementById('chatProviderSelect').value;
+                    list[i].keyStr = chatSelectedKeyStr;
+                    list[i].updated = Date.now();
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                var provId = document.getElementById('chatProviderSelect').value;
+                var item = getKeyItemById(provId);
+                list.unshift({
+                    id: chatCurrentConvId,
+                    title: chatConvTitle(chatMessages),
+                    providerId: provId,
+                    providerName: item ? (item.name || '') : '',
+                    model: chatSelectedModel,
+                    keyStr: chatSelectedKeyStr,
+                    systemPrompt: document.getElementById('chatSysPrompt').value || '',
+                    messages: chatMessages,
+                    created: Date.now(),
+                    updated: Date.now()
+                });
+            }
+            // 按 updated 降序排
+            list.sort(function(a, b) { return (b.updated || 0) - (a.updated || 0); });
+            chatSetHistory(list);
+        }
+        function chatConvTitle(msgs) {
+            for (var i = 0; i < msgs.length; i++) {
+                if (msgs[i].role === 'user') {
+                    var t = msgs[i].content.replace(/\s+/g, ' ').trim();
+                    return t.length > 40 ? t.substring(0, 40) + '…' : t;
+                }
+            }
+            return '新对话';
+        }
+        function chatDeleteConv(id, e) {
+            if (e) { e.stopPropagation(); e.preventDefault(); }
+            var list = chatGetHistory().filter(function(c) { return c.id !== id; });
+            chatSetHistory(list);
+            if (chatCurrentConvId === id) {
+                chatCurrentConvId = null;
+                chatMessages = [];
+            }
+            chatRenderHistoryList();
+        }
+        function chatTimeAgo(ts) {
+            var diff = Date.now() - ts;
+            if (diff < 60000) return '刚刚';
+            if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前';
+            if (diff < 86400000) return Math.floor(diff / 3600000) + ' 小时前';
+            if (diff < 604800000) return Math.floor(diff / 86400000) + ' 天前';
+            return new Date(ts).toLocaleDateString('zh-CN');
+        }
+
+        /* ===== 视图切换 ===== */
+        function chatSwitchView(view) {
+            chatView = view;
+            var topList = document.getElementById('chatTopbarList');
+            var topConv = document.getElementById('chatTopbarConv');
+            var inputArea = document.getElementById('chatInputArea');
+            var spArea = document.getElementById('chatSpArea');
+            if (view === 'list') {
+                topList.style.display = '';
+                topConv.style.display = 'none';
+                inputArea.style.display = 'none';
+                spArea.style.display = 'none';
+                document.getElementById('chatSpBtn').classList.remove('active');
+                chatRenderHistoryList();
+            } else {
+                topList.style.display = 'none';
+                topConv.style.display = '';
+                inputArea.style.display = '';
+                spArea.style.display = 'none';
+                document.getElementById('chatSpBtn').classList.remove('active');
+            }
+        }
+
+        function chatRenderHistoryList() {
+            var container = document.getElementById('chatMessages');
+            var list = chatGetHistory();
+            if (list.length === 0) {
+                container.innerHTML = '<div class="chat-hist-empty">' +
+                    '<div style="font-size:36px">💬</div>' +
+                    '<div>还没有对话记录</div>' +
+                    '<button class="new-btn" onclick="chatNewConv()">开始新对话</button>' +
+                    '</div>';
+                return;
+            }
+            var h = '';
+            for (var i = 0; i < list.length; i++) {
+                var c = list[i];
+                var msgCount = c.messages ? c.messages.length : 0;
+                var meta = (c.model || '未知模型');
+                if (c.providerName) meta = c.providerName + ' · ' + meta;
+                meta += ' · ' + chatTimeAgo(c.updated || c.created) + ' · ' + msgCount + '条';
+                h += '<div class="chat-hist-item" onclick="chatLoadConv(\'' + c.id + '\')">';
+                h += '<div class="chat-hist-info">';
+                h += '<div class="chat-hist-title">' + esc(c.title || '新对话') + '</div>';
+                h += '<div class="chat-hist-meta">' + esc(meta) + '</div>';
+                h += '</div>';
+                h += '<button class="chat-hist-del" onclick="chatDeleteConv(\'' + c.id + '\', event)" title="删除">🗑️</button>';
+                h += '</div>';
+            }
+            container.innerHTML = h;
+            container.scrollTop = 0;
+        }
+
+        /* ===== 打开 / 关闭 ===== */
+        function openChatModal() {
+            document.getElementById('chatModalOverlay').classList.add('show');
+            document.body.classList.add('modal-open');
+            chatSwitchView('list');
+        }
+
+        function closeChatModal() {
+            if (chatStreaming && chatAbortCtrl) chatAbortCtrl.abort();
+            chatStreaming = false;
+            // 保存当前对话
+            chatSaveCurrentConv();
+            document.getElementById('chatModalOverlay').classList.remove('show');
+            document.body.classList.remove('modal-open');
+        }
+
+        function chatBackToList() {
+            if (chatStreaming) return;
+            chatSaveCurrentConv();
+            chatResetConvState();
+            chatSwitchView('list');
+        }
+
+        function chatResetConvState() {
+            chatMessages = [];
+            chatAllModels = [];
+            chatSelectedModel = '';
+            chatSelectedKeyStr = '';
+            chatCurrentConvId = null;
+            document.getElementById('chatInput').value = '';
+            document.getElementById('chatSendBtn').disabled = true;
+            document.getElementById('chatModelInput').value = '';
+            document.getElementById('chatModelDropdown').innerHTML = '';
+            document.getElementById('chatModelDropdown').classList.remove('show');
+            document.getElementById('chatKeySelect').style.display = 'none';
+            document.getElementById('chatSysPrompt').value = '';
+            document.getElementById('chatSpArea').style.display = 'none';
+            document.getElementById('chatSpBtn').classList.remove('active');
+        }
+
+        /* ===== 新建对话 ===== */
+        function chatNewConv() {
+            chatResetConvState();
+            chatCurrentConvId = 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+            chatSwitchView('conv');
+            document.getElementById('chatMessages').innerHTML = '<div class="chat-empty">选择中转站和模型，开始对话 💬</div>';
+            populateChatProviders();
+            // 恢复上次的中转站
+            var lastProv = localStorage.getItem('chat_last_provider') || '';
+            var sel = document.getElementById('chatProviderSelect');
+            if (lastProv) {
+                for (var i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].value === lastProv) { sel.value = lastProv; onChatProviderChange(); break; }
+                }
+            }
+            setTimeout(function() { document.getElementById('chatInput').focus(); }, 300);
+        }
+
+        /* ===== 加载历史对话 ===== */
+        function chatLoadConv(id) {
+            var list = chatGetHistory();
+            var conv = null;
+            for (var i = 0; i < list.length; i++) {
+                if (list[i].id === id) { conv = list[i]; break; }
+            }
+            if (!conv) return;
+
+            chatResetConvState();
+            chatCurrentConvId = conv.id;
+            chatMessages = conv.messages || [];
+            chatSelectedModel = conv.model || '';
+            chatSelectedKeyStr = conv.keyStr || '';
+
+            chatSwitchView('conv');
+            populateChatProviders();
+
+            // 恢复中转站
+            var sel = document.getElementById('chatProviderSelect');
+            if (conv.providerId) {
+                sel.value = conv.providerId;
+                onChatProviderChangeRestore(conv);
+            }
+            // 恢复 system prompt（只填值，不展开面板）
+            if (conv.systemPrompt) {
+                document.getElementById('chatSysPrompt').value = conv.systemPrompt;
+                document.getElementById('chatSpBtn').classList.add('active');
+            }
+            // 渲染消息
+            chatRenderAllMessages();
+            setTimeout(function() { document.getElementById('chatInput').focus(); }, 300);
+        }
+
+        function onChatProviderChangeRestore(conv) {
+            // 专门用于恢复历史对话时，跳过清空逻辑
+            var id = document.getElementById('chatProviderSelect').value;
+            if (!id) return;
+            var item = getKeyItemById(id);
+            if (!item) return;
+            var keys = getItemKeys(item);
+            var keySel = document.getElementById('chatKeySelect');
+            if (keys.length > 1) {
+                keySel.innerHTML = '<option value="">选择分组…</option>';
+                for (var i = 0; i < keys.length; i++) {
+                    var opt = document.createElement('option');
+                    opt.value = keys[i].key;
+                    opt.textContent = keys[i].label || ('密钥 ' + (i + 1));
+                    keySel.appendChild(opt);
+                }
+                keySel.style.display = '';
+                if (conv.keyStr) keySel.value = conv.keyStr;
+                chatSelectedKeyStr = conv.keyStr || keys[0].key;
+            } else {
+                keySel.style.display = 'none';
+                chatSelectedKeyStr = keys.length > 0 ? keys[0].key : (item.key || '');
+            }
+            // 恢复模型
+            document.getElementById('chatModelInput').value = conv.model || '';
+            chatSelectedModel = conv.model || '';
+            document.getElementById('chatSendBtn').disabled = !chatSelectedModel;
+            // 后台拉取模型列表
+            chatFetchModels(item);
+        }
+
+        function chatRenderAllMessages() {
+            var container = document.getElementById('chatMessages');
+            container.innerHTML = '';
+            if (chatMessages.length === 0) {
+                container.innerHTML = '<div class="chat-empty">选择中转站和模型，开始对话 💬</div>';
+                return;
+            }
+            for (var i = 0; i < chatMessages.length; i++) {
+                var msg = chatMessages[i];
+                var role = msg.role === 'assistant' ? 'ai' : (msg.role === 'user' ? 'user' : null);
+                if (!role) continue;
+                var el = chatBuildMsgEl(role, msg.content);
+                container.appendChild(el);
+            }
+            chatScrollBottom();
+        }
+
+        function chatBuildMsgEl(role, text) {
+            var div = document.createElement('div');
+            div.className = 'chat-msg ' + role;
+            var bubble = document.createElement('div');
+            bubble.className = 'chat-bubble';
+            if (role === 'user') {
+                bubble.innerHTML = '<div style="white-space:pre-wrap;word-break:break-word">' + esc(text) + '</div>';
+            } else {
+                bubble.innerHTML = text ? renderText(text) : '';
+                if (text) chatAddCopyBtn(bubble, text);
+            }
+            div.appendChild(bubble);
+            return div;
+        }
+
+        /* ----- 中转站选择 ----- */
+        function populateChatProviders() {
+            var data = getKeyData();
+            var sel = document.getElementById('chatProviderSelect');
+            var old = sel.value;
+            sel.innerHTML = '<option value="">选择中转站…</option>';
+            for (var i = 0; i < data.length; i++) {
+                var item = data[i];
+                if (!item.url) continue;
+                var keys = getItemKeys(item);
+                if (keys.length === 0 && !item.key) continue;
+                var opt = document.createElement('option');
+                opt.value = item.id;
+                opt.textContent = item.name || item.url;
+                sel.appendChild(opt);
+            }
+            if (old) sel.value = old;
+        }
+
+        function onChatProviderChange() {
+            var id = document.getElementById('chatProviderSelect').value;
+            localStorage.setItem('chat_last_provider', id);
+            chatAllModels = [];
+            chatSelectedModel = '';
+            chatSelectedKeyStr = '';
+            document.getElementById('chatModelInput').value = '';
+            document.getElementById('chatModelDropdown').innerHTML = '';
+            document.getElementById('chatSendBtn').disabled = true;
+            var keySel = document.getElementById('chatKeySelect');
+            keySel.style.display = 'none';
+            keySel.innerHTML = '';
+            if (!id) return;
+            var item = getKeyItemById(id);
+            if (!item) return;
+            var keys = getItemKeys(item);
+            if (keys.length > 1) {
+                keySel.innerHTML = '<option value="">选择分组…</option>';
+                for (var i = 0; i < keys.length; i++) {
+                    var opt = document.createElement('option');
+                    opt.value = keys[i].key;
+                    opt.textContent = keys[i].label || ('密钥 ' + (i + 1));
+                    keySel.appendChild(opt);
+                }
+                keySel.style.display = '';
+                var lastKey = localStorage.getItem('chat_last_key_' + id) || '';
+                if (lastKey) {
+                    for (var j = 0; j < keySel.options.length; j++) {
+                        if (keySel.options[j].value === lastKey) { keySel.value = lastKey; onChatKeyChange(); return; }
+                    }
+                }
+            } else {
+                chatSelectedKeyStr = keys.length > 0 ? keys[0].key : (item.key || '');
+                chatLoadModelsForCurrentKey(item);
+            }
+        }
+
+        function onChatKeyChange() {
+            var keySel = document.getElementById('chatKeySelect');
+            var keyStr = keySel.value;
+            chatSelectedKeyStr = keyStr;
+            chatAllModels = [];
+            chatSelectedModel = '';
+            document.getElementById('chatModelInput').value = '';
+            document.getElementById('chatModelDropdown').innerHTML = '';
+            document.getElementById('chatSendBtn').disabled = true;
+            if (!keyStr) return;
+            var provId = document.getElementById('chatProviderSelect').value;
+            localStorage.setItem('chat_last_key_' + provId, keyStr);
+            var item = getKeyItemById(provId);
+            if (!item) return;
+            chatLoadModelsForCurrentKey(item);
+        }
+
+        function chatLoadModelsForCurrentKey(item) {
+            if (item.models && item.models.length > 0) {
+                chatAllModels = item.models.map(function(m) { return m.name || m.id || m; });
+                chatSortModels();
+                chatRenderModelDropdown('');
+                var provId = document.getElementById('chatProviderSelect').value;
+                var lastModel = localStorage.getItem('chat_last_model_' + provId) || '';
+                if (lastModel && chatAllModels.indexOf(lastModel) !== -1) {
+                    chatSelectedModel = lastModel;
+                    document.getElementById('chatModelInput').value = lastModel;
+                    document.getElementById('chatSendBtn').disabled = false;
+                }
+            }
+            chatFetchModels(item);
+        }
+
+        async function chatFetchModels(item) {
+            var baseUrl = getBaseUrl(item.url);
+            var apiKey = chatSelectedKeyStr || getActiveKey(item);
+            try {
+                var resp = await fetch(baseUrl + '/models', {
+                    headers: { 'Authorization': 'Bearer ' + apiKey }
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                var json = await resp.json();
+                var list = json.data || json;
+                if (Array.isArray(list)) {
+                    chatAllModels = list.map(function(m) { return m.id || m.name || String(m); });
+                    chatSortModels();
+                    var curFilter = document.getElementById('chatModelInput').value;
+                    chatRenderModelDropdown(curFilter);
+                }
+            } catch(e) {
+                console.warn('Chat: fetch models failed', e.message);
+            }
+        }
+
+        function chatSortModels() {
+            var provId = document.getElementById('chatProviderSelect').value;
+            var item = getKeyItemById(provId);
+            var provUrl = item ? (item.url || '') : '';
+            var favSet = {};
+            for (var i = 0; i < chatFavModels.length; i++) {
+                if (chatFavModels[i].url === provUrl) favSet[chatFavModels[i].model] = true;
+            }
+            chatAllModels.sort(function(a, b) {
+                var fa = favSet[a] ? 0 : 1;
+                var fb = favSet[b] ? 0 : 1;
+                if (fa !== fb) return fa - fb;
+                return a.localeCompare(b);
+            });
+        }
+
+        function chatIsModelFav(model) {
+            var provId = document.getElementById('chatProviderSelect').value;
+            var item = getKeyItemById(provId);
+            var provUrl = item ? (item.url || '') : '';
+            for (var i = 0; i < chatFavModels.length; i++) {
+                if (chatFavModels[i].url === provUrl && chatFavModels[i].model === model) return true;
+            }
+            return false;
+        }
+
+        function chatToggleFav(model, e) {
+            if (e) { e.stopPropagation(); e.preventDefault(); }
+            var provId = document.getElementById('chatProviderSelect').value;
+            var item = getKeyItemById(provId);
+            var provUrl = item ? (item.url || '') : '';
+            var idx = -1;
+            for (var i = 0; i < chatFavModels.length; i++) {
+                if (chatFavModels[i].url === provUrl && chatFavModels[i].model === model) { idx = i; break; }
+            }
+            if (idx >= 0) chatFavModels.splice(idx, 1);
+            else chatFavModels.push({ url: provUrl, model: model });
+            localStorage.setItem('chat_fav_models', JSON.stringify(chatFavModels));
+            chatSortModels();
+            var curFilter = document.getElementById('chatModelInput').value;
+            chatRenderModelDropdown(curFilter);
+        }
+
+        function chatRenderModelDropdown(filter) {
+            var dd = document.getElementById('chatModelDropdown');
+            var lower = (filter || '').toLowerCase();
+            var items = chatAllModels.filter(function(m) {
+                return !lower || m.toLowerCase().indexOf(lower) !== -1;
+            });
+            if (items.length === 0) {
+                dd.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--text-muted);text-align:center">' +
+                    (chatAllModels.length === 0 ? '加载模型中…' : '无匹配模型') + '</div>';
+                return;
+            }
+            dd.innerHTML = '';
+            for (var i = 0; i < items.length; i++) {
+                (function(m) {
+                    var isFav = chatIsModelFav(m);
+                    var isActive = m === chatSelectedModel;
+                    var row = document.createElement('div');
+                    row.className = 'chat-model-item' + (isActive ? ' active' : '');
+                    row.onclick = function() { chatPickModel(m); };
+                    var star = document.createElement('span');
+                    star.className = 'fav-star' + (isFav ? ' on' : '');
+                    star.textContent = '\u2B50';
+                    star.onclick = function(e) { chatToggleFav(m, e); };
+                    row.appendChild(star);
+                    var nameSpan = document.createElement('span');
+                    nameSpan.className = 'model-name';
+                    nameSpan.textContent = m;
+                    row.appendChild(nameSpan);
+                    dd.appendChild(row);
+                })(items[i]);
+            }
+        }
+
+        function chatShowModelDropdown() {
+            var dd = document.getElementById('chatModelDropdown');
+            dd.classList.add('show');
+            chatRenderModelDropdown(document.getElementById('chatModelInput').value);
+        }
+
+        function chatFilterModels() {
+            chatRenderModelDropdown(document.getElementById('chatModelInput').value);
+            document.getElementById('chatModelDropdown').classList.add('show');
+            var val = document.getElementById('chatModelInput').value;
+            if (chatAllModels.indexOf(val) !== -1) {
+                chatSelectedModel = val;
+                document.getElementById('chatSendBtn').disabled = false;
+                var provId = document.getElementById('chatProviderSelect').value;
+                if (provId) localStorage.setItem('chat_last_model_' + provId, val);
+            } else {
+                chatSelectedModel = '';
+                document.getElementById('chatSendBtn').disabled = true;
+            }
+        }
+
+        function chatPickModel(model) {
+            chatSelectedModel = model;
+            document.getElementById('chatModelInput').value = model;
+            document.getElementById('chatModelDropdown').classList.remove('show');
+            document.getElementById('chatSendBtn').disabled = false;
+            var provId = document.getElementById('chatProviderSelect').value;
+            if (provId) localStorage.setItem('chat_last_model_' + provId, model);
+        }
+
+        document.addEventListener('click', function(e) {
+            var wrap = document.querySelector('.chat-model-wrap');
+            var dd = document.getElementById('chatModelDropdown');
+            if (wrap && dd && !wrap.contains(e.target)) dd.classList.remove('show');
+        });
+
+        /* ----- System Prompt ----- */
+        function toggleChatSp() {
+            var area = document.getElementById('chatSpArea');
+            var btn = document.getElementById('chatSpBtn');
+            if (area.style.display === 'none') {
+                area.style.display = 'block';
+                btn.classList.add('active');
+                document.getElementById('chatSysPrompt').focus();
+            } else {
+                area.style.display = 'none';
+                btn.classList.remove('active');
+            }
+        }
+
+        /* ----- 输入区自动增高 ----- */
+        function chatAutoGrow(el) {
+            el.style.height = 'auto';
+            el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+            var hasModel = !!chatSelectedModel;
+            var hasText = el.value.trim().length > 0;
+            document.getElementById('chatSendBtn').disabled = !(hasModel && hasText);
+        }
+
+        /* ----- 键盘事件 ----- */
+        document.addEventListener('keydown', function(e) {
+            if (e.target.id !== 'chatInput') return;
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!document.getElementById('chatSendBtn').disabled) chatSend();
+            }
+        });
+
+        /* ----- 发送消息 ----- */
+        async function chatSend() {
+            var input = document.getElementById('chatInput');
+            var text = input.value.trim();
+            if (!text || !chatSelectedModel || chatStreaming) return;
+
+            var provId = document.getElementById('chatProviderSelect').value;
+            var item = getKeyItemById(provId);
+            if (!item) { showToast('⚠️ 未找到中转站信息'); return; }
+
+            // 确保有对话 ID
+            if (!chatCurrentConvId) {
+                chatCurrentConvId = 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+            }
+
+            input.value = '';
+            input.style.height = 'auto';
+            document.getElementById('chatSendBtn').disabled = true;
+
+            // 清空占位文字
+            var emptyEl = document.getElementById('chatMessages').querySelector('.chat-empty');
+            if (emptyEl) emptyEl.remove();
+
+            chatMessages.push({ role: 'user', content: text });
+            var container = document.getElementById('chatMessages');
+            container.appendChild(chatBuildMsgEl('user', text));
+            chatScrollBottom();
+
+            var reqMsgs = [];
+            var sp = document.getElementById('chatSysPrompt').value.trim();
+            if (sp) reqMsgs.push({ role: 'system', content: sp });
+            for (var i = 0; i < chatMessages.length; i++) reqMsgs.push(chatMessages[i]);
+
+            // AI占位
+            var aiDiv = document.createElement('div');
+            aiDiv.className = 'chat-msg ai';
+            var bubbleEl = document.createElement('div');
+            bubbleEl.className = 'chat-bubble';
+            bubbleEl.innerHTML = '<div class="chat-typing"><span></span><span></span><span></span></div>';
+            aiDiv.appendChild(bubbleEl);
+            container.appendChild(aiDiv);
+            chatScrollBottom();
+
+            var baseUrl = getBaseUrl(item.url);
+            var apiKey = chatSelectedKeyStr || getActiveKey(item);
+
+            chatStreaming = true;
+            chatAbortCtrl = new AbortController();
+            var fullContent = '';
+
+            try {
+                var resp = await fetch(baseUrl + '/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + apiKey
+                    },
+                    body: JSON.stringify({
+                        model: chatSelectedModel,
+                        messages: reqMsgs,
+                        stream: true
+                    }),
+                    signal: chatAbortCtrl.signal
+                });
+
+                if (!resp.ok) {
+                    var errText = '';
+                    try { errText = await resp.text(); } catch(x) {}
+                    throw new Error('HTTP ' + resp.status + (errText ? ': ' + errText.substring(0, 200) : ''));
+                }
+
+                var reader = resp.body.getReader();
+                var decoder = new TextDecoder();
+                var buffer = '';
+
+                while (true) {
+                    var result = await reader.read();
+                    if (result.done) break;
+                    buffer += decoder.decode(result.value, { stream: true });
+                    var lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (var li = 0; li < lines.length; li++) {
+                        var line = lines[li].trim();
+                        if (!line || !line.startsWith('data: ')) continue;
+                        var payload = line.substring(6);
+                        if (payload === '[DONE]') continue;
+                        try {
+                            var chunk = JSON.parse(payload);
+                            var delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
+                            if (delta && delta.content) {
+                                fullContent += delta.content;
+                                bubbleEl.innerHTML = renderText(fullContent);
+                                chatScrollBottom();
+                            }
+                        } catch(pe) { /* skip */ }
+                    }
+                }
+
+                if (buffer.trim()) {
+                    var remaining = buffer.trim();
+                    if (remaining.startsWith('data: ') && remaining.substring(6) !== '[DONE]') {
+                        try {
+                            var lastChunk = JSON.parse(remaining.substring(6));
+                            var lastDelta = lastChunk.choices && lastChunk.choices[0] && lastChunk.choices[0].delta;
+                            if (lastDelta && lastDelta.content) fullContent += lastDelta.content;
+                        } catch(x) {}
+                    }
+                }
+
+                if (fullContent) {
+                    bubbleEl.innerHTML = renderText(fullContent);
+                    chatMessages.push({ role: 'assistant', content: fullContent });
+                } else {
+                    bubbleEl.innerHTML = '<span style="color:var(--text-muted)">（无回复内容）</span>';
+                }
+
+            } catch(err) {
+                if (err.name === 'AbortError') {
+                    if (fullContent) {
+                        bubbleEl.innerHTML = renderText(fullContent);
+                        chatMessages.push({ role: 'assistant', content: fullContent });
+                    } else {
+                        bubbleEl.innerHTML = '<span style="color:var(--text-muted)">（已中断）</span>';
+                    }
+                } else {
+                    var errMsg = err.message || '请求失败';
+                    bubbleEl.innerHTML = '<div class="chat-error">❌ ' + esc(errMsg) + '</div>';
+                }
+            }
+
+            chatStreaming = false;
+            chatAbortCtrl = null;
+            if (fullContent) chatAddCopyBtn(bubbleEl, fullContent);
+            chatScrollBottom();
+            document.getElementById('chatSendBtn').disabled = !chatSelectedModel;
+            // 自动保存
+            chatSaveCurrentConv();
+        }
+
+        function chatAddCopyBtn(bubbleEl, text) {
+            var btn = document.createElement('button');
+            btn.className = 'chat-copy-btn';
+            btn.textContent = '📋';
+            btn.title = '复制';
+            btn.onclick = function(e) {
+                e.stopPropagation();
+                copyText(text, btn);
+                btn.textContent = '✅';
+                btn.classList.add('copied');
+                setTimeout(function() { btn.textContent = '📋'; btn.classList.remove('copied'); }, 1500);
+            };
+            bubbleEl.style.position = 'relative';
+            bubbleEl.appendChild(btn);
+        }
+
+        function chatScrollBottom() {
+            var el = document.getElementById('chatMessages');
+            requestAnimationFrame(function() { el.scrollTop = el.scrollHeight; });
+        }
+
+        /* ----- 长按搜索浮标打开聊天 ----- */
+        (function() {
+            var fab = document.getElementById('fabSearch');
+            var longTimer = null;
+            var didLongPress = false;
+            function onDown(e) {
+                didLongPress = false;
+                longTimer = setTimeout(function() {
+                    didLongPress = true;
+                    longTimer = null;
+                    openChatModal();
+                }, 500);
+            }
+            function onUp(e) {
+                if (longTimer) { clearTimeout(longTimer); longTimer = null; }
+                if (didLongPress) { e.preventDefault(); e.stopPropagation(); didLongPress = false; }
+            }
+            function onCancel() {
+                if (longTimer) { clearTimeout(longTimer); longTimer = null; }
+                didLongPress = false;
+            }
+            fab.addEventListener('touchstart', onDown, { passive: true });
+            fab.addEventListener('touchend', onUp);
+            fab.addEventListener('touchcancel', onCancel);
+            fab.addEventListener('mousedown', onDown);
+            fab.addEventListener('mouseup', onUp);
+            fab.addEventListener('mouseleave', onCancel);
+            var origClick = fab.onclick;
+            fab.onclick = function(e) {
+                if (didLongPress) { didLongPress = false; return; }
+                if (origClick) origClick.call(this, e);
+            };
+        })();
+
+        /* ----- 移动端键盘弹出适配 ----- */
+        (function() {
+            if (!window.visualViewport) return;
+            function adjustChat() {
+                var overlay = document.getElementById('chatModalOverlay');
+                if (!overlay || !overlay.classList.contains('show')) return;
+                var modal = overlay.querySelector('.chat-modal');
+                if (!modal) return;
+                var vv = window.visualViewport;
+                modal.style.height = vv.height + 'px';
+                modal.style.top = vv.offsetTop + 'px';
+                chatScrollBottom();
+            }
+            window.visualViewport.addEventListener('resize', adjustChat);
+            window.visualViewport.addEventListener('scroll', adjustChat);
+            // 关闭时重置
+            var origClose = closeChatModal;
+            closeChatModal = function() {
+                origClose();
+                var modal = document.querySelector('.chat-modal');
+                if (modal) { modal.style.height = ''; modal.style.top = ''; }
+            };
+        })();
 
         /* =========================================================================
          * [3.11] 应用启动流程
