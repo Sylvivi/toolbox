@@ -8820,6 +8820,15 @@ body {
         /* ----- 键盘事件 ----- */
         document.addEventListener('keydown', function(e) {
             if (e.target.id !== 'chatInput') return;
+            if (e.key === 'Enter' && e.ctrlKey) {
+                e.preventDefault();
+                var ta = e.target;
+                var start = ta.selectionStart, end = ta.selectionEnd;
+                ta.value = ta.value.substring(0, start) + '\n' + ta.value.substring(end);
+                ta.selectionStart = ta.selectionEnd = start + 1;
+                chatAutoGrow(ta);
+                return;
+            }
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 if (!document.getElementById('chatSendBtn').disabled) chatSend();
