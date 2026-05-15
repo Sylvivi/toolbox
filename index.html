@@ -10222,11 +10222,25 @@ body {
             if (activeSyncProvider === 'cf') {
                 var cfCfg = cfGetConfig();
                 if (cfCfg.url && cfCfg.token) {
-                    cfPullData(false).catch(function(e) {
-                        console.warn('Background cloud sync failed:', e);
+                    console.log('[sync-diag] provider=cf, url=' + cfCfg.url);
+                    cfGetManifest().then(function(manifest) {
+                        console.log('[sync-diag] manifest=', manifest);
+                        if (!manifest) {
+                            showToast('⚠️ 自动同步：manifest 为空（ver 不匹配或 Worker 无响应）');
+                            return;
+                        }
+                        return cfPullData(false);
+                    }).then(function() {
+                        console.log('[sync-diag] pull done');
+                    }).catch(function(e) {
+                        console.warn('[sync-diag] failed:', e);
+                        showToast('❌ 自动同步失败: ' + (e.message || e));
                     });
+                } else {
+                    console.log('[sync-diag] cf not configured, url=' + cfCfg.url + ' token=' + !!cfCfg.token);
                 }
             } else {
+                console.log('[sync-diag] provider=' + activeSyncProvider);
                 var cfg = gistGetConfig();
                 if (cfg.token && cfg.gistId) gistPull(false);
             }
