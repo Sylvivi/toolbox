@@ -10151,7 +10151,6 @@ body {
             var didLongPress = false;
             function onDown(e) {
                 didLongPress = false;
-                if (e.cancelable) e.preventDefault();
                 longTimer = setTimeout(function() {
                     didLongPress = true;
                     longTimer = null;
@@ -10160,7 +10159,9 @@ body {
             }
             function onUp(e) {
                 if (longTimer) { clearTimeout(longTimer); longTimer = null; }
-                if (didLongPress) { e.preventDefault(); e.stopPropagation(); didLongPress = false; }
+                if (didLongPress) { e.preventDefault(); e.stopPropagation(); didLongPress = false; return; }
+                // 触摸短按 → 手动触发 click
+                if (e.type === 'touchend') fab.click();
             }
             function onCancel() {
                 if (longTimer) { clearTimeout(longTimer); longTimer = null; }
