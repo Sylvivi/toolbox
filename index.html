@@ -6982,7 +6982,8 @@ body {
             var statusLine = document.getElementById('gistStatusLine');
 
             // 已配置同步：显示上次同步时间，不显示备份提醒
-            if (cfg.token && cfg.gistId) {
+            var cfCfg = cfGetConfig();
+            if ((cfg.token && cfg.gistId) || (cfCfg.url && cfCfg.token)) {
                 var t = localStorage.getItem('toolbox_gist_last_sync');
                 if (statusLine) statusLine.innerHTML = t ? '☁️ ' + fmtTimeShort(t) + ' <span style="opacity:0.5">已同步</span>' : '☁️ <span style="opacity:0.6">等待同步…</span>';
                 return;
@@ -8472,6 +8473,28 @@ body {
                 bar.addEventListener('touchend', function() { dragging = false; });
                 bar.addEventListener('touchcancel', function() { dragging = false; });
             });
+        })();
+
+        // 右滑返回对话列表
+        (function() {
+            var msgArea = document.getElementById('chatMessages');
+            if (!msgArea) return;
+            var startX = 0, startY = 0, swiping = false;
+            msgArea.addEventListener('touchstart', function(e) {
+                if (chatView !== 'conv' || chatStreaming) return;
+                var t = e.touches[0];
+                if (t.clientX > 40) return;
+                startX = t.clientX; startY = t.clientY; swiping = true;
+            }, { passive: true });
+            msgArea.addEventListener('touchmove', function(e) {
+                if (!swiping) return;
+                var dx = e.touches[0].clientX - startX;
+                var dy = Math.abs(e.touches[0].clientY - startY);
+                if (dy > 50) { swiping = false; return; }
+                if (dx > 80) { swiping = false; chatBackToList(); }
+            }, { passive: true });
+            msgArea.addEventListener('touchend', function() { swiping = false; });
+            msgArea.addEventListener('touchcancel', function() { swiping = false; });
         })();
 
         // 空白处双击退出聊天
@@ -10252,6 +10275,7 @@ body {
             if (typeof renderKeyCards === 'function') renderKeyCards();
             if (typeof renderSnipFilters === 'function') renderSnipFilters();
             if (typeof renderSnippets === 'function') renderSnippets();
+            if (typeof checkBackupReminder === 'function') checkBackupReminder();
 
             return html;
         }
