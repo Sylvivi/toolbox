@@ -10244,8 +10244,15 @@ body {
                 if (!cc.url || !cc.token) return;
                 _syncing = true;
                 _lastSync = Date.now();
-                cfPullData(false).then(function() {
-                    _syncing = false;
+                cfGetManifest().then(function(manifest) {
+                    if (!manifest) { _syncing = false; return; }
+                    var lastSync = localStorage.getItem('toolbox_gist_last_sync');
+                    var cloudTime = manifest.lastModified ? new Date(manifest.lastModified).getTime() : 0;
+                    var localTime = lastSync ? new Date(lastSync).getTime() : 0;
+                    if (cloudTime <= localTime + 2000) { _syncing = false; return; }
+                    return cfPullData(false).then(function() {
+                        _syncing = false;
+                    });
                 }).catch(function() {
                     _syncing = false;
                 });
