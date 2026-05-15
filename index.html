@@ -10222,18 +10222,7 @@ body {
             if (activeSyncProvider === 'cf') {
                 var cfCfg = cfGetConfig();
                 if (cfCfg.url && cfCfg.token) {
-                    var beforeKeys = JSON.stringify(getKeyData());
-                    var beforeSnips = JSON.stringify(getSnipData());
-                    cfCloudFirstLoad().then(function() {
-                        var keysChanged = JSON.stringify(getKeyData()) !== beforeKeys;
-                        var snipsChanged = JSON.stringify(getSnipData()) !== beforeSnips;
-                        if (keysChanged || snipsChanged) {
-                            var expanded = getExpandedCardIds();
-                            if (keysChanged) { renderKeyFilters(); renderKeyCards(); }
-                            if (snipsChanged) { renderSnipFilters(); renderSnippets(); }
-                            restoreExpandedCards(expanded);
-                        }
-                    }).catch(function(e) {
+                    cfPullData(false).catch(function(e) {
                         console.warn('Background cloud sync failed:', e);
                     });
                 }
@@ -10259,30 +10248,7 @@ body {
             if (activeSyncProvider === 'cf') {
                 var cfCfg = cfGetConfig();
                 if (!cfCfg.url || !cfCfg.token) { done(); return; }
-                cfGetManifest().then(function(manifest) {
-                    if (!manifest) { done(); return; }
-                    var lastSync = localStorage.getItem('toolbox_gist_last_sync');
-                    var cloudMod = manifest.lastModified ? new Date(manifest.lastModified).getTime() : 0;
-                    var localSyncTime = lastSync ? new Date(lastSync).getTime() : 0;
-                    if (cloudMod > localSyncTime + 2000) {
-                        var beforeKeys = JSON.stringify(getKeyData());
-                        var beforeSnips = JSON.stringify(getSnipData());
-                        cfSmartSync().then(function() {
-                            localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
-                            var keysChanged = JSON.stringify(getKeyData()) !== beforeKeys;
-                            var snipsChanged = JSON.stringify(getSnipData()) !== beforeSnips;
-                            if (keysChanged || snipsChanged) {
-                                var expanded = getExpandedCardIds();
-                                if (keysChanged) { renderKeyFilters(); renderKeyCards(); }
-                                if (snipsChanged) { renderSnipFilters(); renderSnippets(); }
-                                restoreExpandedCards(expanded);
-                                var sl = document.getElementById('gistStatusLine');
-                                if (sl) sl.innerHTML = '☁️ ' + fmtTimeShort(new Date().toISOString()) + ' <span style="opacity:0.5">已同步</span>';
-                            }
-                            done();
-                        }).catch(function() { done(); });
-                    } else { done(); }
-                }).catch(function() { done(); });
+                cfPullData(false).then(done).catch(done);
             } else {
                 var cfg = gistGetConfig();
                 if (!cfg.token || !cfg.gistId) { done(); return; }
