@@ -914,11 +914,16 @@ body {
             padding: 6px 16px;
             max-width: 768px; width: 100%; margin: 0 auto;
         }
-        @keyframes chatMsgIn {
-            from { opacity: 0; transform: translateY(10px); }
+        @keyframes chatMsgInUser {
+            from { opacity: 0; transform: translateX(20px) scale(0.96); }
+            to { opacity: 1; transform: translateX(0) scale(1); }
+        }
+        @keyframes chatMsgInAi {
+            from { opacity: 0; transform: translateY(12px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .chat-msg.chat-appear { animation: chatMsgIn 0.3s ease-out; }
+        .chat-msg.user.chat-appear { animation: chatMsgInUser 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .chat-msg.ai.chat-appear { animation: chatMsgInAi 0.45s cubic-bezier(0.22, 1, 0.36, 1); }
         .chat-msg.user {
             align-self: stretch; align-items: flex-end;
         }
@@ -1018,9 +1023,17 @@ body {
         .chat-msg.ai .chat-more-btn { align-self: flex-start; }
 
         /* 打字动画 */
-        .chat-typing { display: inline-flex; gap: 5px; padding: 8px 0; }
+        .chat-typing {
+            display: inline-flex; gap: 5px; padding: 8px 14px;
+            background: var(--card-inner); border-radius: 16px;
+            animation: chatTypingPulse 2s ease-in-out infinite;
+        }
+        @keyframes chatTypingPulse {
+            0%, 100% { background: var(--card-inner); }
+            50% { background: var(--accent-light); }
+        }
         .chat-typing span {
-            width: 7px; height: 7px; border-radius: 50%;
+            width: 6px; height: 6px; border-radius: 50%;
             background: var(--text-muted); animation: chatTyping 1.2s infinite;
         }
         .chat-typing span:nth-child(2) { animation-delay: 0.2s; }
@@ -1052,14 +1065,18 @@ body {
             background: var(--card-bg); border: 1px solid var(--card-border);
             border-radius: 22px; padding: 12px 14px 8px;
             box-shadow: 0 1px 6px rgba(0,0,0,0.04);
-            transition: border-color 0.15s;
+            transition: border-color 0.3s, box-shadow 0.3s;
         }
-        .chat-input-box:focus-within { border-color: var(--accent-mid); }
+        .chat-input-box:focus-within {
+            border-color: var(--accent-mid);
+            box-shadow: 0 0 0 3px var(--accent-light), 0 1px 6px rgba(0,0,0,0.04);
+        }
         .chat-input-box textarea {
             width: 100%; min-height: 24px; max-height: 120px; padding: 0;
             background: none; border: none; color: var(--text); font-size: 14px;
             outline: none; resize: none; font-family: inherit; line-height: 1.5;
             overflow-y: auto; margin-bottom: 8px;
+            transition: height 0.15s ease;
         }
         .chat-input-box textarea::placeholder { color: var(--text-muted); }
         .chat-input-toolbar {
@@ -1089,14 +1106,22 @@ body {
         .chat-attach-item svg { color: var(--text-sub); flex-shrink: 0; }
         .chat-send-btn {
             width: 32px; height: 32px; border: none; border-radius: 50%;
-            background: var(--accent); color: #fff; font-size: 16px;
+            background: var(--text-muted); color: #fff; font-size: 16px;
             cursor: pointer; flex-shrink: 0;
             display: flex; align-items: center; justify-content: center;
-            transition: opacity 0.15s, transform 0.12s ease;
+            transition: opacity 0.3s, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.3s;
             -webkit-tap-highlight-color: transparent;
         }
-        .chat-send-btn:active:not(:disabled) { transform: scale(0.85); }
+        .chat-send-btn.ready { background: var(--accent); }
+        .chat-send-btn:active:not(:disabled) { transform: scale(0.82); }
         .chat-send-btn:disabled { opacity: 0.15; cursor: not-allowed; }
+        @keyframes chatSendPop {
+            0% { transform: scale(1); }
+            40% { transform: scale(0.75) rotate(-8deg); }
+            70% { transform: scale(1.15) rotate(2deg); }
+            100% { transform: scale(1) rotate(0); }
+        }
+        .chat-send-btn.sending { animation: chatSendPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .dark .chat-send-btn { color: #1a2420; }
 
         .chat-clear-btn {
@@ -1122,12 +1147,13 @@ body {
         .chat-thinking.open .chat-thinking-hd .arrow { transform: rotate(90deg); }
         .chat-think-timer { font-variant-numeric: tabular-nums; opacity: 0.45; font-size: 11px; margin-left: 1px; letter-spacing: 0.02em; }
         .chat-thinking-bd {
-            display: none; margin-top: 8px; padding: 2px 0 2px 12px;
+            margin-top: 8px; padding: 2px 0 2px 12px;
             font-size: 12px; line-height: 1.65; color: var(--text-sub);
             border-top: none; border-left: 2px solid var(--card-border);
-            max-height: 240px; overflow-y: auto; background: transparent;
+            max-height: 0; overflow: hidden; opacity: 0; background: transparent;
+            transition: max-height 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease;
         }
-        .chat-thinking.open .chat-thinking-bd { display: block; }
+        .chat-thinking.open .chat-thinking-bd { max-height: 240px; opacity: 1; overflow-y: auto; }
 
         /* ===== 上下文控制 ===== */
         .chat-ctx-bar {
@@ -8152,6 +8178,7 @@ body {
         var chatStreaming = false;
         var chatAbortCtrl = null;
         var chatStreamStart = 0;
+        var chatThinkStart = 0;
         var chatThinkDuration = 0;
         var chatThinkInterval = null;
         function chatFmtElapsed(s) { return s < 60 ? s + 's' : Math.floor(s/60) + ':' + ('0'+s%60).slice(-2); }
@@ -8228,8 +8255,10 @@ body {
         function chatConvTitle(msgs) {
             for (var i = 0; i < msgs.length; i++) {
                 if (msgs[i].role === 'user') {
-                    var t = msgs[i].content.replace(/\s+/g, ' ').trim();
-                    return t.length > 40 ? t.substring(0, 40) + '…' : t;
+                    var c = msgs[i].content;
+                    var t = typeof c === 'string' ? c : Array.isArray(c) ? c.filter(function(p){return p.type==='text';}).map(function(p){return p.text;}).join(' ') : '';
+                    t = t.replace(/\s+/g, ' ').trim();
+                    return t.length > 40 ? t.substring(0, 40) + '…' : t || '图片对话';
                 }
             }
             return '新对话';
@@ -9036,7 +9065,9 @@ body {
             el.style.height = Math.min(el.scrollHeight, 120) + 'px';
             var hasModel = !!chatSelectedModel;
             var hasContent = el.value.trim().length > 0 || chatPendingImages.length > 0 || chatPendingFiles.length > 0;
-            document.getElementById('chatSendBtn').disabled = !(hasModel && hasContent);
+            var btn = document.getElementById('chatSendBtn');
+            btn.disabled = !(hasModel && hasContent);
+            btn.classList.toggle('ready', hasModel && hasContent);
         }
 
         /* ----- 键盘事件 ----- */
@@ -9075,7 +9106,11 @@ body {
 
             input.value = '';
             input.style.height = 'auto';
-            document.getElementById('chatSendBtn').disabled = true;
+            var _sendBtn = document.getElementById('chatSendBtn');
+            _sendBtn.disabled = true;
+            _sendBtn.classList.remove('ready');
+            _sendBtn.classList.add('sending');
+            setTimeout(function() { _sendBtn.classList.remove('sending'); }, 450);
 
             var emptyEl = document.getElementById('chatMessages').querySelector('.chat-empty');
             if (emptyEl) emptyEl.remove();
@@ -9172,6 +9207,7 @@ body {
             chatAbortCtrl = new AbortController();
             chatSetStopMode(true);
             chatStreamStart = Date.now();
+            chatThinkStart = 0;
             chatThinkDuration = 0;
             if (chatThinkInterval) clearInterval(chatThinkInterval);
             chatThinkInterval = setInterval(function() {
@@ -9186,6 +9222,8 @@ body {
             var thinkContent = '';
             var inThinkTag = false;
             var inThinkTagName = 'think';
+            var _contentBuf = '';
+            var _thinkTags = ['<think>', '</think>', '<thinking>', '</thinking>'];
             var _rafPending = false;
             var _rafThinking = false;
             function _scheduleRender(isThinking) {
@@ -9243,31 +9281,44 @@ body {
                             // 思维链字段（覆盖各家中转站变体）
                             var thinkDelta = delta.reasoning_content || delta.reasoning || delta.thinking;
                             if (thinkDelta) {
+                                if (!chatThinkStart) chatThinkStart = Date.now();
                                 thinkContent += thinkDelta;
                                 _scheduleRender(true);
                             }
                             if (delta.content) {
-                                var txt = delta.content;
-                                // 处理 <think> / <thinking> 标签
-                                if (!inThinkTag && (txt.indexOf('<think>') !== -1 || txt.indexOf('<thinking>') !== -1)) {
-                                    var tagStart = txt.indexOf('<think>') !== -1 ? '<think>' : '<thinking>';
-                                    var parts = txt.split(tagStart);
-                                    fullContent += parts[0];
-                                    thinkContent += parts.slice(1).join(tagStart);
-                                    inThinkTag = true;
-                                    inThinkTagName = tagStart === '<think>' ? 'think' : 'thinking';
-                                } else if (inThinkTag && (txt.indexOf('</think>') !== -1 || txt.indexOf('</thinking>') !== -1)) {
-                                    var tagEnd = '</' + inThinkTagName + '>';
-                                    var parts2 = txt.split(tagEnd);
-                                    thinkContent += parts2[0];
-                                    fullContent += parts2.slice(1).join(tagEnd);
-                                    inThinkTag = false;
-                                } else if (inThinkTag) {
-                                    thinkContent += txt;
-                                } else {
-                                    fullContent += txt;
+                                _contentBuf += delta.content;
+                                var safeCut = _contentBuf.length;
+                                var ltIdx = _contentBuf.lastIndexOf('<');
+                                if (ltIdx !== -1) {
+                                    var tail = _contentBuf.substring(ltIdx);
+                                    for (var ti = 0; ti < _thinkTags.length; ti++) {
+                                        if (_thinkTags[ti].substring(0, tail.length) === tail) { safeCut = ltIdx; break; }
+                                    }
                                 }
-                                _scheduleRender(inThinkTag);
+                                var proc = _contentBuf.substring(0, safeCut);
+                                _contentBuf = _contentBuf.substring(safeCut);
+                                if (proc) {
+                                    if (!inThinkTag && (proc.indexOf('<think>') !== -1 || proc.indexOf('<thinking>') !== -1)) {
+                                        var tagStart = proc.indexOf('<think>') !== -1 ? '<think>' : '<thinking>';
+                                        var parts = proc.split(tagStart);
+                                        fullContent += parts[0];
+                                        thinkContent += parts.slice(1).join(tagStart);
+                                        inThinkTag = true;
+                                        if (!chatThinkStart) chatThinkStart = Date.now();
+                                        inThinkTagName = tagStart === '<think>' ? 'think' : 'thinking';
+                                    } else if (inThinkTag && (proc.indexOf('</think>') !== -1 || proc.indexOf('</thinking>') !== -1)) {
+                                        var tagEnd = '</' + inThinkTagName + '>';
+                                        var parts2 = proc.split(tagEnd);
+                                        thinkContent += parts2[0];
+                                        fullContent += parts2.slice(1).join(tagEnd);
+                                        inThinkTag = false;
+                                    } else if (inThinkTag) {
+                                        thinkContent += proc;
+                                    } else {
+                                        fullContent += proc;
+                                    }
+                                    _scheduleRender(inThinkTag);
+                                }
                             }
                         } catch(pe) { /* skip */ }
                     }
@@ -9280,9 +9331,14 @@ body {
                             var lastChunk = JSON.parse(remaining.substring(6));
                             var ld = lastChunk.choices && lastChunk.choices[0] && lastChunk.choices[0].delta;
                             if (ld && (ld.reasoning_content || ld.reasoning || ld.thinking)) thinkContent += (ld.reasoning_content || ld.reasoning || ld.thinking);
-                            if (ld && ld.content) fullContent += ld.content;
+                            if (ld && ld.content) _contentBuf += ld.content;
                         } catch(x) {}
                     }
+                }
+                if (_contentBuf) {
+                    if (inThinkTag) thinkContent += _contentBuf;
+                    else fullContent += _contentBuf;
+                    _contentBuf = '';
                 }
 
                 if (fullContent || thinkContent) {
@@ -9338,10 +9394,10 @@ body {
                 h += '<div class="chat-thinking' + (isThinking ? ' open' : '') + '">';
                 h += '<div class="chat-thinking-hd" onclick="this.parentElement.classList.toggle(\'open\')">';
                 if (isThinking) {
-                    var _es = chatStreamStart ? Math.floor((Date.now() - chatStreamStart) / 1000) : 0;
+                    var _es = chatThinkStart ? Math.floor((Date.now() - chatThinkStart) / 1000) : 0;
                     h += '<span class="arrow">▶</span> 思考中… <span class="chat-think-timer">' + chatFmtElapsed(_es) + '</span>';
                 } else {
-                    if (chatThinkInterval) { chatThinkDuration = chatStreamStart ? Math.floor((Date.now() - chatStreamStart) / 1000) : 0; clearInterval(chatThinkInterval); chatThinkInterval = null; }
+                    if (chatThinkInterval) { chatThinkDuration = chatThinkStart ? Math.floor((Date.now() - chatThinkStart) / 1000) : 0; clearInterval(chatThinkInterval); chatThinkInterval = null; }
                     h += '<span class="arrow">▶</span> 思考过程';
                     if (chatThinkDuration > 0) h += ' <span class="chat-think-timer">' + chatFmtElapsed(chatThinkDuration) + '</span>';
                 }
