@@ -8656,7 +8656,7 @@ body {
             } else {
                 var h = '';
                 if (thinking && thinking.trim()) {
-                    h += '<div class="chat-thinking"><div class="chat-thinking-hd" onclick="this.parentElement.classList.toggle(\'open\')">';
+                    h += '<div class="chat-thinking"><div class="chat-thinking-hd" onclick="chatToggleThinking(this)">';
                     h += '<span class="arrow">▶</span> 思考过程</div>';
                     h += '<div class="chat-thinking-bd">' + renderText(thinking) + '</div></div>';
                 }
@@ -9415,7 +9415,7 @@ body {
             var h = '';
             if (thinking && thinking.trim()) {
                 h += '<div class="chat-thinking' + (isThinking ? ' open' : '') + '">';
-                h += '<div class="chat-thinking-hd" onclick="this.parentElement.classList.toggle(\'open\')">';
+                h += '<div class="chat-thinking-hd" onclick="chatToggleThinking(this)">';
                 if (isThinking) {
                     var _es = chatThinkStart ? Math.floor((Date.now() - chatThinkStart) / 1000) : 0;
                     h += '<span class="arrow">▶</span> 思考中… <span class="chat-think-timer">' + chatFmtElapsed(_es) + '</span>';
@@ -10083,6 +10083,28 @@ body {
         function chatIsNearBottom() {
             var el = document.getElementById('chatMessages');
             return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        }
+
+        function chatToggleThinking(hd) {
+            var wrap = hd.parentElement;
+            var isOpening = !wrap.classList.contains('open');
+            wrap.classList.toggle('open');
+            if (isOpening) {
+                var container = document.getElementById('chatMessages');
+                setTimeout(function() {
+                    var bd = wrap.querySelector('.chat-thinking-bd');
+                    if (!bd || !container) return;
+                    var cRect = container.getBoundingClientRect();
+                    var bdRect = bd.getBoundingClientRect();
+                    if (bdRect.bottom > cRect.bottom) {
+                        var scrollBy = bdRect.bottom - cRect.bottom + 10;
+                        var hdRect = hd.getBoundingClientRect();
+                        var maxScroll = hdRect.top - cRect.top - 10;
+                        if (scrollBy > maxScroll) scrollBy = maxScroll;
+                        container.scrollBy({ top: scrollBy, behavior: 'smooth' });
+                    }
+                }, 80);
+            }
         }
 
         function chatScrollBottomSmooth() {
