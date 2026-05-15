@@ -7167,12 +7167,16 @@ body {
             return cfReq('PUT', '_manifest', manifest);
         }
         function cfBuildManifest() {
+            var cardTs = {};
+            getKeyData().forEach(function(d) { cardTs['k_' + d.id] = d.updatedAt || ''; });
+            getSnipData().forEach(function(d) { cardTs['s_' + d.id] = d.updatedAt || ''; });
             return {
                 ver: CF_VER,
                 keyIds: getKeyData().map(function(d) { return d.id; }),
                 snipIds: getSnipData().map(function(d) { return d.id; }),
                 imgbeds: getImgBedData(),
                 tombstones: getTombstones(),
+                cardTimestamps: cardTs,
                 lastModified: new Date().toISOString()
             };
         }
@@ -7307,7 +7311,6 @@ body {
         }
 
         // Diff 同步：比较新旧数组，只推变化的卡片
-        var _cfSyncTimer = null;
         function cfSyncCards(prefix, oldArr, newArr) {
             if (activeSyncProvider !== 'cf') return;
             var cfg = cfGetConfig();
@@ -7341,13 +7344,10 @@ body {
 
             if (promises.length === 0) return;
 
-            // Debounce manifest 更新（避免频繁写）
-            if (_cfSyncTimer) clearTimeout(_cfSyncTimer);
-            _cfSyncTimer = setTimeout(function() {
-                cfPutManifest(cfBuildManifest()).catch(function() {});
-            }, 1500);
-
             Promise.all(promises).then(function() {
+                // 卡片全部推完后立刻更新 manifest，确保其他设备能发现变化
+                return cfPutManifest(cfBuildManifest());
+            }).then(function() {
                 localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
                 var sl = document.getElementById('gistStatusLine');
                 if (sl) sl.innerHTML = '☁️ ' + fmtTimeShort(new Date().toISOString()) + ' <span style="opacity:0.5">已同步</span>';
@@ -7382,41 +7382,85 @@ body {
                     if (!localImgbeds || localImgbeds.length === 0) setImgBedData(manifest.imgbeds);
                 }
 
-                // 2) 拉取所有云端卡片
-                var allCloudKeys = [];
-                (manifest.keyIds || []).forEach(function(id) { allCloudKeys.push('k_' + id); });
-                (manifest.snipIds || []).forEach(function(id) { allCloudKeys.push('s_' + id); });
-
                 // 本地数据
                 var localKeys = getKeyData();
                 var localSnips = getSnipData();
 
-                if (allCloudKeys.length === 0 && localKeys.length === 0 && localSnips.length === 0) return;
+                // 2) 利用 manifest.cardTimestamps 增量判断，只拉取有变化的卡片
+                var cloudTs = manifest.cardTimestamps || {};
+                var localKeyMap = {};
+                localKeys.forEach(function(d) { localKeyMap[d.id] = d; });
+                var localSnipMap = {};
+                localSnips.forEach(function(d) { localSnipMap[d.id] = d; });
 
-                var batchPromise = allCloudKeys.length > 0 ? cfBatchGet(allCloudKeys) : Promise.resolve({});
+                var needFetchKeys = [];
+                (manifest.keyIds || []).forEach(function(id) {
+                    var local = localKeyMap[id];
+                    var ct = cloudTs['k_' + id] || '';
+                    if (!local || (ct && local.updatedAt !== ct)) {
+                        needFetchKeys.push('k_' + id);
+                    }
+                });
+                var needFetchSnips = [];
+                (manifest.snipIds || []).forEach(function(id) {
+                    var local = localSnipMap[id];
+                    var ct = cloudTs['s_' + id] || '';
+                    if (!local || (ct && local.updatedAt !== ct)) {
+                        needFetchSnips.push('s_' + id);
+                    }
+                });
+
+                // 检查本地有但云端没有的卡片（需要推上去）
+                var cloudKeyIdSet = {};
+                (manifest.keyIds || []).forEach(function(id) { cloudKeyIdSet[id] = true; });
+                var cloudSnipIdSet = {};
+                (manifest.snipIds || []).forEach(function(id) { cloudSnipIdSet[id] = true; });
+
+                var allFetchKeys = needFetchKeys.concat(needFetchSnips);
+
+                // 如果 manifest 没有 cardTimestamps（旧版），降级为全量拉取
+                if (!manifest.cardTimestamps) {
+                    allFetchKeys = [];
+                    (manifest.keyIds || []).forEach(function(id) { allFetchKeys.push('k_' + id); });
+                    (manifest.snipIds || []).forEach(function(id) { allFetchKeys.push('s_' + id); });
+                }
+
+                if (allFetchKeys.length === 0 && localKeys.length === 0 && localSnips.length === 0) return;
+
+                var batchPromise = allFetchKeys.length > 0 ? cfBatchGet(allFetchKeys) : Promise.resolve({});
 
                 return batchPromise.then(function(cloudResults) {
-                    // 3) 解析云端卡片
+                    // 3) 构建云端卡片 map（只含实际拉取的 + 本地已有且未变化的用本地版本代替）
                     var cloudKeyMap = {}, cloudSnipMap = {};
                     (manifest.keyIds || []).forEach(function(id) {
-                        var c = cloudResults['k_' + id]; if (c && c.id) cloudKeyMap[c.id] = c;
+                        var c = cloudResults['k_' + id];
+                        if (c && c.id) {
+                            cloudKeyMap[id] = c;
+                        } else if (localKeyMap[id] && !cloudResults.hasOwnProperty('k_' + id)) {
+                            // 没拉取（时间戳一致）→ 用本地的，不算云端独有
+                            cloudKeyMap[id] = localKeyMap[id];
+                        }
                     });
                     (manifest.snipIds || []).forEach(function(id) {
-                        var c = cloudResults['s_' + id]; if (c && c.id) cloudSnipMap[c.id] = c;
+                        var c = cloudResults['s_' + id];
+                        if (c && c.id) {
+                            cloudSnipMap[id] = c;
+                        } else if (localSnipMap[id] && !cloudResults.hasOwnProperty('s_' + id)) {
+                            cloudSnipMap[id] = localSnipMap[id];
+                        }
                     });
 
-                    // 4) 双向合并 keys
+                    // 4) 双向合并
                     var mergedKeys = _mergeCardArrays(localKeys, cloudKeyMap, mergedTombs);
-                    // 5) 双向合并 snips
                     var mergedSnips = _mergeCardArrays(localSnips, cloudSnipMap, mergedTombs);
 
-                    // 6) 写回本地
+                    // 5) 写回本地
                     setKeyDataSilent(mergedKeys.cards);
                     setSnipDataSilent(mergedSnips.cards);
                     markSynced(mergedKeys.cards);
                     markSynced(mergedSnips.cards);
 
-                    // 7) 将本地独有或合并后有变化的卡片推回云端
+                    // 6) 将本地独有或合并后有变化的卡片推回云端
                     var pushPromises = [];
                     mergedKeys.toPush.forEach(function(card) {
                         pushPromises.push(cfReq('PUT', 'k_' + card.id, card).then(function() {
@@ -7437,7 +7481,7 @@ body {
                         pushPromises.push(cfReq('DELETE', 's_' + id).catch(function(){}));
                     });
 
-                    // 8) 更新 manifest
+                    // 7) 更新 manifest（有变化时才写）
                     if (pushPromises.length > 0 || mergedKeys.manifestDirty || mergedSnips.manifestDirty) {
                         var newManifest = cfBuildManifest();
                         newManifest.tombstones = mergedTombs;
