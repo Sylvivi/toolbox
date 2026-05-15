@@ -10237,6 +10237,61 @@ body {
                 if (cfg.token && cfg.gistId) gistPull(false);
             }
         });
+
+        /* ----- 自动同步：visibilitychange + 定时轮询 ----- */
+        var _autoSyncInterval = null;
+        var _lastAutoSync = Date.now();
+        var _autoSyncLock = false;
+
+        function _doAutoSync() {
+            if (_autoSyncLock) return;
+            if (Date.now() - _lastAutoSync < 30000) return;
+            _autoSyncLock = true;
+            _lastAutoSync = Date.now();
+
+            var done = function() { _autoSyncLock = false; };
+
+            if (activeSyncProvider === 'cf') {
+                var cfCfg = cfGetConfig();
+                if (!cfCfg.url || !cfCfg.token) { done(); return; }
+                cfGetManifest().then(function(manifest) {
+                    if (!manifest) { done(); return; }
+                    var lastSync = localStorage.getItem('toolbox_gist_last_sync');
+                    var cloudMod = manifest.lastModified ? new Date(manifest.lastModified).getTime() : 0;
+                    var localSyncTime = lastSync ? new Date(lastSync).getTime() : 0;
+                    if (cloudMod > localSyncTime + 2000) {
+                        var beforeKeys = JSON.stringify(getKeyData());
+                        var beforeSnips = JSON.stringify(getSnipData());
+                        cfSmartSync().then(function() {
+                            localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
+                            var keysChanged = JSON.stringify(getKeyData()) !== beforeKeys;
+                            var snipsChanged = JSON.stringify(getSnipData()) !== beforeSnips;
+                            if (keysChanged || snipsChanged) {
+                                var expanded = getExpandedCardIds();
+                                if (keysChanged) { renderKeyFilters(); renderKeyCards(); }
+                                if (snipsChanged) { renderSnipFilters(); renderSnippets(); }
+                                restoreExpandedCards(expanded);
+                                var sl = document.getElementById('gistStatusLine');
+                                if (sl) sl.innerHTML = '☁️ ' + fmtTimeShort(new Date().toISOString()) + ' <span style="opacity:0.5">已同步</span>';
+                            }
+                            done();
+                        }).catch(function() { done(); });
+                    } else { done(); }
+                }).catch(function() { done(); });
+            } else {
+                var cfg = gistGetConfig();
+                if (!cfg.token || !cfg.gistId) { done(); return; }
+                gistPull(false);
+                done();
+            }
+        }
+
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) _doAutoSync();
+        });
+
+        _autoSyncInterval = setInterval(_doAutoSync, 5 * 60 * 1000);
+
         /* =========================================================================
          * [3.12] 部署与 PWA 支持
          * 说明：负责生成可部署 HTML 快照、推送 GitHub Pages 以及 PWA 资源定义。
