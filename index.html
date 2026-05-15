@@ -7118,8 +7118,12 @@ body {
                 opts.headers['Content-Type'] = 'application/json';
                 opts.body = JSON.stringify(body);
             }
-            if (method === 'GET') opts.cache = 'no-store';
-            return fetch(cfg.url + '/' + encodeURIComponent(key), opts).then(function(r) {
+            var url = cfg.url + '/' + encodeURIComponent(key);
+            if (method === 'GET') {
+                opts.cache = 'no-store';
+                url += (url.indexOf('?') === -1 ? '?' : '&') + '_t=' + Date.now();
+            }
+            return fetch(url, opts).then(function(r) {
                 if (r.status === 404) return null;
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 return method === 'DELETE' ? { ok: true } : r.json();
