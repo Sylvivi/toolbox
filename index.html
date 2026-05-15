@@ -7359,8 +7359,9 @@ body {
         }
 
         /* ===== 双向智能合并（替代旧的云端覆盖） ===== */
-        function cfSmartSync() {
-            return cfGetManifest().then(function(manifest) {
+        function cfSmartSync(cachedManifest) {
+            var p = cachedManifest ? Promise.resolve(cachedManifest) : cfGetManifest();
+            return p.then(function(manifest) {
                 if (!manifest) return cfMigrateFromBlob();
 
                 // 1) 合并墓碑（双向取并集，时间取较新）
@@ -7648,11 +7649,10 @@ body {
             });
         }
 
-        function cfPullData(manual) {
+        function cfPullData(manual, cachedManifest) {
             var cfg = cfGetConfig();
             if (!cfg.url || !cfg.token) return Promise.resolve();
-            // 手动拉取 = 用户确认了覆盖；自动 = 智能合并
-            var syncFn = manual ? cfCloudOverwrite() : cfSmartSync();
+            var syncFn = manual ? cfCloudOverwrite() : cfSmartSync(cachedManifest);
             return syncFn.then(function() {
                 localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
                 renderKeyFilters(); renderKeyCards();
@@ -10227,7 +10227,14 @@ body {
                 }
                 var cc = cfGetConfig();
                 if (!cc.url || !cc.token) return;
-                cfPullData(false).catch(function() {});
+                cfGetManifest().then(function(manifest) {
+                    if (!manifest) return;
+                    var lastSync = localStorage.getItem('toolbox_gist_last_sync');
+                    var cloudTime = manifest.lastModified ? new Date(manifest.lastModified).getTime() : 0;
+                    var localTime = lastSync ? new Date(lastSync).getTime() : 0;
+                    if (cloudTime <= localTime + 2000) return;
+                    return cfPullData(false, manifest);
+                }).catch(function() {});
             })();
         });
 
@@ -10250,7 +10257,7 @@ body {
                     var cloudTime = manifest.lastModified ? new Date(manifest.lastModified).getTime() : 0;
                     var localTime = lastSync ? new Date(lastSync).getTime() : 0;
                     if (cloudTime <= localTime + 2000) { _syncing = false; return; }
-                    return cfPullData(false).then(function() {
+                    return cfPullData(false, manifest).then(function() {
                         _syncing = false;
                     });
                 }).catch(function() {
