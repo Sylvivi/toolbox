@@ -1290,6 +1290,27 @@ body {
             opacity: 0.4; transition: opacity 0.15s, background 0.15s, color 0.15s;
         }
         .chat-hist-del:hover { opacity: 1; background: var(--red-bg); color: var(--red); }
+        .chat-hist-more {
+            flex-shrink: 0; width: 30px; height: 30px; border: none; border-radius: 8px;
+            background: transparent; color: var(--text-muted); font-size: 18px; letter-spacing: 1px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            opacity: 0.4; transition: opacity 0.15s, background 0.15s;
+        }
+        .chat-hist-more:hover, .chat-hist-more:active { opacity: 1; background: var(--card-inner); }
+        .chat-hist-menu {
+            position: fixed; z-index: 9999; min-width: 110px;
+            background: var(--card-bg); border: 1px solid var(--card-border);
+            border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+            padding: 4px 0; display: none;
+        }
+        .chat-hist-menu > div {
+            padding: 9px 16px; font-size: 13px; cursor: pointer; color: var(--text);
+            transition: background 0.1s;
+        }
+        .chat-hist-menu > div:first-child { border-radius: 6px 6px 0 0; }
+        .chat-hist-menu > div:last-child { border-radius: 0 0 6px 6px; }
+        .chat-hist-menu > div:hover { background: var(--card-inner); }
+        .chat-hist-menu > div.danger { color: var(--red); }
         .chat-hist-empty {
             flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
             color: var(--text-muted); font-size: 14px; gap: 16px;
@@ -2636,14 +2657,14 @@ body {
     <div class="modal-overlay" id="chatModalOverlay" onclick="if(event.target===this)closeChatModal()">
         <div class="modal chat-modal">
             <!-- 列表视图顶栏 -->
-            <div class="chat-topbar" id="chatTopbarList" style="display: none;">
+            <div class="chat-topbar" id="chatTopbarList" style="">
                 <div class="chat-handle-bar"></div>
                 <div style="flex:1;font-size:15px;font-weight:600;color:var(--accent)">对话</div>
                 <button class="chat-sp-btn" onclick="chatCloudShowList()" title="云端"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg></button>
                 <button class="chat-sp-btn" onclick="chatNewConv()" title="新对话"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
             </div>
             <!-- 对话视图顶栏 -->
-            <div class="chat-topbar" id="chatTopbarConv" style="">
+            <div class="chat-topbar" id="chatTopbarConv" style="display: none;">
                 <div class="chat-handle-bar"></div>
                 <button class="chat-close-btn" id="chatBackBtn">←</button>
                 <span id="chatModelLabel" style="flex:1;font-size:14px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;cursor:pointer;text-align:center" onclick="chatOpenModelSheet()">deepseek-v4-pro</span>
@@ -2669,47 +2690,10 @@ body {
                 </div>
             </div>
             <div style="position:relative;flex:1;display:flex;flex-direction:column;min-height:0">
-                <div class="chat-messages" id="chatMessages"><div class="chat-msg user" data-idx="0"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">你好👋</div></div><button class="chat-more-btn">⋯</button></div><div class="chat-msg ai" data-idx="1"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">你好！👋 很高兴见到你！有什么我可以帮助你的吗？😊</div></div><div class="chat-toolbar"><button class="chat-tb-btn" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button><button class="chat-tb-btn" title="从此处截断"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></button><button class="chat-tb-btn" title="删除此消息"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path></svg></button></div></div><div class="chat-msg user" data-idx="2"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">你能做什么？</div></div><button class="chat-more-btn">⋯</button></div><div class="chat-msg ai" data-idx="3"><div class="chat-bubble"><div class="chat-thinking"><div class="chat-thinking-hd" onclick="this.parentElement.classList.toggle('open')"><span class="arrow">▶</span> 思考过程</div><div class="chat-thinking-bd"><div style="white-space:pre-wrap;word-break:break-word">好的，用户问“你能做什么？”，这是一个很常见的开场问题。
-
-嗯，从之前的对话看，用户只是简单打了个招呼，我也回应了。现在他直接问我的能力，说明他可能是第一次接触我，想了解我的功能范围，以便决定如何向我提问。他的深层需求可能是想快速知道我能帮他解决哪些类型的问题，或者想确认我是否具备他需要的特定能力。
-
-这个问题看似简单，但需要系统、清晰地介绍我的核心功能，让用户一目了然。我应该按类别组织信息，比如知识问答、创意写作、编程、文件处理这些主要方面，这样结构清晰，用户也容易找到自己感兴趣的部分。
-
-最后，可以加上一个友好的结尾，邀请他提出具体需求，这样对话就能继续深入下去了。</div></div></div><p>我能做的事情很多，让我为你介绍一下：</p>
-<div style="height:0.5em"></div>
-<h2>📚 <strong>知识问答</strong></h2>
-<ul><li>解答各种领域的问题（科学、历史、文化等）</li>
-<li>解释复杂概念，提供学习建议</li>
-</ul>
-<h2>✍️ <strong>写作助手</strong></h2>
-<ul><li>撰写文章、故事、邮件、报告</li>
-<li>润色修改，调整语气风格</li>
-<li>翻译多种语言</li>
-</ul>
-<h2>💻 <strong>编程帮手</strong></h2>
-<ul><li>编写、调试、解释代码</li>
-<li>提供算法建议和最佳实践</li>
-<li>涵盖Python、JavaScript等多种语言</li>
-</ul>
-<h2>📊 <strong>数据处理</strong></h2>
-<ul><li>分析数据，生成报表</li>
-<li>整理信息，制作表格</li>
-<li>阅读并处理你上传的文件（图片中的文字也能读取）</li>
-</ul>
-<h2>🎨 <strong>创意伙伴</strong></h2>
-<ul><li>头脑风暴，激发灵感</li>
-<li>策划方案，制定计划</li>
-<li>角色扮演，模拟对话</li>
-</ul>
-<h2>🔍 <strong>研究辅助</strong></h2>
-<ul><li>总结长文档，提取关键信息</li>
-<li>联网搜索实时信息（需手动开启）</li>
-<li>文献整理，资料归纳</li>
-</ul>
-<p>有什么具体需求吗？我随时准备帮你！😊</p></div><div class="chat-toolbar"><button class="chat-tb-btn" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button><button class="chat-tb-btn" id="chatRerollBtn" title="重新生成"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 102.13-9.36L1 10"></path></svg></button><button class="chat-tb-btn" title="从此处截断"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></button><button class="chat-tb-btn" title="删除此消息"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path></svg></button></div></div></div>
-                <button class="chat-scroll-bottom show" id="chatScrollBtn" onclick="chatScrollBottomSmooth()" title="回到底部">↓</button>
+                <div class="chat-messages" id="chatMessages"><div class="chat-hist-item" onclick="chatLoadConv('chat_1778739737440_604765')"><div class="chat-hist-info"><div class="chat-hist-title">你好</div><div class="chat-hist-meta">VSLLM · deepseek-v4-pro · 2 小时前 · 16条</div></div><button class="chat-hist-more" onclick="chatHistMenuOpen('chat_1778739737440_604765',event)" title="更多">⋯</button></div></div>
+                <button class="chat-scroll-bottom" id="chatScrollBtn" onclick="chatScrollBottomSmooth()" title="回到底部">↓</button>
             </div>
-            <div class="chat-input-area" id="chatInputArea" style="">
+            <div class="chat-input-area" id="chatInputArea" style="display: none;">
                 <div class="chat-img-preview" id="chatImgPreview" style="display:none"></div>
                 <div class="chat-input-box">
                     <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this)"></textarea>
@@ -2773,6 +2757,13 @@ body {
                 <button onclick="chatGenTitle(true)" style="width:100%;padding:10px;background:var(--accent-light);border:1px solid var(--card-border);border-radius:10px;color:var(--accent);font-size:13px;font-weight:500;cursor:pointer;transition:opacity 0.15s">AI 生成标题</button>
             </div>
         </div>
+    </div>
+
+    <!-- 对话历史项菜单 -->
+    <div class="chat-hist-menu" id="chatHistMenu" style="display: none; top: 141px; right: 20px;">
+        <div onclick="chatHistMenuAction('upload')">上传云端</div>
+        <div onclick="chatHistMenuAction('export')">导出</div>
+        <div onclick="chatHistMenuAction('delete')" class="danger">删除</div>
     </div>
 
     <!-- 聊天长按操作面板 -->
@@ -8323,9 +8314,7 @@ body {
                 h += '<div class="chat-hist-title">' + esc(c.title || '新对话') + '</div>';
                 h += '<div class="chat-hist-meta">' + esc(meta) + '</div>';
                 h += '</div>';
-                h += '<button class="chat-hist-export" onclick="chatCloudUpload(\'' + c.id + '\',event);event.stopPropagation()" title="上传云端">上传</button>';
-                h += '<button class="chat-hist-export" onclick="chatExportConv(\'' + c.id + '\');event.stopPropagation()" title="导出">导出</button>';
-                h += '<button class="chat-hist-del" onclick="chatDeleteConv(\'' + c.id + '\', event)" title="删除">删除</button>';
+                h += '<button class="chat-hist-more" onclick="chatHistMenuOpen(\'' + c.id + '\',event)" title="更多">⋯</button>';
                 h += '</div>';
             }
             container.innerHTML = h;
@@ -9478,6 +9467,34 @@ body {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             showToast('📥 已导出');
+        }
+
+        /* ===== 对话历史项菜单 ===== */
+        var chatHistMenuId = null;
+        function chatHistMenuOpen(id, e) {
+            e.stopPropagation(); e.preventDefault();
+            var menu = document.getElementById('chatHistMenu');
+            var rect = e.currentTarget.getBoundingClientRect();
+            menu.style.display = 'block';
+            menu.style.top = Math.min(rect.bottom + 4, window.innerHeight - menu.offsetHeight - 8) + 'px';
+            menu.style.right = (window.innerWidth - rect.right) + 'px';
+            menu.style.left = '';
+            chatHistMenuId = id;
+            setTimeout(function() {
+                document.addEventListener('click', chatHistMenuAutoClose, { once: true });
+            }, 0);
+        }
+        function chatHistMenuAutoClose() {
+            document.getElementById('chatHistMenu').style.display = 'none';
+            chatHistMenuId = null;
+        }
+        function chatHistMenuAction(action) {
+            var id = chatHistMenuId;
+            chatHistMenuAutoClose();
+            if (!id) return;
+            if (action === 'upload') chatCloudUpload(id);
+            else if (action === 'export') chatExportConv(id);
+            else if (action === 'delete') chatDeleteConv(id);
         }
 
         /* ===== 对话云同步（复用已有 Cloudflare Worker） ===== */
