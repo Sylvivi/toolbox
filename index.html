@@ -9361,9 +9361,14 @@ body {
             btn.classList.toggle('ready', hasModel && hasContent);
         }
 
-        /* ----- 键盘事件 ----- */
+        /* ----- 键盘事件（处理中文输入法 composition） ----- */
+        var _chatComposing = false;
+        document.getElementById('chatInput').addEventListener('compositionstart', function() { _chatComposing = true; });
+        document.getElementById('chatInput').addEventListener('compositionend', function() { _chatComposing = false; });
+
         document.addEventListener('keydown', function(e) {
             if (e.target.id !== 'chatInput') return;
+            if (e.isComposing || _chatComposing) return;
             if (e.key === 'Enter' && e.ctrlKey) {
                 e.preventDefault();
                 var ta = e.target;
