@@ -9414,7 +9414,7 @@ body {
                 }
 
                 if (fullContent || thinkContent) {
-                    chatRenderStreamBubble(bubbleEl, thinkContent, fullContent, false);
+                    chatRenderStreamFinal(bubbleEl, thinkContent, fullContent);
                     chatMessages.push({ role: 'assistant', content: fullContent, thinking: (thinkContent && thinkContent.trim()) ? thinkContent : undefined });
                 } else {
                     bubbleEl.innerHTML = '<span style="color:var(--text-muted)">（无回复内容）</span>';
@@ -9423,7 +9423,7 @@ body {
             } catch(err) {
                 if (err.name === 'AbortError') {
                     if (fullContent || thinkContent) {
-                        chatRenderStreamBubble(bubbleEl, thinkContent, fullContent, false);
+                        chatRenderStreamFinal(bubbleEl, thinkContent, fullContent);
                         chatMessages.push({ role: 'assistant', content: fullContent, thinking: (thinkContent && thinkContent.trim()) ? thinkContent : undefined });
                     } else {
                         bubbleEl.innerHTML = '<span style="color:var(--text-muted)">（已中断）</span>';
@@ -9460,6 +9460,7 @@ body {
             }
         }
 
+        var _streamContentEl = null; // 流式输出时复用的纯文本节点，避免每帧重建 DOM
         function chatRenderStreamBubble(el, thinking, content, isThinking) {
             var h = '';
             if (thinking && thinking.trim()) {
@@ -9474,11 +9475,38 @@ body {
                     if (chatThinkDuration > 0) h += ' <span class="chat-think-timer">' + chatFmtElapsed(chatThinkDuration) + '</span>';
                 }
                 h += '</div>';
-                h += '<div class="chat-thinking-bd">' + renderText(thinking) + '</div>';
+                // 思考内容也用纯文本，避免每帧正则解析
+                h += '<div class="chat-thinking-bd"><div style="white-space:pre-wrap;word-break:break-word">' + esc(thinking) + '</div></div>';
                 h += '</div>';
             }
             if (content) {
-                h += renderText(content);
+                // 流式输出期间：只用纯文本追加，不做 Markdown 解析
+                // 最终渲染（流结束后）由 chatRenderStreamFinal 完成
+                if (!_streamContentEl || !el.contains(_streamContentEl)) {
+                    // 首次或 DOM 被重建（思考区变化时），创建纯文本容器
+                    var wrapper = document.createElement('div');
+                    wrapper.style.cssText = 'white-space:pre-wrap;word-break:break-word';
+                    wrapper.textContent = content;
+                    // 先设置思考区
+                    if (h) el.innerHTML = h;
+                    else { /* 清除旧内容但保留思考区 */
+                        while (el.lastChild && !el.lastChild.classList?.contains('chat-thinking')) el.removeChild(el.lastChild);
+                    }
+                    el.appendChild(wrapper);
+                    _streamContentEl = wrapper;
+                } else {
+                    // 后续帧：只更新文本内容，不碰 DOM 结构
+                    _streamContentEl.textContent = content;
+                    // 如果思考区需要更新（状态从思考中→思考结束），重建思考区
+                    var thinkEl = el.querySelector('.chat-thinking');
+                    if (thinkEl && h) {
+                        var temp = document.createElement('div');
+                        temp.innerHTML = h;
+                        var newThink = temp.firstChild;
+                        if (newThink) el.replaceChild(newThink, thinkEl);
+                    }
+                }
+                return;
             } else if (isThinking) {
                 // 还在思考，不显示正文loading
             } else if (!thinking || !thinking.trim()) {
@@ -9487,6 +9515,22 @@ body {
                 if (_ws > 0) h += '<span class="chat-wait-timer">' + chatFmtElapsed(_ws) + '</span>';
                 h += '</div>';
             }
+            el.innerHTML = h;
+        }
+        // 流式结束后调用：一次性做 Markdown 渲染
+        function chatRenderStreamFinal(el, thinking, content) {
+            _streamContentEl = null;
+            var h = '';
+            if (thinking && thinking.trim()) {
+                h += '<div class="chat-thinking">';
+                h += '<div class="chat-thinking-hd" onclick="chatToggleThinking(this)">';
+                h += '<span class="arrow">▶</span> 思考过程';
+                if (chatThinkDuration > 0) h += ' <span class="chat-think-timer">' + chatFmtElapsed(chatThinkDuration) + '</span>';
+                h += '</div>';
+                h += '<div class="chat-thinking-bd">' + renderText(thinking) + '</div>';
+                h += '</div>';
+            }
+            if (content) h += renderText(content);
             el.innerHTML = h;
         }
 
