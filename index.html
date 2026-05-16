@@ -8693,26 +8693,45 @@ body {
             });
         })();
 
-        // 右滑返回对话列表
+        // 右滑返回对话列表（整个 chat-modal 区域，左半屏起手）
         (function() {
-            var msgArea = document.getElementById('chatMessages');
-            if (!msgArea) return;
+            var modal = document.querySelector('.chat-modal');
+            if (!modal) return;
             var startX = 0, startY = 0, swiping = false;
-            msgArea.addEventListener('touchstart', function(e) {
+            var swipeHint = null;
+            function getHint() {
+                if (!swipeHint) {
+                    swipeHint = document.createElement('div');
+                    swipeHint.style.cssText = 'position:fixed;left:0;top:50%;transform:translateY(-50%);width:4px;height:60px;border-radius:0 4px 4px 0;background:var(--accent-mid);opacity:0;transition:opacity 0.15s,width 0.15s;z-index:9999;pointer-events:none';
+                    document.body.appendChild(swipeHint);
+                }
+                return swipeHint;
+            }
+            modal.addEventListener('touchstart', function(e) {
                 if (chatView !== 'conv' || chatStreaming) return;
+                // 忽略在输入框内的滑动（避免干扰文本选择）
+                if (e.target.closest('textarea, input')) return;
                 var t = e.touches[0];
-                if (t.clientX > 40) return;
+                if (t.clientX > window.innerWidth * 0.45) return;
                 startX = t.clientX; startY = t.clientY; swiping = true;
             }, { passive: true });
-            msgArea.addEventListener('touchmove', function(e) {
+            modal.addEventListener('touchmove', function(e) {
                 if (!swiping) return;
                 var dx = e.touches[0].clientX - startX;
                 var dy = Math.abs(e.touches[0].clientY - startY);
-                if (dy > 50) { swiping = false; return; }
-                if (dx > 80) { swiping = false; chatBackToList(); }
+                if (dy > 60 || dx < 0) { swiping = false; getHint().style.opacity = '0'; return; }
+                var progress = Math.min(dx / 80, 1);
+                var h = getHint();
+                h.style.opacity = String(progress * 0.7);
+                h.style.width = (4 + progress * 4) + 'px';
+                if (dx > 80) {
+                    swiping = false;
+                    h.style.opacity = '0';
+                    chatBackToList();
+                }
             }, { passive: true });
-            msgArea.addEventListener('touchend', function() { swiping = false; });
-            msgArea.addEventListener('touchcancel', function() { swiping = false; });
+            modal.addEventListener('touchend', function() { swiping = false; if (swipeHint) swipeHint.style.opacity = '0'; });
+            modal.addEventListener('touchcancel', function() { swiping = false; if (swipeHint) swipeHint.style.opacity = '0'; });
         })();
 
         // 空白处双击退出聊天
