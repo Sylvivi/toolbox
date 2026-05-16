@@ -9526,12 +9526,13 @@ body {
             var _contentBuf = '';
             var _thinkTags = ['<think>', '</think>', '<thinking>', '</thinking>'];
             var _rafPending = false;
+            var _rafId = 0;
             var _rafThinking = false;
             function _scheduleRender(isThinking) {
                 _rafThinking = isThinking;
                 if (_rafPending) return;
                 _rafPending = true;
-                requestAnimationFrame(function() {
+                _rafId = requestAnimationFrame(function() {
                     chatRenderStreamBubble(bubbleEl, thinkContent, fullContent, _rafThinking);
                     if (chatIsNearBottom()) chatScrollBottom();
                     _rafPending = false;
@@ -9643,6 +9644,7 @@ body {
                 }
 
                 if (fullContent || thinkContent) {
+                    if (_rafPending) { cancelAnimationFrame(_rafId); _rafPending = false; }
                     chatRenderStreamFinal(bubbleEl, thinkContent, fullContent);
                     chatMessages.push({ role: 'assistant', content: fullContent, thinking: (thinkContent && thinkContent.trim()) ? thinkContent : undefined, ts: Date.now() });
                 } else {
@@ -9652,6 +9654,7 @@ body {
             } catch(err) {
                 if (err.name === 'AbortError') {
                     if (fullContent || thinkContent) {
+                        if (_rafPending) { cancelAnimationFrame(_rafId); _rafPending = false; }
                         chatRenderStreamFinal(bubbleEl, thinkContent, fullContent);
                         chatMessages.push({ role: 'assistant', content: fullContent, thinking: (thinkContent && thinkContent.trim()) ? thinkContent : undefined, ts: Date.now() });
                     } else {
