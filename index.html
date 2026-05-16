@@ -987,30 +987,20 @@ body {
         @keyframes deco-spin {
             from { transform: rotate(0deg); } to { transform: rotate(360deg); }
         }
-        /* 装饰选择器样式 */
-        .deco-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
-        .deco-tab {
-            padding: 4px 10px; border-radius: 14px; font-size: 11px; cursor: pointer;
-            border: 1px solid var(--card-border); background: var(--card-bg); color: var(--text-sub);
-            transition: all 0.15s;
-        }
-        .deco-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+        /* 装饰选择器样式 — 单排横向滑动 */
         .deco-grid {
-            display: flex; flex-wrap: wrap; gap: 6px;
+            display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden;
+            padding: 4px 2px; -webkit-overflow-scrolling: touch;
+            scrollbar-width: none; flex-wrap: nowrap;
         }
+        .deco-grid::-webkit-scrollbar { display: none; }
         .deco-item {
-            width: 42px; height: 42px; display: flex; align-items: center; justify-content: center;
+            width: 38px; height: 38px; min-width: 38px; display: flex; align-items: center; justify-content: center;
             border-radius: 10px; cursor: pointer; font-size: 18px; border: 2px solid transparent;
-            background: var(--card-bg); transition: all 0.15s; position: relative;
+            background: var(--card-bg); transition: all 0.15s; position: relative; flex-shrink: 0;
         }
         .deco-item:hover { border-color: var(--accent-mid); }
         .deco-item.active { border-color: var(--accent); background: var(--accent-light); }
-        .deco-item .deco-label {
-            position: absolute; bottom: -2px; right: -2px; font-size: 7px;
-            background: var(--accent); color: #fff; border-radius: 4px; padding: 0 3px; line-height: 14px;
-            display: none;
-        }
-        .deco-item.active .deco-label { display: block; }
 
         /* Markdown 内容样式 */
         .chat-bubble p { margin: 0 0 8px; }
@@ -1111,6 +1101,20 @@ body {
             background: var(--red-bg); border-radius: 10px; margin-top: 6px;
         }
 
+        /* 时间分隔线 */
+        .chat-time-sep {
+            display: flex; align-items: center; gap: 12px;
+            padding: 10px 16px 4px; max-width: 768px; width: 100%; margin: 0 auto;
+            user-select: none;
+        }
+        .chat-time-sep::before, .chat-time-sep::after {
+            content: ''; flex: 1; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--card-border), transparent);
+        }
+        .chat-time-sep span {
+            font-size: 11px; color: var(--text-muted); white-space: nowrap; opacity: 0.6;
+        }
+
         /* ===== 输入区 — 一体化卡片 ===== */
         .chat-input-area {
             display: flex; flex-direction: column;
@@ -1138,6 +1142,10 @@ body {
             transition: height 0.15s ease;
         }
         .chat-input-box textarea::placeholder { color: var(--text-muted); }
+        .chat-ctx-indicator {
+            font-size: 11px; color: var(--text-muted); opacity: 0.6;
+            padding: 0 2px 4px; line-height: 1;
+        }
         .chat-input-toolbar {
             display: flex; align-items: center; justify-content: space-between;
         }
@@ -2330,11 +2338,11 @@ body {
             <button class="search-clear" onclick="clearSearch('snipSearchInput')">✕</button>
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">64</span></div>
-            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">17</span></div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">62</span></div>
+            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">14</span></div>
             <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">0</span></div>
             <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">3</span></div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">44</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">45</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
@@ -2837,6 +2845,7 @@ body {
                 <div class="chat-img-preview" id="chatImgPreview" style="display:none"></div>
                 <div class="chat-input-box">
                     <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this)"></textarea>
+                    <div id="chatCtxIndicator" class="chat-ctx-indicator" style="display:none"></div>
                     <div class="chat-input-toolbar">
                         <div style="position:relative">
                             <button class="chat-plus-btn" onclick="chatToggleAttachMenu()">＋</button>
@@ -3531,10 +3540,9 @@ body {
             { id:'p17', cat:'像素', icon:'✦',  name:'闪紫星', ai:'"✦"',  aiSize:'12px', aiColor:'#daf', aiAnim:'deco-twinkle 2s ease-in-out infinite' },
             { id:'p19', cat:'像素', icon:'❖',  name:'弹菱',   ai:'"❖"',  aiSize:'13px', aiColor:'#8cf', aiAnim:'deco-bounce 2s ease-in-out infinite' }
         ];
-        var DECO_CATS = ['全部','极简','像素'];
-        var _decoActiveCat = '全部';
+        // 装饰不再分类，统一一排展示
 
-        function getDecoId() { return localStorage.getItem('toolbox_chat_deco') || 'none'; }
+        function getDecoId() { return localStorage.getItem('toolbox_chat_deco') || 'px02'; }
         function findDecoById(id) {
             for (var i = 0; i < CHAT_DECOS.length; i++) { if (CHAT_DECOS[i].id === id) return CHAT_DECOS[i]; }
             return CHAT_DECOS[0];
@@ -3576,22 +3584,10 @@ body {
             if (!list) return;
             var curId = getDecoId();
             list.innerHTML = '';
-            // 分类标签
-            var tabs = document.createElement('div');
-            tabs.className = 'deco-tabs';
-            DECO_CATS.forEach(function(cat) {
-                var tab = document.createElement('span');
-                tab.className = 'deco-tab' + (cat === _decoActiveCat ? ' active' : '');
-                tab.textContent = cat;
-                tab.onclick = function() { _decoActiveCat = cat; renderDecoList(); };
-                tabs.appendChild(tab);
-            });
-            list.appendChild(tabs);
-            // 图标网格
+            // 单排横向滑动
             var grid = document.createElement('div');
             grid.className = 'deco-grid';
             CHAT_DECOS.forEach(function(d) {
-                if (_decoActiveCat !== '全部' && d.cat !== _decoActiveCat && d.id !== 'none') return;
                 var item = document.createElement('div');
                 item.className = 'deco-item' + (d.id === curId ? ' active' : '');
                 item.title = d.name;
@@ -3606,6 +3602,11 @@ body {
                 grid.appendChild(item);
             });
             list.appendChild(grid);
+            // 自动滚动到选中项
+            setTimeout(function() {
+                var active = grid.querySelector('.deco-item.active');
+                if (active) active.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+            }, 50);
         }
         // 初始化装饰
         applyChatDeco(getDecoId());
@@ -8416,8 +8417,10 @@ body {
         var CHAT_STORE = 'chat_history';
         var CHAT_MAX = 30;           // 最多保留对话数
 
-        /* ===== 对话存储（IndexedDB） ===== */
+        /* ===== 对话存储（IndexedDB + 内存缓存） ===== */
+        var _chatHistCache = null;
         function chatGetHistory() {
+            if (_chatHistCache) return _chatHistCache;
             // 迁移旧 localStorage 数据
             var old = localStorage.getItem(CHAT_STORE);
             if (old) {
@@ -8430,10 +8433,12 @@ body {
                 } catch(e) {}
                 localStorage.removeItem(CHAT_STORE);
             }
-            return idbGet(CHAT_STORE) || [];
+            _chatHistCache = idbGet(CHAT_STORE) || [];
+            return _chatHistCache;
         }
         function chatSetHistory(list) {
             while (list.length > CHAT_MAX) list.pop();
+            _chatHistCache = list;
             idbSet(CHAT_STORE, list);
         }
         function chatSaveCurrentConv() {
@@ -8525,7 +8530,7 @@ body {
                     body: JSON.stringify({
                         model: chatSelectedModel,
                         messages: [
-                            { role: 'system', content: '根据以下对话内容生成一个简短的中文标题（不超过15个字，不要加引号和标点，直接输出标题文字）：' },
+                            { role: 'system', content: '根据以下对话内容生成一个简短的中文标题。要求：1.不超过15个字 2.纯文本，不要任何markdown格式、符号、引号、标点 3.直接输出标题文字' },
                             { role: 'user', content: summary }
                         ],
                         max_tokens: 30,
@@ -8538,9 +8543,10 @@ body {
                 if (json.choices && json.choices[0]) {
                     title = (json.choices[0].message && json.choices[0].message.content || '').trim();
                 }
-                // 清理：去引号、截断
+                // 清理：去引号、markdown符号、截断到15字
                 title = title.replace(/^["'「《【]|["'」》】]$/g, '').trim();
-                if (title.length > 20) title = title.substring(0, 20) + '…';
+                title = title.replace(/[#*_`~\[\]()>|\\-]/g, '').trim();
+                if (title.length > 15) title = title.substring(0, 15);
                 if (title) {
                     // 更新当前对话标题
                     var list = chatGetHistory();
@@ -8591,6 +8597,7 @@ body {
                 document.getElementById('chatScrollBtn').classList.remove('show');
                 chatCloseSettings();
                 chatCloseModelSheet();
+                chatCleanEmptyConv();
                 chatRenderHistoryList();
             } else {
                 topList.style.display = 'none';
@@ -8755,8 +8762,19 @@ body {
             document.getElementById('chatImgPreview').innerHTML = '';
         }
 
+        /* ===== 空对话清理 ===== */
+        function chatCleanEmptyConv() {
+            if (chatCurrentConvId && chatMessages.length === 0) {
+                var list = chatGetHistory();
+                list = list.filter(function(c) { return c.id !== chatCurrentConvId; });
+                chatSetHistory(list);
+                chatCurrentConvId = null;
+            }
+        }
+
         /* ===== 新建对话 ===== */
         function chatNewConv() {
+            chatCleanEmptyConv();
             chatResetConvState();
             chatCurrentConvId = 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
             chatSwitchView('conv');
@@ -8776,6 +8794,7 @@ body {
 
         /* ===== 加载历史对话 ===== */
         function chatLoadConv(id) {
+            chatCleanEmptyConv();
             var list = chatGetHistory();
             var conv = null;
             for (var i = 0; i < list.length; i++) {
@@ -8804,6 +8823,7 @@ body {
             }
             // 渲染消息
             chatRenderAllMessages();
+            chatUpdateCtxIndicator();
             setTimeout(function() { document.getElementById('chatInput').focus(); }, 300);
         }
 
@@ -8839,6 +8859,17 @@ body {
             chatFetchModels(item);
         }
 
+        function chatFmtTimeSep(ts) {
+            var d = new Date(ts);
+            var now = new Date();
+            var hm = ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2);
+            var isToday = d.toDateString() === now.toDateString();
+            var yest = new Date(now); yest.setDate(yest.getDate() - 1);
+            var isYest = d.toDateString() === yest.toDateString();
+            if (isToday) return '今天 ' + hm;
+            if (isYest) return '昨天 ' + hm;
+            return (d.getMonth()+1) + '/' + d.getDate() + ' ' + hm;
+        }
         function chatRenderAllMessages() {
             var container = document.getElementById('chatMessages');
             container.innerHTML = '';
@@ -8850,10 +8881,29 @@ body {
             for (var k = chatMessages.length - 1; k >= 0; k--) {
                 if (chatMessages[k].role === 'assistant') { lastAiIdx = k; break; }
             }
+            var lastTs = 0;
             for (var i = 0; i < chatMessages.length; i++) {
                 var msg = chatMessages[i];
                 var role = msg.role === 'assistant' ? 'ai' : (msg.role === 'user' ? 'user' : null);
                 if (!role) continue;
+                // 时间分隔线：跨天或间隔>1小时
+                if (msg.ts) {
+                    var gap = msg.ts - lastTs;
+                    var crossDay = lastTs > 0 && new Date(msg.ts).toDateString() !== new Date(lastTs).toDateString();
+                    if (crossDay || (lastTs > 0 && gap > 3600000)) {
+                        var sep = document.createElement('div');
+                        sep.className = 'chat-time-sep';
+                        sep.innerHTML = '<span>' + chatFmtTimeSep(msg.ts) + '</span>';
+                        container.appendChild(sep);
+                    } else if (i === 0) {
+                        // 第一条消息也显示时间
+                        var sep = document.createElement('div');
+                        sep.className = 'chat-time-sep';
+                        sep.innerHTML = '<span>' + chatFmtTimeSep(msg.ts) + '</span>';
+                        container.appendChild(sep);
+                    }
+                    lastTs = msg.ts;
+                }
                 var el = chatBuildMsgEl(role, msg.content, msg.thinking, i, i === lastAiIdx);
                 container.appendChild(el);
             }
@@ -9388,12 +9438,13 @@ body {
                 msgContent = text;
             }
 
-            chatMessages.push({ role: 'user', content: msgContent });
+            chatMessages.push({ role: 'user', content: msgContent, ts: Date.now() });
             var container = document.getElementById('chatMessages');
             var userEl = chatBuildMsgEl('user', msgContent, null, chatMessages.length - 1);
             userEl.classList.add('chat-appear');
             container.appendChild(userEl);
             chatScrollBottom();
+            chatUpdateCtxIndicator();
 
             await chatDoRequest();
         }
@@ -9591,7 +9642,7 @@ body {
 
                 if (fullContent || thinkContent) {
                     chatRenderStreamFinal(bubbleEl, thinkContent, fullContent);
-                    chatMessages.push({ role: 'assistant', content: fullContent, thinking: (thinkContent && thinkContent.trim()) ? thinkContent : undefined });
+                    chatMessages.push({ role: 'assistant', content: fullContent, thinking: (thinkContent && thinkContent.trim()) ? thinkContent : undefined, ts: Date.now() });
                 } else {
                     bubbleEl.innerHTML = '<span style="color:var(--text-muted)">（无回复内容）</span>';
                 }
@@ -9600,7 +9651,7 @@ body {
                 if (err.name === 'AbortError') {
                     if (fullContent || thinkContent) {
                         chatRenderStreamFinal(bubbleEl, thinkContent, fullContent);
-                        chatMessages.push({ role: 'assistant', content: fullContent, thinking: (thinkContent && thinkContent.trim()) ? thinkContent : undefined });
+                        chatMessages.push({ role: 'assistant', content: fullContent, thinking: (thinkContent && thinkContent.trim()) ? thinkContent : undefined, ts: Date.now() });
                     } else {
                         bubbleEl.innerHTML = '<span style="color:var(--text-muted)">（已中断）</span>';
                     }
@@ -9848,15 +9899,41 @@ body {
 
         function chatSheetTruncate(idx) {
             chatMessages.splice(idx);
-            chatRenderAllMessages();
+            // 只移除 idx 及之后的 DOM 节点（包括时间分隔线）
+            var container = document.getElementById('chatMessages');
+            var toRemove = [];
+            var children = container.children;
+            for (var c = children.length - 1; c >= 0; c--) {
+                var child = children[c];
+                var dataIdx = child.getAttribute('data-idx');
+                if (dataIdx !== null && parseInt(dataIdx) >= idx) {
+                    toRemove.push(child);
+                    // 检查前面紧邻的时间分隔线
+                    if (c > 0 && children[c-1].classList.contains('chat-time-sep')) {
+                        toRemove.push(children[c-1]);
+                    }
+                }
+            }
+            for (var r = 0; r < toRemove.length; r++) toRemove[r].remove();
             chatSaveCurrentConv();
+            chatUpdateCtxIndicator();
             showToast('✂️ 已截断');
         }
 
         function chatSheetDelete(idx) {
             chatMessages.splice(idx, 1);
-            chatRenderAllMessages();
+            // 移除对应 DOM 节点
+            var msgEl = document.querySelector('.chat-msg[data-idx="' + idx + '"]');
+            if (msgEl) msgEl.remove();
+            // 更新后续节点的 data-idx
+            var container = document.getElementById('chatMessages');
+            var msgs = container.querySelectorAll('.chat-msg[data-idx]');
+            for (var m = 0; m < msgs.length; m++) {
+                var di = parseInt(msgs[m].getAttribute('data-idx'));
+                if (di > idx) msgs[m].setAttribute('data-idx', di - 1);
+            }
             chatSaveCurrentConv();
+            chatUpdateCtxIndicator();
             showToast('🗑️ 已删除');
         }
 
@@ -10229,6 +10306,20 @@ body {
             var val = parseInt(document.getElementById('chatCtxRange').value);
             chatContextMax = val;
             document.getElementById('chatCtxLabel').textContent = val === 0 ? '全部' : val + ' 轮';
+            chatUpdateCtxIndicator();
+        }
+        function chatUpdateCtxIndicator() {
+            var el = document.getElementById('chatCtxIndicator');
+            if (!el) return;
+            if (chatContextMax <= 0) { el.style.display = 'none'; return; }
+            // 计算当前实际轮数
+            var totalTurns = 0;
+            for (var i = 0; i < chatMessages.length; i++) {
+                if (chatMessages[i].role === 'user') totalTurns++;
+            }
+            var sendTurns = Math.min(totalTurns, chatContextMax);
+            el.style.display = '';
+            el.textContent = '上下文 ' + sendTurns + '/' + totalTurns + ' 轮';
         }
 
         function chatAddCopyBtn(bubbleEl, text) {
