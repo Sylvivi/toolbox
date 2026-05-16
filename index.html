@@ -963,6 +963,65 @@ body {
             transform: translateZ(0);
         }
 
+        /* ===== 气泡装饰风格 ===== */
+        .chat-msg .chat-bubble { position: relative; overflow: visible; }
+
+        /* --- 极简几何 --- */
+        .chat-deco-geo .chat-msg.ai .chat-bubble::before {
+            content: ''; position: absolute; top: -6px; left: 8px;
+            width: 6px; height: 6px; background: rgba(120,120,180,0.35); border-radius: 50%;
+        }
+        .chat-deco-geo .chat-msg.ai .chat-bubble::after {
+            content: ''; position: absolute; top: -10px; left: 18px;
+            width: 4px; height: 4px; background: rgba(120,120,180,0.2); border-radius: 50%;
+        }
+        .chat-deco-geo .chat-msg.user .chat-bubble::after {
+            content: ''; position: absolute; bottom: -5px; right: 12px;
+            width: 20px; height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(120,120,180,0.3), transparent);
+            border-radius: 1px;
+        }
+
+        /* --- 像素风 --- */
+        .chat-deco-pixel .chat-msg.ai .chat-bubble::before {
+            content: '♥'; position: absolute; top: -14px; left: 6px;
+            font-size: 10px; color: #f8a; line-height: 1;
+            image-rendering: pixelated;
+        }
+        .chat-deco-pixel .chat-msg.user .chat-bubble::after {
+            content: '◆'; position: absolute; bottom: -10px; right: 10px;
+            font-size: 8px; color: rgba(150,130,200,0.45); line-height: 1;
+        }
+
+        /* --- 星光 --- */
+        .chat-deco-sparkle .chat-msg.ai .chat-bubble::before {
+            content: '✦'; position: absolute; top: -8px; left: -2px;
+            font-size: 13px; color: rgba(180,160,60,0.6); line-height: 1;
+            animation: deco-twinkle 2s ease-in-out infinite;
+        }
+        .chat-deco-sparkle .chat-msg.user .chat-bubble::after {
+            content: '·'; position: absolute; bottom: -6px; right: 8px;
+            font-size: 18px; color: rgba(180,160,60,0.3); line-height: 1;
+        }
+        @keyframes deco-twinkle {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.35; transform: scale(0.8); }
+        }
+
+        /* --- 气泡 --- */
+        .chat-deco-bubble .chat-msg.ai .chat-bubble::before {
+            content: ''; position: absolute; top: -8px; left: 12px;
+            width: 5px; height: 5px; border-radius: 50%;
+            background: rgba(130,180,220,0.3);
+            box-shadow: 8px -4px 0 2px rgba(130,180,220,0.15), 18px -2px 0 0px rgba(130,180,220,0.2);
+        }
+        .chat-deco-bubble .chat-msg.user .chat-bubble::after {
+            content: ''; position: absolute; bottom: -7px; right: 14px;
+            width: 4px; height: 4px; border-radius: 50%;
+            background: rgba(130,180,220,0.25);
+            box-shadow: -7px -3px 0 1px rgba(130,180,220,0.15);
+        }
+
         /* Markdown 内容样式 */
         .chat-bubble p { margin: 0 0 8px; }
         .chat-bubble p:last-child { margin-bottom: 0; }
@@ -2847,6 +2906,10 @@ body {
                 <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">对话标题</div>
                 <button onclick="chatGenTitle(true)" style="width:100%;padding:10px;background:var(--accent-light);border:1px solid var(--card-border);border-radius:10px;color:var(--accent);font-size:13px;font-weight:500;cursor:pointer;transition:opacity 0.15s">AI 生成标题</button>
             </div>
+            <div style="margin-top:16px">
+                <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">气泡装饰</div>
+                <div id="chatDecoList" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+            </div>
         </div>
     </div>
 
@@ -3448,6 +3511,47 @@ body {
             }
             applyTheme(getThemeIdx());
         })();
+
+        /* ============= 气泡装饰切换 ============= */
+        var CHAT_DECOS = [
+            { id: 'none',    name: '无',   cls: '' },
+            { id: 'geo',     name: '几何', cls: 'chat-deco-geo' },
+            { id: 'pixel',   name: '像素', cls: 'chat-deco-pixel' },
+            { id: 'sparkle', name: '星光', cls: 'chat-deco-sparkle' },
+            { id: 'bubble',  name: '气泡', cls: 'chat-deco-bubble' }
+        ];
+        function getDecoIdx() {
+            var saved = localStorage.getItem('toolbox_chat_deco') || 'none';
+            for (var i = 0; i < CHAT_DECOS.length; i++) { if (CHAT_DECOS[i].id === saved) return i; }
+            return 0;
+        }
+        function applyChatDeco(idx) {
+            var d = CHAT_DECOS[idx];
+            CHAT_DECOS.forEach(function(dd) { if (dd.cls) document.body.classList.remove(dd.cls); });
+            if (d.cls) document.body.classList.add(d.cls);
+            localStorage.setItem('toolbox_chat_deco', d.id);
+        }
+        function renderDecoList() {
+            var list = document.getElementById('chatDecoList');
+            if (!list) return;
+            var curIdx = getDecoIdx();
+            list.innerHTML = '';
+            for (var i = 0; i < CHAT_DECOS.length; i++) {
+                (function(idx) {
+                    var btn = document.createElement('button');
+                    btn.style.cssText = 'padding:6px 14px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid var(--card-border);transition:all 0.15s;' +
+                        (idx === curIdx ? 'background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;' : 'background:var(--card-bg);color:var(--text-sub);');
+                    btn.textContent = CHAT_DECOS[idx].name;
+                    btn.onclick = function() {
+                        applyChatDeco(idx);
+                        renderDecoList();
+                    };
+                    list.appendChild(btn);
+                })(i);
+            }
+        }
+        // 初始化装饰
+        applyChatDeco(getDecoIdx());
 
         /* ============= 自定义座右铭 ============= */
         var MOTTO_KEY = 'toolbox_motto';
@@ -9067,6 +9171,7 @@ body {
         /* ----- 设置弹窗 ----- */
         function chatOpenSettings() {
             chatRenderSpPresets();
+            renderDecoList();
             document.getElementById('chatSettingsBg').classList.add('show');
             document.getElementById('chatSettingsModal').classList.add('show');
         }
