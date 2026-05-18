@@ -2457,7 +2457,7 @@ body {
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:8px">
-                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 2px 0px;">💾 本地存储：7.15 MB / ~50 MB（14%）</div>
+                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 2px 0px;">💾 本地存储：7.23 MB / ~50 MB（14%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
@@ -2582,11 +2582,11 @@ body {
             <button class="search-clear" onclick="clearSearch('snipSearchInput')">✕</button>
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">63</span></div>
-            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">15</span></div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">56</span></div>
+            <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">13</span></div>
             <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">0</span></div>
             <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">3</span></div>
-            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">45</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">40</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
@@ -3190,6 +3190,7 @@ body {
 
     <!-- 对话历史项菜单 -->
     <div class="chat-hist-menu" id="chatHistMenu">
+        <div onclick="chatHistMenuAction('rename')">重命名</div>
         <div onclick="chatHistMenuAction('upload')">上传云端</div>
         <div onclick="chatHistMenuAction('export')">导出</div>
         <div onclick="chatHistMenuAction('delete')" class="danger">删除</div>
@@ -8859,6 +8860,19 @@ body {
             }
             chatTitleGenerating = false;
         }
+        function chatRenameConv(id) {
+            var list = chatGetHistory();
+            var conv = null;
+            for (var i = 0; i < list.length; i++) { if (list[i].id === id) { conv = list[i]; break; } }
+            if (!conv) return;
+            var newTitle = prompt('修改对话标题', conv.title || '');
+            if (newTitle === null || newTitle.trim() === '') return;
+            conv.title = newTitle.trim();
+            conv.aiTitle = true;
+            chatSetHistory(list);
+            if (chatView === 'list') chatRenderHistoryList();
+            chatScheduleSyncPush();
+        }
         function chatDeleteConv(id, e) {
             if (e) { e.stopPropagation(); e.preventDefault(); }
             var list = chatGetHistory().filter(function(c) { return c.id !== id; });
@@ -10445,7 +10459,8 @@ body {
             var id = chatHistMenuId;
             chatHistMenuAutoClose();
             if (!id) return;
-            if (action === 'upload') chatCloudUpload(id);
+            if (action === 'rename') chatRenameConv(id);
+            else if (action === 'upload') chatCloudUpload(id);
             else if (action === 'export') chatExportConv(id);
             else if (action === 'delete') chatDeleteConv(id);
         }
