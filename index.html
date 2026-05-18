@@ -2461,7 +2461,7 @@ body {
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:8px">
-                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 2px 0px;">💾 本地存储：7.38 MB / ~50 MB（15%）</div>
+                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 2px 0px;">💾 本地存储：7.42 MB / ~50 MB（15%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
@@ -10597,10 +10597,8 @@ body {
             if (!cfg.url || !cfg.token) return;
             var list = chatGetHistory();
             var tombs = _chatGetTombstones();
-            var chats = list.map(function(c) {
-                return { id: c.id, title: c.title || '新对话', model: c.model || '', providerName: c.providerName || '', updated: c.updated || 0, msgCount: (c.messages || []).length };
-            });
-            cfReq('PUT', '_chat_manifest', { chats: chats, deleted: tombs }).catch(function() {});
+
+            // 先推送 dirty 的对话数据
             list.forEach(function(conv) {
                 if (conv._dirty) {
                     var clean = JSON.parse(JSON.stringify(conv));
@@ -10611,6 +10609,24 @@ body {
                     }).catch(function() {});
                 }
             });
+
+            // 读取云端清单后合并再写回，避免覆盖其他设备的对话
+            cfReq('GET', '_chat_manifest').then(function(cloudManifest) {
+                var cloudMap = {};
+                if (cloudManifest && cloudManifest.chats) {
+                    cloudManifest.chats.forEach(function(c) { cloudMap[c.id] = c; });
+                }
+                // 用本地数据更新（本地有的覆盖云端条目）
+                list.forEach(function(c) {
+                    cloudMap[c.id] = { id: c.id, title: c.title || '新对话', model: c.model || '', providerName: c.providerName || '', updated: c.updated || 0, msgCount: (c.messages || []).length };
+                });
+                // 移除墓碑中的条目
+                Object.keys(tombs).forEach(function(id) { delete cloudMap[id]; });
+                var merged = [];
+                Object.keys(cloudMap).forEach(function(id) { merged.push(cloudMap[id]); });
+                merged.sort(function(a, b) { return (b.updated || 0) - (a.updated || 0); });
+                cfReq('PUT', '_chat_manifest', { chats: merged, deleted: tombs }).catch(function() {});
+            }).catch(function() {});
         }
 
         function chatSyncPull() {
