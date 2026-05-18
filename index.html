@@ -8770,16 +8770,13 @@ body {
                     compressedCount: chatCompressedCount || 0,
                     messages: chatMessages.slice(),
                     created: Date.now(),
-                    updated: Date.now()
+                    updated: Date.now(),
+                    _dirty: true
                 });
             }
             // 按 updated 降序排
             list.sort(function(a, b) { return (b.updated || 0) - (a.updated || 0); });
             chatSetHistory(list);
-            // 标记当前对话需要同步并调度推送
-            for (var si = 0; si < list.length; si++) {
-                if (list[si].id === chatCurrentConvId) { list[si]._dirty = true; break; }
-            }
             chatScheduleSyncPush();
         }
         function chatConvTitle(msgs) {
@@ -10598,9 +10595,11 @@ body {
             });
             cfReq('PUT', '_chat_manifest', { chats: chats, deleted: tombs }).catch(function() {});
             list.forEach(function(conv) {
-                if (!conv._synced || conv._dirty) {
-                    cfReq('PUT', 'chat_' + conv.id, conv).then(function() {
-                        conv._synced = true;
+                if (conv._dirty) {
+                    var clean = JSON.parse(JSON.stringify(conv));
+                    delete clean._dirty;
+                    delete clean._synced;
+                    cfReq('PUT', 'chat_' + conv.id, clean).then(function() {
                         conv._dirty = false;
                     }).catch(function() {});
                 }
@@ -10633,7 +10632,10 @@ body {
                 if (localList.length !== beforeLen) changed = true;
 
                 if (!manifest.chats || manifest.chats.length === 0) {
-                    if (changed) chatSetHistory(localList);
+                    if (changed) {
+                        chatSetHistory(localList);
+                        if (chatView === 'list') chatRenderHistoryList();
+                    }
                     _chatSyncingPull = false;
                     return;
                 }
@@ -10663,7 +10665,7 @@ body {
                         for (var i = 0; i < localList.length; i++) {
                             if (localList[i].id === conv.id) {
                                 if ((conv.updated || 0) > (localList[i].updated || 0)) {
-                                    conv._synced = true;
+                                    delete conv._dirty;
                                     localList[i] = conv;
                                     changed = true;
                                 }
@@ -10680,6 +10682,7 @@ body {
                     if (changed) {
                         localList.sort(function(a, b) { return (b.updated || 0) - (a.updated || 0); });
                         chatSetHistory(localList);
+                        if (chatView === 'list') chatRenderHistoryList();
                     }
                     _chatSyncingPull = false;
                 });
@@ -11324,7 +11327,7 @@ body {
                     var lastSync = localStorage.getItem('toolbox_gist_last_sync');
                     var cloudTime = manifest.lastModified ? new Date(manifest.lastModified).getTime() : 0;
                     var localTime = lastSync ? new Date(lastSync).getTime() : 0;
-                    if (cloudTime <= localTime + 2000) { _syncing = false; return; }
+                    if (cloudTime <= localTime + 2000) { chatSyncPull().catch(function(){}).then(function(){ _syncing = false; }); return; }
                     return cfPullData(false, manifest).then(function() {
                         return chatSyncPull();
                     }).then(function() {
