@@ -1627,8 +1627,12 @@ body {
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
         .chat-hist-meta {
-            font-size: 12px; color: var(--text-muted); margin-top: 4px;
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;
+        }
+        .chat-hist-meta .chat-meta-tag {
+            font-size: 11px; color: var(--text-muted); background: var(--accent-light);
+            padding: 1px 7px; border-radius: 6px; white-space: nowrap;
+            max-width: 160px; overflow: hidden; text-overflow: ellipsis;
         }
         .chat-hist-del {
             flex-shrink: 0; width: 30px; height: 30px; border: none; border-radius: 8px;
@@ -3014,7 +3018,8 @@ body {
             <!-- 列表视图顶栏 -->
             <div class="chat-topbar" id="chatTopbarList" style="display: none;">
                 <div class="chat-handle-bar"></div>
-                <div style="flex:1;font-size:15px;font-weight:600;color:var(--accent)">对话</div>
+                <button class="chat-close-btn" onclick="closeChatModal()" title="关闭">✕</button>
+                <div style="flex:1"></div>
                 <button class="chat-sp-btn" onclick="chatCloudShowList()" title="云端"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg></button>
                 <button class="chat-sp-btn" onclick="chatNewConv()" title="新对话"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
             </div>
@@ -8869,6 +8874,8 @@ body {
             if (newTitle === null || newTitle.trim() === '') return;
             conv.title = newTitle.trim();
             conv.aiTitle = true;
+            conv.updated = Date.now();
+            conv._dirty = true;
             chatSetHistory(list);
             if (chatView === 'list') chatRenderHistoryList();
             chatScheduleSyncPush();
@@ -8931,13 +8938,15 @@ body {
             for (var i = 0; i < list.length; i++) {
                 var c = list[i];
                 var msgCount = c.messages ? c.messages.length : 0;
-                var meta = (c.model || '未知模型');
-                if (c.providerName) meta = c.providerName + ' · ' + meta;
-                meta += ' · ' + chatTimeAgo(c.updated || c.created) + ' · ' + msgCount + '条';
                 h += '<div class="chat-hist-item" onclick="chatLoadConv(\'' + c.id + '\')">';
                 h += '<div class="chat-hist-info">';
                 h += '<div class="chat-hist-title">' + esc(c.title || '新对话') + '</div>';
-                h += '<div class="chat-hist-meta">' + esc(meta) + '</div>';
+                h += '<div class="chat-hist-meta">';
+                if (c.providerName) h += '<span class="chat-meta-tag">' + esc(c.providerName) + '</span>';
+                h += '<span class="chat-meta-tag">' + esc(c.model || '未知模型') + '</span>';
+                h += '<span class="chat-meta-tag">' + msgCount + '条</span>';
+                h += '<span class="chat-meta-tag">' + chatTimeAgo(c.updated || c.created) + '</span>';
+                h += '</div>';
                 h += '</div>';
                 h += '<button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen(\'' + c.id + '\',event)" title="更多">⋯</button>';
                 h += '</div>';
@@ -10568,16 +10577,26 @@ body {
             _chatSyncTimer = setTimeout(chatSyncPush, 3000);
         }
 
+        function _chatGetTombstones() {
+            try { return JSON.parse(localStorage.getItem('chat_tombstones') || '{}'); } catch(e) { return {}; }
+        }
+        function _chatSetTombstones(t) {
+            // 清理 30 天前的墓碑
+            var cutoff = Date.now() - 30 * 86400000;
+            Object.keys(t).forEach(function(id) { if (t[id] < cutoff) delete t[id]; });
+            localStorage.setItem('chat_tombstones', JSON.stringify(t));
+        }
+
         function chatSyncPush() {
             if (activeSyncProvider !== 'cf') return;
             var cfg = cfGetConfig();
             if (!cfg.url || !cfg.token) return;
             var list = chatGetHistory();
-            if (list.length === 0) return;
+            var tombs = _chatGetTombstones();
             var chats = list.map(function(c) {
                 return { id: c.id, title: c.title || '新对话', model: c.model || '', providerName: c.providerName || '', updated: c.updated || 0, msgCount: (c.messages || []).length };
             });
-            cfReq('PUT', '_chat_manifest', { chats: chats }).catch(function() {});
+            cfReq('PUT', '_chat_manifest', { chats: chats, deleted: tombs }).catch(function() {});
             list.forEach(function(conv) {
                 if (!conv._synced || conv._dirty) {
                     cfReq('PUT', 'chat_' + conv.id, conv).then(function() {
@@ -10595,24 +10614,51 @@ body {
             if (!cfg.url || !cfg.token) return Promise.resolve();
             _chatSyncingPull = true;
             return cfReq('GET', '_chat_manifest').then(function(manifest) {
-                if (!manifest || !manifest.chats || manifest.chats.length === 0) { _chatSyncingPull = false; return; }
+                if (!manifest) { _chatSyncingPull = false; return; }
                 var localList = chatGetHistory();
+                var changed = false;
+
+                // 合并墓碑：双向取并集
+                var localTombs = _chatGetTombstones();
+                var cloudTombs = manifest.deleted || {};
+                var mergedTombs = JSON.parse(JSON.stringify(localTombs));
+                Object.keys(cloudTombs).forEach(function(id) {
+                    if (!mergedTombs[id] || cloudTombs[id] > mergedTombs[id]) mergedTombs[id] = cloudTombs[id];
+                });
+                _chatSetTombstones(mergedTombs);
+
+                // 删除本地存在但已在墓碑中的对话
+                var beforeLen = localList.length;
+                localList = localList.filter(function(c) { return !mergedTombs[c.id]; });
+                if (localList.length !== beforeLen) changed = true;
+
+                if (!manifest.chats || manifest.chats.length === 0) {
+                    if (changed) chatSetHistory(localList);
+                    _chatSyncingPull = false;
+                    return;
+                }
+
                 var localMap = {};
                 localList.forEach(function(c) { localMap[c.id] = c; });
                 var toFetch = [];
                 manifest.chats.forEach(function(cloud) {
+                    if (mergedTombs[cloud.id]) return;
                     var local = localMap[cloud.id];
                     if (!local || (cloud.updated && cloud.updated > (local.updated || 0))) {
                         toFetch.push(cloud.id);
                     }
                 });
-                if (toFetch.length === 0) { _chatSyncingPull = false; return; }
+                if (toFetch.length === 0) {
+                    if (changed) chatSetHistory(localList);
+                    _chatSyncingPull = false;
+                    return;
+                }
                 return Promise.all(toFetch.map(function(id) {
                     return cfReq('GET', 'chat_' + id).catch(function() { return null; });
                 })).then(function(results) {
-                    var changed = false;
                     results.forEach(function(conv) {
                         if (!conv || !conv.id) return;
+                        if (mergedTombs[conv.id]) return;
                         var found = false;
                         for (var i = 0; i < localList.length; i++) {
                             if (localList[i].id === conv.id) {
@@ -10644,10 +10690,16 @@ body {
             if (activeSyncProvider !== 'cf') return;
             var cfg = cfGetConfig();
             if (!cfg.url || !cfg.token) return;
+            // 写入墓碑
+            var tombs = _chatGetTombstones();
+            tombs[id] = Date.now();
+            _chatSetTombstones(tombs);
+            // 删除云端数据并更新清单
             cfReq('DELETE', 'chat_' + id).catch(function() {});
             cfReq('GET', '_chat_manifest').then(function(manifest) {
-                if (!manifest || !manifest.chats) return;
-                manifest.chats = manifest.chats.filter(function(c) { return c.id !== id; });
+                if (!manifest) manifest = { chats: [] };
+                manifest.chats = (manifest.chats || []).filter(function(c) { return c.id !== id; });
+                manifest.deleted = tombs;
                 cfReq('PUT', '_chat_manifest', manifest).catch(function() {});
             }).catch(function() {});
         }
