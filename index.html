@@ -152,18 +152,13 @@ html:has(.theme-clay) { background-color: #EEF4FB; }
  * ========================================================================= */
 body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: none;
+            background: var(--bg);
             color: var(--text);
             min-height: 100vh;
+            min-height: 100dvh;
             padding: 16px;
             padding-bottom: max(30px, env(safe-area-inset-bottom));
-            transition: color 0.3s;
-        }
-        body::before {
-            content: ''; position: fixed; inset: 0; z-index: -1;
-            background: var(--bg);
-            transition: background 0.3s;
-            pointer-events: none;
+            transition: background 0.3s, color 0.3s;
         }
 
         /* ===== 全局数据栏 ===== */
@@ -2507,7 +2502,7 @@ body {
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:8px">
-                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 2px 0px;">💾 本地存储：10.03 MB / ~50 MB（20%）</div>
+                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 2px 0px;">💾 本地存储：10.04 MB / ~50 MB（20%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
@@ -2632,11 +2627,11 @@ body {
             <button class="search-clear" onclick="clearSearch('snipSearchInput')">✕</button>
         </div>
         <div class="type-filter-bar">
-            <div class="type-filter-chip" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">56</span></div>
+            <div class="type-filter-chip active" id="tfall" onclick="setSnipType('all', this)">全部<span class="chip-count">56</span></div>
             <div class="type-filter-chip" id="tftext" onclick="setSnipType('text', this)">📄 文本<span class="chip-count">13</span></div>
             <div class="type-filter-chip" id="tfcode" onclick="setSnipType('code', this)">💻 代码<span class="chip-count">0</span></div>
             <div class="type-filter-chip" id="tflink" onclick="setSnipType('link', this)">🔗 链接<span class="chip-count">3</span></div>
-            <div class="type-filter-chip active" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">40</span></div>
+            <div class="type-filter-chip" id="tfcollection" onclick="setSnipType('collection', this)">📦 集合<span class="chip-count">40</span></div>
         </div>
         <div class="filter-bar" id="snipFilterBar"></div>
         <div class="sort-bar" id="sortBar">
@@ -3342,6 +3337,7 @@ body {
         function idbGet(key) { return _idbCache[key]; }
         function idbSet(key, value) {
             _idbCache[key] = value;
+            if (typeof _invalidateIdbSizeCache === 'function') _invalidateIdbSizeCache();
             if (_idb) {
                 try {
                     _idbPendingWrites++;
@@ -4259,10 +4255,11 @@ body {
         var keySort = localStorage.getItem('toolbox_key_sort_mode') || 'edited';
         var keyVisible = {};
 
-        function getKeyData() { var d = idbGet(KEY_STORE); return d ? JSON.parse(JSON.stringify(d)) : []; }
+        var _cloneData = typeof structuredClone === 'function' ? structuredClone : function(d) { return JSON.parse(JSON.stringify(d)); };
+        function getKeyData() { var d = idbGet(KEY_STORE); return d ? _cloneData(d) : []; }
         function setKeyData(d) {
             var old = idbGet(KEY_STORE) || [];
-            var oldSnap = JSON.parse(JSON.stringify(old));
+            var oldSnap = activeSyncProvider === 'cf' ? _cloneData(old) : old;
             idbSet(KEY_STORE, d);
             localStorage.setItem('toolbox_last_local_modified', new Date().toISOString());
             if (activeSyncProvider === 'cf') { cfSyncCards('k_', oldSnap, d); }
@@ -5149,10 +5146,10 @@ body {
         var snipAllExpanded = false;
         var currentEditorType = 'code';
 
-        function getSnipData() { var d = idbGet(SNIP_STORE); return d ? JSON.parse(JSON.stringify(d)) : []; }
+        function getSnipData() { var d = idbGet(SNIP_STORE); return d ? _cloneData(d) : []; }
         function setSnipData(d) {
             var old = idbGet(SNIP_STORE) || [];
-            var oldSnap = JSON.parse(JSON.stringify(old));
+            var oldSnap = activeSyncProvider === 'cf' ? _cloneData(old) : old;
             idbSet(SNIP_STORE, d);
             localStorage.setItem('toolbox_last_local_modified', new Date().toISOString());
             if (activeSyncProvider === 'cf') { cfSyncCards('s_', oldSnap, d); }
@@ -7269,6 +7266,11 @@ body {
                         setImgBedData(ibData);
                     }
 
+                    // 导入预设数据
+                    if (imported.chat_sp_presets && Array.isArray(imported.chat_sp_presets)) {
+                        localStorage.setItem(CHAT_SP_KEY, JSON.stringify(imported.chat_sp_presets));
+                    }
+
                     var totalUpdated = kUpdated + sUpdated;
                     showToast('📦 导入成功，密钥+' + kCount + '，收藏+' + sCount + (totalUpdated ? '，更新' + totalUpdated : '') + (ibCount ? '，图床+' + ibCount : ''));
                 } catch (err) { showToast('❌ 文件格式错误'); }
@@ -7533,14 +7535,20 @@ body {
         }
 
         /* ===== 存储用量检测 ===== */
+        var _idbSizeCache = null;
+        function _invalidateIdbSizeCache() { _idbSizeCache = null; }
         function checkStorageUsage() {
             var used = 0;
             try {
-                // 测量 IndexedDB 缓存数据大小
-                _idbKeys.forEach(function(key) {
-                    var val = _idbCache[key];
-                    if (val !== undefined) used += JSON.stringify(val).length;
-                });
+                // 测量 IndexedDB 缓存数据大小（带缓存，避免重复 stringify）
+                if (_idbSizeCache === null) {
+                    _idbSizeCache = 0;
+                    _idbKeys.forEach(function(key) {
+                        var val = _idbCache[key];
+                        if (val !== undefined) _idbSizeCache += JSON.stringify(val).length;
+                    });
+                }
+                used += _idbSizeCache;
                 // 加上 localStorage 中的小设置数据
                 for (var i = 0; i < localStorage.length; i++) {
                     var k = localStorage.key(i);
@@ -8347,6 +8355,7 @@ body {
                 api_keys: getKeyData(),
                 snippets: getSnipData(),
                 imgbeds: getImgBedData(),
+                chat_sp_presets: chatGetSpPresets(),
                 tombstones: getTombstones(),
                 lastModified: new Date().toISOString()
             };
@@ -8438,6 +8447,7 @@ body {
             if (p.api_keys) setKeyData(p.api_keys);
             if (p.snippets) setSnipData(p.snippets);
             if (p.imgbeds) setImgBedData(p.imgbeds);
+            if (p.chat_sp_presets) localStorage.setItem(CHAT_SP_KEY, JSON.stringify(p.chat_sp_presets));
             if (p.tombstones) setTombstones(p.tombstones);
             localStorage.setItem('toolbox_last_local_modified', new Date().toISOString());
             if (typeof renderKeyFilters === 'function') renderKeyFilters();
@@ -8645,6 +8655,7 @@ body {
                 if (remote.api_keys) setKeyDataSilent(remote.api_keys);
                 if (remote.snippets) setSnipDataSilent(remote.snippets);
                 if (remote.imgbeds) setImgBedData(remote.imgbeds);
+                if (remote.chat_sp_presets) localStorage.setItem(CHAT_SP_KEY, JSON.stringify(remote.chat_sp_presets));
                 if (remote.tombstones) setTombstones(remote.tombstones);
             } else {
                 var localTombs = getTombstones();
@@ -8722,6 +8733,7 @@ body {
                 setKeyDataSilent(kData);
                 setSnipDataSilent(sData);
                 if (remote.imgbeds) setImgBedData(remote.imgbeds);
+                if (remote.chat_sp_presets) localStorage.setItem(CHAT_SP_KEY, JSON.stringify(remote.chat_sp_presets));
 
                 var totalChanges = kCount + sCount + kUpdated + sUpdated;
                 if (manual && totalChanges > 0) {
@@ -8804,6 +8816,8 @@ body {
                     if (!list[i].aiTitle) list[i].title = chatConvTitle(chatMessages);
                     list[i].model = chatSelectedModel;
                     list[i].providerId = document.getElementById('chatProviderSelect').value;
+                    var _provItem = getKeyItemById(list[i].providerId);
+                    list[i].providerName = _provItem ? (_provItem.name || '') : '';
                     list[i].keyStr = chatSelectedKeyStr;
                     list[i].contextMax = chatContextMax;
                     list[i].compressSummary = chatCompressSummary || '';
@@ -9295,7 +9309,13 @@ body {
             chatSelectedModel = conv.model || '';
             document.getElementById('chatSendBtn').disabled = !chatSelectedModel;
             document.getElementById('chatModelLabel').textContent = conv.model || '未选择模型';
-            // 后台拉取模型列表
+            // 先用缓存填充模型下拉（秒加载），再后台刷新
+            var cached = chatGetCachedModels(item);
+            if (cached && cached.length > 0) {
+                chatAllModels = cached;
+                chatSortModels();
+                chatRenderModelDropdown(conv.model || '');
+            }
             chatFetchModels(item);
         }
 
@@ -9477,11 +9497,15 @@ body {
         }
 
         function chatLoadModelsForCurrentKey(item) {
-            if (item.models && item.models.length > 0) {
-                chatAllModels = item.models.map(function(m) { return m.name || m.id || m; });
+            var provId = document.getElementById('chatProviderSelect').value;
+            // 优先用 item.models（手动配置），其次用缓存
+            var cached = item.models && item.models.length > 0
+                ? item.models.map(function(m) { return m.name || m.id || m; })
+                : chatGetCachedModels(item);
+            if (cached && cached.length > 0) {
+                chatAllModels = cached;
                 chatSortModels();
                 chatRenderModelDropdown('');
-                var provId = document.getElementById('chatProviderSelect').value;
                 var lastModel = localStorage.getItem('chat_last_model_' + provId) || '';
                 if (lastModel && chatAllModels.indexOf(lastModel) !== -1) {
                     chatSelectedModel = lastModel;
@@ -9491,6 +9515,13 @@ body {
                 }
             }
             chatFetchModels(item);
+        }
+
+        function chatGetCachedModels(item) {
+            try {
+                var key = 'chat_models_' + (getBaseUrl(item.url) || '');
+                return JSON.parse(localStorage.getItem(key) || 'null');
+            } catch(e) { return null; }
         }
 
         async function chatFetchModels(item) {
@@ -9505,6 +9536,8 @@ body {
                 var list = json.data || json;
                 if (Array.isArray(list)) {
                     chatAllModels = list.map(function(m) { return m.id || m.name || String(m); });
+                    // 缓存到 localStorage，下次秒加载
+                    try { localStorage.setItem('chat_models_' + baseUrl, JSON.stringify(chatAllModels)); } catch(e) {}
                     chatSortModels();
                     var curFilter = document.getElementById('chatModelInput').value;
                     chatRenderModelDropdown(curFilter);
@@ -11343,9 +11376,15 @@ body {
             var msgs = document.getElementById('chatMessages');
             var btn = document.getElementById('chatScrollBtn');
             if (!msgs || !btn) return;
+            var _scrollTick = false;
             msgs.addEventListener('scroll', function() {
-                var gap = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight;
-                btn.classList.toggle('show', gap > 200);
+                if (_scrollTick) return;
+                _scrollTick = true;
+                requestAnimationFrame(function() {
+                    var gap = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight;
+                    btn.classList.toggle('show', gap > 200);
+                    _scrollTick = false;
+                });
             });
         })();
 
@@ -11365,14 +11404,18 @@ body {
                 });
             }
             if (window.visualViewport) {
+                var _vpTimer = 0;
                 window.visualViewport.addEventListener('resize', function() {
-                    var overlay = document.getElementById('chatModalOverlay');
-                    if (!overlay || !overlay.classList.contains('show')) return;
-                    var modal = overlay.querySelector('.chat-modal');
-                    if (modal) modal.style.height = window.visualViewport.height + 'px';
-                    if (document.activeElement && document.activeElement.id === 'chatInput') {
-                        setTimeout(chatScrollBottom, 100);
-                    }
+                    clearTimeout(_vpTimer);
+                    _vpTimer = setTimeout(function() {
+                        var overlay = document.getElementById('chatModalOverlay');
+                        if (!overlay || !overlay.classList.contains('show')) return;
+                        var modal = overlay.querySelector('.chat-modal');
+                        if (modal) modal.style.height = window.visualViewport.height + 'px';
+                        if (document.activeElement && document.activeElement.id === 'chatInput') {
+                            setTimeout(chatScrollBottom, 100);
+                        }
+                    }, 80);
                 });
             }
         })();
