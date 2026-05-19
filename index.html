@@ -10801,6 +10801,7 @@ body {
                 manifest.chats.forEach(function(cloud) {
                     if (mergedTombs[cloud.id]) return;
                     var local = localMap[cloud.id];
+                    if (local && local._dirty) return;
                     if (!local || (cloud.updated && cloud.updated > (local.updated || 0))) {
                         toFetch.push(cloud.id);
                     }
@@ -10819,7 +10820,7 @@ body {
                         var found = false;
                         for (var i = 0; i < localList.length; i++) {
                             if (localList[i].id === conv.id) {
-                                if ((conv.updated || 0) > (localList[i].updated || 0)) {
+                                if (!localList[i]._dirty && (conv.updated || 0) > (localList[i].updated || 0)) {
                                     delete conv._dirty;
                                     localList[i] = conv;
                                     changed = true;
