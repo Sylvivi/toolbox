@@ -3,7 +3,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
     <title>工具箱</title>
-    <meta name="theme-color" content="#EEF4FB">
+    <meta name="theme-color" content="#1a2420">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="工具箱">
@@ -1405,9 +1405,32 @@ body {
             line-height: 1; letter-spacing: 0.03em;
             transition: opacity 0.2s; pointer-events: none;
             margin-left: auto; padding-right: 6px;
-            display: none;
+            display: none; position: relative; cursor: pointer;
         }
-        .chat-ctx-indicator.visible { opacity: 0.5; display: block; }
+        .chat-ctx-indicator.visible { opacity: 0.5; display: block; pointer-events: auto; }
+        .chat-ctx-indicator.has-summary { color: var(--accent); }
+        .chat-summary-popup {
+            position: absolute; bottom: 24px; right: 0; width: 300px; max-height: 260px;
+            overflow-y: auto; background: var(--card-bg); border: 1px solid var(--card-border);
+            border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+            padding: 12px; font-size: 12px; line-height: 1.6; color: var(--text);
+            z-index: 999; display: none; pointer-events: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .chat-summary-popup.show { display: block; }
+        .chat-summary-popup .seg { padding: 8px 0; border-bottom: 1px dashed var(--input-border); }
+        .chat-summary-popup .seg:last-child { border-bottom: none; }
+        .chat-summary-popup .seg-label { font-size: 10px; color: var(--text-muted); margin-bottom: 4px; }
+        .chat-summary-popup .empty { color: var(--text-muted); text-align: center; padding: 16px 0; }
+        .sheet-tabs { display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid var(--card-border); }
+        .sheet-tab {
+            flex: 1; padding: 8px 0; text-align: center; font-size: 13px; font-weight: 600;
+            color: var(--text-muted); background: none; border: none; cursor: pointer;
+            border-bottom: 2px solid transparent; transition: all 0.2s; margin-bottom: -1px;
+        }
+        .sheet-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .sheet-tab-body { display: none; }
+        .sheet-tab-body.active { display: block; }
         .chat-input-toolbar {
             display: flex; align-items: center; justify-content: space-between;
         }
@@ -2355,8 +2378,8 @@ body {
         .lock-footer { position: absolute; bottom: 24px; display: flex; gap: 16px; }
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
-<style id="deco-custom-style">.chat-deco-on .chat-msg.ai::before{content:""!important;position:absolute!important;top:-14px!important;left:16px!important;width:2px!important;height:2px!important;font-size:0!important;image-rendering:pixelated!important;animation:none!important;pointer-events:none!important;z-index:5!important;box-shadow:0 0 #9a9a9a,10px 0 #9a9a9a,0 2px #9a9a9a,2px 2px #9a9a9a,8px 2px #9a9a9a,10px 2px #9a9a9a,0 4px #9a9a9a,2px 4px #9a9a9a,4px 4px #9a9a9a,6px 4px #9a9a9a,8px 4px #9a9a9a,10px 4px #9a9a9a,0 6px #9a9a9a,2px 6px #3a3a4a,4px 6px #9a9a9a,6px 6px #9a9a9a,8px 6px #3a3a4a,10px 6px #9a9a9a,0 8px #9a9a9a,2px 8px #9a9a9a,4px 8px #9a9a9a,6px 8px #e8a0a0,8px 8px #9a9a9a,10px 8px #9a9a9a,2px 10px #9a9a9a,4px 10px #9a9a9a,6px 10px #9a9a9a,8px 10px #9a9a9a!important;}</style></head>
-<body class="on-snippets chat-deco-on on-keys theme-clay modal-open">
+<style id="deco-custom-style">.chat-deco-on .chat-msg.ai::before{content:""!important;position:absolute!important;top:-14px!important;left:16px!important;width:2px!important;height:2px!important;font-size:0!important;image-rendering:pixelated!important;animation:none!important;pointer-events:none!important;z-index:5!important;box-shadow:6px 0 #CD6E58,8px 0 #CD6E58,10px 0 #CD6E58,12px 0 #CD6E58,14px 0 #CD6E58,16px 0 #CD6E58,18px 0 #CD6E58,20px 0 #CD6E58,6px 2px #CD6E58,8px 2px #000,10px 2px #CD6E58,12px 2px #CD6E58,14px 2px #CD6E58,16px 2px #CD6E58,18px 2px #000,20px 2px #CD6E58,2px 4px #CD6E58,4px 4px #CD6E58,6px 4px #FAC8D8,8px 4px #CD6E58,10px 4px #CD6E58,12px 4px #CD6E58,14px 4px #CD6E58,16px 4px #CD6E58,18px 4px #CD6E58,20px 4px #FAC8D8,22px 4px #CD6E58,24px 4px #CD6E58,2px 6px #CD6E58,4px 6px #CD6E58,6px 6px #CD6E58,8px 6px #CD6E58,10px 6px #CD6E58,12px 6px #CD6E58,14px 6px #CD6E58,16px 6px #CD6E58,18px 6px #CD6E58,20px 6px #CD6E58,22px 6px #CD6E58,24px 6px #CD6E58,6px 8px #CD6E58,8px 8px #CD6E58,10px 8px #CD6E58,12px 8px #CD6E58,14px 8px #CD6E58,16px 8px #CD6E58,18px 8px #CD6E58,20px 8px #CD6E58,6px 10px #CD6E58,8px 10px #CD6E58,10px 10px #CD6E58,12px 10px #CD6E58,14px 10px #CD6E58,16px 10px #CD6E58,18px 10px #CD6E58,20px 10px #CD6E58,6px 12px #CD6E58,10px 12px #CD6E58,16px 12px #CD6E58,20px 12px #CD6E58,6px 14px #CD6E58,10px 14px #CD6E58,16px 14px #CD6E58,20px 14px #CD6E58!important;}</style></head>
+<body class="on-snippets chat-deco-on on-keys dark modal-open">
 
     <!-- =======================================================================
       [2.1] 顶级拦截层
@@ -2502,7 +2525,7 @@ body {
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:8px">
-                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 2px 0px;">💾 本地存储：10.04 MB / ~50 MB（20%）</div>
+                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 2px 0px;">💾 本地存储：7.53 MB / ~50 MB（15%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
@@ -2592,7 +2615,7 @@ body {
     </div>
 
     <!-- ==================== 页面二：密钥管理 ==================== -->
-    <div class="tab-content" id="tab-keys">
+    <div class="tab-content active" id="tab-keys">
         
 <!-- =======================================================================
   [2.2] 主体导航与视图区
@@ -2618,7 +2641,7 @@ body {
     </div>
 
     <!-- ==================== 页面三：收藏（代码/文本/链接） ==================== -->
-    <div class="tab-content active" id="tab-snippets">
+    <div class="tab-content" id="tab-snippets">
         <div class="header">
             <div class="motto" contenteditable="true" spellcheck="false" onblur="saveMotto(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">Tomorrow is another day.</div>
         </div>
@@ -2637,7 +2660,7 @@ body {
         <div class="sort-bar" id="sortBar">
             <span class="sort-label">排序：</span>
             <!-- chips will be rendered by JS in saved order -->
-        <div class="sort-chip active" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
+        <div class="sort-chip" id="sortEdited" draggable="true" data-sort-key="edited">最近编辑</div><div class="sort-chip active" id="sortNewest" draggable="true" data-sort-key="newest">最新创建</div><div class="sort-chip" id="sortCreated" draggable="true" data-sort-key="created">最早创建</div></div>
         <div class="toolbar">
             <div class="toolbar-btn" id="snipExpandBtn" onclick="toggleAllSnippets()">📂 展开</div>
         </div>
@@ -3091,50 +3114,13 @@ body {
                 </div>
             </div>
             <div style="position:relative;flex:1;display:flex;flex-direction:column;min-height:0">
-                <div class="chat-messages" id="chatMessages"><div class="chat-msg user" data-idx="0"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">你好👋</div></div><button class="chat-more-btn">⋯</button></div><div class="chat-msg ai" data-idx="1"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">你好！👋 很高兴见到你！有什么我可以帮助你的吗？😊</div></div><div class="chat-toolbar"><button class="chat-tb-btn" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button><button class="chat-tb-btn" title="从此处截断"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></button><button class="chat-tb-btn" title="删除此消息"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path></svg></button></div></div><div class="chat-msg user" data-idx="2"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">你能做什么？</div></div><button class="chat-more-btn">⋯</button></div><div class="chat-msg ai" data-idx="3"><div class="chat-bubble"><div class="chat-thinking"><div class="chat-thinking-hd" onclick="this.parentElement.classList.toggle('open')"><span class="arrow">▶</span> 思考过程</div><div class="chat-thinking-bd"><div style="white-space:pre-wrap;word-break:break-word">好的，用户问“你能做什么？”，这是一个很常见的开场问题。
-
-嗯，从之前的对话看，用户只是简单打了个招呼，我也回应了。现在他直接问我的能力，说明他可能是第一次接触我，想了解我的功能范围，以便决定如何向我提问。他的深层需求可能是想快速知道我能帮他解决哪些类型的问题，或者想确认我是否具备他需要的特定能力。
-
-这个问题看似简单，但需要系统、清晰地介绍我的核心功能，让用户一目了然。我应该按类别组织信息，比如知识问答、创意写作、编程、文件处理这些主要方面，这样结构清晰，用户也容易找到自己感兴趣的部分。
-
-最后，可以加上一个友好的结尾，邀请他提出具体需求，这样对话就能继续深入下去了。</div></div></div><p>我能做的事情很多，让我为你介绍一下：</p>
-<div style="height:0.5em"></div>
-<h2>📚 <strong>知识问答</strong></h2>
-<ul><li>解答各种领域的问题（科学、历史、文化等）</li>
-<li>解释复杂概念，提供学习建议</li>
-</ul>
-<h2>✍️ <strong>写作助手</strong></h2>
-<ul><li>撰写文章、故事、邮件、报告</li>
-<li>润色修改，调整语气风格</li>
-<li>翻译多种语言</li>
-</ul>
-<h2>💻 <strong>编程帮手</strong></h2>
-<ul><li>编写、调试、解释代码</li>
-<li>提供算法建议和最佳实践</li>
-<li>涵盖Python、JavaScript等多种语言</li>
-</ul>
-<h2>📊 <strong>数据处理</strong></h2>
-<ul><li>分析数据，生成报表</li>
-<li>整理信息，制作表格</li>
-<li>阅读并处理你上传的文件（图片中的文字也能读取）</li>
-</ul>
-<h2>🎨 <strong>创意伙伴</strong></h2>
-<ul><li>头脑风暴，激发灵感</li>
-<li>策划方案，制定计划</li>
-<li>角色扮演，模拟对话</li>
-</ul>
-<h2>🔍 <strong>研究辅助</strong></h2>
-<ul><li>总结长文档，提取关键信息</li>
-<li>联网搜索实时信息（需手动开启）</li>
-<li>文献整理，资料归纳</li>
-</ul>
-<p>有什么具体需求吗？我随时准备帮你！😊</p></div><div class="chat-toolbar"><button class="chat-tb-btn" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button><button class="chat-tb-btn" id="chatRerollBtn" title="重新生成"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 102.13-9.36L1 10"></path></svg></button><button class="chat-tb-btn" title="从此处截断"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></button><button class="chat-tb-btn" title="删除此消息"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path></svg></button></div></div></div>
+                <div class="chat-messages" id="chatMessages"><div class="chat-hist-item" onclick="chatLoadConv('chat_1779195494882_5mfky1')"><div class="chat-hist-info"><div class="chat-hist-title">开车冥想笑话</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">gpt-5.5</span><span class="chat-meta-tag">62条</span><span class="chat-meta-tag">15 小时前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1779195494882_5mfky1',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1779166587909_rm9vjq')"><div class="chat-hist-info"><div class="chat-hist-title">想你了的温暖对话</div><div class="chat-hist-meta"><span class="chat-meta-tag">纯爱</span><span class="chat-meta-tag">[官-B-特惠]claude-opus-4-6-thinking</span><span class="chat-meta-tag">19条</span><span class="chat-meta-tag">1 天前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1779166587909_rm9vjq',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1779031664704_4ljt20')"><div class="chat-hist-info"><div class="chat-hist-title">你好呀蘑菇同学</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">[官-B-特惠]claude-opus-4-6-thinking</span><span class="chat-meta-tag">312条</span><span class="chat-meta-tag">1 天前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1779031664704_4ljt20',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1778777603253_at2f5g')"><div class="chat-hist-info"><div class="chat-hist-title">晓晴</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">claude-sonnet-4-6-request</span><span class="chat-meta-tag">254条</span><span class="chat-meta-tag">1 天前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1778777603253_at2f5g',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1779007341981_rh8rnp')"><div class="chat-hist-info"><div class="chat-hist-title">计算机室友</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">[官-A-特惠]claude-opus-4-6-thinking</span><span class="chat-meta-tag">78条</span><span class="chat-meta-tag">1 天前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1779007341981_rh8rnp',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1778835003716_hfrkam')"><div class="chat-hist-info"><div class="chat-hist-title">闲聊问候</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">claude-sonnet-4-6-request</span><span class="chat-meta-tag">188条</span><span class="chat-meta-tag">2 天前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1778835003716_hfrkam',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1778985103504_0bedkx')"><div class="chat-hist-info"><div class="chat-hist-title">你好</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">deepseek-v4-pro</span><span class="chat-meta-tag">2条</span><span class="chat-meta-tag">3 天前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1778985103504_0bedkx',event)" title="更多">⋯</button></div></div>
                 <button class="chat-scroll-bottom show" id="chatScrollBtn" onclick="chatScrollBottomSmooth()" title="回到底部">↓</button>
             </div>
             <div class="chat-input-area" id="chatInputArea" style="">
                 <div class="chat-img-preview" id="chatImgPreview" style="display:none"></div>
                 <div class="chat-input-box">
-                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-normal" id="clawdPx"></span></button>
+                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-love" id="clawdPx"></span></button>
                     <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this)"></textarea>
                     <div class="chat-input-toolbar">
                         <div style="position:relative">
@@ -3157,7 +3143,9 @@ body {
                         <input type="file" id="chatAttachPhoto" accept="image/*" multiple="" style="display:none" onchange="chatOnFileSelect(this)">
                         <input type="file" id="chatAttachFile" multiple="" style="display:none" onchange="chatOnFileSelect(this)">
                         <input type="file" id="chatAttachCamera" accept="image/*" capture="environment" style="display:none" onchange="chatOnFileSelect(this)">
-                        <div id="chatCtxIndicator" class="chat-ctx-indicator" style="display:none"></div>
+                        <div id="chatCtxIndicator" class="chat-ctx-indicator" style="display:none" onclick="chatToggleSummaryPopup(event)">
+                            <div id="chatSummaryPopup" class="chat-summary-popup"></div>
+                        </div>
                         <button class="chat-send-btn" id="chatSendBtn" onclick="chatSend()">↑</button>
                     </div>
                 </div>
@@ -3186,60 +3174,9 @@ body {
                 </div>
                 <textarea id="chatSysPrompt" placeholder="输入系统提示词（可选）…" rows="6" style="width:100%;padding:12px 14px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;color:var(--text);font-size:14px;outline:none;resize:none;font-family:inherit;line-height:1.6"></textarea>
             </div>
-            <div>
-                <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">上下文轮数</div>
-                <div class="chat-ctx-bar" style="padding:6px 0">
-                    <span>发送最近</span>
-                    <input type="range" id="chatCtxRange" min="0" max="50" value="0" oninput="chatUpdateCtxLabel()">
-                    <span class="ctx-label" id="chatCtxLabel">全部</span>
-                </div>
-            </div>
-            <div style="margin-top:16px">
-                <div style="display:flex;align-items:center;justify-content:space-between">
-                    <div style="font-size:13px;font-weight:600;color:var(--text)">上下文压缩</div>
-                    <label style="position:relative;width:40px;height:22px;cursor:pointer">
-                        <input type="checkbox" id="compressToggle" onchange="toggleCompress(this.checked)" style="display:none">
-                        <span style="position:absolute;inset:0;background:var(--input-border);border-radius:11px;transition:background 0.2s"></span>
-                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.15)"></span>
-                    </label>
-                </div>
-            </div>
             <div style="margin-top:16px">
                 <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">对话标题</div>
                 <button onclick="chatGenTitle(true)" style="width:100%;padding:10px;background:var(--accent-light);border:1px solid var(--card-border);border-radius:10px;color:var(--accent);font-size:13px;font-weight:500;cursor:pointer;transition:opacity 0.15s">AI 生成标题</button>
-            </div>
-            <div style="margin-top:16px">
-                <div style="display:flex;align-items:center;justify-content:space-between">
-                    <div style="font-size:13px;font-weight:600;color:var(--text)">模型快捷图标</div>
-                    <label style="position:relative;width:40px;height:22px;cursor:pointer">
-                        <input type="checkbox" id="clawdToggle" onchange="toggleClawdIcon(this.checked)" style="display:none">
-                        <span style="position:absolute;inset:0;background:var(--input-border);border-radius:11px;transition:background 0.2s"></span>
-                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.15)"></span>
-                    </label>
-                </div>
-                <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
-                    <button class="clawd-skin-opt" data-skin="normal" onclick="setClawdSkin('normal')">🦀 普通</button>
-                    <button class="clawd-skin-opt" data-skin="shy" onclick="setClawdSkin('shy')">😳 害羞</button>
-                    <button class="clawd-skin-opt" data-skin="love" onclick="setClawdSkin('love')">💕 举心</button>
-                    <button class="clawd-skin-opt" data-skin="rainy" onclick="setClawdSkin('rainy')">☔ 雨天</button>
-                    <button class="clawd-skin-opt" data-skin="boba" onclick="setClawdSkin('boba')">🧋 奶茶</button>
-                    <button class="clawd-skin-opt" data-skin="flower" onclick="setClawdSkin('flower')">🌸 送花</button>
-                    <button class="clawd-skin-opt" data-skin="music" onclick="setClawdSkin('music')">🎧 音乐</button>
-                </div>
-            </div>
-            <div style="margin-top:16px" id="chatMaskRow">
-                <div style="display:flex;align-items:center;justify-content:space-between">
-                    <div style="font-size:13px;font-weight:600;color:var(--text)">背景遮罩</div>
-                    <label style="position:relative;width:40px;height:22px;cursor:pointer">
-                        <input type="checkbox" id="chatMaskToggle" onchange="toggleChatMask(this.checked)" style="display:none">
-                        <span style="position:absolute;inset:0;background:var(--input-border);border-radius:11px;transition:background 0.2s"></span>
-                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.15)"></span>
-                    </label>
-                </div>
-            </div>
-            <div style="margin-top:16px">
-                <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">气泡装饰</div>
-                <div id="chatDecoList"></div>
             </div>
         </div>
     </div>
@@ -3264,7 +3201,11 @@ body {
     <div class="chat-action-sheet chat-model-sheet" id="chatModelSheet">
         <div class="sheet-handle"></div>
         <div style="padding:4px 20px 10px">
-            <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:12px">选择模型</div>
+            <div class="sheet-tabs">
+                <button class="sheet-tab active" id="sheetTabBtnModel" onclick="switchSheetTab('model')">模型</button>
+                <button class="sheet-tab" id="sheetTabBtnOpts" onclick="switchSheetTab('opts')">设置</button>
+            </div>
+            <div id="sheetTabModel" class="sheet-tab-body active">
             <div style="display:flex;gap:6px;margin-bottom:8px">
                 <select id="chatProviderSelect2" onchange="chatSheetProviderChange()" style="flex:1;min-width:0;padding:9px 12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px;color:var(--text);font-size:13px;outline:none">
                     <option value="">选择中转站…</option>
@@ -3273,7 +3214,77 @@ body {
                 </select>
             </div>
             <input type="text" id="chatModelSearch" placeholder="搜索模型…" autocomplete="off" oninput="chatSheetFilterModels()" style="width:100%;padding:9px 12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px;color:var(--text);font-size:13px;outline:none;margin-bottom:8px">
-            <div id="chatModelSheetList" style="max-height:40vh;overflow-y:auto;margin:0 -20px;padding:0 20px"><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 1;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-6-request-antigravity</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 1;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.5</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">auto-free</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-5-sex</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-6-free</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-6-request</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-6-standard</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-7</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-7-free</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-7-request</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-7-request-antigravity</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-7-standard</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4.6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-sonnet-4-6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-sonnet-4-6-request</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-sonnet-4-6-request-antigravity</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">deepseek-ai-v4-flash</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">deepseek-ai-v4-pro</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">deepseek-v4-flash</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">deepseek-v4-flash-free</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px; background: var(--accent-light);"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">deepseek-v4-pro</span><span style="color: var(--accent); font-size: 16px; flex-shrink: 0;">✓</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">deepseek-v4-pro-free</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">doubao-seed-code-preview-251028</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-2.5-pro</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3-flash-preview</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3-flash-preview-request</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3-flash-preview-request-antigravity</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3-pro-image-preview</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3.1-flash-image-preview</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3.1-flash-lite-preview</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3.1-pro-preview</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3.1-pro-request</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3.1-pro-request-antigravity</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-embedding-001</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">glm-4.6v-flash</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">glm-4.7-flash</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">glm-5</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">glm-5-turbo</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">glm-5-turbo-code-plan</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">glm-5-turbo-free</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">glm-5.1</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">glm-5.1-code-plan</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">glm-5.1-free</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.2</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.3-codex</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.3-codex-spark</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.4</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.4-fast</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.4-free</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.5-fast</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.5-free</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-image-2</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-image-2-chat-priority</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-oss-120b</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">grok-4.20-0309-reasoning</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">grok-4.20-beta</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">hunyuan-2.0-thinking-20251109</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">kimi-for-coding-thinking</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">kimi-k2.6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">mimo-v2.5-pro</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">mimo-v2.5-tts-voicedesign</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">mixed</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">np-claude-opus-4-5</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">np-claude-opus-4-6-request</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">np-claude-opus-4-7-request</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">Pro/deepseek-ai/DeepSeek-V3.2</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">Pro/moonshotai/Kimi-K2.6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">Pro/zai-org/GLM-5.1</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">Qwen/Qwen3.6-35B-A3B</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">qwen3.6-flash</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">qwen3.6-max-preview</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">qwen3.6-plus</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">v0-1.0-md</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">v0-1.5-md</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">z-ai-glm-5.1</span></div></div>
+            <div id="chatModelSheetList" style="max-height:50vh;overflow-y:auto;margin:0 -20px;padding:0 20px"><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 1;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-6-request-antigravity</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 1;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.5</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">auto-free</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-5-sex</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-6-free</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-6-request</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-6-standard</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-7</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-7-free</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-7-request</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-7-request-antigravity</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-7-standard</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4.6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-sonnet-4-6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-sonnet-4-6-request</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-sonnet-4-6-request-antigravity</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">deepseek-ai-v4-flash</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">deepseek-ai-v4-pro</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">deepseek-v4-flash</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">deepseek-v4-flash-free</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px; background: var(--accent-light);"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">deepseek-v4-pro</span><span style="color: var(--accent); font-size: 16px; flex-shrink: 0;">✓</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">deepseek-v4-pro-free</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">doubao-seed-code-preview-251028</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-2.5-pro</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3-flash-preview</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3-flash-preview-request</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3-flash-preview-request-antigravity</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3-pro-image-preview</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3.1-flash-image-preview</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3.1-flash-lite-preview</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3.1-pro-preview</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3.1-pro-request</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3.1-pro-request-antigravity</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-embedding-001</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">glm-4.6v-flash</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">glm-4.7-flash</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">glm-5</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">glm-5-turbo</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">glm-5-turbo-code-plan</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">glm-5-turbo-free</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">glm-5.1</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">glm-5.1-code-plan</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">glm-5.1-free</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.2</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.3-codex</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.3-codex-spark</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.4</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.4-fast</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.4-free</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.5-fast</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.5-free</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-image-2</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-image-2-chat-priority</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-oss-120b</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">grok-4.20-0309-reasoning</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">grok-4.20-beta</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">hunyuan-2.0-thinking-20251109</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">kimi-for-coding-thinking</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">kimi-k2.6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">mimo-v2.5-pro</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">mimo-v2.5-tts-voicedesign</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">mixed</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">np-claude-opus-4-5</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">np-claude-opus-4-6-request</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">np-claude-opus-4-7-request</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">Pro/deepseek-ai/DeepSeek-V3.2</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">Pro/moonshotai/Kimi-K2.6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">Pro/zai-org/GLM-5.1</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">Qwen/Qwen3.6-35B-A3B</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">qwen3.6-flash</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">qwen3.6-max-preview</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">qwen3.6-plus</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">v0-1.0-md</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">v0-1.5-md</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">z-ai-glm-5.1</span></div></div>
+            </div>
+            <div id="sheetTabOpts" class="sheet-tab-body">
+            <div>
+                <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">上下文</div>
+                <div class="chat-ctx-bar" style="padding:0 0 6px">
+                    <span style="font-size:12px">发送最近</span>
+                    <input type="range" id="chatCtxRange" min="0" max="50" value="0" oninput="chatUpdateCtxLabel()">
+                    <span class="ctx-label" id="chatCtxLabel" style="font-size:12px">全部</span>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+                    <span style="font-size:12px;color:var(--text)">上下文压缩</span>
+                    <label style="position:relative;width:36px;height:20px;cursor:pointer">
+                        <input type="checkbox" id="compressToggle" onchange="toggleCompress(this.checked)" style="display:none">
+                        <span style="position:absolute;inset:0;background:var(--input-border);border-radius:10px;transition:background 0.2s"></span>
+                        <span style="position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.15)"></span>
+                    </label>
+                </div>
+                <div id="compressModelRow" style="margin-top:6px;display:none">
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">压缩用模型（留空自动选小模型）</div>
+                    <select id="compressModelSelect" onchange="chatSaveCompressModel()" style="width:100%;padding:6px 8px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:8px;color:var(--text);font-size:12px;outline:none">
+                        <option value="">自动（优先小模型）</option>
+                    </select>
+                </div>
+                <div id="compressThresholdRow" style="margin-top:8px;display:none">
+                    <div class="chat-ctx-bar" style="padding:0 0 4px">
+                        <span style="font-size:11px;white-space:nowrap">触发</span>
+                        <input type="range" id="compressThresholdInput" min="10" max="200" step="10" oninput="chatUpdateCompressLabel()">
+                        <span class="ctx-label" id="compressThresholdLabel" style="font-size:11px">40 条</span>
+                    </div>
+                    <div class="chat-ctx-bar" style="padding:0 0 4px">
+                        <span style="font-size:11px;white-space:nowrap">保留</span>
+                        <input type="range" id="compressKeepInput" min="4" max="100" step="2" oninput="chatUpdateCompressLabel()">
+                        <span class="ctx-label" id="compressKeepLabel" style="font-size:11px">20 条</span>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--card-border)">
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">模型快捷图标</span>
+                    <label style="position:relative;width:36px;height:20px;cursor:pointer">
+                        <input type="checkbox" id="clawdToggle" onchange="toggleClawdIcon(this.checked)" style="display:none">
+                        <span style="position:absolute;inset:0;background:var(--input-border);border-radius:10px;transition:background 0.2s"></span>
+                        <span style="position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.15)"></span>
+                    </label>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+                    <button class="clawd-skin-opt" data-skin="normal" onclick="setClawdSkin('normal')">🦀 普通</button>
+                    <button class="clawd-skin-opt" data-skin="shy" onclick="setClawdSkin('shy')">😳 害羞</button>
+                    <button class="clawd-skin-opt" data-skin="love" onclick="setClawdSkin('love')">💕 举心</button>
+                    <button class="clawd-skin-opt" data-skin="rainy" onclick="setClawdSkin('rainy')">☔ 雨天</button>
+                    <button class="clawd-skin-opt" data-skin="boba" onclick="setClawdSkin('boba')">🧋 奶茶</button>
+                    <button class="clawd-skin-opt" data-skin="flower" onclick="setClawdSkin('flower')">🌸 送花</button>
+                    <button class="clawd-skin-opt" data-skin="music" onclick="setClawdSkin('music')">🎧 音乐</button>
+                </div>
+            </div>
+            <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--card-border)">
+                <div style="display:flex;align-items:center;justify-content:space-between" id="chatMaskRow">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">背景遮罩</span>
+                    <label style="position:relative;width:36px;height:20px;cursor:pointer">
+                        <input type="checkbox" id="chatMaskToggle" onchange="toggleChatMask(this.checked)" style="display:none">
+                        <span style="position:absolute;inset:0;background:var(--input-border);border-radius:10px;transition:background 0.2s"></span>
+                        <span style="position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.15)"></span>
+                    </label>
+                </div>
+                <div style="margin-top:10px">
+                    <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px">气泡装饰</div>
+                    <div id="chatDecoList"></div>
+                </div>
+            </div>
+            </div>
         </div>
     </div>
 
@@ -8754,11 +8765,12 @@ body {
          * 说明：全屏聊天面板，对话历史列表，中转站/分组/模型选择，流式输出。
          * ========================================================================= */
         var chatMessages = [];       // 当前对话的 {role, content} 数组
-        var chatCompressSummary = ''; // 已压缩的上下文摘要
-        var chatCompressedCount = 0;  // 已压缩的消息条数
+        var chatCompressSummaries = []; // 分段摘要数组，每段独立保存防止信息衰减
+        var chatCompressedCount = 0;   // 已压缩的消息条数
         var chatCompressEnabled = localStorage.getItem('chat_compress') !== '0'; // 默认开启
-        var chatCompressThreshold = 40; // 超过此消息数触发压缩（≈20轮）
-        var chatCompressKeep = 20;     // 保留最近几条不压缩（≈10轮）
+        var chatCompressModel = localStorage.getItem('chat_compress_model') || ''; // 用户指定的压缩模型
+        var chatCompressThreshold = parseInt(localStorage.getItem('chat_compress_threshold')) || 40;
+        var chatCompressKeep = parseInt(localStorage.getItem('chat_compress_keep')) || 20;
         var chatCompressing = false;   // 正在压缩中
         var chatStreaming = false;
         var chatAbortCtrl = null;
@@ -8820,7 +8832,7 @@ body {
                     list[i].providerName = _provItem ? (_provItem.name || '') : '';
                     list[i].keyStr = chatSelectedKeyStr;
                     list[i].contextMax = chatContextMax;
-                    list[i].compressSummary = chatCompressSummary || '';
+                    list[i].compressSummaries = chatCompressSummaries.length ? chatCompressSummaries : [];
                     list[i].compressedCount = chatCompressedCount || 0;
                     // 只在消息数量变化（有新消息/删消息）时更新时间
                     if (chatMessages.length !== oldMsgCount) {
@@ -8843,7 +8855,7 @@ body {
                     keyStr: chatSelectedKeyStr,
                     systemPrompt: document.getElementById('chatSysPrompt').value || '',
                     contextMax: chatContextMax,
-                    compressSummary: chatCompressSummary || '',
+                    compressSummaries: chatCompressSummaries.length ? chatCompressSummaries : [],
                     compressedCount: chatCompressedCount || 0,
                     messages: chatMessages.slice(),
                     created: Date.now(),
@@ -8961,6 +8973,9 @@ body {
             if (chatCurrentConvId === id) {
                 chatCurrentConvId = null;
                 chatMessages = [];
+                chatCompressSummaries = [];
+                chatCompressedCount = 0;
+                chatUpdateCtxIndicator();
             }
             chatRenderHistoryList();
             chatSyncDeleteFromCloud(id);
@@ -9183,7 +9198,7 @@ body {
 
         function chatResetConvState() {
             chatMessages = [];
-            chatCompressSummary = '';
+            chatCompressSummaries = [];
             chatCompressedCount = 0;
             chatAllModels = [];
             chatSelectedModel = '';
@@ -9254,7 +9269,14 @@ body {
             chatResetConvState();
             chatCurrentConvId = conv.id;
             chatMessages = (conv.messages || []).slice();
-            chatCompressSummary = conv.compressSummary || '';
+            // 兼容旧版字符串格式
+            if (conv.compressSummaries && Array.isArray(conv.compressSummaries)) {
+                chatCompressSummaries = conv.compressSummaries;
+            } else if (conv.compressSummary) {
+                chatCompressSummaries = [conv.compressSummary];
+            } else {
+                chatCompressSummaries = [];
+            }
             chatCompressedCount = conv.compressedCount || 0;
             chatSelectedModel = conv.model || '';
             chatSelectedKeyStr = conv.keyStr || '';
@@ -9539,6 +9561,7 @@ body {
                     // 缓存到 localStorage，下次秒加载
                     try { localStorage.setItem('chat_models_' + baseUrl, JSON.stringify(chatAllModels)); } catch(e) {}
                     chatSortModels();
+                    chatPopulateCompressModels();
                     var curFilter = document.getElementById('chatModelInput').value;
                     chatRenderModelDropdown(curFilter);
                     // 同步更新底部模型面板
@@ -9668,7 +9691,15 @@ body {
         });
 
         /* ----- 模型底部面板 ----- */
+        function switchSheetTab(tab) {
+            document.getElementById('sheetTabModel').classList.toggle('active', tab === 'model');
+            document.getElementById('sheetTabOpts').classList.toggle('active', tab === 'opts');
+            document.getElementById('sheetTabBtnModel').classList.toggle('active', tab === 'model');
+            document.getElementById('sheetTabBtnOpts').classList.toggle('active', tab === 'opts');
+        }
         function chatOpenModelSheet() {
+            switchSheetTab('model');
+            chatInitSheetOpts();
             // 同步 provider select
             var sel2 = document.getElementById('chatProviderSelect2');
             var selOld = document.getElementById('chatProviderSelect');
@@ -9758,11 +9789,22 @@ body {
         /* ----- 设置弹窗 ----- */
         function chatOpenSettings() {
             chatRenderSpPresets();
+            document.getElementById('chatSettingsBg').classList.add('show');
+            document.getElementById('chatSettingsModal').classList.add('show');
+        }
+        function chatInitSheetOpts() {
             renderDecoList();
             document.getElementById('clawdToggle').checked = localStorage.getItem('clawd_icon_show') !== '0';
             syncClawdToggleStyle();
             document.getElementById('compressToggle').checked = chatCompressEnabled;
             syncCompressToggleStyle();
+            document.getElementById('compressModelRow').style.display = chatCompressEnabled ? '' : 'none';
+            document.getElementById('compressThresholdRow').style.display = chatCompressEnabled ? '' : 'none';
+            document.getElementById('compressThresholdInput').value = chatCompressThreshold;
+            document.getElementById('compressKeepInput').value = chatCompressKeep;
+            document.getElementById('compressThresholdLabel').textContent = chatCompressThreshold + ' 条';
+            document.getElementById('compressKeepLabel').textContent = chatCompressKeep + ' 条';
+            chatPopulateCompressModels();
             var maskOn = localStorage.getItem('chat_mask') === '1';
             document.getElementById('chatMaskToggle').checked = maskOn;
             syncChatMaskToggleStyle();
@@ -9774,8 +9816,6 @@ body {
                 btns[i].style.background = btns[i].getAttribute('data-skin') === curSkin ? 'var(--accent-light)' : '';
                 btns[i].style.borderColor = btns[i].getAttribute('data-skin') === curSkin ? 'var(--accent-mid)' : '';
             }
-            document.getElementById('chatSettingsBg').classList.add('show');
-            document.getElementById('chatSettingsModal').classList.add('show');
         }
 
         function toggleClawdIcon(on) {
@@ -9789,7 +9829,7 @@ body {
             var thumb = track.nextElementSibling;
             if (cb.checked) {
                 track.style.background = 'var(--accent)';
-                thumb.style.transform = 'translateX(18px)';
+                thumb.style.transform = 'translateX(16px)';
             } else {
                 track.style.background = 'var(--input-border)';
                 thumb.style.transform = 'translateX(0)';
@@ -9811,7 +9851,7 @@ body {
             var thumb = track.nextElementSibling;
             if (cb.checked) {
                 track.style.background = 'var(--accent)';
-                thumb.style.transform = 'translateX(18px)';
+                thumb.style.transform = 'translateX(16px)';
             } else {
                 track.style.background = 'var(--input-border)';
                 thumb.style.transform = 'translateX(0)';
@@ -10091,8 +10131,8 @@ body {
             var _timeStr = '当前时间：' + _now.getFullYear() + '/' + ('0'+(_now.getMonth()+1)).slice(-2) + '/' + ('0'+_now.getDate()).slice(-2) + ' ' + ['周日','周一','周二','周三','周四','周五','周六'][_now.getDay()] + ' ' + ('0'+_now.getHours()).slice(-2) + ':' + ('0'+_now.getMinutes()).slice(-2);
             reqMsgs.push({ role: 'system', content: sp ? sp + '\n\n' + _timeStr : _timeStr });
             // 插入压缩摘要（如果有）
-            if (chatCompressSummary) {
-                reqMsgs.push({ role: 'system', content: '以下是之前对话的摘要：\n' + chatCompressSummary });
+            if (chatCompressSummaries.length) {
+                reqMsgs.push({ role: 'system', content: '以下是之前对话的摘要：\n' + chatCompressSummaries.join('\n\n---\n\n') });
             }
             var src = chatMessages;
             // 如果有压缩，从压缩点之后开始取消息
@@ -10112,10 +10152,11 @@ body {
             }
             for (var i = 0; i < src.length; i++) {
                 var _mc = src[i].content;
+                // 时间戳作为 system 提示插入，不污染用户消息原文
                 if (src[i].role === 'user' && src[i].ts) {
                     var _d = new Date(src[i].ts);
-                    var _ts = '[' + ('0'+_d.getHours()).slice(-2) + ':' + ('0'+_d.getMinutes()).slice(-2) + '] ';
-                    if (typeof _mc === 'string') _mc = _ts + _mc;
+                    var _ts = ('0'+_d.getHours()).slice(-2) + ':' + ('0'+_d.getMinutes()).slice(-2);
+                    reqMsgs.push({ role: 'system', content: '[用户发送于 ' + _ts + ']' });
                 }
                 reqMsgs.push({ role: src[i].role, content: _mc });
             }
@@ -11134,14 +11175,62 @@ body {
             } else {
                 label = Math.min(totalTurns, chatContextMax) + '/' + totalTurns + ' 轮';
             }
-            if (chatCompressSummary) label += ' ✓';
-            el.textContent = label;
+            if (chatCompressEnabled) label += ' ✓';
+            // 有摘要时高亮颜色
+            if (chatCompressSummaries.length) {
+                el.classList.add('has-summary');
+            } else {
+                el.classList.remove('has-summary');
+            }
+            // 保留弹出层，只更新文本节点
+            var popup = document.getElementById('chatSummaryPopup');
+            el.childNodes.forEach(function(n) { if (n !== popup) el.removeChild(n); });
+            el.insertBefore(document.createTextNode(label), popup);
+        }
+        function chatToggleSummaryPopup(e) {
+            e.stopPropagation();
+            var popup = document.getElementById('chatSummaryPopup');
+            if (!popup) return;
+            if (popup.classList.contains('show')) {
+                popup.classList.remove('show');
+                return;
+            }
+            // 渲染摘要内容
+            if (!chatCompressSummaries.length) {
+                popup.innerHTML = '<div class="empty">' + (chatCompressEnabled ? '压缩已开启，尚无摘要' : '压缩未开启') + '</div>';
+            } else {
+                var html = '';
+                for (var i = 0; i < chatCompressSummaries.length; i++) {
+                    html += '<div class="seg"><div class="seg-label">段 ' + (i + 1) + '</div>' + chatCompressSummaries[i].replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>') + '</div>';
+                }
+                html += '<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:6px">共 ' + chatCompressedCount + ' 条消息已压缩为 ' + chatCompressSummaries.length + ' 段</div>';
+                popup.innerHTML = html;
+            }
+            popup.classList.add('show');
+            // 点击外部关闭
+            setTimeout(function() {
+                document.addEventListener('click', function closePopup() {
+                    popup.classList.remove('show');
+                    document.removeEventListener('click', closePopup);
+                }, { once: true });
+            }, 0);
         }
 
         /* ===== 上下文压缩 ===== */
+        function chatPickCompressModel() {
+            // 用户手动指定的优先
+            if (chatCompressModel && chatAllModels.indexOf(chatCompressModel) !== -1) return chatCompressModel;
+            // 自动选便宜小模型
+            var cheap = ['mini', 'flash', 'haiku', 'lite', 'nano', 'small', 'fast', 'turbo'];
+            for (var i = 0; i < cheap.length; i++) {
+                for (var j = 0; j < chatAllModels.length; j++) {
+                    if (chatAllModels[j].toLowerCase().indexOf(cheap[i]) !== -1) return chatAllModels[j];
+                }
+            }
+            return chatSelectedModel;
+        }
         async function chatCompressContext() {
             if (chatCompressing || chatStreaming) return;
-            // 计算未压缩的消息数
             var uncompressed = chatMessages.length - (chatCompressedCount || 0);
             if (uncompressed <= chatCompressThreshold) return;
 
@@ -11155,13 +11244,7 @@ body {
             chatCompressing = true;
             var toCompress = chatMessages.slice(chatCompressedCount || 0, compressEnd);
 
-            // 构建压缩提示
-            var prompt = '';
-            if (chatCompressSummary) {
-                prompt += '已有的对话摘要：\n' + chatCompressSummary + '\n\n后续新增对话：\n';
-            } else {
-                prompt += '以下是一段对话：\n';
-            }
+            var prompt = '以下是一段对话：\n';
             for (var i = 0; i < toCompress.length; i++) {
                 var m = toCompress[i];
                 var c = typeof m.content === 'string' ? m.content : '[多模态内容]';
@@ -11172,18 +11255,20 @@ body {
 
             var baseUrl = getBaseUrl(item.url);
             var apiKey = chatSelectedKeyStr || getActiveKey(item);
-            var convId = chatCurrentConvId; // 记住当前对话ID，防止压缩期间切换
+            var convId = chatCurrentConvId;
+            var compressModel = chatPickCompressModel();
 
             try {
                 var resp = await fetch(baseUrl + '/chat/completions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
                     body: JSON.stringify({
-                        model: chatSelectedModel,
+                        model: compressModel,
                         messages: [
-                            { role: 'system', content: '你是对话摘要助手。简洁准确地总结对话内容，保留所有关键细节。' },
+                            { role: 'system', content: '你是对话摘要助手。简洁准确地总结对话内容，保留所有关键细节。300字以内。' },
                             { role: 'user', content: prompt }
                         ],
+                        max_tokens: 500,
                         stream: false
                     })
                 });
@@ -11191,11 +11276,11 @@ body {
                 var json = await resp.json();
                 var summary = json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content;
                 if (summary && chatCurrentConvId === convId) {
-                    chatCompressSummary = summary.trim();
+                    chatCompressSummaries.push(summary.trim());
                     chatCompressedCount = compressEnd;
                     chatSaveCurrentConv();
                     chatUpdateCtxIndicator();
-                    console.log('[压缩] 已压缩 ' + compressEnd + ' 条消息，摘要 ' + chatCompressSummary.length + ' 字');
+                    console.log('[压缩] 段 ' + chatCompressSummaries.length + '，模型 ' + compressModel + '，已压缩 ' + compressEnd + ' 条消息，摘要 ' + summary.trim().length + ' 字');
                 }
             } catch(e) {
                 console.warn('[压缩] 失败:', e.message);
@@ -11207,6 +11292,42 @@ body {
             chatCompressEnabled = on;
             localStorage.setItem('chat_compress', on ? '1' : '0');
             syncCompressToggleStyle();
+            chatUpdateCtxIndicator();
+            var row = document.getElementById('compressModelRow');
+            if (row) row.style.display = on ? '' : 'none';
+            var tRow = document.getElementById('compressThresholdRow');
+            if (tRow) tRow.style.display = on ? '' : 'none';
+        }
+        function chatSaveCompressModel() {
+            chatCompressModel = document.getElementById('compressModelSelect').value;
+            localStorage.setItem('chat_compress_model', chatCompressModel);
+        }
+        function chatUpdateCompressLabel() {
+            var t = parseInt(document.getElementById('compressThresholdInput').value) || 40;
+            var k = parseInt(document.getElementById('compressKeepInput').value) || 20;
+            if (k >= t) {
+                k = Math.max(4, t - 10);
+                document.getElementById('compressKeepInput').value = k;
+            }
+            document.getElementById('compressThresholdLabel').textContent = t + ' 条';
+            document.getElementById('compressKeepLabel').textContent = k + ' 条';
+            chatCompressThreshold = t;
+            chatCompressKeep = k;
+            localStorage.setItem('chat_compress_threshold', t);
+            localStorage.setItem('chat_compress_keep', k);
+        }
+        function chatPopulateCompressModels() {
+            var sel = document.getElementById('compressModelSelect');
+            if (!sel) return;
+            var cur = chatCompressModel;
+            sel.innerHTML = '<option value="">自动（优先小模型）</option>';
+            for (var i = 0; i < chatAllModels.length; i++) {
+                var opt = document.createElement('option');
+                opt.value = chatAllModels[i];
+                opt.textContent = chatAllModels[i];
+                if (chatAllModels[i] === cur) opt.selected = true;
+                sel.appendChild(opt);
+            }
         }
         function syncCompressToggleStyle() {
             var cb = document.getElementById('compressToggle');
@@ -11215,7 +11336,7 @@ body {
             var thumb = track.nextElementSibling;
             if (cb.checked) {
                 track.style.background = 'var(--accent)';
-                thumb.style.transform = 'translateX(18px)';
+                thumb.style.transform = 'translateX(16px)';
             } else {
                 track.style.background = 'var(--input-border)';
                 thumb.style.transform = 'translateX(0)';
