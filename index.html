@@ -2513,8 +2513,8 @@ body {
         .lock-footer { position: absolute; bottom: 24px; display: flex; gap: 16px; }
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
-<style id="deco-custom-style">.chat-deco-on .chat-msg.ai::before{content:""!important;position:absolute!important;top:-14px!important;left:16px!important;width:2px!important;height:2px!important;font-size:0!important;image-rendering:pixelated!important;animation:none!important;pointer-events:none!important;z-index:5!important;box-shadow:4px 0 #e85050,6px 0 #e85050,8px 0 #e85050,2px 2px #e85050,4px 2px #fff,6px 2px #e85050,8px 2px #fff,10px 2px #e85050,0 4px #e85050,2px 4px #e85050,4px 4px #e85050,6px 4px #e85050,8px 4px #e85050,10px 4px #e85050,12px 4px #e85050,2px 6px #f5e6d0,4px 6px #f5e6d0,6px 6px #f5e6d0,8px 6px #f5e6d0,10px 6px #f5e6d0,2px 8px #f5e6d0,4px 8px #3a2a20,6px 8px #f5e6d0,8px 8px #3a2a20,10px 8px #f5e6d0,4px 10px #f5e6d0,6px 10px #f5e6d0,8px 10px #f5e6d0!important;}</style></head>
-<body class="on-snippets chat-deco-on on-keys dark modal-open">
+</head>
+<body class="on-snippets chat-deco-on on-keys dark modal-open" style="--deco-ai: &quot;❀&quot;; --deco-ai-size: 13px; --deco-ai-color: #e8a; --deco-ai-anim: deco-bounce 2s ease-in-out infinite; --deco-ai-top: -14px; --deco-ai-left: 16px;">
 
     <!-- =======================================================================
       [2.1] 顶级拦截层
@@ -3292,7 +3292,7 @@ body {
             <div class="chat-input-area" id="chatInputArea" style="">
                 <div class="chat-img-preview" id="chatImgPreview" style="display:none"></div>
                 <div class="chat-input-box">
-                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-normal" id="clawdPx"></span></button>
+                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-coding" id="clawdPx"></span></button>
                     <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this)"></textarea>
                     <div class="chat-input-toolbar">
                         <div style="position:relative">
@@ -4070,7 +4070,7 @@ body {
         ];
         // 装饰不再分类，统一一排展示
 
-        function getDecoId() { return localStorage.getItem('toolbox_chat_deco') || 'px02'; }
+        function getDecoId() { return localStorage.getItem('toolbox_chat_deco') || 'random'; }
         function findDecoById(id) {
             for (var i = 0; i < CHAT_DECOS.length; i++) { if (CHAT_DECOS[i].id === id) return CHAT_DECOS[i]; }
             return CHAT_DECOS[0];
@@ -9821,6 +9821,19 @@ body {
             chatRenderModelDropdown(curFilter);
         }
 
+        function chatRemoveFavByUrl(url, model) {
+            for (var i = 0; i < chatFavModels.length; i++) {
+                if (chatFavModels[i].url === url && chatFavModels[i].model === model) {
+                    chatFavModels.splice(i, 1);
+                    localStorage.setItem('chat_fav_models', JSON.stringify(chatFavModels));
+                    chatSortModels();
+                    var curFilter = document.getElementById('chatModelInput').value;
+                    chatRenderModelDropdown(curFilter);
+                    return;
+                }
+            }
+        }
+
         function chatRenderModelDropdown(filter) {
             var dd = document.getElementById('chatModelDropdown');
             var lower = (filter || '').toLowerCase();
@@ -10027,12 +10040,23 @@ body {
                 container.innerHTML = '<div style="padding:12px 0;text-align:center;color:var(--text-muted);font-size:12px">还没有收藏模型，在模型列表中点击 ⭐ 添加</div>';
                 return;
             }
-            // 补全旧数据缺失的 providerName
+            // 用 url 匹配补全/修正 providerName 和 providerId
             var _fnDirty = false;
+            var _allKeys = getKeyData();
             for (var i = 0; i < chatFavModels.length; i++) {
-                if (!chatFavModels[i].providerName) {
-                    var _item = chatFavModels[i].providerId ? getKeyItemById(chatFavModels[i].providerId) : null;
-                    if (_item && _item.name) { chatFavModels[i].providerName = _item.name; _fnDirty = true; }
+                var f = chatFavModels[i];
+                var _item = null;
+                // 用 url 反查（最可靠，因为 url 是实际的中转站地址）
+                if (f.url) {
+                    for (var k = 0; k < _allKeys.length; k++) {
+                        if (_allKeys[k].url === f.url) { _item = _allKeys[k]; break; }
+                    }
+                }
+                // url 没匹配到，fallback 用 providerId
+                if (!_item && f.providerId) _item = getKeyItemById(f.providerId);
+                if (_item) {
+                    if (f.providerName !== _item.name && _item.name) { f.providerName = _item.name; _fnDirty = true; }
+                    if (f.providerId !== _item.id && _item.id) { f.providerId = _item.id; _fnDirty = true; }
                 }
             }
             if (_fnDirty) localStorage.setItem('chat_fav_models', JSON.stringify(chatFavModels));
@@ -10060,7 +10084,7 @@ body {
                         var star = document.createElement('span');
                         star.style.cssText = 'flex-shrink:0;font-size:12px;cursor:pointer;';
                         star.textContent = '⭐';
-                        star.onclick = function(e) { e.stopPropagation(); chatToggleFav(fav.model, e); chatRenderFavSection(); };
+                        star.onclick = function(e) { e.stopPropagation(); chatRemoveFavByUrl(fav.url, fav.model); chatRenderFavSection(); };
                         row.appendChild(star);
                         var nameSpan = document.createElement('span');
                         nameSpan.style.cssText = 'flex:1;min-width:0;word-break:break-all;font-size:13px;color:var(--text);';
@@ -10102,7 +10126,7 @@ body {
             syncChatMaskToggleStyle();
             var maskRow = document.getElementById('chatMaskRow');
             if (maskRow) maskRow.style.display = document.body.classList.contains('dark') ? 'none' : 'flex';
-            var curSkin = localStorage.getItem('clawd_skin') || 'normal';
+            var curSkin = localStorage.getItem('clawd_skin') || 'random';
             var btns = document.querySelectorAll('.clawd-skin-opt');
             for (var i = 0; i < btns.length; i++) {
                 btns[i].style.background = btns[i].getAttribute('data-skin') === curSkin ? 'var(--accent-light)' : '';
@@ -10167,7 +10191,7 @@ body {
         (function() {
             var show = localStorage.getItem('clawd_icon_show') !== '0';
             document.getElementById('clawdModelBtn').style.display = show ? '' : 'none';
-            var skin = localStorage.getItem('clawd_skin') || 'normal';
+            var skin = localStorage.getItem('clawd_skin') || 'random';
             var actual = skin === 'random' ? _clawdPickRandom() : skin;
             document.getElementById('clawdPx').className = 'clawd-px clawd-' + actual;
         })();
