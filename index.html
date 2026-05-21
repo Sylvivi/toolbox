@@ -3292,7 +3292,7 @@ body {
             <div class="chat-input-area" id="chatInputArea" style="">
                 <div class="chat-img-preview" id="chatImgPreview" style="display:none"></div>
                 <div class="chat-input-box">
-                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-sunglasses" id="clawdPx"></span></button>
+                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-love" id="clawdPx"></span></button>
                     <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this)"></textarea>
                     <div class="chat-input-toolbar">
                         <div style="position:relative">
@@ -4058,7 +4058,7 @@ body {
         /* ============= 气泡装饰切换（数据驱动） ============= */
         // pixel: true 的项用 box-shadow 像素画，其余用 content 文字
         var CHAT_DECOS = [
-            { id:'none', cat:'全部', icon:'✕', name:'无' },
+            { id:'random', cat:'全部', icon:'🎲', name:'随机' },
             { id:'px00', cat:'像素', icon:'💟', name:'像素心', customCss:
                 '.chat-deco-on .chat-msg.ai::before{content:""!important;position:absolute!important;top:-14px!important;left:16px!important;width:16px!important;height:12px!important;font-size:0!important;background:linear-gradient(to right,transparent 0px,transparent 2px,#f8a 2px,#f8a 4px,transparent 4px,transparent 6px,#f8a 6px,#f8a 8px,transparent 8px,transparent 16px),linear-gradient(to right,transparent 0px,#f8a 0px,#f8a 10px,transparent 10px),linear-gradient(to right,transparent 2px,#f8a 2px,#f8a 8px,transparent 8px),linear-gradient(to right,transparent 4px,#f8a 4px,#f8a 6px,transparent 6px)!important;background-size:16px 2px!important;background-position:0 0,0 2px,0 4px,0 6px!important;background-repeat:no-repeat!important;image-rendering:pixelated!important;animation:none!important;pointer-events:none!important;z-index:5!important;}'
             },
@@ -4074,8 +4074,7 @@ body {
             { id:'p06', cat:'像素', icon:'✿',  name:'转花',   ai:'"✿"',  aiSize:'14px', aiColor:'#f6a', aiAnim:'deco-spin 4s linear infinite' },
             { id:'p07', cat:'像素', icon:'❀',  name:'弹花',   ai:'"❀"',  aiSize:'13px', aiColor:'#e8a', aiAnim:'deco-bounce 2s ease-in-out infinite' },
             { id:'p17', cat:'像素', icon:'✦',  name:'闪紫星', ai:'"✦"',  aiSize:'12px', aiColor:'#daf', aiAnim:'deco-twinkle 2s ease-in-out infinite' },
-            { id:'p19', cat:'像素', icon:'❖',  name:'弹菱',   ai:'"❖"',  aiSize:'13px', aiColor:'#8cf', aiAnim:'deco-bounce 2s ease-in-out infinite' },
-            { id:'random', cat:'全部', icon:'🎲', name:'随机' }
+            { id:'p19', cat:'像素', icon:'❖',  name:'弹菱',   ai:'"❖"',  aiSize:'13px', aiColor:'#8cf', aiAnim:'deco-bounce 2s ease-in-out infinite' }
         ];
         // 装饰不再分类，统一一排展示
 
@@ -4133,13 +4132,8 @@ body {
                 var item = document.createElement('div');
                 item.className = 'deco-item' + (d.id === curId ? ' active' : '');
                 item.title = d.name;
-                if (d.id === 'none') {
-                    item.textContent = '✕';
-                    item.style.cssText = 'font-size:14px;color:var(--text-muted);';
-                } else {
-                    item.textContent = d.icon;
-                    if (d.aiColor && d.aiColor.charAt(0) === '#') item.style.color = d.aiColor;
-                }
+                item.textContent = d.icon;
+                if (d.aiColor && d.aiColor.charAt(0) === '#') item.style.color = d.aiColor;
                 item.onclick = function() { applyChatDeco(d.id); renderDecoList(); };
                 grid.appendChild(item);
             });
@@ -9485,18 +9479,6 @@ body {
                 chatCompressSummaries = [];
             }
             chatCompressedCount = conv.compressedCount || 0;
-            if (conv.compressEnabled !== undefined) {
-                chatCompressEnabled = conv.compressEnabled;
-                localStorage.setItem('chat_compress', chatCompressEnabled ? '1' : '0');
-            }
-            if (conv.compressThreshold !== undefined) {
-                chatCompressThreshold = conv.compressThreshold;
-                localStorage.setItem('chat_compress_threshold', chatCompressThreshold);
-            }
-            if (conv.compressKeep !== undefined) {
-                chatCompressKeep = conv.compressKeep;
-                localStorage.setItem('chat_compress_keep', chatCompressKeep);
-            }
             chatSelectedModel = conv.model || '';
             chatSelectedKeyStr = conv.keyStr || '';
             chatContextMax = conv.contextMax || 0;
@@ -10274,7 +10256,6 @@ body {
                 var isEditing = i === chatEditingPresetIdx;
                 h += '<div class="sp-preset-item' + (isEditing ? ' editing' : '') + '" onclick="chatLoadSpPresetIdx(' + i + ')">';
                 h += '<span class="sp-name">' + esc(presets[i].name) + '</span>';
-                h += '<button class="sp-act edit" onclick="event.stopPropagation();chatEditSpPresetIdx(' + i + ')" title="编辑">✎</button>';
                 h += '<button class="sp-act del" onclick="event.stopPropagation();chatDelSpPresetIdx(' + i + ')" title="删除">✕</button>';
                 h += '</div>';
             }
