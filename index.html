@@ -2660,7 +2660,7 @@ body {
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:8px">
-                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 2px 0px;">💾 本地存储：10.08 MB / ~50 MB（20%）</div>
+                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 2px 0px;">💾 本地存储：9.90 MB / ~50 MB（20%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
@@ -3292,7 +3292,7 @@ body {
             <div class="chat-input-area" id="chatInputArea" style="">
                 <div class="chat-img-preview" id="chatImgPreview" style="display:none"></div>
                 <div class="chat-input-box">
-                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-music" id="clawdPx"></span></button>
+                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-sunglasses" id="clawdPx"></span></button>
                     <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this)"></textarea>
                     <div class="chat-input-toolbar">
                         <div style="position:relative">
@@ -3373,6 +3373,12 @@ body {
                         <span class="ctx-label" id="compressKeepLabel" style="font-size:11px">20 条</span>
                     </div>
                     <button id="viewSummaryBtn" onclick="chatShowSummaryModal()" style="margin-top:6px;width:100%;padding:6px 0;font-size:11px;color:var(--accent);background:var(--input-bg);border:1px solid var(--card-border);border-radius:8px;cursor:pointer">查看摘要</button>
+                    <div style="margin-top:8px">
+                        <span style="font-size:11px;color:var(--text-muted)">摘要模型</span>
+                        <select id="compressModelSelect" onchange="chatSaveCompressModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none">
+                            <option value="">跟随当前模型</option>
+                        </select>
+                    </div>
                 </div>
             </div>
             <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--card-border)">
@@ -10168,6 +10174,7 @@ body {
             document.getElementById('compressKeepLabel').textContent = chatCompressKeep + ' 条';
             updateRangeFill(document.getElementById('compressThresholdInput'));
             updateRangeFill(document.getElementById('compressKeepInput'));
+            chatRenderCompressModelSelect();
             var maskOn = localStorage.getItem('chat_mask') === '1';
             document.getElementById('chatMaskToggle').checked = maskOn;
             syncChatMaskToggleStyle();
@@ -11194,6 +11201,10 @@ body {
                 }
             });
 
+            // 同步 SP 预设
+            var _spPresets = chatGetSpPresets();
+            cfReq('PUT', '_chat_sp_presets', { presets: _spPresets, updated: Date.now() }).catch(function() {});
+
             // 读取云端清单后合并再写回，避免覆盖其他设备的对话
             cfReq('GET', '_chat_manifest').then(function(cloudManifest) {
                 var cloudMap = {};
@@ -11219,6 +11230,12 @@ body {
             var cfg = cfGetConfig();
             if (!cfg.url || !cfg.token) return Promise.resolve();
             _chatSyncingPull = true;
+            // 拉取 SP 预设
+            cfReq('GET', '_chat_sp_presets').then(function(remote) {
+                if (remote && remote.presets) {
+                    localStorage.setItem(CHAT_SP_KEY, JSON.stringify(remote.presets));
+                }
+            }).catch(function() {});
             return cfReq('GET', '_chat_manifest').then(function(manifest) {
                 if (!manifest) { _chatSyncingPull = false; return; }
                 var localList = chatGetHistory();
@@ -11658,9 +11675,30 @@ body {
             var compressEnd = chatMessages.length - chatCompressKeep;
             if (compressEnd <= (chatCompressedCount || 0)) return;
 
-            var provId = document.getElementById('chatProviderSelect').value;
-            var item = getKeyItemById(provId);
-            if (!item || !chatSelectedModel) return;
+            var _compressModelCfg = chatGetCompressModel();
+            var _useModel, _useBaseUrl, _useApiKey;
+            if (_compressModelCfg && _compressModelCfg.model) {
+                _useModel = _compressModelCfg.model;
+                var _cmItem = null;
+                if (_compressModelCfg.url) {
+                    var _allK = getKeyData();
+                    for (var _ki = 0; _ki < _allK.length; _ki++) {
+                        if (_allK[_ki].url === _compressModelCfg.url) { _cmItem = _allK[_ki]; break; }
+                    }
+                }
+                if (!_cmItem && _compressModelCfg.providerId) _cmItem = getKeyItemById(_compressModelCfg.providerId);
+                if (!_cmItem) { _cmItem = getKeyItemById(document.getElementById('chatProviderSelect').value); }
+                if (!_cmItem) return;
+                _useBaseUrl = getBaseUrl(_cmItem.url);
+                _useApiKey = getActiveKey(_cmItem);
+            } else {
+                var provId = document.getElementById('chatProviderSelect').value;
+                var item = getKeyItemById(provId);
+                if (!item || !chatSelectedModel) return;
+                _useModel = chatSelectedModel;
+                _useBaseUrl = getBaseUrl(item.url);
+                _useApiKey = chatSelectedKeyStr || getActiveKey(item);
+            }
 
             chatCompressing = true;
             var toCompress = chatMessages.slice(chatCompressedCount || 0, compressEnd);
@@ -11674,16 +11712,14 @@ body {
             }
             prompt += '\n请用简洁的语言总结以上对话要点，保留关键信息（数据、决策、代码片段名、具体数值等），去除寒暄和重复。直接输出摘要，不要加前缀。';
 
-            var baseUrl = getBaseUrl(item.url);
-            var apiKey = chatSelectedKeyStr || getActiveKey(item);
             var convId = chatCurrentConvId;
 
             try {
-                var resp = await fetch(baseUrl + '/chat/completions', {
+                var resp = await fetch(_useBaseUrl + '/chat/completions', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _useApiKey },
                     body: JSON.stringify({
-                        model: chatSelectedModel,
+                        model: _useModel,
                         messages: [
                             { role: 'system', content: '你是对话摘要助手。简洁准确地总结对话内容，保留所有关键细节。300字以内。' },
                             { role: 'user', content: prompt }
@@ -11701,9 +11737,11 @@ body {
                     chatSaveCurrentConv();
                     chatUpdateCtxIndicator();
                     console.log('[压缩] 段 ' + chatCompressSummaries.length + '，已压缩 ' + compressEnd + ' 条消息，摘要 ' + summary.trim().length + ' 字');
+                    showToast('📋 已生成摘要（第' + chatCompressSummaries.length + '段，' + summary.trim().length + '字）');
                 }
             } catch(e) {
                 console.warn('[压缩] 失败:', e.message);
+                showToast('⚠️ 摘要生成失败：' + (e.message || ''));
             }
             chatCompressing = false;
         }
@@ -11715,6 +11753,33 @@ body {
             chatUpdateCtxIndicator();
             var tRow = document.getElementById('compressThresholdRow');
             if (tRow) tRow.style.display = on ? '' : 'none';
+        }
+        function chatGetCompressModel() {
+            try { return JSON.parse(localStorage.getItem('chat_compress_model') || 'null'); } catch(e) { return null; }
+        }
+        function chatSaveCompressModel(val) {
+            if (!val) { localStorage.removeItem('chat_compress_model'); return; }
+            for (var i = 0; i < chatFavModels.length; i++) {
+                var f = chatFavModels[i];
+                if (f.model + '||' + (f.url || '') === val) {
+                    localStorage.setItem('chat_compress_model', JSON.stringify({ model: f.model, url: f.url, providerId: f.providerId, providerName: f.providerName }));
+                    return;
+                }
+            }
+            localStorage.removeItem('chat_compress_model');
+        }
+        function chatRenderCompressModelSelect() {
+            var sel = document.getElementById('compressModelSelect');
+            if (!sel) return;
+            var saved = chatGetCompressModel();
+            var html = '<option value="">跟随当前模型</option>';
+            for (var i = 0; i < chatFavModels.length; i++) {
+                var f = chatFavModels[i];
+                var val = f.model + '||' + (f.url || '');
+                var selected = saved && saved.model === f.model && saved.url === f.url ? ' selected' : '';
+                html += '<option value="' + val.replace(/"/g, '&quot;') + '"' + selected + '>' + (f.providerName || '未知') + ' / ' + f.model + '</option>';
+            }
+            sel.innerHTML = html;
         }
         function chatUpdateCompressLabel() {
             var t = parseInt(document.getElementById('compressThresholdInput').value) || 40;
