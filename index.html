@@ -3292,7 +3292,7 @@ body {
             <div class="chat-input-area" id="chatInputArea" style="">
                 <div class="chat-img-preview" id="chatImgPreview" style="display:none"></div>
                 <div class="chat-input-box">
-                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-love" id="clawdPx"></span></button>
+                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-boba" id="clawdPx"></span></button>
                     <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this)"></textarea>
                     <div class="chat-input-toolbar">
                         <div style="position:relative">
@@ -8555,7 +8555,6 @@ body {
                 api_keys: getKeyData(),
                 snippets: getSnipData(),
                 imgbeds: getImgBedData(),
-                chat_sp_presets: chatGetSpPresets(),
                 chat_fav_models: JSON.parse(localStorage.getItem('chat_fav_models') || '[]'),
                 tombstones: getTombstones(),
                 lastModified: new Date().toISOString()
@@ -8648,7 +8647,6 @@ body {
             if (p.api_keys) setKeyData(p.api_keys);
             if (p.snippets) setSnipData(p.snippets);
             if (p.imgbeds) setImgBedData(p.imgbeds);
-            if (p.chat_sp_presets) localStorage.setItem(CHAT_SP_KEY, JSON.stringify(p.chat_sp_presets));
             if (p.chat_fav_models) { localStorage.setItem('chat_fav_models', JSON.stringify(p.chat_fav_models)); chatFavModels = p.chat_fav_models; }
             if (p.tombstones) setTombstones(p.tombstones);
             localStorage.setItem('toolbox_last_local_modified', new Date().toISOString());
@@ -8857,7 +8855,7 @@ body {
                 if (remote.api_keys) setKeyDataSilent(remote.api_keys);
                 if (remote.snippets) setSnipDataSilent(remote.snippets);
                 if (remote.imgbeds) setImgBedData(remote.imgbeds);
-                if (remote.chat_sp_presets) localStorage.setItem(CHAT_SP_KEY, JSON.stringify(remote.chat_sp_presets));
+
                 if (remote.chat_fav_models) { localStorage.setItem('chat_fav_models', JSON.stringify(remote.chat_fav_models)); chatFavModels = remote.chat_fav_models; }
                 if (remote.tombstones) setTombstones(remote.tombstones);
             } else {
@@ -8936,7 +8934,7 @@ body {
                 setKeyDataSilent(kData);
                 setSnipDataSilent(sData);
                 if (remote.imgbeds) setImgBedData(remote.imgbeds);
-                if (remote.chat_sp_presets) localStorage.setItem(CHAT_SP_KEY, JSON.stringify(remote.chat_sp_presets));
+
                 if (remote.chat_fav_models) { localStorage.setItem('chat_fav_models', JSON.stringify(remote.chat_fav_models)); chatFavModels = remote.chat_fav_models; }
 
                 var totalChanges = kCount + sCount + kUpdated + sUpdated;
@@ -10284,7 +10282,6 @@ body {
                 chatEditingPresetIdx = -1;
                 localStorage.setItem(CHAT_SP_KEY, JSON.stringify(presets));
                 chatRenderSpPresets();
-                syncPushData();
                 showToast('✅ 已更新');
             } else {
                 // 新建模式
@@ -10293,7 +10290,6 @@ body {
                 presets.push({ name: name.trim(), content: content });
                 localStorage.setItem(CHAT_SP_KEY, JSON.stringify(presets));
                 chatRenderSpPresets();
-                syncPushData();
                 showToast('✅ 已保存');
             }
         }
@@ -10323,7 +10319,6 @@ body {
             else if (chatEditingPresetIdx > idx) chatEditingPresetIdx--;
             localStorage.setItem(CHAT_SP_KEY, JSON.stringify(presets));
             chatRenderSpPresets();
-            syncPushData();
             showToast('已删除');
         }
 
@@ -11182,10 +11177,6 @@ body {
                 }
             });
 
-            // 同步 SP 预设
-            var _spPresets = chatGetSpPresets();
-            cfReq('PUT', '_chat_sp_presets', { presets: _spPresets, updated: Date.now() }).catch(function() {});
-
             // 读取云端清单后合并再写回，避免覆盖其他设备的对话
             cfReq('GET', '_chat_manifest').then(function(cloudManifest) {
                 var cloudMap = {};
@@ -11211,12 +11202,6 @@ body {
             var cfg = cfGetConfig();
             if (!cfg.url || !cfg.token) return Promise.resolve();
             _chatSyncingPull = true;
-            // 拉取 SP 预设
-            cfReq('GET', '_chat_sp_presets').then(function(remote) {
-                if (remote && remote.presets) {
-                    localStorage.setItem(CHAT_SP_KEY, JSON.stringify(remote.presets));
-                }
-            }).catch(function() {});
             return cfReq('GET', '_chat_manifest').then(function(manifest) {
                 if (!manifest) { _chatSyncingPull = false; return; }
                 var localList = chatGetHistory();
