@@ -2660,7 +2660,7 @@ body {
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:8px">
-                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 2px 0px;">💾 本地存储：9.90 MB / ~50 MB（20%）</div>
+                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 2px 0px;">💾 本地存储：10.01 MB / ~50 MB（20%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
@@ -3292,7 +3292,7 @@ body {
             <div class="chat-input-area" id="chatInputArea" style="">
                 <div class="chat-img-preview" id="chatImgPreview" style="display:none"></div>
                 <div class="chat-input-box">
-                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-boba" id="clawdPx"></span></button>
+                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-music" id="clawdPx"></span></button>
                     <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this)"></textarea>
                     <div class="chat-input-toolbar">
                         <div style="position:relative">
@@ -3427,11 +3427,6 @@ body {
             <div style="margin-top:0">
                 <div style="display:flex;align-items:center;justify-content:space-between">
                     <span style="font-size:12px;font-weight:600;color:var(--text-muted)">模型快捷图标</span>
-                    <label style="position:relative;width:40px;height:22px;cursor:pointer">
-                        <input type="checkbox" id="clawdToggle" onchange="toggleClawdIcon(this.checked)" style="display:none">
-                        <span style="position:absolute;inset:0;background:var(--input-border);border-radius:11px;transition:background 0.3s cubic-bezier(0.4,0,0.2,1)"></span>
-                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 1px 4px rgba(0,0,0,0.18),0 0 0 0.5px rgba(0,0,0,0.04)"></span>
-                    </label>
                 </div>
                 <div class="clawd-skin-scroll" style="margin-top:8px">
                     <button class="clawd-skin-opt" data-skin="random" onclick="setClawdSkin('random')">🎲</button>
@@ -10143,8 +10138,6 @@ body {
         }
         function chatInitSheetOpts() {
             renderDecoList();
-            document.getElementById('clawdToggle').checked = localStorage.getItem('clawd_icon_show') !== '0';
-            syncClawdToggleStyle();
             document.getElementById('compressToggle').checked = chatCompressEnabled;
             syncCompressToggleStyle();
             document.getElementById('compressThresholdRow').style.display = chatCompressEnabled ? '' : 'none';
@@ -10168,23 +10161,6 @@ body {
             }
         }
 
-        function toggleClawdIcon(on) {
-            localStorage.setItem('clawd_icon_show', on ? '1' : '0');
-            document.getElementById('clawdModelBtn').style.display = on ? '' : 'none';
-            syncClawdToggleStyle();
-        }
-        function syncClawdToggleStyle() {
-            var cb = document.getElementById('clawdToggle');
-            var track = cb.nextElementSibling;
-            var thumb = track.nextElementSibling;
-            if (cb.checked) {
-                track.style.background = 'var(--accent)';
-                thumb.style.transform = 'translateX(18px)';
-            } else {
-                track.style.background = 'var(--input-border)';
-                thumb.style.transform = 'translateX(0)';
-            }
-        }
         function toggleChatMask(on) {
             localStorage.setItem('chat_mask', on ? '1' : '0');
             if (on && !document.body.classList.contains('dark')) {
@@ -10223,8 +10199,6 @@ body {
             }
         }
         (function() {
-            var show = localStorage.getItem('clawd_icon_show') !== '0';
-            document.getElementById('clawdModelBtn').style.display = show ? '' : 'none';
             var skin = localStorage.getItem('clawd_skin') || 'random';
             var actual = skin === 'random' ? _clawdPickRandom() : skin;
             document.getElementById('clawdPx').className = 'clawd-px clawd-' + actual;
