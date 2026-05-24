@@ -2324,6 +2324,12 @@ body {
             border: none; border-radius: 6px; color: var(--red); font-size: 15px;
             cursor: pointer; flex-shrink: 0;
         }
+        .btn-move-row {
+            width: 24px; height: 24px; background: var(--accent-light);
+            border: none; border-radius: 6px; color: var(--accent); font-size: 12px;
+            cursor: pointer; flex-shrink: 0; padding: 0; line-height: 24px;
+        }
+        .btn-move-row:hover { background: var(--accent); color: #fff; }
         .btn-add-model {
             width: 100%; padding: 8px; background: transparent;
             border: 1px dashed var(--accent-mid); border-radius: 8px;
@@ -3292,7 +3298,7 @@ body {
             <div class="chat-input-area" id="chatInputArea" style="">
                 <div class="chat-img-preview" id="chatImgPreview" style="display:none"></div>
                 <div class="chat-input-box">
-                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-music" id="clawdPx"></span></button>
+                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-love" id="clawdPx"></span></button>
                     <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this)"></textarea>
                     <div class="chat-input-toolbar">
                         <div style="position:relative">
@@ -4586,7 +4592,7 @@ body {
                 }
                 var websiteHtml = '';
                 if (item.website) {
-                    websiteHtml = '<div class="card-field"><div class="card-field-label">官网</div><div class="card-field-value"><div class="text">' + esc(item.website) + '</div><a class="btn-visit" href="' + esc(item.website) + '" target="_blank">访问</a><button class="btn-copy" onclick="copyText(\'' + escAttr(item.website) + '\', this)">复制</button></div></div>';
+                    websiteHtml = '<div class="card-field"><div class="card-field-label">官网</div><div class="card-field-value"><div class="text">' + esc(item.website) + '</div><button class="btn-copy" onclick="copyText(\'' + escAttr(item.website) + '\', this)">复制</button></div></div>';
                 }
 
                 html += '<div class="card collapsed" data-kid="' + item.id + '">' +
@@ -4689,8 +4695,19 @@ body {
             div.innerHTML =
                 '<input type="text" placeholder="分组名（可选）" value="' + esc(label) + '" class="ke-label" style="flex:1;min-width:0">' +
                 '<input type="text" placeholder="sk-xxx" value="' + esc(key) + '" class="ke-key" style="flex:2;min-width:0">' +
+                '<button class="btn-move-row" onclick="moveKeyRow(this,-1)" title="上移">↑</button>' +
+                '<button class="btn-move-row" onclick="moveKeyRow(this,1)" title="下移">↓</button>' +
                 '<button class="btn-remove-model" onclick="this.parentElement.remove()">×</button>';
             container.appendChild(div);
+        }
+        function moveKeyRow(btn, dir) {
+            var row = btn.parentElement;
+            var container = row.parentElement;
+            if (dir === -1 && row.previousElementSibling) {
+                container.insertBefore(row, row.previousElementSibling);
+            } else if (dir === 1 && row.nextElementSibling) {
+                container.insertBefore(row.nextElementSibling, row);
+            }
         }
 
         function addUrlRow(label, url) {
@@ -4701,6 +4718,8 @@ body {
             div.innerHTML =
                 '<input type="text" placeholder="名称（如 国内/美国）" value="' + esc(label) + '" class="url-label" style="flex:1;min-width:0">' +
                 '<input type="text" placeholder="https://xxx.com/v1" value="' + esc(url) + '" class="url-value" style="flex:2;min-width:0">' +
+                '<button class="btn-move-row" onclick="moveKeyRow(this,-1)" title="上移">↑</button>' +
+                '<button class="btn-move-row" onclick="moveKeyRow(this,1)" title="下移">↓</button>' +
                 '<button class="btn-remove-model" onclick="this.parentElement.remove()">×</button>';
             container.appendChild(div);
         }
