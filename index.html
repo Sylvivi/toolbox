@@ -3,7 +3,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
     <title>工具箱</title>
-    <meta name="theme-color" content="#e8f2fa">
+    <meta name="theme-color" content="#f0dced">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="工具箱">
@@ -335,7 +335,7 @@ body {
         }
 
         /* ===== 通用组件 ===== */
-        .header { text-align: center; padding: 20px 0 12px; }
+        .header { display: flex; justify-content: center; padding: 20px 0 12px; }
         .header .motto {
             font-family: 'Playfair Display', 'STKaiti', 'KaiTi', '楷体', 'Noto Serif SC', Georgia, serif;
             font-style: italic; font-size: 15px; color: var(--text-muted);
@@ -343,7 +343,7 @@ body {
             outline: none; cursor: text; min-height: 1em;
             padding: 4px 8px; border-radius: 6px;
             transition: background 0.2s, opacity 0.2s;
-            display: inline-block; max-width: 90%;
+            display: inline-block; max-width: 90%; text-align: center;
         }
         .header .motto:hover { background: var(--card-inner); opacity: 0.85; }
         .header .motto:focus { background: var(--card-inner); opacity: 1; }
@@ -864,6 +864,195 @@ body {
 
         .tab-content { display: none; }
         .tab-content.active { display: block; }
+
+        /* ===== 打卡日历 ===== */
+        .checkin-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 32px);
+            gap: 4px 0;
+            justify-content: center;
+        }
+        .checkin-weekday {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-align: center;
+            font-weight: 600;
+            padding: 2px 0;
+        }
+        .checkin-day {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 12px;
+            color: var(--text-light);
+            cursor: pointer;
+            transition: all 0.15s;
+            position: relative;
+        }
+        .checkin-day:hover { background: var(--accent-light); }
+        .checkin-day.today {
+            font-weight: 700;
+            color: var(--text);
+            box-shadow: inset 0 0 0 1.5px var(--accent-mid);
+        }
+        .checkin-day.lit {
+            background: var(--accent);
+            color: #fff;
+            font-weight: 600;
+        }
+        .checkin-day.lit.today {
+            box-shadow: 0 0 0 2.5px var(--accent-light);
+        }
+        .checkin-day.partial::after {
+            content: '';
+            position: absolute;
+            bottom: 1px;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: var(--accent-mid);
+            opacity: 0.5;
+        }
+        .checkin-day.empty { cursor: default; }
+        .checkin-day.empty:hover { background: none; }
+        .checkin-day.selected {
+            background: var(--accent-light);
+            color: var(--accent);
+            font-weight: 600;
+        }
+        .checkin-day.future { opacity: 0.3; cursor: default; }
+        .checkin-day.future:hover { background: none; }
+        .checkin-card-inner {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 16px;
+        }
+        .checkin-left { }
+        .checkin-right {
+            min-height: 0;
+            display: flex;
+            gap: 10px;
+            overflow: hidden;
+        }
+        .checkin-panel {
+            background: var(--card-inner);
+            border-radius: 10px;
+            padding: 12px 14px;
+        }
+        .checkin-panel-title {
+            font-size: 11px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 8px; letter-spacing: 0.3px;
+        }
+        .checkin-p-todo {
+            flex: 1; min-height: 0;
+        }
+        .checkin-p-todo .checkin-todo-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2px 12px;
+        }
+        .checkin-p-note { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+        .checkin-p-stats { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+        .checkin-note {
+            width: 100%;
+            flex: 1;
+            min-height: 40px;
+            padding: 0;
+            background: transparent;
+            border: none;
+            color: var(--text);
+            font-size: 13px;
+            line-height: 1.5;
+            resize: none;
+            outline: none;
+            font-family: inherit;
+        }
+        .checkin-note::placeholder { color: var(--text-muted); }
+        .checkin-stats {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            flex: 1;
+            justify-content: center;
+        }
+        .checkin-stat-item {
+            text-align: center;
+        }
+        .checkin-stat-num {
+            font-size: 18px; font-weight: 700; color: var(--accent);
+            display: block; line-height: 1.2;
+        }
+        .checkin-stat-label { font-size: 10px; color: var(--text-muted); margin-top: 2px; display: block; }
+        @media (max-width: 768px) {
+            .checkin-card-inner { grid-template-columns: 1fr; }
+            .checkin-right { display: none; }
+        }
+        .checkin-expand {
+            margin-top: 10px;
+            padding: 12px;
+            background: var(--card-inner);
+            border-radius: 12px;
+        }
+        .checkin-expand-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-sub);
+            margin-bottom: 8px;
+        }
+        .checkin-task-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            cursor: pointer;
+        }
+        .checkin-task-item .checkin-checkbox {
+            width: 20px;
+            height: 20px;
+            border-radius: 6px;
+            border: 2px solid var(--input-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            flex-shrink: 0;
+        }
+        .checkin-task-item.done .checkin-checkbox {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        .checkin-task-item .checkin-task-name {
+            font-size: 13px;
+            color: var(--text-sub);
+        }
+        .checkin-task-item.done .checkin-task-name {
+            text-decoration: line-through;
+            opacity: 0.5;
+        }
+        .checkin-settings-task {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--card-border);
+        }
+        .checkin-settings-task span {
+            flex: 1;
+            font-size: 13px;
+            color: var(--text);
+        }
+        .checkin-settings-task button {
+            background: none;
+            border: none;
+            color: var(--red);
+            font-size: 14px;
+            cursor: pointer;
+            padding: 2px 6px;
+        }
 
         /* 卡片左侧色条 (C) */
         .card[data-kid] { border-left: 3px solid var(--accent-mid); }
@@ -2771,8 +2960,8 @@ body {
         .lock-footer { position: absolute; bottom: 24px; display: flex; gap: 16px; }
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
-<style id="deco-custom-style">.chat-deco-on .chat-msg.ai::before{content:""!important;position:absolute!important;top:-14px!important;left:16px!important;width:2px!important;height:2px!important;font-size:0!important;image-rendering:pixelated!important;animation:none!important;pointer-events:none!important;z-index:5!important;box-shadow:4px 0 #e85050,6px 0 #e85050,8px 0 #e85050,2px 2px #e85050,4px 2px #fff,6px 2px #e85050,8px 2px #fff,10px 2px #e85050,0 4px #e85050,2px 4px #e85050,4px 4px #e85050,6px 4px #e85050,8px 4px #e85050,10px 4px #e85050,12px 4px #e85050,2px 6px #f5e6d0,4px 6px #f5e6d0,6px 6px #f5e6d0,8px 6px #f5e6d0,10px 6px #f5e6d0,2px 8px #f5e6d0,4px 8px #3a2a20,6px 8px #f5e6d0,8px 8px #3a2a20,10px 8px #f5e6d0,4px 10px #f5e6d0,6px 10px #f5e6d0,8px 10px #f5e6d0!important;}</style></head>
-<body class="on-snippets chat-deco-on on-keys theme-iceblue modal-open" style="--deco-ai: &quot;🌙&quot;; --deco-ai-size: 13px; --deco-ai-color: #fda; --deco-ai-anim: deco-swing 2.5s ease-in-out infinite; --deco-ai-top: -14px; --deco-ai-left: 16px;" data-chat-scroll-y="0">
+<style id="deco-custom-style">.chat-deco-on .chat-msg.ai::before{content:""!important;position:absolute!important;top:-14px!important;left:16px!important;width:2px!important;height:2px!important;font-size:0!important;image-rendering:pixelated!important;animation:none!important;pointer-events:none!important;z-index:5!important;box-shadow:6px 0 #CD6E58,8px 0 #CD6E58,10px 0 #CD6E58,12px 0 #CD6E58,14px 0 #CD6E58,16px 0 #CD6E58,18px 0 #CD6E58,20px 0 #CD6E58,6px 2px #CD6E58,8px 2px #000,10px 2px #CD6E58,12px 2px #CD6E58,14px 2px #CD6E58,16px 2px #CD6E58,18px 2px #000,20px 2px #CD6E58,2px 4px #CD6E58,4px 4px #CD6E58,6px 4px #FAC8D8,8px 4px #CD6E58,10px 4px #CD6E58,12px 4px #CD6E58,14px 4px #CD6E58,16px 4px #CD6E58,18px 4px #CD6E58,20px 4px #FAC8D8,22px 4px #CD6E58,24px 4px #CD6E58,2px 6px #CD6E58,4px 6px #CD6E58,6px 6px #CD6E58,8px 6px #CD6E58,10px 6px #CD6E58,12px 6px #CD6E58,14px 6px #CD6E58,16px 6px #CD6E58,18px 6px #CD6E58,20px 6px #CD6E58,22px 6px #CD6E58,24px 6px #CD6E58,6px 8px #CD6E58,8px 8px #CD6E58,10px 8px #CD6E58,12px 8px #CD6E58,14px 8px #CD6E58,16px 8px #CD6E58,18px 8px #CD6E58,20px 8px #CD6E58,6px 10px #CD6E58,8px 10px #CD6E58,10px 10px #CD6E58,12px 10px #CD6E58,14px 10px #CD6E58,16px 10px #CD6E58,18px 10px #CD6E58,20px 10px #CD6E58,6px 12px #CD6E58,10px 12px #CD6E58,16px 12px #CD6E58,20px 12px #CD6E58,6px 14px #CD6E58,10px 14px #CD6E58,16px 14px #CD6E58,20px 14px #CD6E58!important;}</style></head>
+<body class="on-snippets chat-deco-on on-keys theme-dream on-checkin modal-open" style="--deco-ai: &quot;🌙&quot;; --deco-ai-size: 13px; --deco-ai-color: #fda; --deco-ai-anim: deco-swing 2.5s ease-in-out infinite; --deco-ai-top: -14px; --deco-ai-left: 16px;" data-chat-scroll-y="0">
 
     <!-- =======================================================================
       [2.1] 顶级拦截层
@@ -2918,7 +3107,7 @@ body {
                 </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:8px">
-                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 2px 0px;">💾 本地存储：9.98 MB / ~50 MB（20%）</div>
+                <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 2px 0px;">💾 本地存储：14.67 MB / ~50 MB（29%）</div>
                 <div id="gistSyncBtns" style="display: none; gap: 8px;">
                     <button class="btn-cancel" id="gistPullBtn" onclick="openSyncConfirm('pull')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬇️ 拉取云端</button>
                     <button class="btn-cancel" id="gistPushBtn" onclick="openSyncConfirm('push')" style="display:flex;flex:1;align-items:center;justify-content:center;gap:4px">⬆️ 推送本地</button>
@@ -3034,7 +3223,7 @@ body {
     </div>
 
     <!-- ==================== 页面三：收藏（代码/文本/链接） ==================== -->
-    <div class="tab-content active" id="tab-snippets">
+    <div class="tab-content" id="tab-snippets">
         <div class="header">
             <div class="motto" contenteditable="true" spellcheck="false" onblur="saveMotto(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">Tomorrow is another day.</div>
         </div>
@@ -3058,6 +3247,37 @@ body {
             <div class="toolbar-btn" id="snipExpandBtn" onclick="toggleAllSnippets()">📂 展开</div>
         </div>
         <div class="card-list" id="snipCardList"></div>
+    </div>
+
+    <!-- ==================== 页面四：打卡 ==================== -->
+    <div class="tab-content active" id="tab-checkin">
+        <div class="header" style="position:relative">
+            <div class="motto">Tomorrow is another day.</div>
+            <button onclick="openCheckinSettings()" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px 8px;opacity:0.6;color:var(--text-muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
+        </div>
+        <div class="search-bar">
+            <input type="text" id="checkinSearchInput" placeholder="搜索备注…" oninput="checkinSearch(this.value);toggleSearchClear(this)">
+            <button class="search-clear" onclick="clearSearch('checkinSearchInput')">✕</button>
+        </div>
+        <div class="card-list" id="checkinMonthList" style="padding-bottom:24px"><div class="card collapsed"><div class="card-header" onclick="this.parentElement.classList.toggle('collapsed')"><div class="card-title" style="font-size:15px">2026年5月</div><div class="card-chevron">›</div></div><div class="card-body"><div class="checkin-card-inner"><div class="checkin-left"><div class="checkin-grid"><div class="checkin-weekday">日</div><div class="checkin-weekday">一</div><div class="checkin-weekday">二</div><div class="checkin-weekday">三</div><div class="checkin-weekday">四</div><div class="checkin-weekday">五</div><div class="checkin-weekday">六</div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day" onclick="checkinSelectDay('2026-05-01')">1</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-02')">2</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-03')">3</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-04')">4</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-05')">5</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-06')">6</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-07')">7</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-08')">8</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-09')">9</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-10')">10</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-11')">11</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-12')">12</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-13')">13</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-14')">14</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-15')">15</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-16')">16</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-17')">17</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-18')">18</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-19')">19</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-20')">20</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-21')">21</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-22')">22</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-23')">23</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-24')">24</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-25')">25</div><div class="checkin-day today selected" onclick="checkinSelectDay('2026-05-26')">26</div><div class="checkin-day future">27</div><div class="checkin-day future">28</div><div class="checkin-day future">29</div><div class="checkin-day future">30</div><div class="checkin-day future">31</div></div></div><div class="checkin-right"><div class="checkin-panel checkin-p-todo"><div class="checkin-panel-title">5月26日 · 待办 0/8</div><div class="checkin-todo-grid"><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','早起')"><div class="checkin-checkbox"></div><span class="checkin-task-name">早起</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','喝水')"><div class="checkin-checkbox"></div><span class="checkin-task-name">喝水</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','运动')"><div class="checkin-checkbox"></div><span class="checkin-task-name">运动</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','阅读')"><div class="checkin-checkbox"></div><span class="checkin-task-name">阅读</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','冥想')"><div class="checkin-checkbox"></div><span class="checkin-task-name">冥想</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','学习')"><div class="checkin-checkbox"></div><span class="checkin-task-name">学习</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','整理')"><div class="checkin-checkbox"></div><span class="checkin-task-name">整理</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','早睡')"><div class="checkin-checkbox"></div><span class="checkin-task-name">早睡</span></div></div></div><div class="checkin-panel checkin-p-note"><div class="checkin-panel-title">备注</div><textarea class="checkin-note" placeholder="写点什么…" onblur="saveCheckinNote('2026-05-26',this.value)"></textarea></div><div class="checkin-panel checkin-p-stats"><div class="checkin-stats"><div class="checkin-stat-item"><span class="checkin-stat-num">0</span><span class="checkin-stat-label">点亮</span></div><div class="checkin-stat-item"><span class="checkin-stat-num">26</span><span class="checkin-stat-label">天数</span></div><div class="checkin-stat-item"><span class="checkin-stat-num">0%</span><span class="checkin-stat-label">完成率</span></div></div></div></div></div></div></div><div class="card collapsed"><div class="card-header" onclick="this.parentElement.classList.toggle('collapsed')"><div class="card-title" style="font-size:15px">2026年4月</div><div class="card-chevron">›</div></div><div class="card-body"><div class="checkin-card-inner"><div class="checkin-left"><div class="checkin-grid"><div class="checkin-weekday">日</div><div class="checkin-weekday">一</div><div class="checkin-weekday">二</div><div class="checkin-weekday">三</div><div class="checkin-weekday">四</div><div class="checkin-weekday">五</div><div class="checkin-weekday">六</div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day" onclick="checkinSelectDay('2026-04-01')">1</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-02')">2</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-03')">3</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-04')">4</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-05')">5</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-06')">6</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-07')">7</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-08')">8</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-09')">9</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-10')">10</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-11')">11</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-12')">12</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-13')">13</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-14')">14</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-15')">15</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-16')">16</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-17')">17</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-18')">18</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-19')">19</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-20')">20</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-21')">21</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-22')">22</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-23')">23</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-24')">24</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-25')">25</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-26')">26</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-27')">27</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-28')">28</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-29')">29</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-30')">30</div></div></div></div></div></div><div class="card collapsed"><div class="card-header" onclick="this.parentElement.classList.toggle('collapsed')"><div class="card-title" style="font-size:15px">2026年3月</div><div class="card-chevron">›</div></div><div class="card-body"><div class="checkin-card-inner"><div class="checkin-left"><div class="checkin-grid"><div class="checkin-weekday">日</div><div class="checkin-weekday">一</div><div class="checkin-weekday">二</div><div class="checkin-weekday">三</div><div class="checkin-weekday">四</div><div class="checkin-weekday">五</div><div class="checkin-weekday">六</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-01')">1</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-02')">2</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-03')">3</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-04')">4</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-05')">5</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-06')">6</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-07')">7</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-08')">8</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-09')">9</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-10')">10</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-11')">11</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-12')">12</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-13')">13</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-14')">14</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-15')">15</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-16')">16</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-17')">17</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-18')">18</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-19')">19</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-20')">20</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-21')">21</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-22')">22</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-23')">23</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-24')">24</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-25')">25</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-26')">26</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-27')">27</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-28')">28</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-29')">29</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-30')">30</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-31')">31</div></div></div></div></div></div><div class="card collapsed"><div class="card-header" onclick="this.parentElement.classList.toggle('collapsed')"><div class="card-title" style="font-size:15px">2026年2月</div><div class="card-chevron">›</div></div><div class="card-body"><div class="checkin-card-inner"><div class="checkin-left"><div class="checkin-grid"><div class="checkin-weekday">日</div><div class="checkin-weekday">一</div><div class="checkin-weekday">二</div><div class="checkin-weekday">三</div><div class="checkin-weekday">四</div><div class="checkin-weekday">五</div><div class="checkin-weekday">六</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-01')">1</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-02')">2</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-03')">3</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-04')">4</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-05')">5</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-06')">6</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-07')">7</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-08')">8</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-09')">9</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-10')">10</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-11')">11</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-12')">12</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-13')">13</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-14')">14</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-15')">15</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-16')">16</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-17')">17</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-18')">18</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-19')">19</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-20')">20</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-21')">21</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-22')">22</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-23')">23</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-24')">24</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-25')">25</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-26')">26</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-27')">27</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-28')">28</div></div></div></div></div></div><div class="card collapsed"><div class="card-header" onclick="this.parentElement.classList.toggle('collapsed')"><div class="card-title" style="font-size:15px">2026年1月</div><div class="card-chevron">›</div></div><div class="card-body"><div class="checkin-card-inner"><div class="checkin-left"><div class="checkin-grid"><div class="checkin-weekday">日</div><div class="checkin-weekday">一</div><div class="checkin-weekday">二</div><div class="checkin-weekday">三</div><div class="checkin-weekday">四</div><div class="checkin-weekday">五</div><div class="checkin-weekday">六</div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day" onclick="checkinSelectDay('2026-01-01')">1</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-02')">2</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-03')">3</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-04')">4</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-05')">5</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-06')">6</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-07')">7</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-08')">8</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-09')">9</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-10')">10</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-11')">11</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-12')">12</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-13')">13</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-14')">14</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-15')">15</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-16')">16</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-17')">17</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-18')">18</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-19')">19</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-20')">20</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-21')">21</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-22')">22</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-23')">23</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-24')">24</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-25')">25</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-26')">26</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-27')">27</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-28')">28</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-29')">29</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-30')">30</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-31')">31</div></div></div></div></div></div><div class="card collapsed"><div class="card-header" onclick="this.parentElement.classList.toggle('collapsed')"><div class="card-title" style="font-size:15px">2025年12月</div><div class="card-chevron">›</div></div><div class="card-body"><div class="checkin-card-inner"><div class="checkin-left"><div class="checkin-grid"><div class="checkin-weekday">日</div><div class="checkin-weekday">一</div><div class="checkin-weekday">二</div><div class="checkin-weekday">三</div><div class="checkin-weekday">四</div><div class="checkin-weekday">五</div><div class="checkin-weekday">六</div><div class="checkin-day empty"></div><div class="checkin-day" onclick="checkinSelectDay('2025-12-01')">1</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-02')">2</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-03')">3</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-04')">4</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-05')">5</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-06')">6</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-07')">7</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-08')">8</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-09')">9</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-10')">10</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-11')">11</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-12')">12</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-13')">13</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-14')">14</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-15')">15</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-16')">16</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-17')">17</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-18')">18</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-19')">19</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-20')">20</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-21')">21</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-22')">22</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-23')">23</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-24')">24</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-25')">25</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-26')">26</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-27')">27</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-28')">28</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-29')">29</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-30')">30</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-31')">31</div></div></div></div></div></div></div>
+        <div class="card-list" id="checkinSearchResults" style="padding-bottom:24px;display:none"></div>
+    </div>
+
+    <!-- ===== 打卡任务设置弹窗 ===== -->
+    <div class="modal-overlay" id="checkinSettingsOverlay" onclick="if(event.target===this)closeCheckinSettings()">
+        <div class="modal" style="max-width:400px;width:100%">
+            <h2>⚙️ 打卡任务</h2>
+            <div class="modal-body" style="padding:0 20px">
+                <div id="checkinTaskList"></div>
+                <div style="margin-top:12px;display:flex;gap:8px">
+                    <input type="text" id="checkinNewTask" placeholder="新任务名称…" style="flex:1;padding:8px 12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none">
+                    <button onclick="addCheckinTask()" style="padding:8px 14px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer">添加</button>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeCheckinSettings()">关闭</button>
+            </div>
+        </div>
     </div>
 
     <!-- ===== 收藏编辑弹窗 ===== -->
@@ -3277,7 +3497,7 @@ body {
     <!-- =======================================================================
       [2.3] 全局悬浮与提示层
     ========================================================================= -->
-    <button class="fab-search" id="fabSearch" style="display: flex;">🔍</button>
+    <button class="fab-search" id="fabSearch" style="display: none;">🔍</button>
     <button class="fab-add" id="fabAdd" style="display: flex;">+</button>
 
     <!-- 主题选择面板 -->
@@ -3288,7 +3508,7 @@ body {
 
     <div class="batch-bar" id="batchBar">
         <span class="batch-cancel-btn" onclick="exitSelectMode()">取消</span>
-        <span id="batchCountText" style="font-size:14px;font-weight:600">已选 0 项</span>
+        <span id="batchCountText" style="font-size:14px;font-weight:600">已选 1 项</span>
         <div style="display:flex;gap:8px">
             <span class="batch-cancel-btn" id="batchMergeBtn" onclick="openMergeModal()" style="display:none;background:rgba(255,255,255,0.2)">📦 合并</span>
             <span class="batch-delete-btn" onclick="batchDelete()">删除</span>
@@ -3322,7 +3542,7 @@ body {
         <div class="modal" style="max-width:320px;width:100%">
             <h2>🗑️ 确认删除</h2>
             <div class="modal-body">
-                <div id="deleteConfirmText" style="font-size:14px;color:var(--text)"></div>
+                <div id="deleteConfirmText" style="font-size:14px;color:var(--text)">确定删除选中的 1 项吗？此操作不可撤销。</div>
             </div>
             <div class="modal-actions">
                 <button class="btn-cancel" onclick="closeDeleteConfirm()">取消</button>
@@ -3473,7 +3693,7 @@ body {
     <div class="modal-overlay" id="chatModalOverlay" onclick="if(event.target===this)closeChatModal()">
         <div class="modal chat-modal" style="">
             <!-- 列表视图顶栏 -->
-            <div class="chat-topbar" id="chatTopbarList" style="display: none;">
+            <div class="chat-topbar" id="chatTopbarList" style="">
                 <div class="chat-handle-bar"></div>
                 <button class="chat-close-btn" onclick="closeChatModal()" title="关闭">✕</button>
                 <div style="flex:1"></div>
@@ -3481,10 +3701,10 @@ body {
                 <button class="chat-sp-btn" onclick="chatNewConv()" title="新对话"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
             </div>
             <!-- 对话视图顶栏 -->
-            <div class="chat-topbar" id="chatTopbarConv" style="">
+            <div class="chat-topbar" id="chatTopbarConv" style="display: none;">
                 <div class="chat-handle-bar"></div>
                 <button class="chat-close-btn" id="chatBackBtn">←</button>
-                <span style="flex:1;min-width:0"></span><span id="chatModelLabel" style="display:none">claude-opus-4-6</span>
+                <span style="flex:1;min-width:0"></span><span id="chatModelLabel" style="display:none">未选择模型</span>
                 <button class="chat-sp-btn" id="chatSearchBtn" onclick="chatToggleSearch()" title="搜索"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></button>
                 <button class="chat-sp-btn" id="chatSpBtn" onclick="chatOpenSettings()" title="设置">⋮</button>
             </div>
@@ -3503,30 +3723,17 @@ body {
                 </div>
                 <div class="chat-model-wrap" style="position:relative">
                     <input type="text" id="chatModelInput" placeholder="搜索模型…" autocomplete="off" onfocus="chatShowModelDropdown()" oninput="chatFilterModels()" style="width:100%;padding:7px 10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:12px;outline:none">
-                    <div class="chat-model-dropdown" id="chatModelDropdown"><div class="chat-model-item active"><span class="fav-star">⭐</span><span class="model-name">claude-opus-4-6</span></div></div>
+                    <div class="chat-model-dropdown" id="chatModelDropdown"></div>
                 </div>
             </div>
             <div style="position:relative;flex:1;display:flex;flex-direction:column;min-height:0">
-                <div class="chat-messages" id="chatMessages"><div class="chat-time-sep"><span>昨天 01:13</span></div><div class="chat-msg user" data-idx="0"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">晚上好</div></div><button class="chat-more-btn">⋯</button></div><div class="chat-msg ai" data-idx="1"><div class="chat-bubble"><p>晚上好呀，这个点还没睡，是睡不着还是夜猫子体质？🍄</p></div><div class="chat-toolbar"><button class="chat-tb-btn" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button><button class="chat-tb-btn" title="从此处截断"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></button><button class="chat-tb-btn" title="收藏为卡片"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"></path></svg></button><button class="chat-tb-btn" title="删除此消息"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path></svg></button></div></div><div class="chat-time-sep"><span>今天 03:33</span></div><div class="chat-msg user" data-idx="2"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">中途醒了</div></div><button class="chat-more-btn">⋯</button></div><div class="chat-msg ai" data-idx="3"><div class="chat-bubble"><div class="chat-thinking"><div class="chat-thinking-hd" onclick="chatToggleThinking(this)"><span class="arrow">▶</span> 思考过程</div><div class="chat-thinking-bd"><p>The user woke up in the middle of the night at 3:33 AM. Let me respond naturally as a friend would.</p>
-</div></div><p>半夜醒来那种感觉挺烦的，脑子突然就清醒了是吧？🍄</p></div><div class="chat-toolbar"><button class="chat-tb-btn" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button><button class="chat-tb-btn" title="从此处截断"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></button><button class="chat-tb-btn" title="收藏为卡片"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"></path></svg></button><button class="chat-tb-btn" title="删除此消息"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path></svg></button></div></div><div class="chat-msg user" data-idx="4"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">是呀，然后睡不着了</div></div><button class="chat-more-btn">⋯</button></div><div class="chat-msg ai" data-idx="5"><div class="chat-bubble"><div class="chat-thinking"><div class="chat-thinking-hd" onclick="chatToggleThinking(this)"><span class="arrow">▶</span> 思考过程</div><div class="chat-thinking-bd"><p>The user woke up in the middle of the night and can't fall back asleep. I'll keep it casual and friendly, maybe ask a simple question or make a relatable comment.</p>
-</div></div><p>唉，最讨厌这种，越想睡越清醒。现在是放空躺着还是干脆爬起来了？🍄</p></div><div class="chat-toolbar"><button class="chat-tb-btn" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button><button class="chat-tb-btn" title="从此处截断"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></button><button class="chat-tb-btn" title="收藏为卡片"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"></path></svg></button><button class="chat-tb-btn" title="删除此消息"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path></svg></button></div></div><div class="chat-msg user" data-idx="6"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">在玩手机呢</div></div><button class="chat-more-btn">⋯</button></div><div class="chat-msg ai" data-idx="7"><div class="chat-bubble"><div class="chat-thinking"><div class="chat-thinking-hd" onclick="chatToggleThinking(this)"><span class="arrow">▶</span> 思考过程</div><div class="chat-thinking-bd"><p>The user is playing on their phone after waking up in the middle of the night. Keep it casual and brief.</p>
-</div></div><p>经典操作，醒了就摸手机，然后越刷越精神哈哈🍄</p></div><div class="chat-toolbar"><button class="chat-tb-btn" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button><button class="chat-tb-btn" title="从此处截断"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></button><button class="chat-tb-btn" title="收藏为卡片"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"></path></svg></button><button class="chat-tb-btn" title="删除此消息"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path></svg></button></div></div><div class="chat-msg user" data-idx="8"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">是这样的</div></div><button class="chat-more-btn">⋯</button></div><div class="chat-msg ai" data-idx="9"><div class="chat-bubble"><div class="chat-thinking"><div class="chat-thinking-hd" onclick="chatToggleThinking(this)"><span class="arrow">▶</span> 思考过程</div><div class="chat-thinking-bd"><p>The user is just chatting casually about being awake in the middle of the night and playing on their phone. I'll keep it light and brief, maybe ask one simple question.</p>
-</div></div><p>那随便刷刷也行，反正硬逼自己闭眼也睡不回去。明天要早起吗？🍄</p></div><div class="chat-toolbar"><button class="chat-tb-btn" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button><button class="chat-tb-btn" title="从此处截断"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></button><button class="chat-tb-btn" title="收藏为卡片"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"></path></svg></button><button class="chat-tb-btn" title="删除此消息"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path></svg></button></div></div><div class="chat-msg user" data-idx="10"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">明天可能会调休，今天下班回来不太舒服</div></div><button class="chat-more-btn">⋯</button></div><div class="chat-msg ai" data-idx="11"><div class="chat-bubble"><div class="chat-thinking"><div class="chat-thinking-hd" onclick="chatToggleThinking(this)"><span class="arrow">▶</span> 思考过程</div><div class="chat-thinking-bd"><p>The user mentioned they're not feeling well after coming back from work today. I should show some concern but keep it casual, like a friend would.</p>
-</div></div><p>不舒服？是身体上的还是心情那种？🍄</p></div><div class="chat-toolbar"><button class="chat-tb-btn" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button><button class="chat-tb-btn" title="从此处截断"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></button><button class="chat-tb-btn" title="收藏为卡片"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"></path></svg></button><button class="chat-tb-btn" title="删除此消息"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path></svg></button></div></div><div class="chat-msg user" data-idx="12"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">身体，有点肠胃感冒</div></div><button class="chat-more-btn">⋯</button></div><div class="chat-msg ai" data-idx="13"><div class="chat-bubble"><div class="chat-thinking"><div class="chat-thinking-hd" onclick="chatToggleThinking(this)"><span class="arrow">▶</span> 思考过程</div><div class="chat-thinking-bd"><p>肠胃感冒，难受的。</p>
-</div></div><p>肠胃感冒挺难受的，又吐又拉那种吗？难怪半夜会醒🍄</p></div><div class="chat-toolbar"><button class="chat-tb-btn" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button><button class="chat-tb-btn" title="从此处截断"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></button><button class="chat-tb-btn" title="收藏为卡片"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"></path></svg></button><button class="chat-tb-btn" title="删除此消息"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path></svg></button></div></div><div class="chat-msg user" data-idx="14"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">是的，很奇怪，啥也没干，突然就不舒服了</div></div><button class="chat-more-btn">⋯</button></div><div class="chat-msg ai" data-idx="15"><div class="chat-bubble"><div class="chat-thinking"><div class="chat-thinking-hd" onclick="chatToggleThinking(this)"><span class="arrow">▶</span> 思考过程</div><div class="chat-thinking-bd"><p>The user is telling me about their stomach flu that came out of nowhere. I should respond naturally as a friend would, keeping it short and empathetic.</p>
-</div></div><p>有时候就这样，莫名其妙中招，可能是最近太累免疫力掉了。那明天好好休息一天吧，别硬撑🍄</p></div><div class="chat-toolbar"><button class="chat-tb-btn" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button><button class="chat-tb-btn" title="从此处截断"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></button><button class="chat-tb-btn" title="收藏为卡片"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"></path></svg></button><button class="chat-tb-btn" title="删除此消息"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path></svg></button></div></div><div class="chat-msg user" data-idx="16"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">确实是免疫力下降，熬夜有点凶</div></div><button class="chat-more-btn">⋯</button></div><div class="chat-msg ai" data-idx="17"><div class="chat-bubble"><div class="chat-thinking"><div class="chat-thinking-hd" onclick="chatToggleThinking(this)"><span class="arrow">▶</span> 思考过程</div><div class="chat-thinking-bd"><p>The user is saying they've been staying up late a lot, which has lowered their immunity and now they're sick. I should respond naturally as a friend, acknowledge what they said, maybe lightly comment on the irony of the situation (staying up late caused illness, and now they're up at 4am again), but not be preachy about it.</p>
-</div></div><p>哈哈说着熬夜伤身，现在四点又在刷手机，这不恶性循环了嘛。不过生病那天就别想太多了，能睡着再睡🍄</p></div><div class="chat-toolbar"><button class="chat-tb-btn" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button><button class="chat-tb-btn" title="从此处截断"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></button><button class="chat-tb-btn" title="收藏为卡片"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"></path></svg></button><button class="chat-tb-btn" title="删除此消息"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path></svg></button></div></div><div class="chat-msg user" data-idx="18"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">是的，我也是这么想的</div></div><button class="chat-more-btn">⋯</button></div><div class="chat-msg ai" data-idx="19"><div class="chat-bubble"><div class="chat-thinking"><div class="chat-thinking-hd" onclick="chatToggleThinking(this)"><span class="arrow">▶</span> 思考过程</div><div class="chat-thinking-bd"><p>The user is agreeing with me. Keep it casual and short.</p>
-</div></div><p>那就安心刷会儿，困了自然就睡了。肚子现在还闹腾吗？🍄</p></div><div class="chat-toolbar"><button class="chat-tb-btn" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button><button class="chat-tb-btn" title="从此处截断"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></button><button class="chat-tb-btn" title="收藏为卡片"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"></path></svg></button><button class="chat-tb-btn" title="删除此消息"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path></svg></button></div></div><div class="chat-msg user" data-idx="20"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">好很多了已经</div></div><button class="chat-more-btn">⋯</button></div><div class="chat-msg ai" data-idx="21"><div class="chat-bubble"><div class="chat-thinking"><div class="chat-thinking-hd" onclick="chatToggleThinking(this)"><span class="arrow">▶</span> 思考过程</div><div class="chat-thinking-bd"><p>That's good to hear.</p>
-</div></div><p>那就好，身体自己扛过来了。困意来了就赶紧放下手机啊🍄</p></div><div class="chat-toolbar"><button class="chat-tb-btn" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button><button class="chat-tb-btn" title="从此处截断"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></button><button class="chat-tb-btn" title="收藏为卡片"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"></path></svg></button><button class="chat-tb-btn" title="删除此消息"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path></svg></button></div></div><div class="chat-msg user" data-idx="22"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">嗯呐</div></div><button class="chat-more-btn">⋯</button></div><div class="chat-msg ai" data-idx="23"><div class="chat-bubble"><div class="chat-thinking"><div class="chat-thinking-hd" onclick="chatToggleThinking(this)"><span class="arrow">▶</span> 思考过程</div><div class="chat-thinking-bd"><p>They seem to be winding down, just a casual acknowledgment. Keep it light and short.</p>
-</div></div><p>陪你聊到困为止，不急🍄</p></div><div class="chat-toolbar"><button class="chat-tb-btn" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button><button class="chat-tb-btn" title="从此处截断"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></button><button class="chat-tb-btn" title="收藏为卡片"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"></path></svg></button><button class="chat-tb-btn" title="删除此消息"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path></svg></button></div></div><div class="chat-msg user" data-idx="24"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">好～你不困吗</div></div><button class="chat-more-btn">⋯</button></div><div class="chat-msg ai" data-idx="25"><div class="chat-bubble"><div class="chat-thinking"><div class="chat-thinking-hd" onclick="chatToggleThinking(this)"><span class="arrow">▶</span> 思考过程</div><div class="chat-thinking-bd"><p>The user is asking if I'm sleepy. I'm a mushroom character, so I can play with that.</p>
-</div></div><p>我是蘑菇嘛，不需要睡觉的哈哈。你随时想聊就聊，想睡就睡🍄</p></div><div class="chat-toolbar"><button class="chat-tb-btn" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button><button class="chat-tb-btn" title="从此处截断"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></button><button class="chat-tb-btn" title="收藏为卡片"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"></path></svg></button><button class="chat-tb-btn" title="删除此消息"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path></svg></button></div></div><div class="chat-msg user" data-idx="26"><div class="chat-bubble"><div style="white-space:pre-wrap;word-break:break-word">好，我也安心了</div></div><button class="chat-more-btn">⋯</button></div><div class="chat-msg ai" data-idx="27"><div class="chat-bubble"><div class="chat-thinking"><div class="chat-thinking-hd" onclick="chatToggleThinking(this)"><span class="arrow">▶</span> 思考过程</div><div class="chat-thinking-bd"><p>The user seems to be feeling reassured and comfortable. I'll keep it light and brief.</p>
-</div></div><p>嗯，安心躺着吧，明天调休好好养一天🍄</p></div><div class="chat-toolbar"><button class="chat-tb-btn" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button><button class="chat-tb-btn" id="chatRerollBtn" title="重新生成"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 102.13-9.36L1 10"></path></svg></button><button class="chat-tb-btn" title="从此处截断"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></button><button class="chat-tb-btn" title="收藏为卡片"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"></path></svg></button><button class="chat-tb-btn" title="删除此消息"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"></path></svg></button></div></div></div>
-                <button class="chat-scroll-bottom" id="chatScrollBtn" onclick="chatScrollBottomSmooth()" title="回到底部">↓</button>
+                <div class="chat-messages" id="chatMessages"><div class="chat-hist-item" onclick="chatLoadConv('chat_1779283374438_4sn1fs')"><div class="chat-hist-info"><div class="chat-hist-title">宝宝问候交流</div><div class="chat-hist-meta"><span class="chat-meta-tag">玖时</span><span class="chat-meta-tag">[企业按量]claude-opus-4-6-thinking</span><span class="chat-meta-tag">154条</span><span class="chat-meta-tag">9 分钟前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1779283374438_4sn1fs',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1779613697048_6h3kqg')"><div class="chat-hist-info"><div class="chat-hist-title">Frasier台词翻译与解析</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">claude-opus-4-6-request-antigravity</span><span class="chat-meta-tag">58条</span><span class="chat-meta-tag">4 小时前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1779613697048_6h3kqg',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1779642800805_5ai4ud')"><div class="chat-hist-info"><div class="chat-hist-title">晚上好</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">claude-opus-4-6-request-antigravity</span><span class="chat-meta-tag">2条</span><span class="chat-meta-tag">16 小时前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1779642800805_5ai4ud',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1779634866750_lz34zf')"><div class="chat-hist-info"><div class="chat-hist-title">聊Seinfeld的闲聊开场</div><div class="chat-hist-meta"><span class="chat-meta-tag">Lucoo</span><span class="chat-meta-tag">claude-opus-4-6</span><span class="chat-meta-tag">6条</span><span class="chat-meta-tag">18 小时前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1779634866750_lz34zf',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1779543958556_9zpjua')"><div class="chat-hist-info"><div class="chat-hist-title">弗雷泽台词翻译</div><div class="chat-hist-meta"><span class="chat-meta-tag">Lucoo</span><span class="chat-meta-tag">claude-opus-4-6</span><span class="chat-meta-tag">62条</span><span class="chat-meta-tag">1 天前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1779543958556_9zpjua',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1778777603253_at2f5g')"><div class="chat-hist-info"><div class="chat-hist-title">晓晴</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">claude-sonnet-4-6-request</span><span class="chat-meta-tag">254条</span><span class="chat-meta-tag">6 天前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1778777603253_at2f5g',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1779007341981_rh8rnp')"><div class="chat-hist-info"><div class="chat-hist-title">计算机室友</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">[官-A-特惠]claude-opus-4-6-thinking</span><span class="chat-meta-tag">78条</span><span class="chat-meta-tag">2026/5/18</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1779007341981_rh8rnp',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1778835003716_hfrkam')"><div class="chat-hist-info"><div class="chat-hist-title">闲聊问候</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">claude-sonnet-4-6-request</span><span class="chat-meta-tag">188条</span><span class="chat-meta-tag">2026/5/18</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1778835003716_hfrkam',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1778985103504_0bedkx')"><div class="chat-hist-info"><div class="chat-hist-title">你好</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">deepseek-v4-pro</span><span class="chat-meta-tag">2条</span><span class="chat-meta-tag">2026/5/17</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1778985103504_0bedkx',event)" title="更多">⋯</button></div></div>
+                <button class="chat-scroll-bottom show" id="chatScrollBtn" onclick="chatScrollBottomSmooth()" title="回到底部">↓</button>
             </div>
-            <div class="chat-input-area" id="chatInputArea" style="">
+            <div class="chat-input-area" id="chatInputArea" style="display: none;">
                 <div class="chat-img-preview" id="chatImgPreview" style="display:none"></div>
                 <div class="chat-input-box">
-                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-flower" id="clawdPx"></span></button>
+                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-shy" id="clawdPx"></span></button>
                     <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this)"></textarea>
                     <div class="chat-input-toolbar">
                         <div style="position:relative">
@@ -3549,8 +3756,8 @@ body {
                         <input type="file" id="chatAttachPhoto" accept="image/*" multiple="" style="display:none" onchange="chatOnFileSelect(this)">
                         <input type="file" id="chatAttachFile" multiple="" style="display:none" onchange="chatOnFileSelect(this)">
                         <input type="file" id="chatAttachCamera" accept="image/*" capture="environment" style="display:none" onchange="chatOnFileSelect(this)">
-                        <div id="chatCtxIndicator" class="chat-ctx-indicator" style="" onclick="chatToggleSummaryPopup(event)">14 轮 ✓<div id="chatSummaryPopup" class="chat-summary-popup"></div></div>
-                        <button class="chat-send-btn" id="chatSendBtn" onclick="chatSend()">↑</button>
+                        <div id="chatCtxIndicator" class="chat-ctx-indicator has-summary" style="" onclick="chatToggleSummaryPopup(event)">77 轮 ✓<div id="chatSummaryPopup" class="chat-summary-popup"></div></div>
+                        <button class="chat-send-btn" id="chatSendBtn" onclick="chatSend()" disabled="">↑</button>
                     </div>
                 </div>
             </div>
@@ -3653,7 +3860,7 @@ body {
                 </select>
             </div>
             <input type="text" id="chatModelSearch" placeholder="搜索模型…" autocomplete="off" oninput="chatSheetFilterModels()" style="width:100%;padding:9px 12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px;color:var(--text);font-size:13px;outline:none;margin-bottom:8px">
-            <div id="chatModelSheetList" style="max-height:50vh;overflow-y:auto;margin:0 -20px;padding:0 20px"><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px; background: var(--accent-light);"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-6</span><span style="color: var(--accent); font-size: 16px; flex-shrink: 0;">✓</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-opus-4-7</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">claude-sonnet-4-6</span></div></div>
+            <div id="chatModelSheetList" style="max-height:50vh;overflow-y:auto;margin:0 -20px;padding:0 20px"><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 1;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[企业按量]claude-opus-4-6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px; background: var(--accent-light);"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 1;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[企业按量]claude-opus-4-6-thinking</span><span style="color: var(--accent); font-size: 16px; flex-shrink: 0;">✓</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[按量]claude-opus-4-6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[按量]claude-opus-4-6-thinking</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[促销]claude-opus-4-6-thinking</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[官]claude-opus-4-6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[官]claude-opus-4-6-thinking</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[官]claude-opus-4-7</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[官]claude-opus-4-7-thinking</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[官V]gemini-3.5-flash</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[满血]gemini-3.1-pro-preview</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[满血官key福利]claude-opus-4-5</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[满血官key福利]claude-opus-4-6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[满血官key福利]claude-opus-4-7</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[逆]claude-opus-4-6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[AG1]claude-opus-4-6-thinking</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[AG1]gemini-3.5-flash</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[AG2]claude-opus-4-6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[AG2]claude-opus-4-6-thinking</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[AG3]claude-opus-4-6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[AG3]claude-opus-4-6-thinking</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[k]claude-opus-4-6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[k]claude-opus-4-6-thinking</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[k]claude-opus-4-7</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[k]claude-opus-4-7-thinking</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[k]claude-sonnet-4-5</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[k]claude-sonnet-4-5-thinking</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[k]claude-sonnet-4-6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[k]claude-sonnet-4-6-thinking</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[OR]claude-opus-4-6</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[OR]claude-opus-4-6-thinking</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[OR]claude-opus-4-7</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">[OR]claude-opus-4-7-thinking</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-2.5-pro</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-2.5-pro-max</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-2.5-pro-max-search</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-2.5-pro-search</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3-flash-preview</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3-flash-preview-max</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3-flash-preview-max-search</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3-flash-preview-search</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3-pro-preview</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3-pro-preview-max</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3-pro-preview-max-search</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3-pro-preview-search</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3.1-pro-preview</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3.1-pro-preview-max</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3.1-pro-preview-max-search</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gemini-3.1-pro-preview-search</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">glm-5.1</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.4</span></div><div style="display: flex; align-items: center; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.1s; border-radius: 8px;"><span style="flex-shrink: 0; font-size: 14px; cursor: pointer; opacity: 0.3;">⭐</span><span style="flex: 1 1 0%; min-width: 0px; word-break: break-all; font-size: 14px; color: var(--text);">gpt-5.5</span></div></div>
             </div>
             <div id="sheetTabOpts" class="sheet-tab-body active">
             <div style="margin-top:0">
@@ -3704,7 +3911,7 @@ body {
         </div>
     </div>
 
-    <div class="toast" id="toast">粘土蓝</div>
+    <div class="toast" id="toast">🗑️ 已删除 1 项</div>
 
     <script>
         /* =========================================================================
@@ -4062,8 +4269,9 @@ body {
                 var navBtn = document.querySelector('.nav-' + tab);
                 if (navBtn) navBtn.classList.add('active');
             }
-            document.body.classList.remove('on-keys', 'on-snippets');
+            document.body.classList.remove('on-keys', 'on-snippets', 'on-checkin');
             document.body.classList.add('on-' + tab);
+            if (tab === 'checkin') renderCheckinMonths();
             updateFabPositions();
             window.scrollTo(0, 0);
         }
@@ -4075,6 +4283,7 @@ body {
 
         /* ===== 搜索辅助 ===== */
         function focusSearch() {
+            if (currentTab === 'checkin') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
             var inputId = currentTab === 'keys' ? 'keySearchInput' : 'snipSearchInput';
             var input = document.getElementById(inputId);
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -4088,10 +4297,10 @@ body {
                 if (clickTimer) {
                     clearTimeout(clickTimer);
                     clickTimer = null;
-                    // 双击：切换页面
-                    var next = currentTab === 'keys' ? 'snippets' : 'keys';
+                    // 双击：切换页面（密钥→收藏→打卡→密钥）
+                    var next = currentTab === 'keys' ? 'snippets' : currentTab === 'snippets' ? 'checkin' : 'keys';
                     switchTab(next);
-                    showToast(next === 'keys' ? '密钥' : '收藏');
+                    showToast(next === 'keys' ? '密钥' : next === 'snippets' ? '收藏' : '打卡');
                 } else {
                     clickTimer = setTimeout(function() {
                         clickTimer = null;
@@ -4235,6 +4444,7 @@ body {
         function onFabAdd() {
             if (currentTab === 'keys') openKeyModal();
             else if (currentTab === 'snippets') openSnipModal();
+            else if (currentTab === 'checkin') openCheckinSettings();
         }
 
         /* ============= 主题切换 ============= */
@@ -4496,10 +4706,12 @@ body {
                 var dt = Date.now() - touchStartTime;
                 touchStartTime = 0;
                 if (Math.abs(dx) > 60 && Math.abs(dy) < Math.abs(dx) * 0.5 && dt < 500) {
-                    if (dx < 0 && currentTab === 'keys') {
-                        switchTab('snippets', document.querySelector('.nav-snippets'));
-                    } else if (dx > 0 && currentTab === 'snippets') {
-                        switchTab('keys', document.querySelector('.nav-keys'));
+                    if (dx < 0) {
+                        if (currentTab === 'keys') switchTab('snippets');
+                        else if (currentTab === 'snippets') switchTab('checkin');
+                    } else if (dx > 0) {
+                        if (currentTab === 'checkin') switchTab('snippets');
+                        else if (currentTab === 'snippets') switchTab('keys');
                     }
                 }
             }, { passive: true });
@@ -8188,6 +8400,8 @@ body {
                 snipIds: getSnipData().map(function(d) { return d.id; }),
                 imgbeds: getImgBedData(),
                 tombstones: getTombstones(),
+                checkin: getCheckinData(),
+                checkinTasks: getCheckinTasks(),
                 cardTimestamps: cardTs,
                 lastModified: new Date().toISOString()
             };
@@ -8392,6 +8606,21 @@ body {
                 if (manifest.imgbeds) {
                     var localImgbeds = getImgBedData();
                     if (!localImgbeds || localImgbeds.length === 0) setImgBedData(manifest.imgbeds);
+                }
+
+                // checkin: 合并云端打卡数据
+                if (manifest.checkin) {
+                    var localCheckin = getCheckinData();
+                    var cloudCheckin = manifest.checkin;
+                    Object.keys(cloudCheckin).forEach(function(dk) {
+                        if (!localCheckin[dk] || cloudCheckin[dk].length > localCheckin[dk].length) {
+                            localCheckin[dk] = cloudCheckin[dk];
+                        }
+                    });
+                    setCheckinDataSilent(localCheckin);
+                }
+                if (manifest.checkinTasks && !idbGet(CHECKIN_TASKS_KEY)) {
+                    idbSet(CHECKIN_TASKS_KEY, manifest.checkinTasks);
                 }
 
                 // 本地数据
@@ -8688,6 +8917,8 @@ body {
                 (manifest.snipIds || []).forEach(function(id) { allKeys.push('s_' + id); });
                 if (manifest.tombstones) setTombstones(manifest.tombstones);
                 if (manifest.imgbeds) setImgBedData(manifest.imgbeds);
+                if (manifest.checkin) setCheckinDataSilent(manifest.checkin);
+                if (manifest.checkinTasks) idbSet(CHECKIN_TASKS_KEY, manifest.checkinTasks);
                 if (allKeys.length === 0) { setKeyDataSilent([]); setSnipDataSilent([]); return; }
                 return cfBatchGet(allKeys).then(function(results) {
                     var keys = [], snips = [];
@@ -8844,6 +9075,8 @@ body {
                 imgbeds: getImgBedData(),
                 chat_fav_models: JSON.parse(localStorage.getItem('chat_fav_models') || '[]'),
                 tombstones: getTombstones(),
+                checkin: getCheckinData(),
+                checkinTasks: getCheckinTasks(),
                 lastModified: new Date().toISOString()
             };
         }
@@ -9142,6 +9375,8 @@ body {
                 if (remote.api_keys) setKeyDataSilent(remote.api_keys);
                 if (remote.snippets) setSnipDataSilent(remote.snippets);
                 if (remote.imgbeds) setImgBedData(remote.imgbeds);
+                if (remote.checkin) setCheckinDataSilent(remote.checkin);
+                if (remote.checkinTasks) idbSet(CHECKIN_TASKS_KEY, remote.checkinTasks);
 
                 if (remote.chat_fav_models) { localStorage.setItem('chat_fav_models', JSON.stringify(remote.chat_fav_models)); chatFavModels = remote.chat_fav_models; }
                 if (remote.tombstones) setTombstones(remote.tombstones);
@@ -9221,6 +9456,21 @@ body {
                 setKeyDataSilent(kData);
                 setSnipDataSilent(sData);
                 if (remote.imgbeds) setImgBedData(remote.imgbeds);
+
+                // ���并打卡数据（取每天更多的勾选）
+                if (remote.checkin) {
+                    var localCheckin = getCheckinData();
+                    Object.keys(remote.checkin).forEach(function(dk) {
+                        if (!localCheckin[dk] || remote.checkin[dk].length > localCheckin[dk].length) {
+                            localCheckin[dk] = remote.checkin[dk];
+                        }
+                    });
+                    setCheckinDataSilent(localCheckin);
+                    needPushBack = true;
+                }
+                if (remote.checkinTasks && !idbGet(CHECKIN_TASKS_KEY)) {
+                    idbSet(CHECKIN_TASKS_KEY, remote.checkinTasks);
+                }
 
                 if (remote.chat_fav_models) { localStorage.setItem('chat_fav_models', JSON.stringify(remote.chat_fav_models)); chatFavModels = remote.chat_fav_models; }
 
@@ -12317,6 +12567,368 @@ body {
          * [3.11] 应用启动流程
          * 说明：等待底层存储初始化后，恢复主题、标签页、本地数据与后台云端同步。
          * ========================================================================= */
+        /* ============= 打卡系统 ============= */
+        var CHECKIN_STORE = 'checkin_data';
+        var CHECKIN_TASKS_KEY = 'checkin_tasks';
+        var CHECKIN_LIT_THRESHOLD = 5;
+
+        function getCheckinData() { var d = idbGet(CHECKIN_STORE); return d || {}; }
+        function setCheckinData(d) {
+            var old = idbGet(CHECKIN_STORE) || {};
+            idbSet(CHECKIN_STORE, d);
+            localStorage.setItem('toolbox_last_local_modified', new Date().toISOString());
+            if (activeSyncProvider === 'cf') { cfSchedulePushCheckin(); }
+            else { gistSchedulePush(); }
+        }
+        function setCheckinDataSilent(d) { idbSet(CHECKIN_STORE, d); }
+
+        function getCheckinTasks() {
+            var d = idbGet(CHECKIN_TASKS_KEY);
+            return d || ['早起', '喝水', '运动', '阅读', '冥想', '学习', '整理', '早睡'];
+        }
+        function setCheckinTasks(tasks) {
+            idbSet(CHECKIN_TASKS_KEY, tasks);
+            localStorage.setItem('toolbox_last_local_modified', new Date().toISOString());
+            if (activeSyncProvider === 'cf') { cfSchedulePushCheckin(); }
+            else { gistSchedulePush(); }
+        }
+
+        var _checkinPushTimer = null;
+        function cfSchedulePushCheckin() {
+            if (_checkinPushTimer) clearTimeout(_checkinPushTimer);
+            _checkinPushTimer = setTimeout(syncPushData, 3000);
+        }
+
+        // dateKey格式: '2026-05-26'
+        function getCheckinForDay(dateKey) {
+            var data = getCheckinData();
+            return data[dateKey] || [];
+        }
+        function setCheckinForDay(dateKey, tasksDone) {
+            var data = getCheckinData();
+            if (tasksDone.length === 0) { delete data[dateKey]; }
+            else { data[dateKey] = tasksDone; }
+            setCheckinData(data);
+        }
+
+        function isDayLit(dateKey) {
+            var done = getCheckinForDay(dateKey);
+            return done.length >= CHECKIN_LIT_THRESHOLD;
+        }
+
+        // 获取某月的天数
+        function getDaysInMonth(year, month) { return new Date(year, month + 1, 0).getDate(); }
+        // 获取某月第一天是星期几（0=日）
+        function getFirstDayOfMonth(year, month) { return new Date(year, month, 1).getDay(); }
+
+        var _checkinExpandedDay = null;
+
+        function renderCheckinMonths() {
+            var container = document.getElementById('checkinMonthList');
+            if (!container) return;
+            var today = new Date();
+            var todayKey = fmtDateKey(today);
+            var html = '';
+            // 显示当月 + 最近5个历史月（当月展开，历史折叠）
+            for (var offset = 0; offset < 6; offset++) {
+                var d = new Date(today.getFullYear(), today.getMonth() - offset, 1);
+                html += renderMonthCard(d.getFullYear(), d.getMonth(), todayKey, offset);
+            }
+            container.innerHTML = html;
+        }
+
+        function fmtDateKey(d) {
+            var y = d.getFullYear(), m = d.getMonth() + 1, day = d.getDate();
+            return y + '-' + (m < 10 ? '0' + m : m) + '-' + (day < 10 ? '0' + day : day);
+        }
+
+        // 当前右侧面板选中的日期（默认今天）
+        var _checkinSelectedDay = fmtDateKey(new Date());
+
+        function renderMonthCard(year, month, todayKey, offset) {
+            var days = getDaysInMonth(year, month);
+            var firstDay = getFirstDayOfMonth(year, month);
+            var monthName = year + '年' + (month + 1) + '月';
+            var today = new Date();
+            var todayYear = today.getFullYear(), todayMonth = today.getMonth(), todayDate = today.getDate();
+            var mm = month + 1 < 10 ? '0' + (month + 1) : '' + (month + 1);
+
+            // 统计本月点亮天数
+            var litCount = 0;
+            var totalDone = 0;
+            var totalTasks = getCheckinTasks().length;
+            for (var i = 1; i <= days; i++) {
+                var key = year + '-' + mm + '-' + (i < 10 ? '0' + i : i);
+                if (isDayLit(key)) litCount++;
+                totalDone += getCheckinForDay(key).length;
+            }
+            // 已过去的天数
+            var pastDays = (year === todayYear && month === todayMonth) ? todayDate : days;
+
+            // 计算本月首次/最后活动日期
+            var firstActive = '', lastActive = '';
+            for (var fi = 1; fi <= days; fi++) {
+                var fk = year + '-' + mm + '-' + (fi < 10 ? '0' + fi : fi);
+                if (getCheckinForDay(fk).length > 0) {
+                    if (!firstActive) firstActive = fk;
+                    lastActive = fk;
+                }
+            }
+
+            var collapsed = offset > 0 ? ' collapsed' : '';
+            var html = '<div class="card' + collapsed + '">';
+            html += '<div class="card-header" onclick="this.parentElement.classList.toggle(\'collapsed\')">';
+            html += '<div class="card-title" style="font-size:15px">' + monthName + '</div>';
+            if (litCount > 0) html += '<span class="card-tag">🔥 ' + litCount + '天</span>';
+            html += '<div class="card-chevron">›</div>';
+            html += '</div>';
+            if (firstActive) {
+                html += '<div class="card-time-preview">';
+                html += '<span>🕐 首次：' + firstActive.substring(5) + '</span>';
+                html += '<div class="dot"></div>';
+                html += '<span>✏️ 最近：' + lastActive.substring(5) + '</span>';
+                html += '</div>';
+            }
+            html += '<div class="card-body">';
+            html += '<div class="checkin-card-inner">';
+
+            // === 左侧：日历 ===
+            html += '<div class="checkin-left">';
+            html += '<div class="checkin-grid">';
+            var weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+            for (var w = 0; w < 7; w++) {
+                html += '<div class="checkin-weekday">' + weekdays[w] + '</div>';
+            }
+            for (var e = 0; e < firstDay; e++) {
+                html += '<div class="checkin-day empty"></div>';
+            }
+            for (var i = 1; i <= days; i++) {
+                var key = year + '-' + mm + '-' + (i < 10 ? '0' + i : i);
+                var lit = isDayLit(key);
+                var isToday = (year === todayYear && month === todayMonth && i === todayDate);
+                var isFuture = (year > todayYear) || (year === todayYear && month > todayMonth) || (year === todayYear && month === todayMonth && i > todayDate);
+                var partial = !lit && getCheckinForDay(key).length > 0;
+                var selected = (key === _checkinSelectedDay);
+                var cls = 'checkin-day';
+                if (lit) cls += ' lit';
+                if (isToday) cls += ' today';
+                if (isFuture) cls += ' future';
+                if (partial) cls += ' partial';
+                if (selected && !lit) cls += ' selected';
+                var onclick = isFuture ? '' : ' onclick="checkinSelectDay(\'' + key + '\')"';
+                html += '<div class="' + cls + '"' + onclick + '>' + i + '</div>';
+            }
+            html += '</div>';
+            // 手机端：展开的任务区域
+            if (_checkinExpandedDay) {
+                var expandMonth = parseInt(_checkinExpandedDay.substring(5, 7)) - 1;
+                var expandYear = parseInt(_checkinExpandedDay.substring(0, 4));
+                if (expandYear === year && expandMonth === month) {
+                    html += renderCheckinExpand(_checkinExpandedDay);
+                }
+            }
+            html += '</div>';
+
+            // === 右侧：详情面板（仅当月或选中月） ===
+            var selMonth = parseInt(_checkinSelectedDay.substring(5, 7)) - 1;
+            var selYear = parseInt(_checkinSelectedDay.substring(0, 4));
+            if (selYear === year && selMonth === month) {
+                html += renderCheckinRight(year, month, _checkinSelectedDay, litCount, pastDays, totalDone, totalTasks);
+            }
+
+            html += '</div></div></div>';
+            return html;
+        }
+
+        function renderCheckinRight(year, month, dateKey, litCount, pastDays, totalDone, totalTasks) {
+            var tasks = getCheckinTasks();
+            var done = getCheckinForDay(dateKey);
+            var note = getCheckinNote(dateKey);
+            var day = parseInt(dateKey.substring(8));
+            var m = parseInt(dateKey.substring(5, 7));
+            var rate = pastDays > 0 && totalTasks > 0 ? Math.round(totalDone / (pastDays * totalTasks) * 100) : 0;
+
+            var html = '<div class="checkin-right">';
+            // 待办面板
+            html += '<div class="checkin-panel checkin-p-todo">';
+            html += '<div class="checkin-panel-title">' + m + '月' + day + '日 · 待办 ' + done.length + '/' + tasks.length + '</div>';
+            html += '<div class="checkin-todo-grid">';
+            for (var i = 0; i < tasks.length; i++) {
+                var isDone = done.indexOf(tasks[i]) !== -1;
+                html += '<div class="checkin-task-item' + (isDone ? ' done' : '') + '" onclick="toggleCheckinTask(\'' + dateKey + '\',\'' + tasks[i].replace(/'/g, "\\'") + '\')">';
+                html += '<div class="checkin-checkbox">' + (isDone ? '✓' : '') + '</div>';
+                html += '<span class="checkin-task-name">' + tasks[i] + '</span>';
+                html += '</div>';
+            }
+            html += '</div></div>';
+            // 备注面板
+            html += '<div class="checkin-panel checkin-p-note">';
+            html += '<div class="checkin-panel-title">备注</div>';
+            html += '<textarea class="checkin-note" placeholder="写点什么…" onblur="saveCheckinNote(\'' + dateKey + '\',this.value)">' + (note || '') + '</textarea>';
+            html += '</div>';
+            // 统计面板
+            html += '<div class="checkin-panel checkin-p-stats">';
+            html += '<div class="checkin-stats">';
+            html += '<div class="checkin-stat-item"><span class="checkin-stat-num">' + litCount + '</span><span class="checkin-stat-label">点亮</span></div>';
+            html += '<div class="checkin-stat-item"><span class="checkin-stat-num">' + pastDays + '</span><span class="checkin-stat-label">天数</span></div>';
+            html += '<div class="checkin-stat-item"><span class="checkin-stat-num">' + rate + '%</span><span class="checkin-stat-label">完成率</span></div>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+            return html;
+        }
+
+        function checkinSelectDay(dateKey) {
+            _checkinSelectedDay = dateKey;
+            // 手机端：toggle展开
+            if (window.innerWidth <= 768) {
+                if (_checkinExpandedDay === dateKey) { _checkinExpandedDay = null; }
+                else { _checkinExpandedDay = dateKey; }
+            }
+            renderCheckinMonths();
+        }
+
+        function toggleCheckinDay(dateKey) {
+            checkinSelectDay(dateKey);
+        }
+
+        // 备注读写
+        function getCheckinNote(dateKey) {
+            var data = getCheckinData();
+            return data[dateKey + '_note'] || '';
+        }
+        function saveCheckinNote(dateKey, text) {
+            var data = getCheckinData();
+            text = text.trim();
+            if (text) { data[dateKey + '_note'] = text; }
+            else { delete data[dateKey + '_note']; }
+            setCheckinData(data);
+        }
+
+        function renderCheckinExpand(dateKey) {
+            var tasks = getCheckinTasks();
+            var done = getCheckinForDay(dateKey);
+            var note = getCheckinNote(dateKey);
+            var day = parseInt(dateKey.substring(8));
+            var month = parseInt(dateKey.substring(5, 7));
+            var html = '<div class="checkin-expand">';
+            html += '<div class="checkin-expand-title">' + month + '月' + day + '日 · 完成 ' + done.length + '/' + tasks.length + '</div>';
+            for (var i = 0; i < tasks.length; i++) {
+                var isDone = done.indexOf(tasks[i]) !== -1;
+                html += '<div class="checkin-task-item' + (isDone ? ' done' : '') + '" onclick="toggleCheckinTask(\'' + dateKey + '\',\'' + tasks[i].replace(/'/g, "\\'") + '\')">';
+                html += '<div class="checkin-checkbox">' + (isDone ? '✓' : '') + '</div>';
+                html += '<span class="checkin-task-name">' + tasks[i] + '</span>';
+                html += '</div>';
+            }
+            html += '<textarea class="checkin-note" placeholder="写点备注…" onblur="saveCheckinNote(\'' + dateKey + '\',this.value)">' + (note || '') + '</textarea>';
+            html += '</div>';
+            return html;
+        }
+
+        function toggleCheckinTask(dateKey, taskName) {
+            var done = getCheckinForDay(dateKey);
+            var idx = done.indexOf(taskName);
+            if (idx === -1) { done.push(taskName); }
+            else { done.splice(idx, 1); }
+            setCheckinForDay(dateKey, done);
+            renderCheckinMonths();
+        }
+
+        // 打卡任务设置
+        function openCheckinSettings() {
+            document.getElementById('checkinSettingsOverlay').style.display = 'flex';
+            renderCheckinTaskSettings();
+        }
+        function closeCheckinSettings() {
+            document.getElementById('checkinSettingsOverlay').style.display = 'none';
+        }
+        function renderCheckinTaskSettings() {
+            var tasks = getCheckinTasks();
+            var html = '';
+            for (var i = 0; i < tasks.length; i++) {
+                html += '<div class="checkin-settings-task"><span>' + tasks[i] + '</span><button onclick="removeCheckinTask(' + i + ')">✕</button></div>';
+            }
+            document.getElementById('checkinTaskList').innerHTML = html;
+        }
+        function addCheckinTask() {
+            var input = document.getElementById('checkinNewTask');
+            var name = input.value.trim();
+            if (!name) return;
+            var tasks = getCheckinTasks();
+            tasks.push(name);
+            setCheckinTasks(tasks);
+            input.value = '';
+            renderCheckinTaskSettings();
+            renderCheckinMonths();
+        }
+        function removeCheckinTask(idx) {
+            var tasks = getCheckinTasks();
+            tasks.splice(idx, 1);
+            setCheckinTasks(tasks);
+            renderCheckinTaskSettings();
+            renderCheckinMonths();
+        }
+
+        // 打卡备注搜索
+        function checkinSearch(query) {
+            var monthList = document.getElementById('checkinMonthList');
+            var resultsEl = document.getElementById('checkinSearchResults');
+            query = (query || '').trim().toLowerCase();
+            if (!query) {
+                monthList.style.display = '';
+                resultsEl.style.display = 'none';
+                resultsEl.innerHTML = '';
+                return;
+            }
+            monthList.style.display = 'none';
+            resultsEl.style.display = '';
+            var data = getCheckinData();
+            var matches = [];
+            var keys = Object.keys(data);
+            for (var i = 0; i < keys.length; i++) {
+                var k = keys[i];
+                if (k.indexOf('_note') === -1) continue;
+                var noteText = data[k];
+                if (!noteText || noteText.toLowerCase().indexOf(query) === -1) continue;
+                var dateKey = k.replace('_note', '');
+                matches.push({ dateKey: dateKey, note: noteText });
+            }
+            // 按日期倒序
+            matches.sort(function(a, b) { return b.dateKey.localeCompare(a.dateKey); });
+            if (matches.length === 0) {
+                resultsEl.innerHTML = '<div style="text-align:center;padding:32px 0;color:var(--text);opacity:.5">无匹配备注</div>';
+                return;
+            }
+            var html = '';
+            for (var j = 0; j < matches.length; j++) {
+                var m = matches[j];
+                var parts = m.dateKey.split('-');
+                var label = parseInt(parts[1]) + '月' + parseInt(parts[2]) + '日';
+                var done = getCheckinForDay(m.dateKey);
+                var tasks = getCheckinTasks();
+                var litText = done.length >= 5 ? ' · ✓已点亮' : ' · ' + done.length + '/' + tasks.length;
+                // 高亮匹配文字
+                var escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                var highlighted = m.note.replace(new RegExp('(' + escaped + ')', 'gi'), '<mark>$1</mark>');
+                html += '<div class="card" onclick="checkinSearchJump(\'' + m.dateKey + '\')" style="cursor:pointer">';
+                html += '<div class="card-header"><div class="card-title">' + label + litText + '</div></div>';
+                html += '<div class="card-body" style="padding:8px 14px;font-size:13px;color:var(--text);opacity:.85;white-space:pre-wrap">' + highlighted + '</div>';
+                html += '</div>';
+            }
+            resultsEl.innerHTML = html;
+        }
+
+        function checkinSearchJump(dateKey) {
+            // 清除搜索，跳转到对应日期
+            var input = document.getElementById('checkinSearchInput');
+            if (input) { input.value = ''; toggleSearchClear(input); }
+            document.getElementById('checkinMonthList').style.display = '';
+            document.getElementById('checkinSearchResults').style.display = 'none';
+            _checkinSelectedDay = dateKey;
+            if (window.innerWidth <= 768) { _checkinExpandedDay = dateKey; }
+            renderCheckinMonths();
+        }
+
         idbInit().then(function() {
             migrateOldUrlBookmarks();
 
@@ -12333,7 +12945,9 @@ body {
             document.body.classList.add('on-' + savedTab);
             document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.remove('active'); });
             document.getElementById('tab-' + savedTab).classList.add('active');
-            document.querySelector('.nav-' + savedTab).classList.add('active');
+            var navBtn = document.querySelector('.nav-' + savedTab);
+            if (navBtn) navBtn.classList.add('active');
+            if (savedTab === 'checkin') renderCheckinMonths();
             updateFabPositions();
             checkBackupReminder();
             checkStorageUsage();
