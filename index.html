@@ -949,9 +949,12 @@ body {
         .checkin-p-todo {
             flex: 1; min-height: 0;
         }
-        .checkin-p-todo .checkin-todo-grid {
+        .checkin-p-todo .checkin-todo-grid,
+        .checkin-expand .checkin-todo-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
+            grid-template-rows: repeat(6, auto);
+            grid-auto-flow: column;
             gap: 2px 12px;
         }
         .checkin-p-note { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
@@ -1036,23 +1039,60 @@ body {
         .checkin-settings-task {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             padding: 8px 0;
             border-bottom: 1px solid var(--card-border);
+            transition: background 0.15s, opacity 0.15s;
         }
+        .checkin-settings-task.dragging {
+            opacity: 0.4;
+        }
+        .checkin-settings-task.drag-over {
+            background: var(--accent-light);
+            border-radius: 6px;
+        }
+        .checkin-settings-task .checkin-drag-handle {
+            cursor: grab;
+            color: var(--text-muted);
+            font-size: 14px;
+            padding: 2px 4px;
+            user-select: none;
+            touch-action: none;
+            line-height: 1;
+        }
+        .checkin-settings-task .checkin-drag-handle:active { cursor: grabbing; }
         .checkin-settings-task span {
             flex: 1;
             font-size: 13px;
             color: var(--text);
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .checkin-settings-task .checkin-task-edit-input {
+            flex: 1;
+            padding: 4px 8px;
+            background: var(--input-bg);
+            border: 1px solid var(--accent);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 13px;
+            outline: none;
+            min-width: 0;
         }
         .checkin-settings-task button {
             background: none;
             border: none;
-            color: var(--red);
             font-size: 14px;
             cursor: pointer;
             padding: 2px 6px;
+            flex-shrink: 0;
         }
+        .checkin-settings-task .checkin-btn-edit { color: var(--text-muted); }
+        .checkin-settings-task .checkin-btn-edit:hover { color: var(--accent); }
+        .checkin-settings-task .checkin-btn-del { color: var(--red); }
+        .checkin-settings-task .checkin-btn-confirm { color: var(--accent); }
+        .checkin-settings-task .checkin-btn-cancel-edit { color: var(--text-muted); }
 
         /* 卡片左侧色条 (C) */
         .card[data-kid] { border-left: 3px solid var(--accent-mid); }
@@ -2960,8 +3000,8 @@ body {
         .lock-footer { position: absolute; bottom: 24px; display: flex; gap: 16px; }
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
-<style id="deco-custom-style">.chat-deco-on .chat-msg.ai::before{content:""!important;position:absolute!important;top:-14px!important;left:16px!important;width:2px!important;height:2px!important;font-size:0!important;image-rendering:pixelated!important;animation:none!important;pointer-events:none!important;z-index:5!important;box-shadow:6px 0 #CD6E58,8px 0 #CD6E58,10px 0 #CD6E58,12px 0 #CD6E58,14px 0 #CD6E58,16px 0 #CD6E58,18px 0 #CD6E58,20px 0 #CD6E58,6px 2px #CD6E58,8px 2px #000,10px 2px #CD6E58,12px 2px #CD6E58,14px 2px #CD6E58,16px 2px #CD6E58,18px 2px #000,20px 2px #CD6E58,2px 4px #CD6E58,4px 4px #CD6E58,6px 4px #FAC8D8,8px 4px #CD6E58,10px 4px #CD6E58,12px 4px #CD6E58,14px 4px #CD6E58,16px 4px #CD6E58,18px 4px #CD6E58,20px 4px #FAC8D8,22px 4px #CD6E58,24px 4px #CD6E58,2px 6px #CD6E58,4px 6px #CD6E58,6px 6px #CD6E58,8px 6px #CD6E58,10px 6px #CD6E58,12px 6px #CD6E58,14px 6px #CD6E58,16px 6px #CD6E58,18px 6px #CD6E58,20px 6px #CD6E58,22px 6px #CD6E58,24px 6px #CD6E58,6px 8px #CD6E58,8px 8px #CD6E58,10px 8px #CD6E58,12px 8px #CD6E58,14px 8px #CD6E58,16px 8px #CD6E58,18px 8px #CD6E58,20px 8px #CD6E58,6px 10px #CD6E58,8px 10px #CD6E58,10px 10px #CD6E58,12px 10px #CD6E58,14px 10px #CD6E58,16px 10px #CD6E58,18px 10px #CD6E58,20px 10px #CD6E58,6px 12px #CD6E58,10px 12px #CD6E58,16px 12px #CD6E58,20px 12px #CD6E58,6px 14px #CD6E58,10px 14px #CD6E58,16px 14px #CD6E58,20px 14px #CD6E58!important;}</style></head>
-<body class="on-snippets chat-deco-on on-keys theme-dream on-checkin modal-open" style="--deco-ai: &quot;🌙&quot;; --deco-ai-size: 13px; --deco-ai-color: #fda; --deco-ai-anim: deco-swing 2.5s ease-in-out infinite; --deco-ai-top: -14px; --deco-ai-left: 16px;" data-chat-scroll-y="0">
+</head>
+<body class="on-snippets chat-deco-on on-keys theme-dream on-checkin modal-open" style="--deco-ai: &quot;❀&quot;; --deco-ai-size: 13px; --deco-ai-color: #e8a; --deco-ai-anim: deco-bounce 2s ease-in-out infinite; --deco-ai-top: -14px; --deco-ai-left: 16px;" data-chat-scroll-y="0">
 
     <!-- =======================================================================
       [2.1] 顶级拦截层
@@ -3259,7 +3299,7 @@ body {
             <input type="text" id="checkinSearchInput" placeholder="搜索备注…" oninput="checkinSearch(this.value);toggleSearchClear(this)">
             <button class="search-clear" onclick="clearSearch('checkinSearchInput')">✕</button>
         </div>
-        <div class="card-list" id="checkinMonthList" style="padding-bottom:24px"><div class="card collapsed"><div class="card-header" onclick="this.parentElement.classList.toggle('collapsed')"><div class="card-title" style="font-size:15px">2026年5月</div><div class="card-chevron">›</div></div><div class="card-body"><div class="checkin-card-inner"><div class="checkin-left"><div class="checkin-grid"><div class="checkin-weekday">日</div><div class="checkin-weekday">一</div><div class="checkin-weekday">二</div><div class="checkin-weekday">三</div><div class="checkin-weekday">四</div><div class="checkin-weekday">五</div><div class="checkin-weekday">六</div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day" onclick="checkinSelectDay('2026-05-01')">1</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-02')">2</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-03')">3</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-04')">4</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-05')">5</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-06')">6</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-07')">7</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-08')">8</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-09')">9</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-10')">10</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-11')">11</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-12')">12</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-13')">13</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-14')">14</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-15')">15</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-16')">16</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-17')">17</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-18')">18</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-19')">19</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-20')">20</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-21')">21</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-22')">22</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-23')">23</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-24')">24</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-25')">25</div><div class="checkin-day today selected" onclick="checkinSelectDay('2026-05-26')">26</div><div class="checkin-day future">27</div><div class="checkin-day future">28</div><div class="checkin-day future">29</div><div class="checkin-day future">30</div><div class="checkin-day future">31</div></div></div><div class="checkin-right"><div class="checkin-panel checkin-p-todo"><div class="checkin-panel-title">5月26日 · 待办 0/8</div><div class="checkin-todo-grid"><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','早起')"><div class="checkin-checkbox"></div><span class="checkin-task-name">早起</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','喝水')"><div class="checkin-checkbox"></div><span class="checkin-task-name">喝水</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','运动')"><div class="checkin-checkbox"></div><span class="checkin-task-name">运动</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','阅读')"><div class="checkin-checkbox"></div><span class="checkin-task-name">阅读</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','冥想')"><div class="checkin-checkbox"></div><span class="checkin-task-name">冥想</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','学习')"><div class="checkin-checkbox"></div><span class="checkin-task-name">学习</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','整理')"><div class="checkin-checkbox"></div><span class="checkin-task-name">整理</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','早睡')"><div class="checkin-checkbox"></div><span class="checkin-task-name">早睡</span></div></div></div><div class="checkin-panel checkin-p-note"><div class="checkin-panel-title">备注</div><textarea class="checkin-note" placeholder="写点什么…" onblur="saveCheckinNote('2026-05-26',this.value)"></textarea></div><div class="checkin-panel checkin-p-stats"><div class="checkin-stats"><div class="checkin-stat-item"><span class="checkin-stat-num">0</span><span class="checkin-stat-label">点亮</span></div><div class="checkin-stat-item"><span class="checkin-stat-num">26</span><span class="checkin-stat-label">天数</span></div><div class="checkin-stat-item"><span class="checkin-stat-num">0%</span><span class="checkin-stat-label">完成率</span></div></div></div></div></div></div></div><div class="card collapsed"><div class="card-header" onclick="this.parentElement.classList.toggle('collapsed')"><div class="card-title" style="font-size:15px">2026年4月</div><div class="card-chevron">›</div></div><div class="card-body"><div class="checkin-card-inner"><div class="checkin-left"><div class="checkin-grid"><div class="checkin-weekday">日</div><div class="checkin-weekday">一</div><div class="checkin-weekday">二</div><div class="checkin-weekday">三</div><div class="checkin-weekday">四</div><div class="checkin-weekday">五</div><div class="checkin-weekday">六</div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day" onclick="checkinSelectDay('2026-04-01')">1</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-02')">2</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-03')">3</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-04')">4</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-05')">5</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-06')">6</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-07')">7</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-08')">8</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-09')">9</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-10')">10</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-11')">11</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-12')">12</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-13')">13</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-14')">14</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-15')">15</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-16')">16</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-17')">17</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-18')">18</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-19')">19</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-20')">20</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-21')">21</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-22')">22</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-23')">23</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-24')">24</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-25')">25</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-26')">26</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-27')">27</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-28')">28</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-29')">29</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-30')">30</div></div></div></div></div></div><div class="card collapsed"><div class="card-header" onclick="this.parentElement.classList.toggle('collapsed')"><div class="card-title" style="font-size:15px">2026年3月</div><div class="card-chevron">›</div></div><div class="card-body"><div class="checkin-card-inner"><div class="checkin-left"><div class="checkin-grid"><div class="checkin-weekday">日</div><div class="checkin-weekday">一</div><div class="checkin-weekday">二</div><div class="checkin-weekday">三</div><div class="checkin-weekday">四</div><div class="checkin-weekday">五</div><div class="checkin-weekday">六</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-01')">1</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-02')">2</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-03')">3</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-04')">4</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-05')">5</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-06')">6</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-07')">7</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-08')">8</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-09')">9</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-10')">10</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-11')">11</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-12')">12</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-13')">13</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-14')">14</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-15')">15</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-16')">16</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-17')">17</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-18')">18</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-19')">19</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-20')">20</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-21')">21</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-22')">22</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-23')">23</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-24')">24</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-25')">25</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-26')">26</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-27')">27</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-28')">28</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-29')">29</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-30')">30</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-31')">31</div></div></div></div></div></div><div class="card collapsed"><div class="card-header" onclick="this.parentElement.classList.toggle('collapsed')"><div class="card-title" style="font-size:15px">2026年2月</div><div class="card-chevron">›</div></div><div class="card-body"><div class="checkin-card-inner"><div class="checkin-left"><div class="checkin-grid"><div class="checkin-weekday">日</div><div class="checkin-weekday">一</div><div class="checkin-weekday">二</div><div class="checkin-weekday">三</div><div class="checkin-weekday">四</div><div class="checkin-weekday">五</div><div class="checkin-weekday">六</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-01')">1</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-02')">2</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-03')">3</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-04')">4</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-05')">5</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-06')">6</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-07')">7</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-08')">8</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-09')">9</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-10')">10</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-11')">11</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-12')">12</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-13')">13</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-14')">14</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-15')">15</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-16')">16</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-17')">17</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-18')">18</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-19')">19</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-20')">20</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-21')">21</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-22')">22</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-23')">23</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-24')">24</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-25')">25</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-26')">26</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-27')">27</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-28')">28</div></div></div></div></div></div><div class="card collapsed"><div class="card-header" onclick="this.parentElement.classList.toggle('collapsed')"><div class="card-title" style="font-size:15px">2026年1月</div><div class="card-chevron">›</div></div><div class="card-body"><div class="checkin-card-inner"><div class="checkin-left"><div class="checkin-grid"><div class="checkin-weekday">日</div><div class="checkin-weekday">一</div><div class="checkin-weekday">二</div><div class="checkin-weekday">三</div><div class="checkin-weekday">四</div><div class="checkin-weekday">五</div><div class="checkin-weekday">六</div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day" onclick="checkinSelectDay('2026-01-01')">1</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-02')">2</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-03')">3</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-04')">4</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-05')">5</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-06')">6</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-07')">7</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-08')">8</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-09')">9</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-10')">10</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-11')">11</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-12')">12</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-13')">13</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-14')">14</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-15')">15</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-16')">16</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-17')">17</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-18')">18</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-19')">19</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-20')">20</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-21')">21</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-22')">22</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-23')">23</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-24')">24</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-25')">25</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-26')">26</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-27')">27</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-28')">28</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-29')">29</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-30')">30</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-31')">31</div></div></div></div></div></div><div class="card collapsed"><div class="card-header" onclick="this.parentElement.classList.toggle('collapsed')"><div class="card-title" style="font-size:15px">2025年12月</div><div class="card-chevron">›</div></div><div class="card-body"><div class="checkin-card-inner"><div class="checkin-left"><div class="checkin-grid"><div class="checkin-weekday">日</div><div class="checkin-weekday">一</div><div class="checkin-weekday">二</div><div class="checkin-weekday">三</div><div class="checkin-weekday">四</div><div class="checkin-weekday">五</div><div class="checkin-weekday">六</div><div class="checkin-day empty"></div><div class="checkin-day" onclick="checkinSelectDay('2025-12-01')">1</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-02')">2</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-03')">3</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-04')">4</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-05')">5</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-06')">6</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-07')">7</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-08')">8</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-09')">9</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-10')">10</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-11')">11</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-12')">12</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-13')">13</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-14')">14</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-15')">15</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-16')">16</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-17')">17</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-18')">18</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-19')">19</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-20')">20</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-21')">21</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-22')">22</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-23')">23</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-24')">24</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-25')">25</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-26')">26</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-27')">27</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-28')">28</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-29')">29</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-30')">30</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-31')">31</div></div></div></div></div></div></div>
+        <div class="card-list" id="checkinMonthList" style="padding-bottom:24px"><div class="card collapsed"><div class="card-header" onclick="this.parentElement.classList.toggle('collapsed')"><div class="card-title" style="font-size:15px">2026年5月</div><div class="card-chevron">›</div></div><div class="card-time-preview"><span>🕐 首次：05-26</span><div class="dot"></div><span>✏️ 最近：05-26</span></div><div class="card-body"><div class="checkin-card-inner"><div class="checkin-left"><div class="checkin-grid"><div class="checkin-weekday">日</div><div class="checkin-weekday">一</div><div class="checkin-weekday">二</div><div class="checkin-weekday">三</div><div class="checkin-weekday">四</div><div class="checkin-weekday">五</div><div class="checkin-weekday">六</div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day" onclick="checkinSelectDay('2026-05-01')">1</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-02')">2</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-03')">3</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-04')">4</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-05')">5</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-06')">6</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-07')">7</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-08')">8</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-09')">9</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-10')">10</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-11')">11</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-12')">12</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-13')">13</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-14')">14</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-15')">15</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-16')">16</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-17')">17</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-18')">18</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-19')">19</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-20')">20</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-21')">21</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-22')">22</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-23')">23</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-24')">24</div><div class="checkin-day" onclick="checkinSelectDay('2026-05-25')">25</div><div class="checkin-day today partial selected" onclick="checkinSelectDay('2026-05-26')">26</div><div class="checkin-day future">27</div><div class="checkin-day future">28</div><div class="checkin-day future">29</div><div class="checkin-day future">30</div><div class="checkin-day future">31</div></div></div><div class="checkin-right"><div class="checkin-panel checkin-p-todo"><div class="checkin-panel-title">5月26日 · 待办 2/7</div><div class="checkin-todo-grid"><div class="checkin-task-item done" onclick="toggleCheckinTask('2026-05-26','早起')"><div class="checkin-checkbox">✓</div><span class="checkin-task-name">早起</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','运动')"><div class="checkin-checkbox"></div><span class="checkin-task-name">运动</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','阅读')"><div class="checkin-checkbox"></div><span class="checkin-task-name">阅读</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','冥想')"><div class="checkin-checkbox"></div><span class="checkin-task-name">冥想</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','学习')"><div class="checkin-checkbox"></div><span class="checkin-task-name">学习</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','整理')"><div class="checkin-checkbox"></div><span class="checkin-task-name">整理</span></div><div class="checkin-task-item" onclick="toggleCheckinTask('2026-05-26','早')"><div class="checkin-checkbox"></div><span class="checkin-task-name">早</span></div></div></div><div class="checkin-panel checkin-p-note"><div class="checkin-panel-title">备注</div><textarea class="checkin-note" placeholder="写点什么…" onblur="saveCheckinNote('2026-05-26',this.value)"></textarea></div><div class="checkin-panel checkin-p-stats"><div class="checkin-stats"><div class="checkin-stat-item"><span class="checkin-stat-num">0</span><span class="checkin-stat-label">点亮</span></div><div class="checkin-stat-item"><span class="checkin-stat-num">26</span><span class="checkin-stat-label">天数</span></div><div class="checkin-stat-item"><span class="checkin-stat-num">1%</span><span class="checkin-stat-label">完成率</span></div></div></div></div></div></div></div><div class="card collapsed"><div class="card-header" onclick="this.parentElement.classList.toggle('collapsed')"><div class="card-title" style="font-size:15px">2026年4月</div><div class="card-chevron">›</div></div><div class="card-body"><div class="checkin-card-inner"><div class="checkin-left"><div class="checkin-grid"><div class="checkin-weekday">日</div><div class="checkin-weekday">一</div><div class="checkin-weekday">二</div><div class="checkin-weekday">三</div><div class="checkin-weekday">四</div><div class="checkin-weekday">五</div><div class="checkin-weekday">六</div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day" onclick="checkinSelectDay('2026-04-01')">1</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-02')">2</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-03')">3</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-04')">4</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-05')">5</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-06')">6</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-07')">7</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-08')">8</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-09')">9</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-10')">10</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-11')">11</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-12')">12</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-13')">13</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-14')">14</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-15')">15</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-16')">16</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-17')">17</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-18')">18</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-19')">19</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-20')">20</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-21')">21</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-22')">22</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-23')">23</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-24')">24</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-25')">25</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-26')">26</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-27')">27</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-28')">28</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-29')">29</div><div class="checkin-day" onclick="checkinSelectDay('2026-04-30')">30</div></div></div></div></div></div><div class="card collapsed"><div class="card-header" onclick="this.parentElement.classList.toggle('collapsed')"><div class="card-title" style="font-size:15px">2026年3月</div><div class="card-chevron">›</div></div><div class="card-body"><div class="checkin-card-inner"><div class="checkin-left"><div class="checkin-grid"><div class="checkin-weekday">日</div><div class="checkin-weekday">一</div><div class="checkin-weekday">二</div><div class="checkin-weekday">三</div><div class="checkin-weekday">四</div><div class="checkin-weekday">五</div><div class="checkin-weekday">六</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-01')">1</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-02')">2</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-03')">3</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-04')">4</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-05')">5</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-06')">6</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-07')">7</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-08')">8</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-09')">9</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-10')">10</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-11')">11</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-12')">12</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-13')">13</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-14')">14</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-15')">15</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-16')">16</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-17')">17</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-18')">18</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-19')">19</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-20')">20</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-21')">21</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-22')">22</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-23')">23</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-24')">24</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-25')">25</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-26')">26</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-27')">27</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-28')">28</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-29')">29</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-30')">30</div><div class="checkin-day" onclick="checkinSelectDay('2026-03-31')">31</div></div></div></div></div></div><div class="card collapsed"><div class="card-header" onclick="this.parentElement.classList.toggle('collapsed')"><div class="card-title" style="font-size:15px">2026年2月</div><div class="card-chevron">›</div></div><div class="card-body"><div class="checkin-card-inner"><div class="checkin-left"><div class="checkin-grid"><div class="checkin-weekday">日</div><div class="checkin-weekday">一</div><div class="checkin-weekday">二</div><div class="checkin-weekday">三</div><div class="checkin-weekday">四</div><div class="checkin-weekday">五</div><div class="checkin-weekday">六</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-01')">1</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-02')">2</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-03')">3</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-04')">4</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-05')">5</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-06')">6</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-07')">7</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-08')">8</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-09')">9</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-10')">10</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-11')">11</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-12')">12</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-13')">13</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-14')">14</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-15')">15</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-16')">16</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-17')">17</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-18')">18</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-19')">19</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-20')">20</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-21')">21</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-22')">22</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-23')">23</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-24')">24</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-25')">25</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-26')">26</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-27')">27</div><div class="checkin-day" onclick="checkinSelectDay('2026-02-28')">28</div></div></div></div></div></div><div class="card collapsed"><div class="card-header" onclick="this.parentElement.classList.toggle('collapsed')"><div class="card-title" style="font-size:15px">2026年1月</div><div class="card-chevron">›</div></div><div class="card-body"><div class="checkin-card-inner"><div class="checkin-left"><div class="checkin-grid"><div class="checkin-weekday">日</div><div class="checkin-weekday">一</div><div class="checkin-weekday">二</div><div class="checkin-weekday">三</div><div class="checkin-weekday">四</div><div class="checkin-weekday">五</div><div class="checkin-weekday">六</div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day empty"></div><div class="checkin-day" onclick="checkinSelectDay('2026-01-01')">1</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-02')">2</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-03')">3</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-04')">4</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-05')">5</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-06')">6</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-07')">7</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-08')">8</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-09')">9</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-10')">10</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-11')">11</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-12')">12</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-13')">13</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-14')">14</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-15')">15</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-16')">16</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-17')">17</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-18')">18</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-19')">19</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-20')">20</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-21')">21</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-22')">22</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-23')">23</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-24')">24</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-25')">25</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-26')">26</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-27')">27</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-28')">28</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-29')">29</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-30')">30</div><div class="checkin-day" onclick="checkinSelectDay('2026-01-31')">31</div></div></div></div></div></div><div class="card collapsed"><div class="card-header" onclick="this.parentElement.classList.toggle('collapsed')"><div class="card-title" style="font-size:15px">2025年12月</div><div class="card-chevron">›</div></div><div class="card-body"><div class="checkin-card-inner"><div class="checkin-left"><div class="checkin-grid"><div class="checkin-weekday">日</div><div class="checkin-weekday">一</div><div class="checkin-weekday">二</div><div class="checkin-weekday">三</div><div class="checkin-weekday">四</div><div class="checkin-weekday">五</div><div class="checkin-weekday">六</div><div class="checkin-day empty"></div><div class="checkin-day" onclick="checkinSelectDay('2025-12-01')">1</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-02')">2</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-03')">3</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-04')">4</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-05')">5</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-06')">6</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-07')">7</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-08')">8</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-09')">9</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-10')">10</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-11')">11</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-12')">12</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-13')">13</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-14')">14</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-15')">15</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-16')">16</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-17')">17</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-18')">18</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-19')">19</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-20')">20</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-21')">21</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-22')">22</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-23')">23</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-24')">24</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-25')">25</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-26')">26</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-27')">27</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-28')">28</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-29')">29</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-30')">30</div><div class="checkin-day" onclick="checkinSelectDay('2025-12-31')">31</div></div></div></div></div></div></div>
         <div class="card-list" id="checkinSearchResults" style="padding-bottom:24px;display:none"></div>
     </div>
 
@@ -3497,7 +3537,7 @@ body {
     <!-- =======================================================================
       [2.3] 全局悬浮与提示层
     ========================================================================= -->
-    <button class="fab-search" id="fabSearch" style="display: none;">🔍</button>
+    <button class="fab-search" id="fabSearch" style="display: flex;">🔍</button>
     <button class="fab-add" id="fabAdd" style="display: flex;">+</button>
 
     <!-- 主题选择面板 -->
@@ -3508,7 +3548,7 @@ body {
 
     <div class="batch-bar" id="batchBar">
         <span class="batch-cancel-btn" onclick="exitSelectMode()">取消</span>
-        <span id="batchCountText" style="font-size:14px;font-weight:600">已选 1 项</span>
+        <span id="batchCountText" style="font-size:14px;font-weight:600">已选 0 项</span>
         <div style="display:flex;gap:8px">
             <span class="batch-cancel-btn" id="batchMergeBtn" onclick="openMergeModal()" style="display:none;background:rgba(255,255,255,0.2)">📦 合并</span>
             <span class="batch-delete-btn" onclick="batchDelete()">删除</span>
@@ -3542,7 +3582,7 @@ body {
         <div class="modal" style="max-width:320px;width:100%">
             <h2>🗑️ 确认删除</h2>
             <div class="modal-body">
-                <div id="deleteConfirmText" style="font-size:14px;color:var(--text)">确定删除选中的 1 项吗？此操作不可撤销。</div>
+                <div id="deleteConfirmText" style="font-size:14px;color:var(--text)"></div>
             </div>
             <div class="modal-actions">
                 <button class="btn-cancel" onclick="closeDeleteConfirm()">取消</button>
@@ -3733,7 +3773,7 @@ body {
             <div class="chat-input-area" id="chatInputArea" style="display: none;">
                 <div class="chat-img-preview" id="chatImgPreview" style="display:none"></div>
                 <div class="chat-input-box">
-                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-shy" id="clawdPx"></span></button>
+                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-music" id="clawdPx"></span></button>
                     <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this)"></textarea>
                     <div class="chat-input-toolbar">
                         <div style="position:relative">
@@ -3911,7 +3951,7 @@ body {
         </div>
     </div>
 
-    <div class="toast" id="toast">🗑️ 已删除 1 项</div>
+    <div class="toast" id="toast">粘土蓝</div>
 
     <script>
         /* =========================================================================
@@ -3921,7 +3961,7 @@ body {
         /* ===== IndexedDB 存储引擎 ===== */
         var _idbCache = {};
         var _idb = null;
-        var _idbKeys = ['api_manager_data', 'css_snippets_data', 'toolbox_imgbeds', 'toolbox_tombstones', 'toolbox_sort_order', 'toolbox_snapshots', 'chat_history'];
+        var _idbKeys = ['api_manager_data', 'css_snippets_data', 'toolbox_imgbeds', 'toolbox_tombstones', 'toolbox_sort_order', 'toolbox_snapshots', 'chat_history', 'checkin_data', 'checkin_tasks'];
         var _idbPendingWrites = 0;
 
         function idbInit() {
@@ -9468,8 +9508,28 @@ body {
                     setCheckinDataSilent(localCheckin);
                     needPushBack = true;
                 }
-                if (remote.checkinTasks && !idbGet(CHECKIN_TASKS_KEY)) {
+                if (remote.checkinTasks) {
+                    var oldLocal = getCheckinTasks();
                     idbSet(CHECKIN_TASKS_KEY, remote.checkinTasks);
+                    if (JSON.stringify(oldLocal) !== JSON.stringify(remote.checkinTasks) && remote.checkin) {
+                        var lc = getCheckinData();
+                        var validNames = remote.checkinTasks;
+                        Object.keys(remote.checkin).forEach(function(dk) {
+                            if (dk.indexOf('_note') !== -1) return;
+                            var ra = remote.checkin[dk];
+                            if (!Array.isArray(ra)) return;
+                            var la = lc[dk];
+                            if (!Array.isArray(la)) { lc[dk] = ra; return; }
+                            var merged = ra.slice();
+                            for (var mi = 0; mi < la.length; mi++) {
+                                if (validNames.indexOf(la[mi]) !== -1 && merged.indexOf(la[mi]) === -1) {
+                                    merged.push(la[mi]);
+                                }
+                            }
+                            lc[dk] = merged;
+                        });
+                        setCheckinDataSilent(lc);
+                    }
                 }
 
                 if (remote.chat_fav_models) { localStorage.setItem('chat_fav_models', JSON.stringify(remote.chat_fav_models)); chatFavModels = remote.chat_fav_models; }
@@ -12813,6 +12873,7 @@ body {
             var month = parseInt(dateKey.substring(5, 7));
             var html = '<div class="checkin-expand">';
             html += '<div class="checkin-expand-title">' + month + '月' + day + '日 · 完成 ' + done.length + '/' + tasks.length + '</div>';
+            html += '<div class="checkin-todo-grid">';
             for (var i = 0; i < tasks.length; i++) {
                 var isDone = done.indexOf(tasks[i]) !== -1;
                 html += '<div class="checkin-task-item' + (isDone ? ' done' : '') + '" onclick="toggleCheckinTask(\'' + dateKey + '\',\'' + tasks[i].replace(/'/g, "\\'") + '\')">';
@@ -12820,6 +12881,7 @@ body {
                 html += '<span class="checkin-task-name">' + tasks[i] + '</span>';
                 html += '</div>';
             }
+            html += '</div>';
             html += '<textarea class="checkin-note" placeholder="写点备注…" onblur="saveCheckinNote(\'' + dateKey + '\',this.value)">' + (note || '') + '</textarea>';
             html += '</div>';
             return html;
@@ -12842,14 +12904,148 @@ body {
         function closeCheckinSettings() {
             document.getElementById('checkinSettingsOverlay').style.display = 'none';
         }
+        var _checkinDragIdx = -1;
+        var _checkinEditIdx = -1;
+
         function renderCheckinTaskSettings() {
             var tasks = getCheckinTasks();
             var html = '';
             for (var i = 0; i < tasks.length; i++) {
-                html += '<div class="checkin-settings-task"><span>' + tasks[i] + '</span><button onclick="removeCheckinTask(' + i + ')">✕</button></div>';
+                html += '<div class="checkin-settings-task" draggable="true" data-idx="' + i + '" ondragstart="checkinDragStart(event,' + i + ')" ondragover="checkinDragOver(event,' + i + ')" ondragleave="checkinDragLeave(event)" ondrop="checkinDrop(event,' + i + ')" ondragend="checkinDragEnd()" ontouchstart="checkinTouchStart(event,' + i + ')">';
+                html += '<span class="checkin-drag-handle" title="拖拽排序">⠿</span>';
+                if (_checkinEditIdx === i) {
+                    html += '<input class="checkin-task-edit-input" id="checkinEditInput" value="' + tasks[i].replace(/"/g, '&quot;') + '" onkeydown="if(event.key===\'Enter\')checkinSaveEdit(' + i + ')">';
+                    html += '<button class="checkin-btn-confirm" onclick="checkinSaveEdit(' + i + ')" title="保存">✓</button>';
+                    html += '<button class="checkin-btn-cancel-edit" onclick="checkinCancelEdit()" title="取消">✕</button>';
+                } else {
+                    html += '<span>' + tasks[i] + '</span>';
+                    html += '<button class="checkin-btn-edit" onclick="checkinStartEdit(' + i + ')" title="编辑">✎</button>';
+                    html += '<button class="checkin-btn-del" onclick="removeCheckinTask(' + i + ')" title="删除">✕</button>';
+                }
+                html += '</div>';
             }
             document.getElementById('checkinTaskList').innerHTML = html;
+            if (_checkinEditIdx >= 0) {
+                var inp = document.getElementById('checkinEditInput');
+                if (inp) { inp.focus(); inp.select(); }
+            }
         }
+
+        function checkinStartEdit(idx) {
+            _checkinEditIdx = idx;
+            renderCheckinTaskSettings();
+        }
+        function checkinCancelEdit() {
+            _checkinEditIdx = -1;
+            renderCheckinTaskSettings();
+        }
+        function checkinSaveEdit(idx) {
+            var inp = document.getElementById('checkinEditInput');
+            if (!inp) return;
+            var newName = inp.value.trim();
+            if (!newName) { _checkinEditIdx = -1; renderCheckinTaskSettings(); return; }
+            var tasks = getCheckinTasks();
+            var oldName = tasks[idx];
+            if (newName !== oldName) {
+                tasks[idx] = newName;
+                setCheckinTasks(tasks);
+                checkinRenameInHistory(oldName, newName);
+            }
+            _checkinEditIdx = -1;
+            renderCheckinTaskSettings();
+            renderCheckinMonths();
+        }
+        function checkinRenameInHistory(oldName, newName) {
+            var data = getCheckinData();
+            var keys = Object.keys(data);
+            var changed = false;
+            for (var i = 0; i < keys.length; i++) {
+                var k = keys[i];
+                if (k.indexOf('_note') !== -1) continue;
+                var arr = data[k];
+                if (!Array.isArray(arr)) continue;
+                var pos = arr.indexOf(oldName);
+                if (pos !== -1) { arr[pos] = newName; changed = true; }
+            }
+            if (changed) setCheckinData(data);
+        }
+
+        function checkinDragStart(e, idx) {
+            _checkinDragIdx = idx;
+            e.dataTransfer.effectAllowed = 'move';
+            e.target.closest('.checkin-settings-task').classList.add('dragging');
+        }
+        function checkinDragOver(e, idx) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (idx !== _checkinDragIdx) {
+                e.target.closest('.checkin-settings-task').classList.add('drag-over');
+            }
+        }
+        function checkinDragLeave(e) {
+            e.target.closest('.checkin-settings-task').classList.remove('drag-over');
+        }
+        function checkinDrop(e, targetIdx) {
+            e.preventDefault();
+            e.target.closest('.checkin-settings-task').classList.remove('drag-over');
+            if (_checkinDragIdx < 0 || _checkinDragIdx === targetIdx) return;
+            var tasks = getCheckinTasks();
+            var moved = tasks.splice(_checkinDragIdx, 1)[0];
+            tasks.splice(targetIdx, 0, moved);
+            setCheckinTasks(tasks);
+            _checkinDragIdx = -1;
+            renderCheckinTaskSettings();
+            renderCheckinMonths();
+        }
+        function checkinDragEnd() {
+            _checkinDragIdx = -1;
+            var els = document.querySelectorAll('.checkin-settings-task');
+            for (var i = 0; i < els.length; i++) {
+                els[i].classList.remove('dragging', 'drag-over');
+            }
+        }
+
+        // 移动端触摸排序
+        var _checkinTouchEl = null, _checkinTouchIdx = -1, _checkinTouchClone = null;
+        function checkinTouchStart(e, idx) {
+            var handle = e.target.closest('.checkin-drag-handle');
+            if (!handle) return;
+            e.preventDefault();
+            _checkinTouchIdx = idx;
+            _checkinTouchEl = e.target.closest('.checkin-settings-task');
+            _checkinTouchEl.classList.add('dragging');
+            document.addEventListener('touchmove', checkinTouchMove, { passive: false });
+            document.addEventListener('touchend', checkinTouchEnd);
+        }
+        function checkinTouchMove(e) {
+            e.preventDefault();
+            var touch = e.touches[0];
+            var el = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (!el) return;
+            var taskEl = el.closest('.checkin-settings-task');
+            var allTasks = document.querySelectorAll('.checkin-settings-task');
+            for (var i = 0; i < allTasks.length; i++) allTasks[i].classList.remove('drag-over');
+            if (taskEl && taskEl !== _checkinTouchEl) taskEl.classList.add('drag-over');
+        }
+        function checkinTouchEnd(e) {
+            document.removeEventListener('touchmove', checkinTouchMove);
+            document.removeEventListener('touchend', checkinTouchEnd);
+            var touch = e.changedTouches[0];
+            var el = document.elementFromPoint(touch.clientX, touch.clientY);
+            var taskEl = el ? el.closest('.checkin-settings-task') : null;
+            if (taskEl && taskEl !== _checkinTouchEl) {
+                var targetIdx = parseInt(taskEl.getAttribute('data-idx'));
+                var tasks = getCheckinTasks();
+                var moved = tasks.splice(_checkinTouchIdx, 1)[0];
+                tasks.splice(targetIdx, 0, moved);
+                setCheckinTasks(tasks);
+                renderCheckinMonths();
+            }
+            _checkinTouchEl = null;
+            _checkinTouchIdx = -1;
+            renderCheckinTaskSettings();
+        }
+
         function addCheckinTask() {
             var input = document.getElementById('checkinNewTask');
             var name = input.value.trim();
