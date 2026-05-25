@@ -3004,8 +3004,8 @@ body {
         .lock-footer { position: absolute; bottom: 24px; display: flex; gap: 16px; }
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
-<style id="deco-custom-style">.chat-deco-on .chat-msg.ai::before{content:""!important;position:absolute!important;top:-14px!important;left:16px!important;width:2px!important;height:2px!important;font-size:0!important;image-rendering:pixelated!important;animation:none!important;pointer-events:none!important;z-index:5!important;box-shadow:4px 0 #ffcc00,6px 0 #ffcc00,2px 2px #ffcc00,4px 2px #ff8800,6px 2px #ff8800,8px 2px #ffcc00,0 4px #ffcc00,2px 4px #ff8800,4px 4px #885500,6px 4px #885500,8px 4px #ff8800,10px 4px #ffcc00,0 6px #ffcc00,2px 6px #ff8800,4px 6px #885500,6px 6px #885500,8px 6px #ff8800,10px 6px #ffcc00,2px 8px #ffcc00,4px 8px #ff8800,6px 8px #ff8800,8px 8px #ffcc00,4px 10px #44aa44,6px 10px #44aa44,4px 12px #44aa44,6px 12px #44aa44!important;}</style></head>
-<body class="on-snippets chat-deco-on on-keys theme-dream on-checkin modal-open" style="--deco-ai: &quot;🌙&quot;; --deco-ai-size: 13px; --deco-ai-color: #fda; --deco-ai-anim: deco-swing 2.5s ease-in-out infinite; --deco-ai-top: -14px; --deco-ai-left: 16px;" data-chat-scroll-y="0">
+</head>
+<body class="on-snippets chat-deco-on on-keys theme-dream on-checkin modal-open" style="--deco-ai: &quot;☘️&quot;; --deco-ai-size: 13px; --deco-ai-color: #5a5; --deco-ai-anim: deco-swing 2s ease-in-out infinite; --deco-ai-top: -14px; --deco-ai-left: 16px;" data-chat-scroll-y="0">
 
     <!-- =======================================================================
       [2.1] 顶级拦截层
@@ -3777,7 +3777,7 @@ body {
             <div class="chat-input-area" id="chatInputArea" style="display: none;">
                 <div class="chat-img-preview" id="chatImgPreview" style="display:none"></div>
                 <div class="chat-input-box">
-                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-love" id="clawdPx"></span></button>
+                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-xmas" id="clawdPx"></span></button>
                     <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this)"></textarea>
                     <div class="chat-input-toolbar">
                         <div style="position:relative">
@@ -12684,7 +12684,6 @@ body {
         // 获取某月第一天是星期几（0=日）
         function getFirstDayOfMonth(year, month) { return new Date(year, month, 1).getDay(); }
 
-        var _checkinExpandedDay = null;
 
         function renderCheckinMonths() {
             var container = document.getElementById('checkinMonthList');
@@ -12783,13 +12782,11 @@ body {
             }
             html += '</div>';
             // 手机端：展开的任务区域
-            var mobileExpandDay = _checkinExpandedDay;
-            if (!mobileExpandDay && offset === 0) mobileExpandDay = todayKey;
-            if (mobileExpandDay) {
-                var expandMonth = parseInt(mobileExpandDay.substring(5, 7)) - 1;
-                var expandYear = parseInt(mobileExpandDay.substring(0, 4));
+            if (_checkinSelectedDay) {
+                var expandMonth = parseInt(_checkinSelectedDay.substring(5, 7)) - 1;
+                var expandYear = parseInt(_checkinSelectedDay.substring(0, 4));
                 if (expandYear === year && expandMonth === month) {
-                    html += renderCheckinExpand(mobileExpandDay);
+                    html += renderCheckinExpand(_checkinSelectedDay);
                 }
             }
             html += '</div>';
@@ -12844,12 +12841,10 @@ body {
         }
 
         function checkinSelectDay(dateKey) {
-            _checkinSelectedDay = dateKey;
-            if (window.innerWidth <= 768) {
-                if (_checkinExpandedDay === dateKey) { _checkinExpandedDay = null; }
-                else { _checkinExpandedDay = dateKey; }
+            if (window.innerWidth <= 768 && _checkinSelectedDay === dateKey) {
+                _checkinSelectedDay = null;
             } else {
-                _checkinExpandedDay = dateKey;
+                _checkinSelectedDay = dateKey;
             }
             renderCheckinMonths();
         }
@@ -13127,7 +13122,6 @@ body {
             document.getElementById('checkinMonthList').style.display = '';
             document.getElementById('checkinSearchResults').style.display = 'none';
             _checkinSelectedDay = dateKey;
-            if (window.innerWidth <= 768) { _checkinExpandedDay = dateKey; }
             renderCheckinMonths();
         }
 
