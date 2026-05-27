@@ -1302,6 +1302,47 @@ body {
         .chat-search-highlight { background: rgba(255,200,0,0.35); border-radius: 2px; }
         .chat-search-highlight-active { background: rgba(255,150,0,0.55); border-radius: 2px; }
 
+        /* ===== 气泡导航面板 ===== */
+        .chat-nav-panel {
+            display: none; flex-direction: column;
+            position: absolute; top: 100%; right: 8px; z-index: 30;
+            width: min(320px, calc(100vw - 32px));
+            max-height: 420px; overflow-y: auto;
+            background: var(--modal-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border); border-radius: 14px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+            scrollbar-width: thin; scrollbar-color: var(--card-border) transparent;
+        }
+        .chat-nav-panel.show { display: flex; }
+        .chat-nav-panel::-webkit-scrollbar { width: 4px; }
+        .chat-nav-panel::-webkit-scrollbar-track { background: transparent; }
+        .chat-nav-panel::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 4px; }
+        .chat-nav-item {
+            display: flex; align-items: flex-start; gap: 10px;
+            padding: 10px 14px; cursor: pointer;
+            border-bottom: 1px solid var(--card-border);
+            transition: background 0.12s;
+        }
+        .chat-nav-item:last-child { border-bottom: none; }
+        .chat-nav-item:hover { background: var(--accent-light); }
+        .chat-nav-item:active { background: var(--accent-light); opacity: 0.8; }
+        .chat-nav-role {
+            flex-shrink: 0; width: 28px; height: 28px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 13px; font-weight: 600; color: #fff;
+        }
+        .chat-nav-role.user { background: var(--accent); }
+        .chat-nav-role.ai { background: #8b5cf6; }
+        .chat-nav-text {
+            flex: 1; min-width: 0; font-size: 13px; line-height: 1.4;
+            color: var(--text); overflow: hidden;
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        }
+        .chat-nav-idx {
+            flex-shrink: 0; font-size: 11px; color: var(--text-muted);
+            margin-top: 2px;
+        }
+
         .chat-model-wrap { flex: 2; min-width: 0; position: relative; }
         .chat-model-wrap input {
             width: 100%; padding: 7px 30px 7px 10px;
@@ -3783,8 +3824,10 @@ body {
                 <div class="chat-handle-bar"></div>
                 <button class="chat-close-btn" id="chatBackBtn">←</button>
                 <span style="flex:1;min-width:0"></span><span id="chatModelLabel" style="display:none">claude-opus-4-6-request-antigravity</span>
+                <button class="chat-sp-btn" id="chatNavBtn" onclick="chatToggleNavPanel()" title="消息导航"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button>
                 <button class="chat-sp-btn" id="chatSearchBtn" onclick="chatToggleSearch()" title="搜索"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></button>
                 <button class="chat-sp-btn" id="chatSpBtn" onclick="chatOpenSettings()" title="设置">⋮</button>
+                <div class="chat-nav-panel" id="chatNavPanel"></div>
             </div>
             <!-- 对话内搜索条 -->
             <div class="chat-search-bar" id="chatSearchBar" style="display:none">
@@ -12461,6 +12504,92 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
             chatPendingFiles.splice(idx, 1);
             chatRenderAttachPreview();
         }
+
+        /* ===== 气泡导航 ===== */
+        function chatToggleNavPanel() {
+            var panel = document.getElementById('chatNavPanel');
+            var btn = document.getElementById('chatNavBtn');
+            if (panel.classList.contains('show')) {
+                panel.classList.remove('show');
+                btn.classList.remove('active');
+                return;
+            }
+            chatBuildNavPanel();
+            panel.classList.add('show');
+            btn.classList.add('active');
+        }
+        function chatCloseNavPanel() {
+            var panel = document.getElementById('chatNavPanel');
+            var btn = document.getElementById('chatNavBtn');
+            panel.classList.remove('show');
+            btn.classList.remove('active');
+        }
+        function chatBuildNavPanel() {
+            var panel = document.getElementById('chatNavPanel');
+            panel.innerHTML = '';
+            if (chatMessages.length === 0) {
+                panel.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">暂无消息</div>';
+                return;
+            }
+            var msgNum = 0;
+            for (var i = 0; i < chatMessages.length; i++) {
+                var msg = chatMessages[i];
+                var role = msg.role === 'assistant' ? 'ai' : (msg.role === 'user' ? 'user' : null);
+                if (!role) continue;
+                msgNum++;
+                var item = document.createElement('div');
+                item.className = 'chat-nav-item';
+                item.setAttribute('data-nav-idx', i);
+                // 提取预览文本
+                var preview = '';
+                if (role === 'user') {
+                    if (Array.isArray(msg.content)) {
+                        for (var k = 0; k < msg.content.length; k++) {
+                            if (msg.content[k].type === 'text') { preview = msg.content[k].text; break; }
+                        }
+                        if (!preview) preview = '[图片]';
+                    } else {
+                        preview = msg.content || '';
+                    }
+                } else {
+                    preview = msg.content || '';
+                }
+                // 去除 HTML/Markdown 标记，截取前80字符
+                preview = preview.replace(/<[^>]+>/g, '').replace(/[#*_`~\[\]]/g, '').replace(/\n+/g, ' ').trim();
+                if (preview.length > 80) preview = preview.slice(0, 80) + '…';
+                if (!preview) preview = role === 'user' ? '[图片/文件]' : '[回复]';
+
+                var roleLabel = role === 'user' ? '我' : 'AI';
+                item.innerHTML = '<div class="chat-nav-role ' + role + '">' + roleLabel + '</div>' +
+                    '<div class="chat-nav-text">' + esc(preview) + '</div>' +
+                    '<div class="chat-nav-idx">#' + msgNum + '</div>';
+                (function(idx) {
+                    item.onclick = function() {
+                        chatNavJump(idx);
+                        chatCloseNavPanel();
+                    };
+                })(i);
+                panel.appendChild(item);
+            }
+        }
+        function chatNavJump(idx) {
+            var container = document.getElementById('chatMessages');
+            var target = container.querySelector('.chat-msg[data-idx="' + idx + '"]');
+            if (!target) return;
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // 高亮闪烁
+            target.style.transition = 'background 0.3s';
+            target.style.background = 'var(--accent-light)';
+            setTimeout(function() { target.style.background = ''; }, 1200);
+        }
+        // 点击其他区域关闭导航面板
+        document.addEventListener('click', function(e) {
+            var panel = document.getElementById('chatNavPanel');
+            var btn = document.getElementById('chatNavBtn');
+            if (panel && panel.classList.contains('show') && !panel.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+                chatCloseNavPanel();
+            }
+        });
 
         /* ===== 对话内搜索 ===== */
         var chatSearchMatches = [];
