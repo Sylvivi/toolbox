@@ -11849,6 +11849,8 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
         }
 
         var _streamContentEl = null; // 流式输出时复用的纯文本节点，避免每帧重建 DOM
+        var _streamMdTimer = 0;
+        var _streamMdContent = '';
         function chatRenderStreamBubble(el, thinking, content, isThinking) {
             var h = '';
             if (thinking && thinking.trim()) {
@@ -11863,29 +11865,33 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
                     if (chatThinkDuration > 0) h += ' <span class="chat-think-timer">' + chatFmtElapsed(chatThinkDuration) + '</span>';
                 }
                 h += '</div>';
-                // 思考内容也用纯文本，避免每帧正则解析
+                // 思考内容用纯文本，避免每帧正则解析
                 h += '<div class="chat-thinking-bd"><div style="white-space:pre-wrap;word-break:break-word">' + esc(thinking) + '</div></div>';
                 h += '</div>';
             }
             if (content) {
-                // 流式输出期间：只用纯文本追加，不做 Markdown 解析
-                // 最终渲染（流结束后）由 chatRenderStreamFinal 完成
+                // 流式 Markdown 渲染：节流 100ms，避免频繁解析
+                _streamMdContent = content;
                 if (!_streamContentEl || !el.contains(_streamContentEl)) {
-                    // 首次或 DOM 被重建（思考区变化时），创建纯文本容器
+                    // 首次或 DOM 被重建，创建容器
                     var wrapper = document.createElement('div');
-                    wrapper.style.cssText = 'white-space:pre-wrap;word-break:break-word';
-                    wrapper.textContent = content;
-                    // 先设置思考区
+                    wrapper.className = 'chat-stream-md';
+                    wrapper.innerHTML = renderText(content);
                     if (h) el.innerHTML = h;
-                    else { /* 清除旧内容但保留思考区 */
+                    else {
                         while (el.lastChild && !el.lastChild.classList?.contains('chat-thinking')) el.removeChild(el.lastChild);
                     }
                     el.appendChild(wrapper);
                     _streamContentEl = wrapper;
                 } else {
-                    // 后续帧：只更新文本内容，不碰 DOM 结构
-                    _streamContentEl.textContent = content;
-                    // 如果思考区需要更新（状态从思考中→思考结束），重建思考区
+                    // 节流：100ms 内只渲染一次
+                    if (!_streamMdTimer) {
+                        _streamMdTimer = setTimeout(function() {
+                            _streamMdTimer = 0;
+                            if (_streamContentEl) _streamContentEl.innerHTML = renderText(_streamMdContent);
+                        }, 100);
+                    }
+                    // 更新思考区
                     var thinkEl = el.querySelector('.chat-thinking');
                     if (thinkEl && h) {
                         var temp = document.createElement('div');
@@ -11905,9 +11911,10 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
             }
             el.innerHTML = h;
         }
-        // 流式结束后调用：一次性做 Markdown 渲染
+        // 流式结束后调用：一次性做 Markdown 渲染（最终精确版）
         function chatRenderStreamFinal(el, thinking, content) {
             _streamContentEl = null;
+            if (_streamMdTimer) { clearTimeout(_streamMdTimer); _streamMdTimer = 0; }
             var h = '';
             if (thinking && thinking.trim()) {
                 h += '<div class="chat-thinking">';
