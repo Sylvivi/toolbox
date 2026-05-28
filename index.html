@@ -13940,7 +13940,12 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
             var html = '<div class="checkin-right">';
             // 待办面板
             html += '<div class="checkin-panel checkin-p-todo">';
-            html += '<div class="checkin-panel-title">' + m + '月' + day + '日 · 待办 ' + done.filter(function(t){return tasks.indexOf(t)!==-1;}).length + '/' + tasks.length + '</div>';
+            var dayEmojis = '';
+            done.forEach(function(t) {
+                var e = extractLeadingEmoji(t);
+                if (e && tasks.indexOf(t) !== -1) dayEmojis += e;
+            });
+            html += '<div class="checkin-panel-title">' + m + '月' + day + '日 · 待办 ' + done.filter(function(t){return tasks.indexOf(t)!==-1;}).length + '/' + tasks.length + (dayEmojis ? ' ' + dayEmojis : '') + '</div>';
             html += '<div class="checkin-todo-grid">';
             for (var i = 0; i < tasks.length; i++) {
                 var isDone = done.indexOf(tasks[i]) !== -1;
@@ -14005,8 +14010,13 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
             var month = parseInt(dateKey.substring(5, 7));
             var validDone = done.filter(function(t){return tasks.indexOf(t)!==-1;}).length;
             var rate = pastDays > 0 && totalTasks > 0 ? Math.round(totalDone / (pastDays * totalTasks) * 100) : 0;
+            var dayEmojis = '';
+            done.forEach(function(t) {
+                var e = extractLeadingEmoji(t);
+                if (e && tasks.indexOf(t) !== -1) dayEmojis += e;
+            });
             var html = '<div class="checkin-expand">';
-            html += '<div class="checkin-expand-title">' + month + '月' + day + '日 · 完成 ' + validDone + '/' + tasks.length + '</div>';
+            html += '<div class="checkin-expand-title">' + month + '月' + day + '日 · 完成 ' + validDone + '/' + tasks.length + (dayEmojis ? ' ' + dayEmojis : '') + '</div>';
             html += '<div class="checkin-todo-grid">';
             for (var i = 0; i < tasks.length; i++) {
                 var isDone = done.indexOf(tasks[i]) !== -1;
