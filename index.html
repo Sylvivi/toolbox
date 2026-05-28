@@ -13358,7 +13358,11 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
                 var frag = sel.getRangeAt(0).cloneContents();
                 var tmp = document.createElement('div');
                 tmp.appendChild(frag);
-                // 将间距 div 转为 <br>，保留段落结构
+                // pre-wrap 元素内的 \n 转为 <br>，否则去掉 style 后换行消失
+                tmp.querySelectorAll('[style*="pre-wrap"]').forEach(function(el) {
+                    el.innerHTML = el.innerHTML.replace(/\n/g, '<br>');
+                });
+                // 间距 div 转为 <br>
                 tmp.querySelectorAll('div[style*="height"]').forEach(function(el) {
                     var br = document.createElement('br');
                     el.parentNode.replaceChild(br, el);
