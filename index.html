@@ -13347,6 +13347,28 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
             bubbleEl.appendChild(btn);
         }
 
+        /* ===== 复制时清理富文本样式，保留段落结构 ===== */
+        (function() {
+            var chatArea = document.getElementById('chatMessages');
+            if (!chatArea) return;
+            chatArea.addEventListener('copy', function(e) {
+                var sel = window.getSelection();
+                if (!sel.rangeCount) return;
+                var frag = sel.getRangeAt(0).cloneContents();
+                var tmp = document.createElement('div');
+                tmp.appendChild(frag);
+                // 彻底移除所有 style 和 class，只保留语义标签结构
+                tmp.querySelectorAll('*').forEach(function(el) {
+                    el.removeAttribute('style');
+                    el.removeAttribute('class');
+                    el.removeAttribute('data-idx');
+                });
+                e.clipboardData.setData('text/html', tmp.innerHTML);
+                e.clipboardData.setData('text/plain', sel.toString());
+                e.preventDefault();
+            });
+        })();
+
         /* ===== AI 消息底部工具栏 ===== */
         var TB_COPY = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
         var TB_CHECK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
