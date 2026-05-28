@@ -3,7 +3,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
     <title>工具箱</title>
-    <meta name="theme-color" content="#1a2420">
+    <meta name="theme-color" content="#EEF4FB">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="工具箱">
@@ -2020,6 +2020,14 @@ body {
             margin-left: auto; padding-right: 6px;
             display: none; position: relative; cursor: pointer;
         }
+        .chat-token-hint {
+            font-size: 10px; color: var(--text-muted); padding: 2px 14px;
+            display: none; line-height: 1; opacity: 0.7;
+        }
+        @keyframes readingCommentIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
         .chat-ctx-indicator.visible { opacity: 0.5; display: block; pointer-events: auto; }
         .chat-ctx-indicator.has-summary { color: var(--accent); }
         .chat-summary-popup {
@@ -3080,7 +3088,7 @@ body {
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
-<body class="on-snippets chat-deco-on on-keys on-checkin dark modal-open" style="--deco-ai: &quot;✿&quot;; --deco-ai-size: 14px; --deco-ai-color: #f6a; --deco-ai-anim: deco-spin 4s linear infinite; --deco-ai-top: -14px; --deco-ai-left: 16px;" data-chat-scroll-y="0">
+<body class="on-snippets chat-deco-on on-keys on-checkin theme-clay chat-mask-on modal-open" style="--deco-ai: &quot;✦&quot;; --deco-ai-size: 12px; --deco-ai-color: #daf; --deco-ai-anim: deco-twinkle 2s ease-in-out infinite; --deco-ai-top: -14px; --deco-ai-left: 16px;" data-chat-scroll-y="0">
 
     <!-- =======================================================================
       [2.1] 顶级拦截层
@@ -4307,10 +4315,11 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
                 <button class="chat-scroll-bottom" id="chatScrollBtn" onclick="chatScrollBottomSmooth()" title="回到底部">↓</button>
             </div>
             <div class="chat-input-area" id="chatInputArea" style="">
+                <div class="chat-token-hint" id="chatTokenHint"></div>
                 <div class="chat-img-preview" id="chatImgPreview" style="display:none"></div>
                 <div class="chat-input-box">
-                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-boba" id="clawdPx"></span></button>
-                    <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this)"></textarea>
+                    <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-coffee" id="clawdPx"></span></button>
+                    <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this);chatUpdateTokenHint()"></textarea>
                     <div class="chat-input-toolbar">
                         <div style="position:relative">
                             <button class="chat-plus-btn" onclick="chatToggleAttachMenu()">＋</button>
@@ -4345,8 +4354,7 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
     <div class="chat-settings-bg" id="chatSettingsBg" onclick="chatCloseSettings()"></div>
     <div class="chat-settings-modal" id="chatSettingsModal">
         <div class="sheet-handle"></div>
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:0 20px 14px">
-            <span style="font-size:16px;font-weight:600;color:var(--text)">对话设置</span>
+        <div style="display:flex;align-items:center;justify-content:flex-end;padding:0 20px 6px">
             <button onclick="chatCloseSettings()" style="border:none;background:none;font-size:18px;color:var(--text-muted);cursor:pointer">✕</button>
         </div>
         <div class="chat-settings-body">
@@ -10523,6 +10531,7 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
         function chatResetConvState() {
             chatMessages = [];
             chatReadingMode = false;
+            chatSyncReadingChip();
             chatCompressSummaries = [];
             chatCompressedCount = 0;
             chatAllModels = [];
@@ -10630,6 +10639,7 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
             // 渲染消息
             chatRenderAllMessages();
             chatUpdateCtxIndicator();
+            chatSyncReadingChip();
             setTimeout(function() { document.getElementById('chatInput').focus(); }, 300);
         }
 
@@ -11368,6 +11378,7 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
             chatRenderThemeList();
             document.getElementById('readingModeToggle').checked = chatReadingMode;
             toggleReadingMode(chatReadingMode);
+            chatSyncReadingChip();
             document.getElementById('compressToggle').checked = chatCompressEnabled;
             syncCompressToggleStyle();
             document.getElementById('compressThresholdRow').style.display = chatCompressEnabled ? '' : 'none';
@@ -11606,6 +11617,8 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
 
             input.value = '';
             input.style.height = 'auto';
+            var _tokenHint = document.getElementById('chatTokenHint');
+            if (_tokenHint) _tokenHint.style.display = 'none';
             var _sendBtn = document.getElementById('chatSendBtn');
             _sendBtn.disabled = true;
             _sendBtn.classList.remove('ready');
@@ -12573,14 +12586,14 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
                         var reader = new FileReader();
                         reader.onload = function(e) {
                             chatPendingImages.push({ base64: e.target.result, type: file.type });
-                            chatRenderAttachPreview();
+                            chatRenderAttachPreview();chatUpdateTokenHint();
                         };
                         reader.readAsDataURL(file);
                     } else if (file.type.startsWith('text/') || CHAT_TEXT_EXTS.test(file.name)) {
                         var reader = new FileReader();
                         reader.onload = function(e) {
                             chatPendingFiles.push({ name: file.name, content: e.target.result, size: file.size });
-                            chatRenderAttachPreview();
+                            chatRenderAttachPreview();chatUpdateTokenHint();
                         };
                         reader.readAsText(file);
                     } else {
@@ -12588,7 +12601,7 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
                         var reader = new FileReader();
                         reader.onload = function(e) {
                             chatPendingFiles.push({ name: file.name, content: e.target.result, size: file.size });
-                            chatRenderAttachPreview();
+                            chatRenderAttachPreview();chatUpdateTokenHint();
                         };
                         reader.onerror = function() { showToast('⚠️ 无法读取 ' + file.name); };
                         reader.readAsText(file);
@@ -13068,6 +13081,7 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
             var thumb = document.getElementById('readingModeThumb');
             if (track) track.style.background = on ? 'var(--accent)' : 'var(--card-border)';
             if (thumb) thumb.style.transform = on ? 'translateX(18px)' : 'translateX(0)';
+            chatSyncReadingChip();
             chatSaveCurrentConv();
         }
 
@@ -13159,7 +13173,7 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
                 html += '<p style="white-space:pre-wrap;word-break:break-word;margin:0.5em 0">' + esc(paragraphs[j]) + '</p>';
                 if (commentMap[pNum]) {
                     for (var k = 0; k < commentMap[pNum].length; k++) {
-                        html += '<blockquote style="margin:0.4em 0 0.6em;padding:6px 12px;border-left:3px solid var(--accent);background:var(--accent-light);border-radius:0 8px 8px 0;font-size:0.92em;color:var(--text-sub);line-height:1.6">' + renderText(commentMap[pNum][k]) + '</blockquote>';
+                        html += '<blockquote style="margin:0.4em 0 0.6em;padding:6px 12px;border-left:3px solid var(--accent);background:var(--accent-light);border-radius:0 8px 8px 0;font-size:0.92em;color:var(--text-sub);line-height:1.6;animation:readingCommentIn 0.4s ease-out both;animation-delay:' + (pNum * 0.05) + 's">' + renderText(commentMap[pNum][k]) + '</blockquote>';
                     }
                 }
             }
@@ -13187,6 +13201,37 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
                 }
             }
             return '';
+        }
+
+        function chatSyncReadingChip() {
+            // 同步设置面板里的开关
+            var toggle = document.getElementById('readingModeToggle');
+            if (toggle) toggle.checked = chatReadingMode;
+            var track = document.getElementById('readingModeTrack');
+            var thumb = document.getElementById('readingModeThumb');
+            if (track) track.style.background = chatReadingMode ? 'var(--accent)' : 'var(--card-border)';
+            if (thumb) thumb.style.transform = chatReadingMode ? 'translateX(18px)' : 'translateX(0)';
+        }
+
+        function chatUpdateTokenHint() {
+            var hint = document.getElementById('chatTokenHint');
+            if (!hint) return;
+            var input = document.getElementById('chatInput');
+            var text = (input ? input.value : '').trim();
+            var fileChars = 0;
+            if (chatPendingFiles && chatPendingFiles.length > 0) {
+                for (var i = 0; i < chatPendingFiles.length; i++) fileChars += (chatPendingFiles[i].content || '').length;
+            }
+            var total = text.length + fileChars;
+            if (total < 100) {
+                hint.style.display = 'none';
+                return;
+            }
+            var tokens = Math.ceil(total * 0.6);
+            var display = total >= 10000 ? (total / 10000).toFixed(1) + ' 万字' : total + ' 字';
+            var tokenDisplay = tokens >= 10000 ? (tokens / 10000).toFixed(1) + ' 万' : tokens;
+            hint.textContent = display + ' · 约 ' + tokenDisplay + ' token';
+            hint.style.display = 'block';
         }
 
         function readingToggleCollapse(id) {
