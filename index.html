@@ -13358,7 +13358,12 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
                 var frag = sel.getRangeAt(0).cloneContents();
                 var tmp = document.createElement('div');
                 tmp.appendChild(frag);
-                // 彻底移除所有 style 和 class，只保留语义标签结构
+                // 将间距 div 转为 <br>，保留段落结构
+                tmp.querySelectorAll('div[style*="height"]').forEach(function(el) {
+                    var br = document.createElement('br');
+                    el.parentNode.replaceChild(br, el);
+                });
+                // 清理所有 style 和 class，只保留语义标签结构
                 tmp.querySelectorAll('*').forEach(function(el) {
                     el.removeAttribute('style');
                     el.removeAttribute('class');
@@ -13837,11 +13842,30 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
                 }
             }
 
+            // 收集今天的固定任务 emoji 用于卡片头部
+            var _headerEmojiTasks = ['吃水果', '睡够7小时', '运动', '阅读', '成1单'];
+            var headerEmojis = '';
+            if (year === todayYear && month === todayMonth) {
+                var todayKey2 = year + '-' + mm + '-' + (todayDate < 10 ? '0' + todayDate : todayDate);
+                var todayDone = checkinData[todayKey2] || [];
+                var hEmojis = [];
+                todayDone.forEach(function(t) {
+                    var e = extractLeadingEmoji(t);
+                    if (!e || taskList.indexOf(t) === -1) return;
+                    var plain = t.replace(/^(\p{Emoji_Presentation}|\p{Extended_Pictographic})/u, '').trim();
+                    for (var ei = 0; ei < _headerEmojiTasks.length; ei++) {
+                        if (plain.indexOf(_headerEmojiTasks[ei]) !== -1) { hEmojis.push(e); break; }
+                    }
+                });
+                if (hEmojis.length > 0) headerEmojis = ' ' + hEmojis.join('');
+            }
+
             var collapsed = offset > 0 ? ' collapsed' : '';
             var html = '<div class="card' + collapsed + '">';
             html += '<div class="card-header" onclick="toggleCard(this)">';
             html += '<div class="card-title">' + monthName + '</div>';
-            if (litCount > 0) html += '<span class="card-tag">🔥 ' + litCount + '天</span>';
+            if (litCount > 0) html += '<span class="card-tag">🔥 ' + litCount + '天' + headerEmojis + '</span>';
+            else if (headerEmojis) html += '<span class="card-tag">' + headerEmojis.trim() + '</span>';
             html += '<div class="card-chevron">▼</div>';
             html += '</div>';
             if (firstActiveDk) {
@@ -13883,17 +13907,21 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
                 if (partial) cls += ' partial';
                 if (selected && !lit) cls += ' selected';
                 var onclick = isFuture ? '' : ' onclick="checkinSelectDay(\'' + key + '\')"';
-                // 收集当天已完成任务的 emoji
+                // 收集当天已完成任务的 emoji（仅限指定任务）
+                var _emojiTasks = ['吃水果', '睡够7小时', '运动', '阅读', '成1单'];
                 var dayEmojis = '';
                 if (dayArr.length > 0) {
                     var emojis = [];
                     dayArr.forEach(function(t) {
                         var e = extractLeadingEmoji(t);
                         if (!e || taskList.indexOf(t) === -1) return;
-                        emojis.push(e);
+                        var plain = t.replace(/^(\p{Emoji_Presentation}|\p{Extended_Pictographic})/u, '').trim();
+                        for (var ei = 0; ei < _emojiTasks.length; ei++) {
+                            if (plain.indexOf(_emojiTasks[ei]) !== -1) { emojis.push(e); break; }
+                        }
                     });
                     if (emojis.length > 0) {
-                        dayEmojis = '<div class="checkin-day-emojis">' + emojis.slice(0, 6).join('') + '</div>';
+                        dayEmojis = '<div class="checkin-day-emojis">' + emojis.slice(0, 5).join('') + '</div>';
                     }
                 }
                 // 无任务 emoji 时，lit 日用随机印章
@@ -13940,12 +13968,7 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
             var html = '<div class="checkin-right">';
             // 待办面板
             html += '<div class="checkin-panel checkin-p-todo">';
-            var dayEmojis = '';
-            done.forEach(function(t) {
-                var e = extractLeadingEmoji(t);
-                if (e && tasks.indexOf(t) !== -1) dayEmojis += e;
-            });
-            html += '<div class="checkin-panel-title">' + m + '月' + day + '日 · 待办 ' + done.filter(function(t){return tasks.indexOf(t)!==-1;}).length + '/' + tasks.length + (dayEmojis ? ' ' + dayEmojis : '') + '</div>';
+            html += '<div class="checkin-panel-title">' + m + '月' + day + '日 · 待办 ' + done.filter(function(t){return tasks.indexOf(t)!==-1;}).length + '/' + tasks.length + '</div>';
             html += '<div class="checkin-todo-grid">';
             for (var i = 0; i < tasks.length; i++) {
                 var isDone = done.indexOf(tasks[i]) !== -1;
@@ -14010,13 +14033,8 @@ Frasier: I don't know, I guess I just didn't recognise the traditional card for 
             var month = parseInt(dateKey.substring(5, 7));
             var validDone = done.filter(function(t){return tasks.indexOf(t)!==-1;}).length;
             var rate = pastDays > 0 && totalTasks > 0 ? Math.round(totalDone / (pastDays * totalTasks) * 100) : 0;
-            var dayEmojis = '';
-            done.forEach(function(t) {
-                var e = extractLeadingEmoji(t);
-                if (e && tasks.indexOf(t) !== -1) dayEmojis += e;
-            });
             var html = '<div class="checkin-expand">';
-            html += '<div class="checkin-expand-title">' + month + '月' + day + '日 · 完成 ' + validDone + '/' + tasks.length + (dayEmojis ? ' ' + dayEmojis : '') + '</div>';
+            html += '<div class="checkin-expand-title">' + month + '月' + day + '日 · 完成 ' + validDone + '/' + tasks.length + '</div>';
             html += '<div class="checkin-todo-grid">';
             for (var i = 0; i < tasks.length; i++) {
                 var isDone = done.indexOf(tasks[i]) !== -1;
