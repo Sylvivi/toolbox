@@ -2390,6 +2390,45 @@ body {
         @keyframes rpFlash { 0%,100% { background: transparent; } 30% { background: var(--accent-light); } }
         .reading-merged p[data-p].rp-flash { animation: rpFlash 1.1s ease; }
 
+        /* ===== 剧本翻译模式 ===== */
+        .translate-merged p[data-p].tp-sel {
+            background: var(--accent-light);
+            box-shadow: inset 3px 0 0 var(--accent);
+        }
+        .translate-block {
+            margin: 0.5em 0 0.8em; border-radius: 10px; overflow: hidden;
+            border: 1px solid var(--accent-mid); background: var(--card-bg);
+            animation: readingCommentIn 0.18s ease;
+        }
+        .translate-block .tb-head {
+            padding: 5px 12px; font-size: 12px; font-weight: 600;
+            color: var(--accent); background: var(--accent-light);
+        }
+        .translate-block .tb-body {
+            padding: 8px 12px; font-size: 0.94em; line-height: 1.7; color: var(--text);
+        }
+        .translate-block .tb-body hr {
+            border: none; border-top: 1px solid var(--card-border); margin: 8px 0;
+        }
+        #translateActBar {
+            position: fixed; left: 50%; transform: translateX(-50%) translateY(20px);
+            bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 10px 8px 14px; border-radius: 24px;
+            background: var(--card-bg); border: 1px solid var(--card-border);
+            box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+            font-size: 13px; z-index: 240; opacity: 0; pointer-events: none;
+            transition: opacity 0.2s, transform 0.2s; white-space: nowrap;
+        }
+        #translateActBar.show { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+        #translateActBar .ta-label { color: var(--text-sub); font-weight: 600; }
+        #translateActBar button {
+            border: none; border-radius: 16px; padding: 6px 16px; font-size: 13px; cursor: pointer;
+        }
+        #translateActBar button.ta-run { background: var(--accent); color: #fff; }
+        #translateActBar button.ta-cancel { background: transparent; color: var(--text-muted); padding: 6px 8px; }
+        #translateActBar button:disabled { opacity: 0.6; cursor: default; }
+
         /* ===== 共读：点段评价 ===== */
         .reading-merged p[data-p] {
             cursor: pointer; border-radius: 5px; padding: 1px 4px; margin-left: -4px; margin-right: -4px;
@@ -3990,6 +4029,11 @@ body {
                 <button class="chat-scroll-bottom" id="chatScrollBtn" onclick="chatScrollBottomSmooth()" title="回到底部">↓</button>
                 <button class="chat-pageup" id="chatPageUpBtn" onclick="readingPageUp()" title="上滑一屏"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg></button>
                 <button class="chat-pagedown" id="chatPageDownBtn" onclick="readingPageDown()" title="下滑一屏"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
+                <div id="translateActBar">
+                    <span class="ta-label">已选</span>
+                    <button class="ta-run" onclick="translateRunSelected()">翻译</button>
+                    <button class="ta-cancel" onclick="translateClearSel()">取消</button>
+                </div>
             </div>
             <div class="chat-input-area" id="chatInputArea" style="">
                 <div class="chat-token-hint" id="chatTokenHint"></div>
@@ -4146,6 +4190,14 @@ body {
                         <input type="checkbox" id="readingModeToggle" onchange="toggleReadingMode(this.checked)" style="display:none">
                         <span id="readingModeTrack" style="position:absolute;inset:0;background:var(--card-border);border-radius:11px;transition:background 0.3s cubic-bezier(0.4,0,0.2,1)"></span>
                         <span id="readingModeThumb" style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 1px 4px rgba(0,0,0,0.18),0 0 0 0.5px rgba(0,0,0,0.04);transform:translateX(0)"></span>
+                    </label>
+                </div>
+                <div id="translateModeRow" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">剧本翻译模式</span>
+                    <label style="position:relative;width:40px;height:22px;cursor:pointer;flex-shrink:0">
+                        <input type="checkbox" id="translateModeToggle" onchange="toggleTranslateMode(this.checked)" style="display:none">
+                        <span id="translateModeTrack" style="position:absolute;inset:0;background:var(--card-border);border-radius:11px;transition:background 0.3s cubic-bezier(0.4,0,0.2,1)"></span>
+                        <span id="translateModeThumb" style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 1px 4px rgba(0,0,0,0.18),0 0 0 0.5px rgba(0,0,0,0.04);transform:translateX(0)"></span>
                     </label>
                 </div>
                 <div id="pageBtnPosRow" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
@@ -9824,6 +9876,8 @@ body {
         var chatReadingMode = false;    // 共读模式
         var _readingModeOrigText = '';  // 流式渲染用：当前原文
         var READING_MODE_INSTRUCTION = '【共读模式格式要求】当用户发送带有 [P1] [P2] 等段落编号的小说原文时，你只需要输出你的评论，不要重复原文。每条评论格式为：[P段落号] 评论内容。例如：\n[P3] 这段描写太细腻了\n[P7] 这里有个伏笔\n\n严格格式：每条评论开头只写一个 [Px] 标记，不要写成 [P25] [P26] 或 [P25-26] 这种合并格式。如果要同时评论多段，请分开写：\n[P25] 评论内容\n[P26] 评论内容\n\n重要：请模拟顺序阅读的视角写评论，评论某段时只基于该段及其之前的内容，不要引用或暗示后文还没出现的信息。你可以运用对作品已读部分（当前文本之前的剧情）的了解来丰富评论，但绝不剧透当前阅读位置之后的情节发展。像一个读过前文、但还没翻到下一页的读友一样。\n\n评论密度自己把握，有感觉的地方就评，没感觉的不要硬评。不需要每段都评。评论结束后可以简短聊两句整体感受。\n如果用户没发原文而是在聊天讨论，就正常回复，不用加 [P] 标记。';
+        var chatTranslateMode = false;  // 剧本翻译模式
+        var TRANSLATE_MODE_INSTRUCTION = '作为智能翻译辅助工具，请将用户提交的文本翻译成中文后，就文本中难以理解或具有专业术语性质的单词或短语进行标注，并提供其对应含义、音标以及详细而准确的解释，帮助用户深入理解翻译内容的确切意义。\n注意：仅对专业术语、专有名词、特定文化背景或难以理解的单词或短语进行解释。常见词汇如"table"（桌子）、"book"（书）等无需解释。\n翻译内容的格式：\n翻译：提供原文的中文翻译。\n一条分割线\n专业术语...的解释格式：英文单词或短语：以粗体标出。单词或短语的美式音标：在方括号中提供。单词或短语的中文含义：紧接着音标，用冒号分隔，并以粗体标出。词根词缀词源... 如果单词或短语有对应的emoji，请务必在你的解释中使用一些... 紧跟其后是牛津词典中的英文释义，用括号括起来。示例：Cockpit [ˈkɑːk.pɪt]：驾驶舱。Cock：这个词根来源于古英语"cocc"，意为公鸡...🛫🚢（the area in a plane，boat or racing car where the pilot or driver sits）';
         var chatStreaming = false;
         var chatAbortCtrl = null;
         var chatStreamStart = 0;
@@ -9896,6 +9950,7 @@ body {
                     list[i].compressKeep = chatCompressKeep;
                     list[i].spPresetIdx = chatActivePresetIdx;
                     list[i].readingMode = chatReadingMode || false;
+                    list[i].translateMode = chatTranslateMode || false;
                     // 只在消息数量变化（有新消息/删消息）或强制标脏（如追加评论）时更新时间
                     if (chatMessages.length !== oldMsgCount || forceDirty) {
                         list[i].updated = Date.now();
@@ -9924,6 +9979,7 @@ body {
                     compressKeep: chatCompressKeep,
                     spPresetIdx: chatActivePresetIdx,
                     readingMode: chatReadingMode || false,
+                    translateMode: chatTranslateMode || false,
                     messages: chatMessages.slice(),
                     created: Date.now(),
                     updated: Date.now(),
@@ -10277,6 +10333,8 @@ body {
         function chatResetConvState() {
             chatMessages = [];
             chatReadingMode = false;
+            chatTranslateMode = false;
+            translateClearSel();
             chatSyncReadingChip();
             chatCompressSummaries = [];
             chatCompressedCount = 0;
@@ -10362,6 +10420,7 @@ body {
             chatSelectedModel = conv.model || '';
             chatSelectedKeyStr = conv.keyStr || '';
             chatReadingMode = conv.readingMode || false;
+            chatTranslateMode = conv.translateMode || false;
             chatContextMax = conv.contextMax || 0;
             document.getElementById('chatCtxRange').value = chatContextMax;
             document.getElementById('chatCtxLabel').textContent = chatContextMax === 0 ? '全部' : chatContextMax + ' 轮';
@@ -10487,6 +10546,8 @@ body {
             bubble.className = 'chat-bubble';
             if (role === 'user') {
                 var _displayText = text;
+                var _nextMode = (typeof msgIdx === 'number' && chatMessages[msgIdx + 1]) ? chatMessages[msgIdx + 1] : null;
+                var _userIsScript = chatReadingMode || chatTranslateMode || (_nextMode && (_nextMode.readingMode || _nextMode.translateMode));
                 if (chatReadingMode || (typeof msgIdx === 'number' && chatMessages[msgIdx + 1] && chatMessages[msgIdx + 1].readingMode)) {
                     if (typeof _displayText === 'string') {
                         _displayText = readingModeStripParaNums(_displayText);
@@ -10497,7 +10558,7 @@ body {
                         });
                     }
                 }
-                var _isReadingUserMsg = (chatReadingMode || (typeof msgIdx === 'number' && chatMessages[msgIdx + 1] && chatMessages[msgIdx + 1].readingMode));
+                var _isReadingUserMsg = _userIsScript;
                 var _plainForCollapse = typeof _displayText === 'string' ? _displayText : (Array.isArray(_displayText) ? _displayText.filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('') : '');
                 if (_isReadingUserMsg && _plainForCollapse.length > 200) {
                     var _lines = _plainForCollapse.split('\n').filter(function(l){return l.trim().length > 0;});
@@ -10532,7 +10593,12 @@ body {
                     h += '<div class="chat-thinking-bd">' + renderText(thinking) + '</div></div>';
                 }
                 var _isReadingMsg = typeof msgIdx === 'number' && chatMessages[msgIdx] && chatMessages[msgIdx].readingMode;
-                if (_isReadingMsg && text) {
+                var _isTranslateMsg = typeof msgIdx === 'number' && chatMessages[msgIdx] && chatMessages[msgIdx].translateMode;
+                if (_isTranslateMsg) {
+                    var _torig = readingModeGetOriginalText(msgIdx);
+                    _torig = readingModeStripParaNums(_torig);
+                    h += translateModeRenderMerged(_torig, text || '');
+                } else if (_isReadingMsg && text) {
                     var _orig = readingModeGetOriginalText(msgIdx);
                     _orig = readingModeStripParaNums(_orig);
                     h += readingModeRenderMerged(_orig, text);
@@ -11572,6 +11638,18 @@ body {
             container.appendChild(userEl);
             chatScrollBottom();
             chatUpdateCtxIndicator();
+
+            // 剧本翻译模式：发送剧本不请求 AI，而是建一条空的承载消息，
+            // 用户随后点选段落，按需逐段翻译并原位累加。
+            if (chatTranslateMode) {
+                chatMessages.push({ role: 'assistant', content: '', translateMode: true, ts: Date.now() });
+                var hostEl = chatBuildMsgEl('ai', '', null, chatMessages.length - 1, true);
+                hostEl.classList.add('chat-appear');
+                container.appendChild(hostEl);
+                chatScrollBottom();
+                chatSaveCurrentConv(true);
+                return;
+            }
 
             await chatDoRequest();
         }
@@ -13011,6 +13089,7 @@ body {
         function toggleReadingMode(on) {
             var changed = (chatReadingMode !== on);
             chatReadingMode = on;
+            if (on && chatTranslateMode) { chatTranslateMode = false; translateSyncToggle(); }
             var track = document.getElementById('readingModeTrack');
             var thumb = document.getElementById('readingModeThumb');
             if (track) track.style.background = on ? 'var(--accent)' : 'var(--card-border)';
@@ -13037,12 +13116,33 @@ body {
             readingSyncReadingModeToggle();
         }
 
+        function toggleTranslateMode(on) {
+            chatTranslateMode = on;
+            if (on && chatReadingMode) { chatReadingMode = false; readingSyncReadingModeToggle(); }
+            translateSyncToggle();
+            chatSyncReadingChip();
+            chatSaveCurrentConv();
+            readingSyncAutoScrollUI();
+            translateClearSel();
+        }
+
+        // 同步设置面板里的「剧本翻译模式」开关到当前状态
+        function translateSyncToggle() {
+            var chk = document.getElementById('translateModeToggle');
+            if (chk) chk.checked = chatTranslateMode;
+            var track = document.getElementById('translateModeTrack');
+            var thumb = document.getElementById('translateModeThumb');
+            if (track) track.style.background = chatTranslateMode ? 'var(--accent)' : 'var(--card-border)';
+            if (thumb) thumb.style.transform = chatTranslateMode ? 'translateX(18px)' : 'translateX(0)';
+        }
+
         // 仅控制书签按钮显隐 + 翻页按钮
         function readingSyncAutoScrollUI() {
-            var show = (chatView === 'conv') && chatReadingMode;
+            var show = (chatView === 'conv') && (chatReadingMode || chatTranslateMode);
+            var bmShow = (chatView === 'conv') && chatReadingMode;
             var bmBtn = document.getElementById('chatBookmarkBtn');
-            if (bmBtn) bmBtn.style.display = show ? '' : 'none';
-            if (!show) { chatCloseBookmarkPanel(); }
+            if (bmBtn) bmBtn.style.display = bmShow ? '' : 'none';
+            if (!bmShow) { chatCloseBookmarkPanel(); }
             // 下滑一屏按钮仅共读模式显示；共读模式下直接隐藏「回到底部」
             // （点输入框会自动回到底部，无需该按钮，避免与下滑一屏重叠）
             var pd = document.getElementById('chatPageDownBtn');
@@ -13329,6 +13429,122 @@ body {
             }
         }
 
+        /* ===== 剧本翻译模式：区间点选 + 按需翻译 ===== */
+        var translateSelMsgIdx = -1, translateSelAnchor = -1, translateSelEnd = -1, translateBusy = false;
+
+        function translateClearSel() {
+            translateSelMsgIdx = -1; translateSelAnchor = -1; translateSelEnd = -1;
+            var sel = document.querySelectorAll('.translate-merged p[data-p].tp-sel');
+            for (var i = 0; i < sel.length; i++) sel[i].classList.remove('tp-sel');
+            translateUpdateSelUI();
+        }
+
+        // 点段状态机：无选→单选；单选同段→清空；单选异段→区间；区间→重启单选；异消息→重启
+        function translateOnParaClick(pEl) {
+            if (translateBusy) return;
+            var msgEl = pEl.closest('.chat-msg.ai');
+            if (!msgEl || !msgEl.hasAttribute('data-idx')) return;
+            var msgIdx = parseInt(msgEl.getAttribute('data-idx'));
+            var pNum = parseInt(pEl.getAttribute('data-p'));
+            if (translateSelMsgIdx !== msgIdx) {
+                // 跨消息或首次：重启为单选
+                translateSelMsgIdx = msgIdx; translateSelAnchor = pNum; translateSelEnd = pNum;
+            } else if (translateSelAnchor < 0) {
+                translateSelAnchor = pNum; translateSelEnd = pNum;
+            } else if (translateSelAnchor === translateSelEnd) {
+                if (pNum === translateSelAnchor) {
+                    // 再点首段：清空
+                    translateClearSel(); return;
+                }
+                // 选定区间
+                translateSelEnd = pNum;
+            } else {
+                // 已是区间：重启为单选
+                translateSelAnchor = pNum; translateSelEnd = pNum;
+            }
+            translateUpdateSelUI();
+        }
+
+        function translateUpdateSelUI() {
+            // 清掉旧高亮
+            var old = document.querySelectorAll('.translate-merged p[data-p].tp-sel');
+            for (var i = 0; i < old.length; i++) old[i].classList.remove('tp-sel');
+            var bar = document.getElementById('translateActBar');
+            if (translateSelMsgIdx < 0 || translateSelAnchor < 0) {
+                if (bar) bar.classList.remove('show');
+                return;
+            }
+            var lo = Math.min(translateSelAnchor, translateSelEnd);
+            var hi = Math.max(translateSelAnchor, translateSelEnd);
+            var msgEl = document.querySelector('.chat-msg.ai[data-idx="' + translateSelMsgIdx + '"]');
+            if (msgEl) {
+                for (var p = lo; p <= hi; p++) {
+                    var pe = msgEl.querySelector('.translate-merged p[data-p="' + p + '"]');
+                    if (pe) pe.classList.add('tp-sel');
+                }
+            }
+            if (bar) {
+                var lbl = bar.querySelector('.ta-label');
+                var n = hi - lo + 1;
+                var range = (lo === hi) ? ('第 ' + lo + ' 段') : ('第 ' + lo + '–' + hi + ' 段');
+                if (lbl) lbl.textContent = '已选 ' + range + '（' + n + ' 段）';
+                bar.classList.add('show');
+            }
+        }
+
+        async function translateRunSelected() {
+            if (translateBusy) return;
+            if (translateSelMsgIdx < 0 || translateSelAnchor < 0) return;
+            var msgIdx = translateSelMsgIdx;
+            var msg = chatMessages[msgIdx];
+            if (!msg || typeof msg.content !== 'string') { translateClearSel(); return; }
+            var provId = document.getElementById('chatProviderSelect').value;
+            var item = getKeyItemById(provId);
+            if (!item || !chatSelectedModel) { alert('请先选择模型'); return; }
+            var lo = Math.min(translateSelAnchor, translateSelEnd);
+            var hi = Math.max(translateSelAnchor, translateSelEnd);
+            var orig = readingModeStripParaNums(readingModeGetOriginalText(msgIdx));
+            var paras = translateModeSplitParas(orig);
+            if (lo < 1 || hi > paras.length) { translateClearSel(); return; }
+            var segment = paras.slice(lo - 1, hi).join('\n');
+            translateBusy = true;
+            var bar = document.getElementById('translateActBar');
+            var runBtn = bar && bar.querySelector('.ta-run');
+            if (runBtn) { runBtn.disabled = true; runBtn.textContent = '翻译中…'; }
+            try {
+                var baseUrl = getBaseUrl(item.url);
+                var apiKey = chatSelectedKeyStr || getActiveKey(item);
+                var resp = await fetch(baseUrl + '/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+                    body: JSON.stringify({
+                        model: chatSelectedModel,
+                        messages: [
+                            { role: 'system', content: TRANSLATE_MODE_INSTRUCTION },
+                            { role: 'user', content: segment }
+                        ],
+                        stream: false
+                    })
+                });
+                if (!resp.ok) { var et = ''; try { et = await resp.text(); } catch (x) {} throw new Error('HTTP ' + resp.status + (et ? ': ' + et.substring(0, 120) : '')); }
+                var data = await resp.json();
+                var answer = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '').trim();
+                // 去掉模型可能误带的 [[TR]] 标记，避免破坏存储块
+                answer = answer.replace(/\[\[\/?TR[^\]]*\]\]/g, '').trim();
+                if (!answer) throw new Error('空回复');
+                if (msg.content && msg.content.trim()) msg.content += '\n';
+                msg.content += '[[TR s=' + lo + ' e=' + hi + ']]\n' + answer + '\n[[/TR]]';
+                chatSaveCurrentConv(true);
+                translateClearSel();
+                readingRerenderMsg(msgIdx, hi);
+            } catch (e) {
+                if (runBtn) { runBtn.disabled = false; runBtn.textContent = '重试'; }
+                alert('翻译失败：' + (e.message || e));
+            } finally {
+                translateBusy = false;
+            }
+        }
+
         /* ===== 共读：书签 ===== */
         function readingGetAllBookmarks() {
             try { return JSON.parse(localStorage.getItem('reading_bookmarks')) || {}; }
@@ -13482,7 +13698,11 @@ body {
             var el = document.getElementById('chatMessages');
             if (!el) return;
             el.addEventListener('click', function(e) {
-                var p = e.target.closest ? e.target.closest('.reading-merged p[data-p]') : null;
+                if (!e.target.closest) return;
+                // translate-merged 同时带 reading-merged 类，必须先判翻译模式
+                var tp = e.target.closest('.translate-merged p[data-p]');
+                if (tp) { translateOnParaClick(tp); return; }
+                var p = e.target.closest('.reading-merged p[data-p]');
                 if (p) readingOnParaClick(p);
             });
         })();
@@ -13599,6 +13819,56 @@ body {
             return html;
         }
 
+        /* ===== 剧本翻译模式：段落拆分 / 译文块解析 / 合并渲染 ===== */
+        // 把原文按非空行拆成段落数组（与共读一致）
+        function translateModeSplitParas(originalText) {
+            var lines = (originalText || '').split('\n');
+            var paragraphs = [];
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i].trim();
+                if (line.length > 0) paragraphs.push(line);
+            }
+            return paragraphs;
+        }
+
+        // 解析承载消息里的 [[TR s=N e=M]]...[[/TR]] 块
+        function translateModeParseBlocks(aiText) {
+            var blocks = [];
+            if (!aiText) return blocks;
+            var re = /\[\[TR\s+s=(\d+)\s+e=(\d+)\]\]\n?([\s\S]*?)\n?\[\[\/TR\]\]/g;
+            var m;
+            while ((m = re.exec(aiText)) !== null) {
+                blocks.push({ s: parseInt(m[1], 10), e: parseInt(m[2], 10), text: m[3] });
+            }
+            return blocks;
+        }
+
+        function translateModeRenderMerged(originalText, aiText) {
+            var paragraphs = translateModeSplitParas(originalText);
+            var blocks = translateModeParseBlocks(aiText);
+            // 按结束段落归位（译文块插在其覆盖区间的末段之后）
+            var blockByEnd = {};
+            for (var b = 0; b < blocks.length; b++) {
+                var ek = blocks[b].e;
+                if (!blockByEnd[ek]) blockByEnd[ek] = [];
+                blockByEnd[ek].push(blocks[b]);
+            }
+            var html = '<div class="reading-merged translate-merged">';
+            for (var j = 0; j < paragraphs.length; j++) {
+                var pNum = j + 1;
+                html += '<p data-p="' + pNum + '" style="white-space:pre-wrap;word-break:break-word;margin:0.5em 0">' + esc(paragraphs[j]) + '</p>';
+                if (blockByEnd[pNum]) {
+                    for (var k = 0; k < blockByEnd[pNum].length; k++) {
+                        var blk = blockByEnd[pNum][k];
+                        var label = blk.s === blk.e ? ('第 ' + blk.s + ' 段译文') : ('第 ' + blk.s + '–' + blk.e + ' 段译文');
+                        html += '<div class="translate-block"><div class="tb-head">📘 ' + label + '</div><div class="tb-body">' + renderText(blk.text) + '</div></div>';
+                    }
+                }
+            }
+            html += '</div>';
+            return html;
+        }
+
         function readingModeGetOriginalText(msgIdx) {
             for (var i = msgIdx; i >= 0; i--) {
                 if (chatMessages[i].role === 'user') {
@@ -13623,6 +13893,7 @@ body {
             var thumb = document.getElementById('readingModeThumb');
             if (track) track.style.background = chatReadingMode ? 'var(--accent)' : 'var(--card-border)';
             if (thumb) thumb.style.transform = chatReadingMode ? 'translateX(18px)' : 'translateX(0)';
+            translateSyncToggle();
             chatUpdateCtxIndicator();
         }
 
