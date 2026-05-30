@@ -2477,15 +2477,21 @@ body {
         .reading-merged p[data-p].rp-flash { animation: rpFlash 1.1s ease; }
 
         /* ===== 消息编辑 ===== */
+        /* 编辑时气泡放宽到约半屏，给编辑框更舒服的空间（不占满整行） */
+        .chat-msg.chat-editing .chat-bubble { max-width: 100%; width: clamp(240px, 46%, 470px); }
+        @media (max-width: 768px) {
+            .chat-msg.chat-editing .chat-bubble { width: 88%; }
+        }
         .chat-edit-area {
-            width: 100%; padding: 8px 12px;
+            width: 100%; padding: 8px 12px; box-sizing: border-box;
             border: 1px solid rgba(255,255,255,0.3);
             border-radius: 14px 14px 4px 14px;
             background: rgba(255,255,255,0.5);
             backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
             box-shadow: 0 4px 16px rgba(0,0,0,0.06);
-            color: var(--text); font-size: 13px; line-height: 1.5;
-            resize: none; outline: none; font-family: inherit; min-height: 44px;
+            color: var(--text); font-size: 14px; line-height: 1.6;
+            resize: vertical; outline: none; font-family: inherit;
+            min-height: calc(1.6em + 16px); max-height: calc(8em + 16px); overflow-y: auto;
             transition: border-color 0.2s;
         }
         .chat-edit-area:focus {
@@ -12146,6 +12152,7 @@ body {
                 : (msg.content || '');
             var msgEl = document.querySelector('.chat-msg[data-idx="' + idx + '"]');
             if (!msgEl) return;
+            msgEl.classList.add('chat-editing');
             var bubble = msgEl.querySelector('.chat-bubble');
             bubble.innerHTML = '<textarea class="chat-edit-area">' + esc(text) + '</textarea>' +
                 '<div class="chat-edit-btns">' +
@@ -12153,8 +12160,12 @@ body {
                 '<button class="edit-confirm" onclick="chatEditConfirm(' + idx + ')">确认</button>' +
                 '</div>';
             var ta = bubble.querySelector('textarea');
+            // 随内容自动增高（受 CSS max-height 限制，超出再滚动）
+            function _grow() { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
+            ta.addEventListener('input', _grow);
             ta.focus();
             ta.setSelectionRange(ta.value.length, ta.value.length);
+            _grow();
         }
 
         function chatEditCancel(idx) {
