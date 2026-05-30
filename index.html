@@ -2401,15 +2401,43 @@ body {
             animation: readingCommentIn 0.18s ease;
         }
         .translate-block .tb-head {
-            padding: 5px 12px; font-size: 12px; font-weight: 600;
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            padding: 4px 8px 4px 12px; font-size: 12px; font-weight: 600;
             color: var(--accent); background: var(--accent-light);
         }
+        .translate-block .tb-head .tb-ask {
+            border: none; background: transparent; color: var(--accent);
+            font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 12px;
+            cursor: pointer; flex-shrink: 0;
+        }
+        .translate-block .tb-head .tb-ask:hover { background: var(--accent); color: #fff; }
         .translate-block .tb-body {
             padding: 8px 12px; font-size: 0.94em; line-height: 1.7; color: var(--text);
         }
         .translate-block .tb-body hr {
             border: none; border-top: 1px solid var(--card-border); margin: 8px 0;
         }
+        .translate-block .tb-qa {
+            margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--card-border);
+        }
+        .translate-block .tb-qa .tb-q { font-weight: 600; color: var(--text-sub); margin-bottom: 4px; }
+        .translate-block .tb-qa .tb-a { color: var(--text); }
+        .translate-askbar {
+            display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+            margin: 0 12px 10px; padding: 6px; border-radius: 10px; background: var(--accent-light);
+            animation: readingCommentIn 0.18s ease;
+        }
+        .translate-askbar input.ta-ask {
+            flex: 1 1 140px; min-width: 0; border: 1px solid var(--accent-mid);
+            background: var(--card-bg); color: var(--text); border-radius: 8px;
+            padding: 5px 10px; font-size: 12px; outline: none;
+        }
+        .translate-askbar button {
+            border: none; background: var(--accent); color: #fff;
+            font-size: 12px; padding: 5px 12px; border-radius: 8px; cursor: pointer;
+        }
+        .translate-askbar button.ta-ask-cancel { background: transparent; color: var(--text-muted); padding: 5px 6px; }
+        .translate-askbar button:disabled { opacity: 0.6; cursor: default; }
         #translateActBar {
             position: fixed; left: 50%; transform: translateX(-50%) translateY(20px);
             bottom: calc(72px + env(safe-area-inset-bottom, 0px));
@@ -13488,6 +13516,11 @@ body {
                 var n = hi - lo + 1;
                 var range = (lo === hi) ? ('第 ' + lo + ' 段') : ('第 ' + lo + '–' + hi + ' 段');
                 if (lbl) lbl.textContent = '已选 ' + range + '（' + n + ' 段）';
+                // 复位「翻译」按钮——操作条是复用的固定元素，上一轮可能把它改成了「翻译中…/重试」
+                if (!translateBusy) {
+                    var rb = bar.querySelector('.ta-run');
+                    if (rb) { rb.disabled = false; rb.textContent = '翻译'; }
+                }
                 bar.classList.add('show');
             }
         }
@@ -13540,6 +13573,110 @@ body {
             } catch (e) {
                 if (runBtn) { runBtn.disabled = false; runBtn.textContent = '重试'; }
                 alert('翻译失败：' + (e.message || e));
+            } finally {
+                translateBusy = false;
+            }
+        }
+
+        // 译文块「追问」：在该块下方展开输入框
+        function translateAskBlock(btn, s, e) {
+            if (translateBusy) return;
+            var block = btn.closest('.translate-block');
+            if (!block) return;
+            // 再点一次收起
+            var existing = block.querySelector('.translate-askbar');
+            if (existing) { existing.remove(); return; }
+            // 关掉其它块上已展开的追问框
+            var others = document.querySelectorAll('.translate-askbar');
+            for (var i = 0; i < others.length; i++) others[i].remove();
+            var msgEl = block.closest('.chat-msg.ai');
+            if (!msgEl || !msgEl.hasAttribute('data-idx')) return;
+            var msgIdx = parseInt(msgEl.getAttribute('data-idx'));
+            var bar = document.createElement('div');
+            bar.className = 'translate-askbar';
+            bar.innerHTML = '<input class="ta-ask" type="text" placeholder="这段没看懂？问问看…（如：这里的双关是什么意思？）">' +
+                '<button class="ta-ask-send">发送</button>' +
+                '<button class="ta-ask-cancel">取消</button>';
+            block.appendChild(bar);
+            var input = bar.querySelector('.ta-ask');
+            var send = bar.querySelector('.ta-ask-send');
+            var cancel = bar.querySelector('.ta-ask-cancel');
+            function go() { translateAskRun(msgIdx, s, e, input.value, bar); }
+            send.onclick = go;
+            cancel.onclick = function() { bar.remove(); };
+            input.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); go(); } });
+            input.focus();
+        }
+
+        // 把一条问答追加进对应 [[TR s e]] 块（插在该块 [[/TR]] 之前）
+        function translateAppendQA(content, s, e, q, a) {
+            var re = new RegExp('(\\[\\[TR\\s+s=' + s + '\\s+e=' + e + '\\]\\][\\s\\S]*?)(\\n?\\[\\[\\/TR\\]\\])');
+            var done = false;
+            return content.replace(re, function(m, bodyPart, close) {
+                if (done) return m; done = true;
+                return bodyPart + '\n[[QA]]' + q + '[[ANS]]' + a + '[[/QA]]' + close;
+            });
+        }
+
+        async function translateAskRun(msgIdx, s, e, question, bar) {
+            if (translateBusy) return;
+            question = (question || '').trim();
+            var input = bar && bar.querySelector('.ta-ask');
+            if (!question) { if (input) input.focus(); return; }
+            var msg = chatMessages[msgIdx];
+            if (!msg || typeof msg.content !== 'string') { if (bar) bar.remove(); return; }
+            var provId = document.getElementById('chatProviderSelect').value;
+            var item = getKeyItemById(provId);
+            if (!item || !chatSelectedModel) { alert('请先选择模型'); return; }
+            // 取该块原文 + 已有译文（含历史追问），作为追问上下文
+            var orig = readingModeStripParaNums(readingModeGetOriginalText(msgIdx));
+            var paras = translateModeSplitParas(orig);
+            var lo = Math.min(s, e), hi = Math.max(s, e);
+            if (lo < 1 || hi > paras.length) { if (bar) bar.remove(); return; }
+            var segment = paras.slice(lo - 1, hi).join('\n');
+            var blocks = translateModeParseBlocks(msg.content);
+            var curBlock = null;
+            for (var b = 0; b < blocks.length; b++) { if (blocks[b].s === s && blocks[b].e === e) { curBlock = blocks[b]; break; } }
+            var prevParsed = curBlock ? translateBlockSplitQA(curBlock.text) : { main: '', qas: [] };
+            var priorQA = prevParsed.qas.length
+                ? '\n\n我们之前就这段的问答：\n' + prevParsed.qas.map(function(p) { return '问：' + p.q + '\n答：' + p.a; }).join('\n')
+                : '';
+            var sysPrompt = '用户正在阅读你给出的中文翻译与注释，对其中含义仍有疑问，现在就同一段落向你追问。请用中文简洁、准确地解答，可结合原文与你之前的翻译，必要时补充音标 / 词源 / 文化背景，但不要整段重复翻译。';
+            var userMsg = '原文（第 ' + (lo === hi ? lo : (lo + '–' + hi)) + ' 段）：\n' + segment +
+                '\n\n你之前给出的翻译与解释：\n' + (prevParsed.main || '（无）') +
+                priorQA +
+                '\n\n我的问题是：' + question;
+            translateBusy = true;
+            var send = bar && bar.querySelector('.ta-ask-send');
+            if (send) { send.disabled = true; send.textContent = '思考中…'; }
+            if (input) input.disabled = true;
+            try {
+                var baseUrl = getBaseUrl(item.url);
+                var apiKey = chatSelectedKeyStr || getActiveKey(item);
+                var resp = await fetch(baseUrl + '/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+                    body: JSON.stringify({
+                        model: chatSelectedModel,
+                        messages: [
+                            { role: 'system', content: sysPrompt },
+                            { role: 'user', content: userMsg }
+                        ],
+                        stream: false
+                    })
+                });
+                if (!resp.ok) { var et = ''; try { et = await resp.text(); } catch (x) {} throw new Error('HTTP ' + resp.status + (et ? ': ' + et.substring(0, 120) : '')); }
+                var data = await resp.json();
+                var answer = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '').trim();
+                answer = answer.replace(/\[\[\/?(?:TR|QA|ANS)[^\]]*\]\]/g, '').trim();
+                if (!answer) throw new Error('空回复');
+                msg.content = translateAppendQA(msg.content, s, e, question, answer);
+                chatSaveCurrentConv(true);
+                readingRerenderMsg(msgIdx, hi);
+            } catch (err) {
+                if (send) { send.disabled = false; send.textContent = '重试'; }
+                if (input) input.disabled = false;
+                alert('追问失败：' + (err.message || err));
             } finally {
                 translateBusy = false;
             }
@@ -13861,12 +13998,30 @@ body {
                     for (var k = 0; k < blockByEnd[pNum].length; k++) {
                         var blk = blockByEnd[pNum][k];
                         var label = blk.s === blk.e ? ('第 ' + blk.s + ' 段译文') : ('第 ' + blk.s + '–' + blk.e + ' 段译文');
-                        html += '<div class="translate-block"><div class="tb-head">📘 ' + label + '</div><div class="tb-body">' + renderText(blk.text) + '</div></div>';
+                        var parsed = translateBlockSplitQA(blk.text);
+                        var body = renderText(parsed.main);
+                        for (var q = 0; q < parsed.qas.length; q++) {
+                            body += '<div class="tb-qa"><div class="tb-q">🙋 ' + esc(parsed.qas[q].q) + '</div><div class="tb-a">' + renderText(parsed.qas[q].a) + '</div></div>';
+                        }
+                        html += '<div class="translate-block" data-s="' + blk.s + '" data-e="' + blk.e + '">' +
+                            '<div class="tb-head"><span>📘 ' + label + '</span>' +
+                            '<button class="tb-ask" onclick="translateAskBlock(this,' + blk.s + ',' + blk.e + ')">追问</button></div>' +
+                            '<div class="tb-body">' + body + '</div></div>';
                     }
                 }
             }
             html += '</div>';
             return html;
+        }
+
+        // 从译文块文本中拆出主译文与历史追问问答
+        function translateBlockSplitQA(text) {
+            var qas = [];
+            var main = (text || '').replace(/\[\[QA\]\]([\s\S]*?)\[\[ANS\]\]([\s\S]*?)\[\[\/QA\]\]/g, function(m, q, a) {
+                qas.push({ q: q.trim(), a: a.trim() });
+                return '';
+            }).replace(/\n{3,}/g, '\n\n').trim();
+            return { main: main, qas: qas };
         }
 
         function readingModeGetOriginalText(msgIdx) {
