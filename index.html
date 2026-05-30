@@ -2063,6 +2063,16 @@ body {
         .sheet-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
         .sheet-tab-body { display: none; }
         .sheet-tab-body.active { display: block; }
+        /* 设置面板内的小子tab（主题 / clawd皮肤 / 气泡装饰） */
+        .opt-subtabs { display: flex; gap: 6px; margin-bottom: 12px; }
+        .opt-subtab {
+            flex: 1; padding: 6px 0; text-align: center; font-size: 12px; font-weight: 600;
+            color: var(--text-muted); background: var(--input-bg); border: 1px solid var(--card-border);
+            border-radius: 9px; cursor: pointer; transition: all 0.2s;
+        }
+        .opt-subtab.active { color: #fff; background: var(--accent); border-color: var(--accent); }
+        .opt-subpane { display: none; }
+        .opt-subpane.active { display: block; }
         .chat-input-toolbar {
             display: flex; align-items: center; justify-content: space-between;
         }
@@ -2301,6 +2311,63 @@ body {
             opacity: 1; pointer-events: auto; transform: translateY(0);
         }
         .chat-scroll-bottom:hover { background: var(--accent-light); }
+        /* 共读：下滑一屏按钮（仅共读模式显示） */
+        .chat-pagedown {
+            position: absolute; right: 14px; bottom: 12px; z-index: 16;
+            width: 34px; height: 34px; border-radius: 50%;
+            border: 1px solid var(--card-border);
+            background: var(--card-bg); color: var(--text-muted);
+            opacity: 0.55; cursor: pointer;
+            display: none; align-items: center; justify-content: center;
+            -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+            transition: opacity 0.2s, transform 0.12s;
+        }
+        .chat-pagedown.show { display: flex; }
+        .chat-pagedown:hover { opacity: 0.9; }
+        .chat-pagedown:active { opacity: 1; transform: scale(0.9); }
+
+        /* ===== 共读：自动滚动控件 ===== */
+        /* ===== 共读：自动阅读（设置面板内） ===== */
+        .autoread-speed input[type=range] {
+            width: 100%; accent-color: var(--accent); cursor: pointer; margin: 0;
+        }
+        .autoread-ticks { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 4px; padding: 0 1px; }
+
+        /* ===== 共读：点段评价 ===== */
+        .reading-merged p[data-p] {
+            cursor: pointer; border-radius: 5px; padding: 1px 4px; margin-left: -4px; margin-right: -4px;
+            transition: background 0.15s;
+        }
+        .reading-merged p[data-p].rp-active { background: var(--accent-light); }
+        .reading-actbar {
+            display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+            margin: 4px 0 8px; padding: 5px 6px 5px 12px;
+            background: var(--accent-light); border-radius: 10px;
+            font-size: 12px; animation: readingCommentIn 0.18s ease;
+        }
+        .reading-actbar input.rp-ask {
+            flex: 1 1 140px; min-width: 0; border: 1px solid var(--accent-mid);
+            background: var(--card-bg); color: var(--text); border-radius: 8px;
+            padding: 5px 10px; font-size: 12px; outline: none;
+        }
+        .reading-actbar button {
+            border: none; background: var(--accent); color: #fff;
+            font-size: 12px; padding: 4px 12px; border-radius: 8px; cursor: pointer;
+        }
+        .reading-actbar button.rp-cancel { background: transparent; color: var(--text-muted); padding: 4px 6px; }
+        .reading-actbar button.rp-bookmark { background: transparent; color: var(--accent); padding: 4px 8px; }
+        .reading-actbar button.rp-bookmark.on { background: var(--accent); color: #fff; }
+        .reading-actbar button:disabled { opacity: 0.6; cursor: default; }
+        /* 书签：已标记段落 */
+        .reading-merged p[data-p].rp-marked {
+            border-left: 3px solid var(--accent); padding-left: 8px; margin-left: -11px;
+        }
+        .reading-merged p[data-p].rp-marked::after {
+            content: '🔖'; font-size: 11px; margin-left: 4px; opacity: 0.7; vertical-align: super;
+        }
+        @keyframes rpFlash { 0%,100% { background: transparent; } 30% { background: var(--accent-light); } }
+        .reading-merged p[data-p].rp-flash { animation: rpFlash 1.1s ease; }
 
         /* ===== 共读：自动滚动控件 ===== */
         /* ===== 共读：自动阅读（设置面板内） ===== */
@@ -3898,6 +3965,7 @@ body {
             <div style="position:relative;flex:1;display:flex;flex-direction:column;min-height:0">
                 <div class="chat-messages" id="chatMessages"><div class="chat-hist-item" onclick="chatLoadConv('chat_1779889380717_qba27d')"><div class="chat-hist-info"><div class="chat-hist-title">天龙八部第三十回解读</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">claude-opus-4-6-request-antigravity</span><span class="chat-meta-tag">14条</span><span class="chat-meta-tag">1 小时前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1779889380717_qba27d',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1780013447709_yttaja')"><div class="chat-hist-info"><div class="chat-hist-title">你好宝宝，你是什么模型</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">claude-opus-4-8</span><span class="chat-meta-tag">2条</span><span class="chat-meta-tag">6 小时前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1780013447709_yttaja',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1779283374438_4sn1fs')"><div class="chat-hist-info"><div class="chat-hist-title">宝宝问候交流</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">claude-opus-4-6-request-antigravity</span><span class="chat-meta-tag">488条</span><span class="chat-meta-tag">16 小时前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1779283374438_4sn1fs',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1779967809638_b2om4k')"><div class="chat-hist-info"><div class="chat-hist-title">英文翻译与术语解释助手</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">gpt-5.5</span><span class="chat-meta-tag">70条</span><span class="chat-meta-tag">16 小时前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1779967809638_b2om4k',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1779873821960_hoq66u')"><div class="chat-hist-info"><div class="chat-hist-title">千妖百魅</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">claude-opus-4-6-request-antigravity</span><span class="chat-meta-tag">24条</span><span class="chat-meta-tag">22 小时前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1779873821960_hoq66u',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1779937006676_m8927j')"><div class="chat-hist-info"><div class="chat-hist-title">[P1] 第4章 首牢村的来信 [P2] 除了夜深人静时有点怕，独居的感觉还不错…</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">claude-sonnet-4-6-request-antigravity</span><span class="chat-meta-tag">4条</span><span class="chat-meta-tag">22 小时前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1779937006676_m8927j',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1779642800805_5ai4ud')"><div class="chat-hist-info"><div class="chat-hist-title">夜晚闲聊问候</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">claude-opus-4-6-request-antigravity</span><span class="chat-meta-tag">92条</span><span class="chat-meta-tag">3 天前</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1779642800805_5ai4ud',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1778777603253_at2f5g')"><div class="chat-hist-info"><div class="chat-hist-title">晓晴</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">claude-sonnet-4-6-request</span><span class="chat-meta-tag">254条</span><span class="chat-meta-tag">2026/5/18</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1778777603253_at2f5g',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1779007341981_rh8rnp')"><div class="chat-hist-info"><div class="chat-hist-title">计算机室友</div><div class="chat-hist-meta"><span class="chat-meta-tag">纯爱</span><span class="chat-meta-tag">[官-A-特惠]claude-opus-4-6-thinking</span><span class="chat-meta-tag">78条</span><span class="chat-meta-tag">2026/5/18</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1779007341981_rh8rnp',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1778835003716_hfrkam')"><div class="chat-hist-info"><div class="chat-hist-title">闲聊问候</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">claude-sonnet-4-6-request</span><span class="chat-meta-tag">188条</span><span class="chat-meta-tag">2026/5/18</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1778835003716_hfrkam',event)" title="更多">⋯</button></div><div class="chat-hist-item" onclick="chatLoadConv('chat_1778985103504_0bedkx')"><div class="chat-hist-info"><div class="chat-hist-title">你好</div><div class="chat-hist-meta"><span class="chat-meta-tag">VSLLM</span><span class="chat-meta-tag">deepseek-v4-pro</span><span class="chat-meta-tag">2条</span><span class="chat-meta-tag">2026/5/17</span></div></div><button class="chat-hist-more" ontouchstart="event.stopPropagation()" onclick="chatHistMenuOpen('chat_1778985103504_0bedkx',event)" title="更多">⋯</button></div></div>
                 <button class="chat-scroll-bottom" id="chatScrollBtn" onclick="chatScrollBottomSmooth()" title="回到底部">↓</button>
+                <button class="chat-pagedown" id="chatPageDownBtn" onclick="readingPageDown()" title="下滑一屏"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
             </div>
             <div class="chat-input-area" id="chatInputArea" style="">
                 <div class="chat-token-hint" id="chatTokenHint"></div>
@@ -4062,37 +4130,33 @@ body {
                 </div>
             </div>
             <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--card-border)">
-                <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;padding:2px 0" onclick="chatToggleOptSection('deco')">
-                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">气泡装饰</span>
-                    <span id="chatDecoArrow" style="font-size:10px;color:var(--text-muted);transition:transform 0.2s;display:inline-block">▶</span>
+                <div class="opt-subtabs">
+                    <button class="opt-subtab active" id="optSubBtnTheme" onclick="switchOptSubTab('theme')">主题</button>
+                    <button class="opt-subtab" id="optSubBtnSkin" onclick="switchOptSubTab('skin')">clawd皮肤</button>
+                    <button class="opt-subtab" id="optSubBtnDeco" onclick="switchOptSubTab('deco')">气泡装饰</button>
                 </div>
-                <div id="chatDecoWrap" style="display:none;margin-top:8px">
+                <div class="opt-subpane active" id="optSubTheme">
+                    <div class="clawd-skin-scroll" id="chatThemeList"><button class="clawd-skin-opt" onclick="chatSetThemeRandom()" style="font-size:11px;padding:4px 10px;white-space:nowrap;">🎲</button><button class="clawd-skin-opt" data-themeidx="0" onclick="chatSetTheme(0)" style="font-size:11px;padding:4px 10px;white-space:nowrap;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#EEF4FB;margin-right:4px;vertical-align:middle;border:1px solid rgba(0,0,0,0.1)"></span>粘土蓝</button><button class="clawd-skin-opt" data-themeidx="1" onclick="chatSetTheme(1)" style="font-size:11px;padding:4px 10px;white-space:nowrap;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#1a2420;margin-right:4px;vertical-align:middle;border:1px solid rgba(0,0,0,0.1)"></span>深林绿</button><button class="clawd-skin-opt" data-themeidx="2" onclick="chatSetTheme(2)" style="font-size:11px;padding:4px 10px;white-space:nowrap;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#FFF8F0;margin-right:4px;vertical-align:middle;border:1px solid rgba(0,0,0,0.1)"></span>蔚蓝金</button><button class="clawd-skin-opt" data-themeidx="3" onclick="chatSetTheme(3)" style="font-size:11px;padding:4px 10px;white-space:nowrap;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#EDF2FC;margin-right:4px;vertical-align:middle;border:1px solid rgba(0,0,0,0.1)"></span>蓝橙</button><button class="clawd-skin-opt" data-themeidx="4" onclick="chatSetTheme(4)" style="font-size:11px;padding:4px 10px;white-space:nowrap;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#F0F8F8;margin-right:4px;vertical-align:middle;border:1px solid rgba(0,0,0,0.1)"></span>青蓝</button><button class="clawd-skin-opt" data-themeidx="5" onclick="chatSetTheme(5)" style="font-size:11px;padding:4px 10px;white-space:nowrap;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f0dced;margin-right:4px;vertical-align:middle;border:1px solid rgba(0,0,0,0.1)"></span>绮梦</button><button class="clawd-skin-opt" data-themeidx="6" onclick="chatSetTheme(6)" style="font-size:11px;padding:4px 10px;white-space:nowrap;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ece4fc;margin-right:4px;vertical-align:middle;border:1px solid rgba(0,0,0,0.1)"></span>紫粉</button><button class="clawd-skin-opt" data-themeidx="7" onclick="chatSetTheme(7)" style="font-size:11px;padding:4px 10px;white-space:nowrap;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#e8f2fa;margin-right:4px;vertical-align:middle;border:1px solid rgba(0,0,0,0.1)"></span>冰蓝</button></div>
+                </div>
+                <div class="opt-subpane" id="optSubSkin">
+                    <div class="clawd-skin-scroll">
+                        <button class="clawd-skin-opt" data-skin="random" onclick="setClawdSkin('random')" style="background: var(--accent-light); border-color: var(--accent-mid);">🎲</button>
+                        <button class="clawd-skin-opt" data-skin="normal" onclick="setClawdSkin('normal')">🦀</button>
+                        <button class="clawd-skin-opt" data-skin="shy" onclick="setClawdSkin('shy')">😳</button>
+                        <button class="clawd-skin-opt" data-skin="love" onclick="setClawdSkin('love')">💕</button>
+                        <button class="clawd-skin-opt" data-skin="rainy" onclick="setClawdSkin('rainy')">☔</button>
+                        <button class="clawd-skin-opt" data-skin="boba" onclick="setClawdSkin('boba')">🧋</button>
+                        <button class="clawd-skin-opt" data-skin="flower" onclick="setClawdSkin('flower')">🌸</button>
+                        <button class="clawd-skin-opt" data-skin="music" onclick="setClawdSkin('music')">🎧</button>
+                        <button class="clawd-skin-opt" data-skin="coffee" onclick="setClawdSkin('coffee')">☕</button>
+                        <button class="clawd-skin-opt" data-skin="sunglasses" onclick="setClawdSkin('sunglasses')">😎</button>
+                        <button class="clawd-skin-opt" data-skin="xmas" onclick="setClawdSkin('xmas')">🎄</button>
+                        <button class="clawd-skin-opt" data-skin="coding" onclick="setClawdSkin('coding')">💻</button>
+                    </div>
+                </div>
+                <div class="opt-subpane" id="optSubDeco">
                     <div id="chatDecoList"><div class="deco-grid"><div class="deco-item active" title="随机">🎲</div><div class="deco-item" title="像素心">💟</div><div class="deco-item" title="像素猫">🐱</div><div class="deco-item" title="像素蘑菇">🍄</div><div class="deco-item" title="像素蟹">🦀</div><div class="deco-item" title="转花" style="color: rgb(255, 102, 170);">✿</div><div class="deco-item" title="弹花" style="color: rgb(238, 136, 170);">❀</div><div class="deco-item" title="闪紫星" style="color: rgb(221, 170, 255);">✦</div><div class="deco-item" title="弹菱" style="color: rgb(136, 204, 255);">❖</div><div class="deco-item" title="摇月" style="color: rgb(255, 221, 170);">🌙</div><div class="deco-item" title="转星" style="color: rgb(255, 221, 136);">💫</div><div class="deco-item" title="飘叶" style="color: rgb(102, 204, 102);">🍀</div><div class="deco-item" title="转雪" style="color: rgb(170, 221, 255);">❄️</div><div class="deco-item" title="摇草" style="color: rgb(85, 170, 85);">☘️</div><div class="deco-item" title="飘花" style="color: rgb(238, 153, 170);">❁</div><div class="deco-item" title="转雪纹" style="color: rgb(170, 221, 255);">❋</div><div class="deco-item" title="像素花">🌻</div><div class="deco-item" title="像素蛙">🐸</div><div class="deco-item" title="像素瓜">🍉</div></div></div>
                 </div>
-            </div>
-            <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--card-border)">
-                <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;padding:2px 0" onclick="chatToggleOptSection('skin')">
-                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">模型快捷图标</span>
-                    <span id="chatSkinArrow" style="font-size:10px;color:var(--text-muted);transition:transform 0.2s;display:inline-block">▶</span>
-                </div>
-                <div id="chatSkinWrap" class="clawd-skin-scroll" style="display:none;margin-top:8px">
-                    <button class="clawd-skin-opt" data-skin="random" onclick="setClawdSkin('random')" style="background: var(--accent-light); border-color: var(--accent-mid);">🎲</button>
-                    <button class="clawd-skin-opt" data-skin="normal" onclick="setClawdSkin('normal')">🦀</button>
-                    <button class="clawd-skin-opt" data-skin="shy" onclick="setClawdSkin('shy')">😳</button>
-                    <button class="clawd-skin-opt" data-skin="love" onclick="setClawdSkin('love')">💕</button>
-                    <button class="clawd-skin-opt" data-skin="rainy" onclick="setClawdSkin('rainy')">☔</button>
-                    <button class="clawd-skin-opt" data-skin="boba" onclick="setClawdSkin('boba')">🧋</button>
-                    <button class="clawd-skin-opt" data-skin="flower" onclick="setClawdSkin('flower')">🌸</button>
-                    <button class="clawd-skin-opt" data-skin="music" onclick="setClawdSkin('music')">🎧</button>
-                    <button class="clawd-skin-opt" data-skin="coffee" onclick="setClawdSkin('coffee')">☕</button>
-                    <button class="clawd-skin-opt" data-skin="sunglasses" onclick="setClawdSkin('sunglasses')">😎</button>
-                    <button class="clawd-skin-opt" data-skin="xmas" onclick="setClawdSkin('xmas')">🎄</button>
-                    <button class="clawd-skin-opt" data-skin="coding" onclick="setClawdSkin('coding')">💻</button>
-                </div>
-            </div>
-            <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--card-border)">
-                <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px">主题</div>
-                <div class="clawd-skin-scroll" id="chatThemeList"><button class="clawd-skin-opt" onclick="chatSetThemeRandom()" style="font-size:11px;padding:4px 10px;white-space:nowrap;">🎲</button><button class="clawd-skin-opt" data-themeidx="0" onclick="chatSetTheme(0)" style="font-size:11px;padding:4px 10px;white-space:nowrap;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#EEF4FB;margin-right:4px;vertical-align:middle;border:1px solid rgba(0,0,0,0.1)"></span>粘土蓝</button><button class="clawd-skin-opt" data-themeidx="1" onclick="chatSetTheme(1)" style="font-size:11px;padding:4px 10px;white-space:nowrap;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#1a2420;margin-right:4px;vertical-align:middle;border:1px solid rgba(0,0,0,0.1)"></span>深林绿</button><button class="clawd-skin-opt" data-themeidx="2" onclick="chatSetTheme(2)" style="font-size:11px;padding:4px 10px;white-space:nowrap;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#FFF8F0;margin-right:4px;vertical-align:middle;border:1px solid rgba(0,0,0,0.1)"></span>蔚蓝金</button><button class="clawd-skin-opt" data-themeidx="3" onclick="chatSetTheme(3)" style="font-size:11px;padding:4px 10px;white-space:nowrap;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#EDF2FC;margin-right:4px;vertical-align:middle;border:1px solid rgba(0,0,0,0.1)"></span>蓝橙</button><button class="clawd-skin-opt" data-themeidx="4" onclick="chatSetTheme(4)" style="font-size:11px;padding:4px 10px;white-space:nowrap;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#F0F8F8;margin-right:4px;vertical-align:middle;border:1px solid rgba(0,0,0,0.1)"></span>青蓝</button><button class="clawd-skin-opt" data-themeidx="5" onclick="chatSetTheme(5)" style="font-size:11px;padding:4px 10px;white-space:nowrap;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f0dced;margin-right:4px;vertical-align:middle;border:1px solid rgba(0,0,0,0.1)"></span>绮梦</button><button class="clawd-skin-opt" data-themeidx="6" onclick="chatSetTheme(6)" style="font-size:11px;padding:4px 10px;white-space:nowrap;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ece4fc;margin-right:4px;vertical-align:middle;border:1px solid rgba(0,0,0,0.1)"></span>紫粉</button><button class="clawd-skin-opt" data-themeidx="7" onclick="chatSetTheme(7)" style="font-size:11px;padding:4px 10px;white-space:nowrap;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#e8f2fa;margin-right:4px;vertical-align:middle;border:1px solid rgba(0,0,0,0.1)"></span>冰蓝</button></div>
             </div>
             <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--card-border)">
                 <div id="chatFavHeader" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;padding:2px 0" onclick="chatToggleFavSection()">
@@ -10866,14 +10930,18 @@ body {
             if (section) section.style.display = _chatFavExpanded ? '' : 'none';
             if (arrow) arrow.style.transform = _chatFavExpanded ? 'rotate(90deg)' : '';
         }
-        // 设置面板内可折叠区块（气泡装饰 / 模型快捷图标），默认折叠
-        function chatToggleOptSection(which) {
-            var wrap = document.getElementById(which === 'deco' ? 'chatDecoWrap' : 'chatSkinWrap');
-            var arrow = document.getElementById(which === 'deco' ? 'chatDecoArrow' : 'chatSkinArrow');
-            if (!wrap) return;
-            var hidden = (wrap.style.display === 'none');
-            wrap.style.display = hidden ? '' : 'none';
-            if (arrow) arrow.style.transform = hidden ? 'rotate(90deg)' : '';
+        // 设置面板内三个子tab：主题 / clawd皮肤 / 气泡装饰（默认「主题」）
+        function switchOptSubTab(which) {
+            var keys = ['theme', 'skin', 'deco'];
+            var paneId = { theme: 'optSubTheme', skin: 'optSubSkin', deco: 'optSubDeco' };
+            var btnId = { theme: 'optSubBtnTheme', skin: 'optSubBtnSkin', deco: 'optSubBtnDeco' };
+            for (var i = 0; i < keys.length; i++) {
+                var k = keys[i];
+                var pane = document.getElementById(paneId[k]);
+                var btn = document.getElementById(btnId[k]);
+                if (pane) pane.classList.toggle('active', k === which);
+                if (btn) btn.classList.toggle('active', k === which);
+            }
         }
         function chatUpdateFavHeader() {
             var el = document.getElementById('chatFavHeaderText');
@@ -12151,6 +12219,11 @@ body {
             var list = chatGetHistory();
             var tombs = _chatGetTombstones();
 
+            // 同步捕获「本地有未推送改动」的对话 id（_dirty 会在推送成功后被异步清掉，
+            // 这里先记下来，供下面合并清单时判断置顶状态是否以本地为准）
+            var dirtyIds = {};
+            list.forEach(function(c) { if (c._dirty) dirtyIds[c.id] = true; });
+
             // 先推送 dirty 的对话数据
             list.forEach(function(conv) {
                 if (conv._dirty) {
@@ -12171,7 +12244,12 @@ body {
                 }
                 // 用本地数据更新（本地有的覆盖云端条目）
                 list.forEach(function(c) {
-                    cloudMap[c.id] = { id: c.id, title: c.title || '新对话', model: c.model || '', providerName: c.providerName || '', updated: c.updated || 0, msgCount: (c.messages || []).length, pinned: !!c.pinned };
+                    var prev = cloudMap[c.id];
+                    // 置顶状态：仅当本地这条对话有未推送的改动(_dirty)时才以本地为准；
+                    // 否则保留云端已有的置顶值，避免「尚未拉取到别的设备刚置顶状态」的
+                    // 本设备在推送时把云端的置顶覆盖回去（这正是置顶不能同步的根因）。
+                    var pinnedVal = (prev && !dirtyIds[c.id]) ? !!prev.pinned : !!c.pinned;
+                    cloudMap[c.id] = { id: c.id, title: c.title || '新对话', model: c.model || '', providerName: c.providerName || '', updated: c.updated || 0, msgCount: (c.messages || []).length, pinned: pinnedVal };
                 });
                 // 移除墓碑中的条目
                 Object.keys(tombs).forEach(function(id) { delete cloudMap[id]; });
@@ -12844,6 +12922,19 @@ body {
             var bmBtn = document.getElementById('chatBookmarkBtn');
             if (bmBtn) bmBtn.style.display = show ? '' : 'none';
             if (!show) { chatCloseBookmarkPanel(); readingStopAutoScroll(); }
+            // 下滑一屏按钮仅共读模式显示；共读模式下直接隐藏「回到底部」
+            // （点输入框会自动回到底部，无需该按钮，避免与下滑一屏重叠）
+            var pd = document.getElementById('chatPageDownBtn');
+            if (pd) pd.classList.toggle('show', show);
+            var sb = document.getElementById('chatScrollBtn');
+            if (sb) sb.style.display = show ? 'none' : '';
+        }
+
+        // 共读：点一下，平滑下滑约一屏（留约一行重叠便于衔接）
+        function readingPageDown() {
+            var el = document.getElementById('chatMessages');
+            if (!el) return;
+            el.scrollBy({ top: Math.max(100, el.clientHeight - 48), behavior: 'smooth' });
         }
 
         // 同步设置面板里的「自动阅读」整块（显隐 + 开关态 + 速度）
@@ -12942,8 +13033,27 @@ body {
             bar.innerHTML = '<span style="color:var(--text-sub);margin-right:auto">💬 让 TA 聊聊这一段？</span>' +
                 '<button class="rp-bookmark' + (marked ? ' on' : '') + '" onclick="readingToggleBookmarkFromBar(' + msgIdx + ',' + pNum + ',this)">' + (marked ? '🔖 已加' : '🔖 书签') + '</button>' +
                 '<button onclick="readingCommentOne(' + msgIdx + ',' + pNum + ',this)">评一下</button>' +
+                '<button onclick="readingAskPrompt(' + msgIdx + ',' + pNum + ',this)">提问</button>' +
                 '<button class="rp-cancel" onclick="readingClearActbar()">取消</button>';
             pEl.insertAdjacentElement('afterend', bar);
+        }
+
+        // 点「提问」：把操作条切换成一个小输入框，回车或「发送」提交
+        function readingAskPrompt(msgIdx, pNum, btn) {
+            if (readingCommenting) return;
+            var bar = btn.closest('.reading-actbar');
+            if (!bar) return;
+            bar.innerHTML = '<input class="rp-ask" type="text" placeholder="问问这一段…（如：他这句话什么意思？）">' +
+                '<button class="rp-ask-send">发送</button>' +
+                '<button class="rp-cancel" onclick="readingClearActbar()">取消</button>';
+            var input = bar.querySelector('.rp-ask');
+            var send = bar.querySelector('.rp-ask-send');
+            function go() { readingAskOne(msgIdx, pNum, input.value, bar); }
+            send.onclick = go;
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); go(); }
+            });
+            input.focus();
         }
 
         async function readingCommentOne(msgIdx, pNum, btn) {
@@ -13003,6 +13113,77 @@ body {
             } catch (e) {
                 if (btn) { btn.disabled = false; btn.textContent = '重试'; }
                 alert('评论失败：' + (e.message || e));
+            } finally {
+                readingCommenting = false;
+            }
+        }
+
+        // 共读：对某段提问（单轮问答），答案以引用形式接在该段下方
+        async function readingAskOne(msgIdx, pNum, question, bar) {
+            if (readingCommenting) return;
+            question = (question || '').trim();
+            var input = bar && bar.querySelector('.rp-ask');
+            if (!question) { if (input) input.focus(); return; }
+            var msg = chatMessages[msgIdx];
+            if (!msg || typeof msg.content !== 'string') { readingClearActbar(); return; }
+            var provId = document.getElementById('chatProviderSelect').value;
+            var item = getKeyItemById(provId);
+            if (!item || !chatSelectedModel) { alert('请先选择模型'); return; }
+            var orig = readingModeStripParaNums(readingModeGetOriginalText(msgIdx));
+            var lines = orig.split('\n').filter(function(l) { return l.trim().length > 0; });
+            if (pNum < 1 || pNum > lines.length) { readingClearActbar(); return; }
+            var CTX_CHAR_BUDGET = 8000;
+            var ctxLines = [];
+            var ctxUsed = 0;
+            for (var i = pNum - 1; i >= 0; i--) {
+                var lineStr = '[P' + (i + 1) + '] ' + lines[i];
+                if (i < pNum - 1 && ctxUsed + lineStr.length > CTX_CHAR_BUDGET) break;
+                ctxLines.unshift(lineStr);
+                ctxUsed += lineStr.length + 1;
+            }
+            var ctxTruncated = ctxLines.length < pNum;
+            var ctxPreface = '以下是小说原文节选' + (ctxTruncated ? '（因前文较长，仅提供距离目标段最近的部分）' : '');
+            var sysPrompt = '你正在和用户一起共读小说。用户会指定某一段并就这段向你提问。请基于该段及其之前的内容回答，' +
+                '绝不剧透当前阅读位置之后的情节。回答自然、简洁，直接回应问题本身，不要加 [P] 段落标记，也不要复述原文。';
+            var userMsg = ctxPreface + '，[P' + pNum + '] 是我想问你的这一段：\n\n' + ctxLines.join('\n') +
+                '\n\n我的问题是：' + question;
+            readingCommenting = true;
+            var sendBtn = bar && bar.querySelector('.rp-ask-send');
+            if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '思考中…'; }
+            if (input) input.disabled = true;
+            try {
+                var baseUrl = getBaseUrl(item.url);
+                var apiKey = chatSelectedKeyStr || getActiveKey(item);
+                var resp = await fetch(baseUrl + '/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+                    body: JSON.stringify({
+                        model: chatSelectedModel,
+                        messages: [
+                            { role: 'system', content: sysPrompt },
+                            { role: 'user', content: userMsg }
+                        ],
+                        stream: false
+                    })
+                });
+                if (!resp.ok) { var et = ''; try { et = await resp.text(); } catch (x) {} throw new Error('HTTP ' + resp.status + (et ? ': ' + et.substring(0, 120) : '')); }
+                var data = await resp.json();
+                var answer = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '').trim();
+                // 去掉段落标记，并把答案内部的空行折叠为单换行——
+                // 否则空行会被 readingModeParseComments 当作该段评论的结束，
+                // 导致答案被丢到整条消息末尾的 trailing 区而非贴在本段下方。
+                answer = answer.replace(/\[P\d+\]/gi, '').replace(/\n\s*\n+/g, '\n').trim();
+                if (!answer) throw new Error('空回复');
+                // 以「汐：问题 / 答案」形式接在该段下方（与评论共用渲染）。
+                // 问题与答案之间只用单换行，确保它们仍属于同一个 [Pn] 评论块。
+                msg.content += '\n[P' + pNum + '] 汐：' + question + '\n' + answer;
+                chatSaveCurrentConv(true);
+                readingClearActbar();
+                readingRerenderMsg(msgIdx, pNum);
+            } catch (e) {
+                if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '重试'; }
+                if (input) input.disabled = false;
+                alert('提问失败：' + (e.message || e));
             } finally {
                 readingCommenting = false;
             }
