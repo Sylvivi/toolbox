@@ -13018,7 +13018,6 @@ body {
             bar.className = 'reading-actbar';
             bar.innerHTML = '<span style="color:var(--text-sub);margin-right:auto">💬 让 TA 聊聊这一段？</span>' +
                 '<button class="rp-bookmark' + (marked ? ' on' : '') + '" onclick="readingToggleBookmarkFromBar(' + msgIdx + ',' + pNum + ',this)">' + (marked ? '🔖 已加' : '🔖 书签') + '</button>' +
-                '<button onclick="readingCommentOne(' + msgIdx + ',' + pNum + ',this)">评一下</button>' +
                 '<button onclick="readingAskPrompt(' + msgIdx + ',' + pNum + ',this)">提问</button>' +
                 '<button class="rp-cancel" onclick="readingClearActbar()">取消</button>';
             pEl.insertAdjacentElement('afterend', bar);
@@ -13129,9 +13128,23 @@ body {
             }
             var ctxTruncated = ctxLines.length < pNum;
             var ctxPreface = '以下是小说原文节选' + (ctxTruncated ? '（因前文较长，仅提供距离目标段最近的部分）' : '');
-            var sysPrompt = '你正在和用户一起共读小说。用户会指定某一段并就这段向你提问。请基于该段及其之前的内容回答，' +
-                '绝不剧透当前阅读位置之后的情节。回答自然、简洁，直接回应问题本身，不要加 [P] 段落标记，也不要复述原文。';
+            // 收集该段已有的评论 / 历史问答，支持「对评论追问」「对上一轮问答再追问」
+            var existingComments = [];
+            try {
+                var parsedAll = readingModeParseComments(msg.content);
+                for (var pc = 0; pc < parsedAll.length; pc++) {
+                    if (parsedAll[pc].p === pNum && parsedAll[pc].text && parsedAll[pc].text.trim()) {
+                        existingComments.push(parsedAll[pc].text.trim());
+                    }
+                }
+            } catch (eParse) {}
+            var commentBlock = existingComments.length
+                ? '\n\n你之前对 [P' + pNum + '] 写下的评论 / 问答如下：\n' + existingComments.map(function(t) { return '· ' + t; }).join('\n')
+                : '';
+            var sysPrompt = '你正在和用户一起共读小说。用户会指定某一段并就这段向你提问，问题可能针对原文，也可能是在追问你之前对这一段写下的评论或问答。' +
+                '请结合该段原文、你之前的相关评论 / 问答以及之前的内容回答，绝不剧透当前阅读位置之后的情节。回答自然、简洁，直接回应问题本身，不要加 [P] 段落标记，也不要复述原文。';
             var userMsg = ctxPreface + '，[P' + pNum + '] 是我想问你的这一段：\n\n' + ctxLines.join('\n') +
+                commentBlock +
                 '\n\n我的问题是：' + question;
             readingCommenting = true;
             var sendBtn = bar && bar.querySelector('.rp-ask-send');
