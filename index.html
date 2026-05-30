@@ -10198,7 +10198,7 @@ body {
             });
         })();
 
-        // 右滑返回对话列表（整个 chat-modal 区域，左半屏起手）
+        // 右滑导航：对话内→返回列表；列表→退回底层标签页（整个 chat-modal 区域，左半屏起手）
         (function() {
             var modal = document.querySelector('.chat-modal');
             if (!modal) return;
@@ -10213,7 +10213,8 @@ body {
                 return swipeHint;
             }
             modal.addEventListener('touchstart', function(e) {
-                if (chatView !== 'conv' || chatStreaming) return;
+                if (chatStreaming) return;
+                if (chatView !== 'conv' && chatView !== 'list') return;
                 // 忽略在输入框内的滑动（避免干扰文本选择）
                 if (e.target.closest('textarea, input')) return;
                 var t = e.touches[0];
@@ -10232,7 +10233,9 @@ body {
                 if (dx > 80) {
                     swiping = false;
                     h.style.opacity = '0';
-                    chatBackToList();
+                    // 对话内→返回列表；列表→退回底层标签页（收藏/密钥/日历等）
+                    if (chatView === 'conv') chatBackToList();
+                    else closeChatModal();
                 }
             }, { passive: true });
             modal.addEventListener('touchend', function() { swiping = false; if (swipeHint) swipeHint.style.opacity = '0'; });
@@ -10245,6 +10248,8 @@ body {
             if (!msgArea) return;
             msgArea.addEventListener('dblclick', function(e) {
                 if (chatStreaming) return;
+                // 列表界面不再双击退出（改用右滑退回标签页）；仅对话内保留双击退出
+                if (chatView !== 'conv') return;
                 // 排除法：点在交互元素内不触发，其余都视为空白
                 if (e.target.closest('.chat-bubble, button, a, input, textarea, .chat-hist-item, .chat-edit-area, .chat-img-preview-item')) return;
                 closeChatModal();
