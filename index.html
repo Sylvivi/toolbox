@@ -2344,6 +2344,16 @@ body {
         .chat-pagedown.show, .chat-pageup.show { display: flex; }
         .chat-pagedown:hover, .chat-pageup:hover { opacity: 0.9; }
         .chat-pagedown:active, .chat-pageup:active { opacity: 1; transform: scale(0.9); }
+        /* 共读：翻页按钮位置选择 */
+        .pagebtn-pos-opt {
+            padding: 4px 8px; font-size: 11px; border-radius: 7px;
+            border: 1px solid var(--card-border); background: var(--card-bg);
+            color: var(--text-muted); cursor: pointer; white-space: nowrap;
+            transition: background 0.15s, color 0.15s, border-color 0.15s;
+        }
+        .pagebtn-pos-opt.active {
+            background: var(--accent-light); border-color: var(--accent-mid); color: var(--text);
+        }
 
         /* ===== 共读：点段评价 ===== */
         .reading-merged p[data-p] {
@@ -4119,6 +4129,15 @@ body {
                         <span id="readingModeTrack" style="position:absolute;inset:0;background:var(--card-border);border-radius:11px;transition:background 0.3s cubic-bezier(0.4,0,0.2,1)"></span>
                         <span id="readingModeThumb" style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 1px 4px rgba(0,0,0,0.18),0 0 0 0.5px rgba(0,0,0,0.04);transform:translateX(0)"></span>
                     </label>
+                </div>
+                <div id="pageBtnPosRow" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">翻页按钮位置</span>
+                    <div style="display:flex;gap:6px">
+                        <button class="pagebtn-pos-opt" data-pos="rb" onclick="readingSetPageBtnPos('rb')" title="右下">右下</button>
+                        <button class="pagebtn-pos-opt" data-pos="lm" onclick="readingSetPageBtnPos('lm')" title="左中">左中</button>
+                        <button class="pagebtn-pos-opt" data-pos="lb" onclick="readingSetPageBtnPos('lb')" title="左下">左下</button>
+                        <button class="pagebtn-pos-opt" data-pos="rm" onclick="readingSetPageBtnPos('rm')" title="右中">右中</button>
+                    </div>
                 </div>
             </div>
             <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--card-border)">
@@ -10809,6 +10828,7 @@ body {
             chatSheetRenderModels('');
             chatRenderFavSection();
             readingSyncReadingModeToggle();
+            readingApplyPageBtnPos();
             document.getElementById('chatModelSheetBg').classList.add('show');
             document.getElementById('chatModelSheet').classList.add('show');
         }
@@ -12911,6 +12931,37 @@ body {
             if (pu) pu.classList.toggle('show', show);
             var sb = document.getElementById('chatScrollBtn');
             if (sb) sb.style.display = show ? 'none' : '';
+            if (show) readingApplyPageBtnPos();
+        }
+
+        // 共读：翻页按钮位置（按设备保存，不参与云同步——握姿/设备相关）
+        function readingApplyPageBtnPos() {
+            var pos = localStorage.getItem('reading_pagebtn_pos') || 'rb';
+            var pu = document.getElementById('chatPageUpBtn');
+            var pd = document.getElementById('chatPageDownBtn');
+            if (pu && pd) {
+                var leftSide = (pos === 'lm' || pos === 'lb');
+                [pu, pd].forEach(function(b) {
+                    b.style.left = leftSide ? '14px' : 'auto';
+                    b.style.right = leftSide ? 'auto' : '14px';
+                });
+                if (pos === 'lm' || pos === 'rm') {
+                    // 垂直居中：上键在上、下键在下，间隔约 8px
+                    pu.style.top = 'calc(50% - 38px)'; pu.style.bottom = 'auto';
+                    pd.style.top = 'calc(50% + 4px)'; pd.style.bottom = 'auto';
+                } else {
+                    pu.style.top = 'auto'; pu.style.bottom = '54px';
+                    pd.style.top = 'auto'; pd.style.bottom = '12px';
+                }
+            }
+            var opts = document.querySelectorAll('.pagebtn-pos-opt');
+            for (var i = 0; i < opts.length; i++) {
+                opts[i].classList.toggle('active', opts[i].getAttribute('data-pos') === pos);
+            }
+        }
+        function readingSetPageBtnPos(pos) {
+            localStorage.setItem('reading_pagebtn_pos', pos);
+            readingApplyPageBtnPos();
         }
 
         // 共读：点一下，平滑下滑约一屏（留约一行重叠便于衔接）
