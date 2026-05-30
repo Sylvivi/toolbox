@@ -2572,42 +2572,51 @@ body {
         .chat-bubble:hover .chat-reroll-btn { opacity: 1; }
         .chat-reroll-btn:hover { background: var(--accent-light); color: var(--accent); }
 
-        /* ===== SP预设列表 ===== */
-        .sp-preset-bar {
-            display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
-        }
-        .sp-preset-bar button {
-            padding: 5px 12px; border: 1px solid var(--card-border); border-radius: 8px;
+        /* ===== SP预设：用/管理两层 ===== */
+        /* 顶部 chips：点一下=套用开聊 */
+        .sp-preset-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+        .sp-chip {
+            padding: 5px 12px; border: 1px solid var(--card-border); border-radius: 14px;
             background: var(--card-bg); color: var(--text-sub); font-size: 12px;
-            cursor: pointer; white-space: nowrap; transition: background 0.12s;
+            cursor: pointer; white-space: nowrap; max-width: 150px; overflow: hidden;
+            text-overflow: ellipsis; transition: all 0.12s;
         }
-        .sp-preset-bar button:hover { background: var(--accent-light); color: var(--accent); }
-        .sp-preset-wrap { position: relative; display: inline-block; }
-        .sp-preset-dropdown {
-            display: none; position: absolute; top: calc(100% + 4px); left: 0;
-            min-width: 180px; max-width: 260px; max-height: 200px; overflow-y: auto;
-            background: var(--modal-bg); border: 1px solid var(--card-border);
-            border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-            z-index: 20; padding: 4px;
-        }
-        .sp-preset-dropdown.show { display: block; }
-        .sp-preset-item {
-            display: flex; align-items: center; gap: 4px;
-            padding: 8px 8px 8px 12px; font-size: 13px; color: var(--text);
-            border-radius: 8px; cursor: pointer; transition: background 0.12s;
-        }
-        .sp-preset-item:hover { background: var(--accent-light); }
-        .sp-preset-item.editing { background: var(--accent-light); color: var(--accent); }
-        .sp-preset-item .sp-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .sp-preset-item .sp-act {
-            width: 22px; height: 22px; border: none; background: none;
-            color: var(--text-muted); font-size: 12px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-            border-radius: 4px; flex-shrink: 0; opacity: 0.5; transition: all 0.12s;
-        }
-        .sp-preset-item .sp-act:hover { opacity: 1; }
-        .sp-preset-item .sp-act.edit:hover { color: var(--accent); background: var(--accent-light); }
-        .sp-preset-item .sp-act.del:hover { color: var(--red); background: var(--red-bg); }
+        .sp-chip:hover { background: var(--accent-light); color: var(--accent); }
+        .sp-chip.active { background: var(--accent-chip); color: #fff; border-color: var(--accent); }
+        .sp-chip-add, .sp-chip-manage { color: var(--accent); }
+        .sp-chip-add { border-style: dashed; }
+
+        /* 内联命名行（新建） */
+        .sp-name-row { display: flex; gap: 6px; margin-bottom: 8px; }
+        .sp-name-row input { flex: 1; min-width: 0; padding: 6px 10px; font-size: 13px; border: 1px solid var(--accent-mid); border-radius: 8px; background: var(--input-bg); color: var(--text); outline: none; }
+        .sp-name-row button { padding: 6px 12px; font-size: 12px; border-radius: 8px; border: 1px solid var(--card-border); background: var(--card-bg); color: var(--text-sub); cursor: pointer; white-space: nowrap; }
+        .sp-name-row .sp-name-ok { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+        /* 编辑态横幅 */
+        .sp-edit-banner { display: flex; align-items: center; gap: 8px; padding: 6px 10px; margin-bottom: 8px; font-size: 12px; background: var(--accent-light); color: var(--accent); border-radius: 8px; }
+        .sp-edit-banner .sp-eb-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .sp-edit-banner button { padding: 4px 12px; font-size: 12px; border-radius: 7px; border: none; cursor: pointer; white-space: nowrap; }
+        .sp-edit-banner .sp-eb-update { background: var(--accent); color: #fff; }
+        .sp-edit-banner .sp-eb-cancel { background: var(--card-bg); color: var(--text-sub); border: 1px solid var(--card-border); }
+
+        /* 预设管理底部 sheet */
+        .sp-manager-mask { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 300; align-items: flex-end; justify-content: center; }
+        .sp-manager-mask.show { display: flex; animation: fadeIn 0.2s; }
+        .sp-manager { width: 100%; max-width: 480px; max-height: 76vh; display: flex; flex-direction: column; background: var(--modal-bg); border-radius: 16px 16px 0 0; padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -4px 24px rgba(0,0,0,0.18); }
+        .sp-manager-head { display: flex; align-items: center; justify-content: space-between; font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+        .sp-manager-head button { border: none; background: none; font-size: 16px; color: var(--text-muted); cursor: pointer; }
+        .sp-manager-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+        .sp-mrow { border: 1px solid var(--card-border); border-radius: 12px; padding: 10px 12px; background: var(--card-bg); }
+        .sp-mrow-top { display: flex; align-items: center; gap: 4px; }
+        .sp-mrow-name { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .sp-mrow-preview { font-size: 12px; color: var(--text-muted); margin-top: 5px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .sp-mrow-act { border: none; background: none; font-size: 12px; cursor: pointer; padding: 4px 8px; border-radius: 7px; color: var(--text-sub); white-space: nowrap; }
+        .sp-mrow-act:hover { background: var(--accent-light); color: var(--accent); }
+        .sp-mrow-act.del:hover { background: var(--red-bg); color: var(--red); }
+        .sp-mrow-rename { display: flex; gap: 6px; margin-top: 8px; }
+        .sp-mrow-rename input { flex: 1; min-width: 0; padding: 5px 8px; font-size: 13px; border: 1px solid var(--accent-mid); border-radius: 7px; background: var(--input-bg); color: var(--text); outline: none; }
+        .sp-mrow-rename button { padding: 5px 12px; font-size: 12px; border-radius: 7px; border: none; background: var(--accent); color: #fff; cursor: pointer; }
+        .sp-manager-new { margin-top: 10px; padding: 10px; width: 100%; border: 1px dashed var(--accent-mid); border-radius: 10px; background: var(--accent-light); color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer; }
 
 
 /* =========================================================================
@@ -4030,12 +4039,12 @@ body {
             <div id="chatSettingsPane1">
                 <div style="margin-bottom:16px">
                     <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">系统提示词</div>
-                    <div class="sp-preset-bar">
-                        <div class="sp-preset-wrap">
-                            <button onclick="chatToggleSpDropdown()" id="chatSpDropBtn">预设 ▾</button>
-                            <div class="sp-preset-dropdown" id="chatSpPresetList"></div>
-                        </div>
-                        <button id="chatSpSaveBtn" onclick="chatSaveSpPreset()">保存为预设</button>
+                    <div class="sp-preset-bar" id="chatSpBar"></div>
+                    <div class="sp-edit-banner" id="chatSpEditBanner" style="display:none"></div>
+                    <div class="sp-name-row" id="chatSpNameRow" style="display:none">
+                        <input id="chatSpNameInput" type="text" placeholder="给这条提示词起个名字…" maxlength="40" onkeydown="if(event.key==='Enter'){event.preventDefault();chatSpNameConfirm();}">
+                        <button class="sp-name-ok" onclick="chatSpNameConfirm()">保存</button>
+                        <button onclick="chatSpNameCancel()">取消</button>
                     </div>
                     <textarea id="chatSysPrompt" placeholder="输入系统提示词（可选）…" rows="6" style="width:100%;padding:12px 14px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;color:var(--text);font-size:14px;outline:none;resize:none;font-family:inherit;line-height:1.6"></textarea>
                 </div>
@@ -4076,6 +4085,15 @@ body {
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- 系统提示词预设管理 sheet -->
+    <div class="sp-manager-mask" id="chatSpManagerMask" onclick="chatCloseSpManager()">
+        <div class="sp-manager" onclick="event.stopPropagation()">
+            <div class="sp-manager-head"><span>管理预设</span><button onclick="chatCloseSpManager()">✕</button></div>
+            <div class="sp-manager-list" id="chatSpManagerList"></div>
+            <button class="sp-manager-new" onclick="chatNewSpPreset()">＋ 新建预设（存入当前提示词框内容）</button>
         </div>
     </div>
 
@@ -9876,7 +9894,7 @@ body {
                     list[i].compressEnabled = chatCompressEnabled;
                     list[i].compressThreshold = chatCompressThreshold;
                     list[i].compressKeep = chatCompressKeep;
-                    list[i].spPresetIdx = chatEditingPresetIdx;
+                    list[i].spPresetIdx = chatActivePresetIdx;
                     list[i].readingMode = chatReadingMode || false;
                     // 只在消息数量变化（有新消息/删消息）或强制标脏（如追加评论）时更新时间
                     if (chatMessages.length !== oldMsgCount || forceDirty) {
@@ -9904,7 +9922,7 @@ body {
                     compressEnabled: chatCompressEnabled,
                     compressThreshold: chatCompressThreshold,
                     compressKeep: chatCompressKeep,
-                    spPresetIdx: chatEditingPresetIdx,
+                    spPresetIdx: chatActivePresetIdx,
                     readingMode: chatReadingMode || false,
                     messages: chatMessages.slice(),
                     created: Date.now(),
@@ -10363,7 +10381,8 @@ body {
                 document.getElementById('chatSysPrompt').value = conv.systemPrompt;
             }
             // 恢复预设选中状态
-            chatEditingPresetIdx = (conv.spPresetIdx !== undefined && conv.spPresetIdx !== null) ? conv.spPresetIdx : -1;
+            chatActivePresetIdx = (conv.spPresetIdx !== undefined && conv.spPresetIdx !== null) ? conv.spPresetIdx : -1;
+            chatEditingPresetIdx = -1;
             // 渲染消息
             chatRenderAllMessages();
             chatUpdateCtxIndicator();
@@ -10802,9 +10821,6 @@ body {
             var wrap = document.querySelector('.chat-model-wrap');
             var dd = document.getElementById('chatModelDropdown');
             if (wrap && dd && !wrap.contains(e.target)) dd.classList.remove('show');
-            var spWrap = document.querySelector('.sp-preset-wrap');
-            var spDd = document.getElementById('chatSpPresetList');
-            if (spWrap && spDd && !spWrap.contains(e.target)) spDd.classList.remove('show');
         });
 
         /* ----- 模型底部面板 ----- */
@@ -11208,87 +11224,186 @@ body {
             document.getElementById('chatSettingsModal').classList.remove('show');
         }
 
-        /* ----- SP 预设存档 ----- */
+        /* ----- SP 预设存档（用/管理两层） ----- */
         var CHAT_SP_KEY = 'chat_sp_presets';
-        var chatEditingPresetIdx = -1; // 正在编辑的预设索引，-1=新建模式
+        var chatActivePresetIdx = -1;   // 当前会话套用的预设（持久化为 spPresetIdx，仅高亮，不会覆盖）
+        var chatEditingPresetIdx = -1;  // 正在显式编辑的预设（瞬时，不持久化）
+        var chatSpRenameIdx = -1;       // 管理面板内正在改名的行
         function chatGetSpPresets() {
             try { return JSON.parse(localStorage.getItem(CHAT_SP_KEY) || '[]'); } catch(e) { return []; }
         }
+        function chatSaveSpPresets(presets) { localStorage.setItem(CHAT_SP_KEY, JSON.stringify(presets)); }
+
+        // 顶部 chips：点一下=套用开聊；末尾「＋新建」「⚙管理」
         function chatRenderSpPresets() {
-            var container = document.getElementById('chatSpPresetList');
-            var presets = chatGetSpPresets();
-            if (presets.length === 0) { container.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:var(--text-muted)">暂无预设</div>'; return; }
-            var h = '';
-            for (var i = 0; i < presets.length; i++) {
-                var isEditing = i === chatEditingPresetIdx;
-                h += '<div class="sp-preset-item' + (isEditing ? ' editing' : '') + '" onclick="chatLoadSpPresetIdx(' + i + ')">';
-                h += '<span class="sp-name">' + esc(presets[i].name) + '</span>';
-                h += '<button class="sp-act del" onclick="event.stopPropagation();chatDelSpPresetIdx(' + i + ')" title="删除">✕</button>';
-                h += '</div>';
+            var bar = document.getElementById('chatSpBar');
+            if (bar) {
+                var presets = chatGetSpPresets();
+                var h = '';
+                for (var i = 0; i < presets.length; i++) {
+                    h += '<button class="sp-chip' + (i === chatActivePresetIdx ? ' active' : '') + '" onclick="chatApplySpPreset(' + i + ')" title="' + esc(presets[i].name) + '">' + esc(presets[i].name) + '</button>';
+                }
+                h += '<button class="sp-chip sp-chip-add" onclick="chatNewSpPresetFromBar()">＋ 新建</button>';
+                if (presets.length) h += '<button class="sp-chip sp-chip-manage" onclick="chatOpenSpManager()">⚙ 管理</button>';
+                bar.innerHTML = h;
             }
-            container.innerHTML = h;
-            // 同步保存按钮文案
-            var saveBtn = document.getElementById('chatSpSaveBtn');
-            if (saveBtn) saveBtn.textContent = chatEditingPresetIdx >= 0 ? '更新预设' : '保存为预设';
-            // 同步下拉按钮标记
-            var dropBtn = document.getElementById('chatSpDropBtn');
-            if (dropBtn) dropBtn.textContent = '预设' + (presets.length > 0 ? ' (' + presets.length + ')' : '') + ' ▾';
+            chatRenderSpEditBanner();
+            var mask = document.getElementById('chatSpManagerMask');
+            if (mask && mask.classList.contains('show')) chatRenderSpManager();
         }
-        function chatToggleSpDropdown() {
-            var dd = document.getElementById('chatSpPresetList');
-            dd.classList.toggle('show');
+        function chatRenderSpEditBanner() {
+            var banner = document.getElementById('chatSpEditBanner');
+            if (!banner) return;
+            var presets = chatGetSpPresets();
+            if (chatEditingPresetIdx >= 0 && presets[chatEditingPresetIdx]) {
+                banner.style.display = 'flex';
+                banner.innerHTML = '<span class="sp-eb-name">✏️ 正在编辑「' + esc(presets[chatEditingPresetIdx].name) + '」</span>'
+                    + '<button class="sp-eb-update" onclick="chatUpdateSpPreset()">更新</button>'
+                    + '<button class="sp-eb-cancel" onclick="chatDiscardSpEdit()">放弃</button>';
+            } else {
+                banner.style.display = 'none';
+                banner.innerHTML = '';
+            }
         }
-        function chatSaveSpPreset() {
+        // 套用：仅载入内容供本次使用，不进入编辑态（绝不会覆盖原预设）
+        function chatApplySpPreset(idx) {
+            var presets = chatGetSpPresets();
+            if (!presets[idx]) return;
+            document.getElementById('chatSysPrompt').value = presets[idx].content;
+            chatActivePresetIdx = idx;
+            chatEditingPresetIdx = -1;
+            chatRenderSpPresets();
+            showToast('已套用「' + presets[idx].name + '」');
+        }
+        // 新建（chips ＋）：内容取自当前输入框，弹内联命名行
+        function chatNewSpPresetFromBar() {
+            var content = document.getElementById('chatSysPrompt').value.trim();
+            if (!content) { showToast('⚠️ 先在下面写好提示词内容'); document.getElementById('chatSysPrompt').focus(); return; }
+            chatShowSpNameRow();
+        }
+        function chatShowSpNameRow() {
+            var row = document.getElementById('chatSpNameRow');
+            var input = document.getElementById('chatSpNameInput');
+            if (!row) return;
+            row.style.display = 'flex';
+            input.value = '';
+            input.focus();
+        }
+        function chatSpNameConfirm() {
+            var name = document.getElementById('chatSpNameInput').value.trim();
+            if (!name) { showToast('⚠️ 请输入名称'); return; }
             var content = document.getElementById('chatSysPrompt').value.trim();
             if (!content) { showToast('⚠️ 提示词为空'); return; }
             var presets = chatGetSpPresets();
-            if (chatEditingPresetIdx >= 0 && presets[chatEditingPresetIdx]) {
-                // 更新模式
-                var newName = prompt('修改名称（留空保持不变）：', presets[chatEditingPresetIdx].name);
-                if (newName === null) return; // 取消
-                presets[chatEditingPresetIdx].content = content;
-                if (newName.trim()) presets[chatEditingPresetIdx].name = newName.trim();
-                chatEditingPresetIdx = -1;
-                localStorage.setItem(CHAT_SP_KEY, JSON.stringify(presets));
-                chatRenderSpPresets();
-                showToast('✅ 已更新');
-            } else {
-                // 新建模式
-                var name = prompt('为这条提示词命名：');
-                if (!name || !name.trim()) return;
-                presets.push({ name: name.trim(), content: content });
-                localStorage.setItem(CHAT_SP_KEY, JSON.stringify(presets));
-                chatRenderSpPresets();
-                showToast('✅ 已保存');
-            }
+            presets.push({ name: name, content: content });
+            chatSaveSpPresets(presets);
+            chatActivePresetIdx = presets.length - 1;
+            chatEditingPresetIdx = -1;
+            chatSpNameCancel();
+            chatRenderSpPresets();
+            showToast('✅ 已保存「' + name + '」');
         }
-        function chatEditSpPresetIdx(idx) {
+        function chatSpNameCancel() {
+            var row = document.getElementById('chatSpNameRow');
+            if (row) row.style.display = 'none';
+        }
+        // 编辑某条：载入到输入框 + 显式编辑态横幅；改完点「更新」回写
+        function chatEditSpPreset(idx) {
             var presets = chatGetSpPresets();
             if (!presets[idx]) return;
             document.getElementById('chatSysPrompt').value = presets[idx].content;
             chatEditingPresetIdx = idx;
+            chatActivePresetIdx = idx;
+            chatCloseSpManager();
             chatRenderSpPresets();
-            showToast('编辑「' + presets[idx].name + '」，修改后点更新预设');
+            showToast('已载入「' + presets[idx].name + '」，改完点「更新」回写');
         }
-        function chatLoadSpPresetIdx(idx) {
+        function chatUpdateSpPreset() {
             var presets = chatGetSpPresets();
-            if (presets[idx]) {
-                document.getElementById('chatSysPrompt').value = presets[idx].content;
-                chatEditingPresetIdx = idx;
-                document.getElementById('chatSpPresetList').classList.remove('show');
-                chatRenderSpPresets();
-                showToast('已加载「' + presets[idx].name + '」，修改后可点更新');
-            }
+            if (chatEditingPresetIdx < 0 || !presets[chatEditingPresetIdx]) { chatDiscardSpEdit(); return; }
+            var content = document.getElementById('chatSysPrompt').value.trim();
+            if (!content) { showToast('⚠️ 内容为空'); return; }
+            presets[chatEditingPresetIdx].content = content;
+            chatSaveSpPresets(presets);
+            var nm = presets[chatEditingPresetIdx].name;
+            chatEditingPresetIdx = -1;
+            chatRenderSpPresets();
+            showToast('✅ 已更新「' + nm + '」');
         }
-        function chatDelSpPresetIdx(idx) {
+        function chatDiscardSpEdit() {
+            chatEditingPresetIdx = -1;
+            chatRenderSpPresets();
+        }
+        // ===== 管理 sheet =====
+        function chatOpenSpManager() {
+            var mask = document.getElementById('chatSpManagerMask');
+            if (!mask) return;
+            chatSpRenameIdx = -1;
+            chatRenderSpManager();
+            mask.classList.add('show');
+        }
+        function chatCloseSpManager() {
+            var mask = document.getElementById('chatSpManagerMask');
+            if (mask) mask.classList.remove('show');
+            chatSpRenameIdx = -1;
+        }
+        function chatRenderSpManager() {
+            var list = document.getElementById('chatSpManagerList');
+            if (!list) return;
+            var presets = chatGetSpPresets();
+            if (!presets.length) { list.innerHTML = '<div style="padding:24px 0;text-align:center;font-size:13px;color:var(--text-muted)">暂无预设，点下方「＋ 新建预设」</div>'; return; }
+            var h = '';
+            for (var i = 0; i < presets.length; i++) {
+                h += '<div class="sp-mrow">';
+                h += '<div class="sp-mrow-top">';
+                h += '<span class="sp-mrow-name">' + esc(presets[i].name) + '</span>';
+                h += '<button class="sp-mrow-act" onclick="chatSpStartRename(' + i + ')">改名</button>';
+                h += '<button class="sp-mrow-act" onclick="chatEditSpPreset(' + i + ')">编辑</button>';
+                h += '<button class="sp-mrow-act del" onclick="chatDelSpPreset(' + i + ')">删除</button>';
+                h += '</div>';
+                h += '<div class="sp-mrow-preview">' + esc(presets[i].content) + '</div>';
+                if (i === chatSpRenameIdx) {
+                    h += '<div class="sp-mrow-rename"><input id="spRenameInput" type="text" maxlength="40" value="' + esc(presets[i].name) + '" onkeydown="if(event.key===\'Enter\'){event.preventDefault();chatSpConfirmRename(' + i + ');}"><button onclick="chatSpConfirmRename(' + i + ')">确定</button></div>';
+                }
+                h += '</div>';
+            }
+            list.innerHTML = h;
+            if (chatSpRenameIdx >= 0) { var ri = document.getElementById('spRenameInput'); if (ri) { ri.focus(); ri.select(); } }
+        }
+        function chatSpStartRename(idx) { chatSpRenameIdx = (chatSpRenameIdx === idx ? -1 : idx); chatRenderSpManager(); }
+        function chatSpConfirmRename(idx) {
             var presets = chatGetSpPresets();
             if (!presets[idx]) return;
+            var v = document.getElementById('spRenameInput').value.trim();
+            if (!v) { showToast('⚠️ 名称不能为空'); return; }
+            presets[idx].name = v;
+            chatSaveSpPresets(presets);
+            chatSpRenameIdx = -1;
+            chatRenderSpManager();
+            chatRenderSpPresets();
+            showToast('✅ 已改名');
+        }
+        function chatDelSpPreset(idx) {
+            var presets = chatGetSpPresets();
+            if (!presets[idx]) return;
+            if (!confirm('删除预设「' + presets[idx].name + '」？')) return;
             presets.splice(idx, 1);
             if (chatEditingPresetIdx === idx) chatEditingPresetIdx = -1;
             else if (chatEditingPresetIdx > idx) chatEditingPresetIdx--;
-            localStorage.setItem(CHAT_SP_KEY, JSON.stringify(presets));
+            if (chatActivePresetIdx === idx) chatActivePresetIdx = -1;
+            else if (chatActivePresetIdx > idx) chatActivePresetIdx--;
+            chatSpRenameIdx = -1;
+            chatSaveSpPresets(presets);
+            chatRenderSpManager();
             chatRenderSpPresets();
             showToast('已删除');
+        }
+        // 管理 sheet 底部「＋ 新建预设」：存入当前输入框内容
+        function chatNewSpPreset() {
+            var content = document.getElementById('chatSysPrompt').value.trim();
+            chatCloseSpManager();
+            if (!content) { showToast('⚠️ 先在提示词框里写好内容再保存'); document.getElementById('chatSysPrompt').focus(); return; }
+            chatShowSpNameRow();
         }
 
         /* ----- 停止生成 ----- */
