@@ -2400,17 +2400,6 @@ body {
             border-left: 3px solid var(--accent); background: var(--quote-bg, var(--accent-light));
             animation: readingCommentIn 0.18s ease;
         }
-        .translate-block .tb-head {
-            display: flex; align-items: center; justify-content: space-between; gap: 8px;
-            padding: 4px 8px 4px 12px; font-size: 12px; font-weight: 600;
-            color: var(--accent); background: var(--accent-light);
-        }
-        .translate-block .tb-head .tb-ask {
-            border: none; background: transparent; color: var(--accent);
-            font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 12px;
-            cursor: pointer; flex-shrink: 0;
-        }
-        .translate-block .tb-head .tb-ask:hover { background: var(--accent); color: #fff; }
         .translate-block .tb-body {
             padding: 8px 12px; font-size: 0.94em; line-height: 1.7; color: var(--text);
         }
@@ -2436,7 +2425,6 @@ body {
             border: none; background: var(--accent); color: #fff;
             font-size: 12px; padding: 5px 12px; border-radius: 8px; cursor: pointer;
         }
-        .translate-askbar button.ta-ask-cancel { background: transparent; color: var(--text-muted); padding: 5px 6px; }
         .translate-askbar button:disabled { opacity: 0.6; cursor: default; }
         #translateActBar {
             position: fixed; left: 0; top: 0;
@@ -13627,9 +13615,9 @@ body {
         }
 
         // 译文块「追问」：在该块下方展开输入框
-        function translateAskBlock(btn, s, e) {
+        // 双击译文块 = 追问（共读式一步提问）：直接弹出输入框、自动聚焦，回车/「提问」发送，再次双击收起
+        function translateAskBlockTap(block) {
             if (translateBusy) return;
-            var block = btn.closest('.translate-block');
             if (!block) return;
             // 再点一次收起
             var existing = block.querySelector('.translate-askbar');
@@ -13640,18 +13628,17 @@ body {
             var msgEl = block.closest('.chat-msg.ai');
             if (!msgEl || !msgEl.hasAttribute('data-idx')) return;
             var msgIdx = parseInt(msgEl.getAttribute('data-idx'));
+            var s = parseInt(block.getAttribute('data-s'));
+            var e = parseInt(block.getAttribute('data-e'));
             var bar = document.createElement('div');
             bar.className = 'translate-askbar';
             bar.innerHTML = '<input class="ta-ask" type="text" placeholder="这段没看懂？问问看…（如：这里的双关是什么意思？）">' +
-                '<button class="ta-ask-send">发送</button>' +
-                '<button class="ta-ask-cancel">取消</button>';
+                '<button class="ta-ask-send">提问</button>';
             block.appendChild(bar);
             var input = bar.querySelector('.ta-ask');
             var send = bar.querySelector('.ta-ask-send');
-            var cancel = bar.querySelector('.ta-ask-cancel');
             function go() { translateAskRun(msgIdx, s, e, input.value, bar); }
             send.onclick = go;
-            cancel.onclick = function() { bar.remove(); };
             input.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); go(); } });
             input.focus();
         }
@@ -13905,6 +13892,14 @@ body {
                 var p = e.target.closest('.reading-merged p[data-p]');
                 if (p) readingOnParaClick(p);
             });
+            // 翻译模式：双击译文块 = 追问（单击/拖选留给复制译文，避免误触）
+            el.addEventListener('dblclick', function(e) {
+                if (!e.target.closest) return;
+                var tb = e.target.closest('.translate-block');
+                if (!tb) return;
+                if (e.target.closest('.translate-askbar')) return;
+                translateAskBlockTap(tb);
+            });
         })();
 
         function readingModeAddParaNums(text) {
@@ -14060,15 +14055,12 @@ body {
                 if (blockByEnd[pNum]) {
                     for (var k = 0; k < blockByEnd[pNum].length; k++) {
                         var blk = blockByEnd[pNum][k];
-                        var label = blk.s === blk.e ? ('第 ' + blk.s + ' 段译文') : ('第 ' + blk.s + '–' + blk.e + ' 段译文');
                         var parsed = translateBlockSplitQA(blk.text);
                         var body = renderText(parsed.main);
                         for (var q = 0; q < parsed.qas.length; q++) {
                             body += '<div class="tb-qa"><div class="tb-q">🙋 ' + esc(parsed.qas[q].q) + '</div><div class="tb-a">' + renderText(parsed.qas[q].a) + '</div></div>';
                         }
-                        html += '<div class="translate-block" data-s="' + blk.s + '" data-e="' + blk.e + '">' +
-                            '<div class="tb-head"><span>📘 ' + label + '</span>' +
-                            '<button class="tb-ask" onclick="translateAskBlock(this,' + blk.s + ',' + blk.e + ')">追问</button></div>' +
+                        html += '<div class="translate-block" data-s="' + blk.s + '" data-e="' + blk.e + '" title="双击可以追问">' +
                             '<div class="tb-body">' + body + '</div></div>';
                     }
                 }
