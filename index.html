@@ -2439,16 +2439,16 @@ body {
         .translate-askbar button.ta-ask-cancel { background: transparent; color: var(--text-muted); padding: 5px 6px; }
         .translate-askbar button:disabled { opacity: 0.6; cursor: default; }
         #translateActBar {
-            position: fixed; left: 50%; transform: translateX(-50%) translateY(-12px);
-            top: calc(70px + env(safe-area-inset-top, 0px));
+            position: fixed; left: 0; top: 0;
             display: flex; align-items: center; gap: 10px;
             padding: 6px; border-radius: 24px;
             background: var(--card-bg); border: 1px solid var(--card-border);
             box-shadow: 0 6px 24px rgba(0,0,0,0.18);
             font-size: 13px; z-index: 240; opacity: 0; pointer-events: none;
-            transition: opacity 0.2s, transform 0.2s; white-space: nowrap;
+            transform: translateY(-6px);
+            transition: opacity 0.15s, transform 0.15s; white-space: nowrap;
         }
-        #translateActBar.show { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+        #translateActBar.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
         #translateActBar button {
             border: none; border-radius: 16px; padding: 6px 18px; font-size: 13px; cursor: pointer;
         }
@@ -13526,7 +13526,48 @@ body {
                     if (rb) { rb.disabled = false; rb.textContent = '翻译'; }
                 }
                 bar.classList.add('show');
+                // 跟随选区：把按钮定位到尾段附近，并绑定滚动/缩放跟随
+                if (!window._translateBarFollowBound) {
+                    window._translateBarFollowBound = true;
+                    var _cm = document.getElementById('chatMessages');
+                    if (_cm) _cm.addEventListener('scroll', translatePositionBar, { passive: true });
+                    window.addEventListener('resize', translatePositionBar);
+                }
+                translatePositionBar();
             }
+        }
+
+        // 把翻译操作条定位到选区（尾段）附近，跟随视线；越界时自动翻到选区上方/夹紧到视口内
+        function translatePositionBar() {
+            var bar = document.getElementById('translateActBar');
+            if (!bar || !bar.classList.contains('show')) return;
+            if (translateSelMsgIdx < 0 || translateSelAnchor < 0) return;
+            var lo = Math.min(translateSelAnchor, translateSelEnd);
+            var hi = Math.max(translateSelAnchor, translateSelEnd);
+            var msgEl = document.querySelector('.chat-msg.ai[data-idx="' + translateSelMsgIdx + '"]');
+            if (!msgEl) return;
+            var endEl = msgEl.querySelector('.translate-merged p[data-p="' + hi + '"]');
+            var startEl = msgEl.querySelector('.translate-merged p[data-p="' + lo + '"]');
+            if (!endEl) return;
+            var er = endEl.getBoundingClientRect();
+            var sr = startEl ? startEl.getBoundingClientRect() : er;
+            var bw = bar.offsetWidth, bh = bar.offsetHeight;
+            var vw = window.innerWidth, vh = window.innerHeight;
+            var gap = 8;
+            var inputEl = document.getElementById('chatInputArea');
+            var bottomLimit = inputEl ? inputEl.getBoundingClientRect().top : vh;
+            var topLimit = 64 + gap; // 顶栏高度约 64
+            // 默认放在尾段下方；若会顶到输入框则翻到首段上方
+            var top = er.bottom + gap;
+            if (top + bh > bottomLimit - gap) top = sr.top - bh - gap;
+            if (top < topLimit) top = topLimit;
+            if (top + bh > vh - gap) top = vh - bh - gap;
+            // 水平方向：居中对齐到尾段，再夹紧到视口内
+            var left = er.left + er.width / 2 - bw / 2;
+            if (left < gap) left = gap;
+            if (left + bw > vw - gap) left = vw - bw - gap;
+            bar.style.left = left + 'px';
+            bar.style.top = top + 'px';
         }
 
         async function translateRunSelected() {
