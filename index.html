@@ -2410,6 +2410,7 @@ body {
             margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--card-border);
         }
         .translate-block .tb-qa .tb-q { font-weight: 600; color: var(--text-sub); margin-bottom: 4px; }
+        .translate-block .tb-qa .tb-q .tb-q-name { color: var(--accent); }
         .translate-block .tb-qa .tb-a { color: var(--text); }
         .translate-askbar {
             display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
@@ -12790,10 +12791,18 @@ body {
             var msgs = document.querySelectorAll('#chatMessages .chat-bubble');
             var re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
             msgs.forEach(function(bubble) {
+                // 先把文本节点全部收集进数组，再遍历替换。
+                // 否则「边遍历 TreeWalker 边 replaceChild」会让当前节点脱离文档树，
+                // nextNode() 立即返回 null、遍历提前中断——翻译模式下一条消息有大量独立文本节点
+                // （每段 <p>、每个译文块各自独立），命中第一段后就断了，后面全部搜不到。
                 var walker = document.createTreeWalker(bubble, NodeFilter.SHOW_TEXT, null, false);
-                var node;
-                while (node = walker.nextNode()) {
-                    if (node.parentElement.closest('.chat-thinking-bd')) continue;
+                var allNodes = [];
+                var wn;
+                while (wn = walker.nextNode()) allNodes.push(wn);
+                allNodes.forEach(function(node) {
+                    if (node.parentElement.closest('.chat-thinking-bd')) return;
+                    // 跳过隐藏文本（如折叠的原文 .reading-collapse-body），否则会重复计数并跳到看不见的地方
+                    if (!node.parentElement.offsetParent) return;
                     var text = node.nodeValue;
                     var match;
                     var parts = [];
@@ -12814,7 +12823,7 @@ body {
                         parts.forEach(function(p) { frag.appendChild(p); });
                         node.parentNode.replaceChild(frag, node);
                     }
-                }
+                });
             });
             var info = document.getElementById('chatSearchInfo');
             if (chatSearchMatches.length > 0) {
@@ -14058,9 +14067,9 @@ body {
                         var parsed = translateBlockSplitQA(blk.text);
                         var body = renderText(parsed.main);
                         for (var q = 0; q < parsed.qas.length; q++) {
-                            body += '<div class="tb-qa"><div class="tb-q">🙋 ' + esc(parsed.qas[q].q) + '</div><div class="tb-a">' + renderText(parsed.qas[q].a) + '</div></div>';
+                            body += '<div class="tb-qa"><div class="tb-q"><span class="tb-q-name">汐</span>：' + esc(parsed.qas[q].q) + '</div><div class="tb-a">' + renderText(parsed.qas[q].a) + '</div></div>';
                         }
-                        html += '<div class="translate-block" data-s="' + blk.s + '" data-e="' + blk.e + '" title="双击可以追问">' +
+                        html += '<div class="translate-block" data-s="' + blk.s + '" data-e="' + blk.e + '">' +
                             '<div class="tb-body">' + body + '</div></div>';
                     }
                 }
