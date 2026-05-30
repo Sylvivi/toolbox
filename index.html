@@ -9904,6 +9904,8 @@ body {
         var chatReadingMode = false;    // 共读模式
         var _readingModeOrigText = '';  // 流式渲染用：当前原文
         var READING_MODE_INSTRUCTION = '【共读模式格式要求】当用户发送带有 [P1] [P2] 等段落编号的小说原文时，你只需要输出你的评论，不要重复原文。每条评论格式为：[P段落号] 评论内容。例如：\n[P3] 这段描写太细腻了\n[P7] 这里有个伏笔\n\n严格格式：每条评论开头只写一个 [Px] 标记，不要写成 [P25] [P26] 或 [P25-26] 这种合并格式。如果要同时评论多段，请分开写：\n[P25] 评论内容\n[P26] 评论内容\n\n重要：请模拟顺序阅读的视角写评论，评论某段时只基于该段及其之前的内容，不要引用或暗示后文还没出现的信息。你可以运用对作品已读部分（当前文本之前的剧情）的了解来丰富评论，但绝不剧透当前阅读位置之后的情节发展。像一个读过前文、但还没翻到下一页的读友一样。\n\n评论密度自己把握，有感觉的地方就评，没感觉的不要硬评。不需要每段都评。评论结束后可以简短聊两句整体感受。\n如果用户没发原文而是在聊天讨论，就正常回复，不用加 [P] 标记。';
+        // 共读模式默认人设（系统提示词框为空时静默兜底使用，不写入对话）
+        var READING_MODE_DEFAULT_PERSONA = '你是一个陪我读书的蘑菇朋友，性格温和、有点好奇、话不多但说到点子上。每条评论结尾带🍄作为签名。\n\n在你觉得有意思的地方——精彩的描写、伏笔、角色高光、反转、值得玩味的细节——给出评论。\n\n评论风格像朋友唠嗑，不是文学赏析课。可以感叹、吐槽、猜剧情、回顾前面聊过的情节。\n\n有自己的审美和判断，表达方式像朋友争论而不是纠正。\n\n讨论时：\n\n我说一个看法，你不要急着帮我找论据支持。先想你自己怎么看，再回应。\n\n你可以同意我，但得是你自己想过之后的结论，并且补充我没提到的角度——不要复述或放大我说的话。\n\n你觉得有意思的地方可以主动聊，不用总等我起话题。\n\n日常对话注意系统时间感知。';
         var chatTranslateMode = false;  // 剧本翻译模式
         var TRANSLATE_MODE_INSTRUCTION = '作为智能翻译辅助工具，请将用户提交的文本翻译成中文后，就文本中难以理解或具有专业术语性质的单词或短语进行标注，并提供其对应含义、音标以及详细而准确的解释，帮助用户深入理解翻译内容的确切意义。\n注意：仅对专业术语、专有名词、特定文化背景或难以理解的单词或短语进行解释。常见词汇如"table"（桌子）、"book"（书）等无需解释。\n\n【输出格式（必须严格遵守，每次回复都使用完全相同的结构，不要增删小标题、不要改变顺序）】\n第一部分：直接给出原文的中文翻译，作为一个或多个自然段落，不要加"翻译："之类的前缀，不要加任何标题。\n然后另起一行，单独输出一行三个连字符作为分割线：\n---\n第二部分：逐条解释术语。每个术语单独占一行（行与行之间空一行），且每一行都严格使用下面这一种格式，不要使用项目符号、不要使用编号、不要使用小标题：\n**英文单词或短语** [美式音标]：**中文含义** 词根/词缀/词源解释 相关emoji（牛津词典英文释义）\n如果整段没有需要解释的术语，第二部分就只输出一句"本段无需特别解释的术语。"，不要省略分割线。\n\n示例：\n**Cockpit** [ˈkɑːk.pɪt]：**驾驶舱** Cock 这个词根来源于古英语"cocc"，意为公鸡，pit 意为坑、围栏，合起来原指斗鸡场，后引申为狭小的操作空间 🛫🚢（the area in a plane, boat or racing car where the pilot or driver sits）';
         var chatStreaming = false;
@@ -11716,7 +11718,10 @@ body {
             var _timeStr = '当前时间：' + _now.getFullYear() + '/' + ('0'+(_now.getMonth()+1)).slice(-2) + '/' + ('0'+_now.getDate()).slice(-2) + ' ' + ['周日','周一','周二','周三','周四','周五','周六'][_now.getDay()] + ' ' + ('0'+_now.getHours()).slice(-2) + ':' + ('0'+_now.getMinutes()).slice(-2);
             var _uName = '汐'; // 硬编码用户名，让 AI 用名字称呼而非"用户"
             var _userIdentity = '和你对话的人叫"' + _uName + '"，称呼时直接用名字，不要用"用户"这种说法。';
-            var _spContent = (sp ? sp + '\n\n' : '') + _userIdentity + '\n\n' + _timeStr;
+            // 共读模式且系统提示词框为空时，静默兜底用蘑菇默认人设（仅当为空，绝不与已填内容叠加）
+            var _persona = sp;
+            if (chatReadingMode && !_persona) _persona = READING_MODE_DEFAULT_PERSONA;
+            var _spContent = (_persona ? _persona + '\n\n' : '') + _userIdentity + '\n\n' + _timeStr;
             if (chatReadingMode) _spContent += '\n\n' + READING_MODE_INSTRUCTION;
             reqMsgs.push({ role: 'system', content: _spContent });
             // 插入压缩摘要（如果有）
@@ -13325,13 +13330,16 @@ body {
             try {
                 var baseUrl = getBaseUrl(item.url);
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
+                // 人设：系统提示词框为空时静默兜底用蘑菇默认，使点段评论与主流程风格一致
+                var _spOne = document.getElementById('chatSysPrompt').value.trim();
+                if (!_spOne) _spOne = READING_MODE_DEFAULT_PERSONA;
                 var resp = await fetch(baseUrl + '/chat/completions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
                     body: JSON.stringify({
                         model: chatSelectedModel,
                         messages: [
-                            { role: 'system', content: READING_MODE_INSTRUCTION },
+                            { role: 'system', content: _spOne + '\n\n' + READING_MODE_INSTRUCTION },
                             { role: 'user', content: userMsg }
                         ],
                         stream: false
@@ -13396,7 +13404,11 @@ body {
             var commentBlock = existingComments.length
                 ? '\n\n你之前对 [P' + pNum + '] 写下的评论 / 问答如下：\n' + existingComments.map(function(t) { return '· ' + t; }).join('\n')
                 : '';
-            var sysPrompt = '你正在和用户一起共读小说。用户会指定某一段并就这段向你提问，问题可能针对原文，也可能是在追问你之前对这一段写下的评论或问答。' +
+            // 人设：系统提示词框为空时静默兜底用蘑菇默认，使追问回答与评论风格一致
+            var _spAsk = document.getElementById('chatSysPrompt').value.trim();
+            if (!_spAsk) _spAsk = READING_MODE_DEFAULT_PERSONA;
+            var sysPrompt = _spAsk + '\n\n' +
+                '你正在和用户一起共读小说。用户会指定某一段并就这段向你提问，问题可能针对原文，也可能是在追问你之前对这一段写下的评论或问答。' +
                 '请结合该段原文、你之前的相关评论 / 问答以及之前的内容回答，绝不剧透当前阅读位置之后的情节。回答自然、简洁，直接回应问题本身，不要加 [P] 段落标记，也不要复述原文。';
             var userMsg = ctxPreface + '，[P' + pNum + '] 是我想问你的这一段：\n\n' + ctxLines.join('\n') +
                 commentBlock +
