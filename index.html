@@ -4133,10 +4133,10 @@ body {
                 <div id="pageBtnPosRow" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
                     <span style="font-size:12px;font-weight:600;color:var(--text-muted)">翻页按钮位置</span>
                     <div style="display:flex;gap:6px">
-                        <button class="pagebtn-pos-opt" data-pos="rb" onclick="readingSetPageBtnPos('rb')" title="右下">右下</button>
                         <button class="pagebtn-pos-opt" data-pos="lm" onclick="readingSetPageBtnPos('lm')" title="左中">左中</button>
                         <button class="pagebtn-pos-opt" data-pos="lb" onclick="readingSetPageBtnPos('lb')" title="左下">左下</button>
                         <button class="pagebtn-pos-opt" data-pos="rm" onclick="readingSetPageBtnPos('rm')" title="右中">右中</button>
+                        <button class="pagebtn-pos-opt" data-pos="rb" onclick="readingSetPageBtnPos('rb')" title="右下">右下</button>
                     </div>
                 </div>
             </div>
@@ -12951,9 +12951,9 @@ body {
                     b.style.right = leftSide ? 'auto' : '14px';
                 });
                 if (pos === 'lm' || pos === 'rm') {
-                    // 垂直居中：上键在上、下键在下，间隔约 8px
-                    pu.style.top = 'calc(50% - 38px)'; pu.style.bottom = 'auto';
-                    pd.style.top = 'calc(50% + 4px)'; pd.style.bottom = 'auto';
+                    // 中线偏上：常用的下滑键落在中线略上方，拇指不用下弯；上键叠在其上
+                    pu.style.top = 'calc(50% - 82px)'; pu.style.bottom = 'auto';
+                    pd.style.top = 'calc(50% - 40px)'; pd.style.bottom = 'auto';
                 } else {
                     pu.style.top = 'auto'; pu.style.bottom = '54px';
                     pd.style.top = 'auto'; pd.style.bottom = '12px';
@@ -13014,13 +13014,25 @@ body {
             var msgIdx = parseInt(msgEl.getAttribute('data-idx'));
             var pNum = parseInt(pEl.getAttribute('data-p'));
             var marked = readingIsBookmarked(msgIdx, pNum);
+            // 左右跟随翻页按钮位置：靠左则「提问」在最左、靠右则在最右（贴近拿机手拇指）
+            var pos = localStorage.getItem('reading_pagebtn_pos') || 'rb';
+            var leftSide = (pos === 'lm' || pos === 'lb');
             var bar = document.createElement('div');
             bar.className = 'reading-actbar';
-            bar.innerHTML = '<span style="color:var(--text-sub);margin-right:auto">💬 让 TA 聊聊这一段？</span>' +
-                '<button class="rp-bookmark' + (marked ? ' on' : '') + '" onclick="readingToggleBookmarkFromBar(' + msgIdx + ',' + pNum + ',this)">' + (marked ? '🔖 已加' : '🔖 书签') + '</button>' +
-                '<button onclick="readingAskPrompt(' + msgIdx + ',' + pNum + ',this)">提问</button>' +
-                '<button class="rp-cancel" onclick="readingClearActbar()">取消</button>';
+            var inputHtml = '<input class="rp-ask" type="text" placeholder="问问这一段…（如：他这句话什么意思？）">';
+            var bmHtml = '<button class="rp-bookmark' + (marked ? ' on' : '') + '" onclick="readingToggleBookmarkFromBar(' + msgIdx + ',' + pNum + ',this)">' + (marked ? '🔖 已加' : '🔖 书签') + '</button>';
+            var askHtml = '<button class="rp-ask-send">提问</button>';
+            bar.innerHTML = leftSide ? (askHtml + bmHtml + inputHtml) : (inputHtml + bmHtml + askHtml);
             pEl.insertAdjacentElement('afterend', bar);
+            // 一步式：直接出输入框，自动聚焦弹键盘；回车或「提问」发送；再点该段收起
+            var input = bar.querySelector('.rp-ask');
+            var send = bar.querySelector('.rp-ask-send');
+            function go() { readingAskOne(msgIdx, pNum, input.value, bar); }
+            send.onclick = go;
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); go(); }
+            });
+            input.focus();
         }
 
         // 点「提问」：把操作条切换成一个小输入框，回车或「发送」提交
