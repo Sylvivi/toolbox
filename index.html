@@ -13679,6 +13679,19 @@ body {
             var lo = Math.min(s, e), hi = Math.max(s, e);
             if (lo < 1 || hi > paras.length) { if (bar) bar.remove(); return; }
             var segment = paras.slice(lo - 1, hi).join('\n');
+            // 前文上下文：取本段之前的原文，从最近往前在字数预算内尽量多带（帮助理解笑点/指代/伏笔）
+            var CTX_CHAR_BUDGET = 6000;
+            var ctxLines = [];
+            var ctxUsed = 0;
+            for (var ci = lo - 2; ci >= 0; ci--) {
+                if (ctxUsed + paras[ci].length > CTX_CHAR_BUDGET) break;
+                ctxLines.unshift(paras[ci]);
+                ctxUsed += paras[ci].length + 1;
+            }
+            var ctxTruncated = ctxLines.length < (lo - 1);
+            var contextBlock = ctxLines.length
+                ? '【前文（' + (ctxTruncated ? '因较长仅取最近部分，' : '') + '仅供你理解上下文，请勿翻译或复述这部分）】\n' + ctxLines.join('\n') + '\n\n'
+                : '';
             var blocks = translateModeParseBlocks(msg.content);
             var curBlock = null;
             for (var b = 0; b < blocks.length; b++) { if (blocks[b].s === s && blocks[b].e === e) { curBlock = blocks[b]; break; } }
@@ -13686,8 +13699,9 @@ body {
             var priorQA = prevParsed.qas.length
                 ? '\n\n我们之前就这段的问答：\n' + prevParsed.qas.map(function(p) { return '问：' + p.q + '\n答：' + p.a; }).join('\n')
                 : '';
-            var sysPrompt = '用户正在阅读你给出的中文翻译与注释，对其中含义仍有疑问，现在就同一段落向你追问。请用中文简洁、准确地解答，可结合原文与你之前的翻译，必要时补充音标 / 词源 / 文化背景，但不要整段重复翻译。';
-            var userMsg = '原文（第 ' + (lo === hi ? lo : (lo + '–' + hi)) + ' 段）：\n' + segment +
+            var sysPrompt = '用户正在阅读你给出的中文翻译与注释，对其中含义仍有疑问，现在就同一段落向你追问。请用中文简洁、准确地解答，可结合原文与你之前的翻译，必要时补充音标 / 词源 / 文化背景，但不要整段重复翻译。如提供了前文，请结合前文理解语境（例如笑点、双关、指代、伏笔从何而来），但前文仅用于帮助你理解，不要翻译或复述前文。';
+            var userMsg = contextBlock +
+                '【我要追问的这一段（第 ' + (lo === hi ? lo : (lo + '–' + hi)) + ' 段）】：\n' + segment +
                 '\n\n你之前给出的翻译与解释：\n' + (prevParsed.main || '（无）') +
                 priorQA +
                 '\n\n我的问题是：' + question;
