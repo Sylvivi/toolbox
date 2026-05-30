@@ -4031,16 +4031,16 @@ body {
                 </div>
             </div>
             <div id="chatSettingsPane2" style="display:none">
-                <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px">上下文</div>
-                <div class="chat-ctx-bar" style="padding:0 0 6px">
+                <!-- 「发送最近」已隐藏：与上下文压缩功能重复，压缩常开时此项恒为「全部」无实际作用。底层 chatContextMax 逻辑保留(默认0=全部，休眠)，如需恢复去掉下方 display:none 即可 -->
+                <div style="display:none;font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px">上下文</div>
+                <div class="chat-ctx-bar" style="display:none;padding:0 0 6px">
                     <span style="font-size:12px">发送最近</span>
                     <input type="range" id="chatCtxRange" min="0" max="50" value="0" oninput="chatUpdateCtxLabel()" style="background: linear-gradient(to right, var(--accent) 0%, var(--accent) 0%, var(--card-border) 0%, var(--card-border) 100%); border-radius: 3px;">
                     <span class="ctx-label" id="chatCtxLabel" style="font-size:12px">全部</span>
                 </div>
-                <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--card-border)">
-                    <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px">压缩</div>
+                <div style="">
                     <div style="display:flex;align-items:center;justify-content:space-between">
-                        <span style="font-size:12px;color:var(--text)">上下文压缩</span>
+                        <span style="font-size:13px;font-weight:600;color:var(--text)">上下文压缩</span>
                         <label style="position:relative;width:40px;height:22px;cursor:pointer">
                             <input type="checkbox" id="compressToggle" onchange="toggleCompress(this.checked)" style="display:none">
                             <span style="position: absolute; inset: 0px; background: var(--accent); border-radius: 11px; transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1);"></span>
@@ -9219,6 +9219,7 @@ body {
                 renderKeyFilters(); renderKeyCards();
                 renderSnipFilters(); renderSnippets();
                 if (currentTab === 'checkin') renderCheckinMonths();
+                readingRefreshBookmarkUI();
                 if (manual) showToast('☁️ 云端数据已加载');
                 var sl = document.getElementById('gistStatusLine');
                 if (sl) sl.innerHTML = '☁️ ' + fmtTimeShort(new Date().toISOString()) + ' <span style="opacity:0.5">已同步</span>';
@@ -13200,6 +13201,22 @@ body {
                 var pEl = bubble.querySelector('p[data-p="' + list[i].p + '"]');
                 if (pEl) pEl.classList.add('rp-marked');
             }
+        }
+        // 云端拉取后即时刷新当前已打开共读对话的书签标记（无需重开对话）
+        function readingRefreshBookmarkUI() {
+            if (!chatReadingMode || !chatCurrentConvId) return;
+            var set = {};
+            readingGetConvBookmarks().forEach(function(b) { set[b.msgIdx + ':' + b.p] = true; });
+            var ps = document.querySelectorAll('#chatMessages .chat-msg.ai p[data-p]');
+            for (var i = 0; i < ps.length; i++) {
+                var p = ps[i];
+                var msg = p.closest ? p.closest('.chat-msg.ai') : null;
+                var idx = msg ? parseInt(msg.getAttribute('data-idx')) : NaN;
+                var pn = parseInt(p.getAttribute('data-p'));
+                p.classList.toggle('rp-marked', !!set[idx + ':' + pn]);
+            }
+            var panel = document.getElementById('chatBookmarkPanel');
+            if (panel && panel.classList.contains('show')) chatBuildBookmarkPanel();
         }
         function chatToggleBookmarkPanel() {
             var panel = document.getElementById('chatBookmarkPanel');
