@@ -13481,6 +13481,7 @@ body {
                 // 问题与答案之间只用单换行，确保它们仍属于同一个 [Pn] 评论块。
                 msg.content += '\n[P' + pNum + '] 汐：' + question + '\n' + answer;
                 chatSaveCurrentConv(true);
+                readingAddQuestionBookmark(msgIdx, pNum, question);
                 readingClearActbar();
                 readingRerenderMsg(msgIdx, pNum);
             } catch (e) {
@@ -13812,7 +13813,7 @@ body {
         }
         function readingIsBookmarked(msgIdx, p) {
             var list = readingGetConvBookmarks();
-            for (var i = 0; i < list.length; i++) { if (list[i].msgIdx === msgIdx && list[i].p === p) return true; }
+            for (var i = 0; i < list.length; i++) { if (list[i].msgIdx === msgIdx && list[i].p === p && list[i].type !== 'ask') return true; }
             return false;
         }
         function readingParaPreview(msgIdx, p) {
@@ -13829,13 +13830,43 @@ body {
             var all = readingGetAllBookmarks();
             var list = all[chatCurrentConvId] || [];
             var found = -1;
-            for (var i = 0; i < list.length; i++) { if (list[i].msgIdx === msgIdx && list[i].p === p) { found = i; break; } }
+            for (var i = 0; i < list.length; i++) { if (list[i].msgIdx === msgIdx && list[i].p === p && list[i].type !== 'ask') { found = i; break; } }
             var nowOn;
             if (found >= 0) { list.splice(found, 1); nowOn = false; }
-            else { list.push({ msgIdx: msgIdx, p: p, preview: readingParaPreview(msgIdx, p), ts: Date.now() }); nowOn = true; }
+            else { list.push({ msgIdx: msgIdx, p: p, preview: readingParaPreview(msgIdx, p), type: 'para', ts: Date.now() }); nowOn = true; }
             all[chatCurrentConvId] = list;
             readingSaveAllBookmarks(all);
             return nowOn;
+        }
+        // 共读提问后，把问题作为「💬 问题书签」加入同一书签列表，便于跳转回该段
+        function readingAddQuestionBookmark(msgIdx, p, question) {
+            if (!chatCurrentConvId) return;
+            question = (question || '').trim();
+            if (!question) return;
+            var all = readingGetAllBookmarks();
+            var list = all[chatCurrentConvId] || [];
+            for (var i = 0; i < list.length; i++) {
+                if (list[i].type === 'ask' && list[i].msgIdx === msgIdx && list[i].p === p && list[i].q === question) return;
+            }
+            var prev = question.length > 60 ? question.slice(0, 60) + '…' : question;
+            list.push({ msgIdx: msgIdx, p: p, q: question, preview: prev, type: 'ask', ts: Date.now() });
+            all[chatCurrentConvId] = list;
+            readingSaveAllBookmarks(all);
+            readingRefreshBookmarkUI();
+        }
+        // 按对象精确删除一条书签（段落书签与问题书签通用）
+        function readingRemoveBookmarkObj(bm) {
+            if (!chatCurrentConvId) return;
+            var all = readingGetAllBookmarks();
+            var list = all[chatCurrentConvId] || [];
+            for (var i = 0; i < list.length; i++) {
+                var b = list[i];
+                if (b.msgIdx === bm.msgIdx && b.p === bm.p && (b.type || 'para') === (bm.type || 'para') && (b.q || '') === (bm.q || '') && (b.ts || 0) === (bm.ts || 0)) {
+                    list.splice(i, 1); break;
+                }
+            }
+            all[chatCurrentConvId] = list;
+            readingSaveAllBookmarks(all);
         }
         function readingToggleBookmarkFromBar(msgIdx, pNum, btn) {
             var on = readingToggleBookmark(msgIdx, pNum);
@@ -13893,26 +13924,26 @@ body {
             panel.innerHTML = '';
             var list = readingGetConvBookmarks().slice();
             if (list.length === 0) {
-                panel.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">还没有书签<br><span style="font-size:11px">点击段落 → 🔖 书签</span></div>';
+                panel.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">还没有书签<br><span style="font-size:11px">点击段落 → 🔖 书签，或双击段落提问</span></div>';
                 return;
             }
-            // 按消息顺序、段落顺序排列
-            list.sort(function(a, b) { return a.msgIdx - b.msgIdx || a.p - b.p; });
+            // 按消息、段落排序；同段内段落书签在前、问题按时间先后
+            list.sort(function(a, b) { return a.msgIdx - b.msgIdx || a.p - b.p || ((a.type === 'ask') - (b.type === 'ask')) || (a.ts || 0) - (b.ts || 0); });
             for (var i = 0; i < list.length; i++) {
                 (function(bm) {
+                    var isAsk = bm.type === 'ask';
                     var item = document.createElement('div');
                     item.className = 'chat-nav-item';
-                    item.innerHTML = '<div class="chat-nav-role ai">🔖</div>' +
+                    item.innerHTML = '<div class="chat-nav-role ai">' + (isAsk ? '💬' : '🔖') + '</div>' +
                         '<div class="chat-nav-text">' + esc(bm.preview || ('第 ' + bm.p + ' 段')) + '</div>' +
                         '<button class="chat-nav-idx" style="border:none;background:transparent;color:var(--text-muted);cursor:pointer;font-size:14px" title="删除">✕</button>';
                     item.onclick = function() { readingJumpBookmark(bm.msgIdx, bm.p); chatCloseBookmarkPanel(); };
                     var delBtn = item.querySelector('button');
                     delBtn.onclick = function(e) {
                         e.stopPropagation();
-                        readingToggleBookmark(bm.msgIdx, bm.p);
-                        var pEl = document.querySelector('.chat-msg.ai[data-idx="' + bm.msgIdx + '"] p[data-p="' + bm.p + '"]');
-                        if (pEl) pEl.classList.remove('rp-marked');
+                        readingRemoveBookmarkObj(bm);
                         chatBuildBookmarkPanel();
+                        readingRefreshBookmarkUI();
                     };
                     panel.appendChild(item);
                 })(list[i]);
