@@ -12494,9 +12494,13 @@ body {
                 if (cloudManifest && cloudManifest.chats) {
                     cloudManifest.chats.forEach(function(c) { cloudMap[c.id] = c; });
                 }
-                // 用本地数据更新（本地有的覆盖云端条目）
+                // 用本地数据更新（仅当本地不比云端旧时才覆盖云端条目）
                 list.forEach(function(c) {
                     var prev = cloudMap[c.id];
+                    // 关键：若云端这条记录「严格更新」（别的设备刚改过、本机还没拉到），不要用本机
+                    // 较旧的时间戳把它盖回去——否则其它设备会以为这条没更新而拉不到新内容，表现为
+                    // 「这台同步了、那台就丢了」的轮流丢失。直接保留云端条目即可。
+                    if (prev && (prev.updated || 0) > (c.updated || 0)) return;
                     // 置顶状态：仅当本地这条对话有未推送的改动(_dirty)时才以本地为准；
                     // 否则保留云端已有的置顶值，避免「尚未拉取到别的设备刚置顶状态」的
                     // 本设备在推送时把云端的置顶覆盖回去（这正是置顶不能同步的根因）。
