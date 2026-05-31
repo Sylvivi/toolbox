@@ -11336,7 +11336,7 @@ body {
                     h += '<button class="sp-chip' + (i === chatActivePresetIdx ? ' active' : '') + '" onclick="chatApplySpPreset(' + i + ')" title="' + esc(presets[i].name) + '">' + esc(presets[i].name) + '</button>';
                 }
                 h += '<button class="sp-chip sp-chip-add" onclick="chatNewSpPresetFromBar()">＋ 新建</button>';
-                if (presets.length) h += '<button class="sp-chip sp-chip-manage" onclick="chatOpenSpManager()">⚙ 管理</button>';
+                if (presets.length) h += '<button class="sp-chip sp-chip-manage" onclick="chatOpenSpManager()">管理</button>';
                 bar.innerHTML = h;
             }
             chatRenderSpEditBanner();
@@ -13426,6 +13426,10 @@ body {
             var sendBtn = bar && bar.querySelector('.rp-ask-send');
             if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '思考中…'; }
             if (input) input.disabled = true;
+            var _askT0 = Date.now();
+            var _askTimer = setInterval(function() {
+                if (sendBtn) sendBtn.textContent = '思考中… ' + chatFmtElapsed(Math.floor((Date.now() - _askT0) / 1000));
+            }, 1000);
             try {
                 var baseUrl = getBaseUrl(item.url);
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
@@ -13460,6 +13464,7 @@ body {
                 if (input) input.disabled = false;
                 alert('提问失败：' + (e.message || e));
             } finally {
+                clearInterval(_askTimer);
                 readingCommenting = false;
             }
         }
@@ -13722,6 +13727,10 @@ body {
             var send = bar && bar.querySelector('.ta-ask-send');
             if (send) { send.disabled = true; send.textContent = '思考中…'; }
             if (input) input.disabled = true;
+            var _taT0 = Date.now();
+            var _taTimer = setInterval(function() {
+                if (send) send.textContent = '思考中… ' + chatFmtElapsed(Math.floor((Date.now() - _taT0) / 1000));
+            }, 1000);
             try {
                 var baseUrl = getBaseUrl(item.url);
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
@@ -13750,6 +13759,7 @@ body {
                 if (input) input.disabled = false;
                 alert('追问失败：' + (err.message || err));
             } finally {
+                clearInterval(_taTimer);
                 translateBusy = false;
             }
         }
