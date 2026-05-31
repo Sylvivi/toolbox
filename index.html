@@ -10746,13 +10746,13 @@ body {
                 chatAllModels = cached;
                 chatSortModels();
                 chatRenderModelDropdown('');
-                var lastModel = localStorage.getItem('chat_last_model_' + provId) || '';
-                if (lastModel) {
-                    chatSelectedModel = lastModel;
-                    document.getElementById('chatModelInput').value = lastModel;
-                    document.getElementById('chatSendBtn').disabled = false;
-                    document.getElementById('chatModelLabel').textContent = lastModel;
-                }
+            }
+            var lastModel = localStorage.getItem('chat_last_model_' + provId) || '';
+            if (lastModel) {
+                chatSelectedModel = lastModel;
+                document.getElementById('chatModelInput').value = lastModel;
+                document.getElementById('chatSendBtn').disabled = false;
+                document.getElementById('chatModelLabel').textContent = lastModel;
             }
             chatFetchModels(item);
         }
@@ -15512,7 +15512,7 @@ body {
                     return toBase64(PWA_SW).then(function(swB64) {
                         return Promise.all([
                             pushIfMissing('manifest.json', manifestB64, deployMsg + ' [manifest]'),
-                            pushIfMissing('sw.js', swB64, deployMsg + ' [sw]'),
+                            pushFile('sw.js', swB64, deployMsg + ' [sw]'),
                             pushIfMissing('icon-192.png', generateAppIcon(192), deployMsg + ' [icon192]'),
                             pushIfMissing('icon-512.png', generateAppIcon(512), deployMsg + ' [icon512]')
                         ]);
@@ -15538,7 +15538,17 @@ body {
         /* ===== PWA 支持 ===== */
         // Service Worker 注册（仅在 HTTPS 下有效）
         if ('serviceWorker' in navigator && location.protocol === 'https:') {
-            navigator.serviceWorker.register('sw.js').catch(function() {});
+            var _swHadController = !!navigator.serviceWorker.controller;
+            var _swReloaded = false;
+            navigator.serviceWorker.addEventListener('controllerchange', function() {
+                if (!_swHadController || _swReloaded) return;
+                _swReloaded = true;
+                window.location.reload();
+            });
+            navigator.serviceWorker.register('sw.js').then(function(reg) {
+                reg.update();
+                setInterval(function() { reg.update(); }, 60 * 60 * 1000);
+            }).catch(function() {});
         }
 
         // PWA 文件内容定义（部署时推送）
@@ -15557,7 +15567,7 @@ body {
         }, null, 2);
 
         var PWA_SW = [
-            "var CACHE = 'toolbox-v3';",
+            "var CACHE = 'toolbox-v4';",
             "var PRECACHE = ['./', 'index.html', 'manifest.json'];",
             "",
             "self.addEventListener('install', function(e) {",

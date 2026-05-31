@@ -1,4 +1,4 @@
-var CACHE = 'toolbox-v1';
+var CACHE = 'toolbox-v4';
 var PRECACHE = ['./', 'index.html', 'manifest.json'];
 
 self.addEventListener('install', function(e) {
@@ -17,6 +17,7 @@ self.addEventListener('fetch', function(e) {
   if (e.request.method !== 'GET') return;
   if (e.request.url.indexOf('api.github.com') !== -1) return;
   if (e.request.url.indexOf('/v1/') !== -1) return;
+  if (e.request.url.indexOf('.workers.dev') !== -1) return;
   e.respondWith(
     fetch(e.request).then(function(r) {
       if (r.ok) { var rc = r.clone(); caches.open(CACHE).then(function(c) { c.put(e.request, rc); }); }
