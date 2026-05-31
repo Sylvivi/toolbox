@@ -10746,13 +10746,13 @@ body {
                 chatAllModels = cached;
                 chatSortModels();
                 chatRenderModelDropdown('');
-            }
-            var lastModel = localStorage.getItem('chat_last_model_' + provId) || '';
-            if (lastModel) {
-                chatSelectedModel = lastModel;
-                document.getElementById('chatModelInput').value = lastModel;
-                document.getElementById('chatSendBtn').disabled = false;
-                document.getElementById('chatModelLabel').textContent = lastModel;
+                var lastModel = localStorage.getItem('chat_last_model_' + provId) || '';
+                if (lastModel && chatAllModels.indexOf(lastModel) !== -1) {
+                    chatSelectedModel = lastModel;
+                    document.getElementById('chatModelInput').value = lastModel;
+                    document.getElementById('chatSendBtn').disabled = false;
+                    document.getElementById('chatModelLabel').textContent = lastModel;
+                }
             }
             chatFetchModels(item);
         }
@@ -10889,8 +10889,8 @@ body {
         function chatFilterModels() {
             chatRenderModelDropdown(document.getElementById('chatModelInput').value);
             document.getElementById('chatModelDropdown').classList.add('show');
-            var val = document.getElementById('chatModelInput').value.trim();
-            if (val) {
+            var val = document.getElementById('chatModelInput').value;
+            if (chatAllModels.indexOf(val) !== -1) {
                 chatSelectedModel = val;
                 document.getElementById('chatSendBtn').disabled = false;
                 document.getElementById('chatModelLabel').textContent = val;
