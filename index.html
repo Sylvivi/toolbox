@@ -13922,16 +13922,20 @@ body {
                 // translate-merged 同时带 reading-merged 类，必须先判翻译模式
                 var tp = e.target.closest('.translate-merged p[data-p]');
                 if (tp) { translateOnParaClick(tp); return; }
-                var p = e.target.closest('.reading-merged p[data-p]');
-                if (p) readingOnParaClick(p);
             });
             // 翻译模式：双击译文块 = 追问（单击/拖选留给复制译文，避免误触）
+            // 共读模式：双击段落 = 选中并提问（单击/拖选留给复制原文，避免误触）
             el.addEventListener('dblclick', function(e) {
                 if (!e.target.closest) return;
                 var tb = e.target.closest('.translate-block');
-                if (!tb) return;
-                if (e.target.closest('.translate-askbar')) return;
-                translateAskBlockTap(tb);
+                if (tb) {
+                    if (e.target.closest('.translate-askbar')) return;
+                    translateAskBlockTap(tb);
+                    return;
+                }
+                // 共读模式段落（排除翻译模式：translate-merged 同带 reading-merged 类）
+                var rp = e.target.closest('.reading-merged p[data-p]');
+                if (rp && !e.target.closest('.translate-merged')) readingOnParaClick(rp);
             });
         })();
 
