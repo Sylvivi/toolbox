@@ -2357,6 +2357,8 @@ body {
         }
 
         /* ===== 共读：点段评价 ===== */
+        /* 共读正文字号（按设备调节，作用于整段正文与问答，不影响操作栏） */
+        .reading-merged { font-size: var(--reading-fs, 1em); }
         .reading-merged blockquote .reading-q-name { color: var(--accent); font-weight: 600; }
         .reading-merged p[data-p] {
             cursor: pointer; border-radius: 5px; padding: 1px 4px; margin-left: -4px; margin-right: -4px;
@@ -4231,6 +4233,14 @@ body {
                         <button class="pagebtn-pos-opt" data-pos="lb" onclick="readingSetPageBtnPos('lb')" title="左下">左下</button>
                         <button class="pagebtn-pos-opt" data-pos="rm" onclick="readingSetPageBtnPos('rm')" title="右中">右中</button>
                         <button class="pagebtn-pos-opt" data-pos="rb" onclick="readingSetPageBtnPos('rb')" title="右下">右下</button>
+                    </div>
+                </div>
+                <div id="readingFontRow" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">正文字号</span>
+                    <div style="display:flex;gap:6px;align-items:center">
+                        <button class="pagebtn-pos-opt" onclick="readingStepFontScale(-0.1)" title="缩小" style="min-width:30px">A−</button>
+                        <span id="readingFontVal" style="font-size:12px;color:var(--text-muted);min-width:40px;text-align:center">100%</span>
+                        <button class="pagebtn-pos-opt" onclick="readingStepFontScale(0.1)" title="放大" style="min-width:30px">A+</button>
                     </div>
                 </div>
             </div>
@@ -7812,6 +7822,7 @@ body {
             subTa.addEventListener('keydown', function(e) {
                 if (e.key === 'Tab') { e.preventDefault(); subEditorOp(e.shiftKey ? 'outdent' : 'indent'); }
             });
+            readingApplyFontScale();
         });
 
         /* =========================================================================
@@ -13247,6 +13258,22 @@ body {
         function readingSetPageBtnPos(pos) {
             localStorage.setItem('reading_pagebtn_pos', pos);
             readingApplyPageBtnPos();
+        }
+
+        // 共读：正文字号缩放（按设备保存，倍率 0.8~1.6，默认 1.0）
+        function readingApplyFontScale() {
+            var s = parseFloat(localStorage.getItem('reading_font_scale') || '1') || 1;
+            if (s < 0.8) s = 0.8; if (s > 1.6) s = 1.6;
+            document.documentElement.style.setProperty('--reading-fs', s + 'em');
+            var lbl = document.getElementById('readingFontVal');
+            if (lbl) lbl.textContent = Math.round(s * 100) + '%';
+        }
+        function readingStepFontScale(delta) {
+            var s = parseFloat(localStorage.getItem('reading_font_scale') || '1') || 1;
+            s = Math.round((s + delta) * 10) / 10;
+            if (s < 0.8) s = 0.8; if (s > 1.6) s = 1.6;
+            localStorage.setItem('reading_font_scale', String(s));
+            readingApplyFontScale();
         }
 
         // 共读：点一下，平滑下滑约一屏（留约一行重叠便于衔接）
