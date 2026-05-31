@@ -12552,7 +12552,10 @@ body {
                 manifest.chats.forEach(function(cloud) {
                     if (mergedTombs[cloud.id]) return;
                     var local = localMap[cloud.id];
-                    if (local && local._dirty) return;
+                    // 仅当本地有未推送改动「且不比云端旧」时才保留本地，避免覆盖本机更新的改动。
+                    // 若云端严格更新（其它设备改得更晚），即使本地是 dirty 也要拉取——否则一旦本机
+                    // 某次推送失败导致 _dirty 卡住，这条对话会永远拒绝接收云端更新（死锁，单台设备卡住）。
+                    if (local && local._dirty && (local.updated || 0) >= (cloud.updated || 0)) return;
                     // 置顶状态轻量同步：直接从清单字段取，无需重新拉取整条对话
                     if (local && (!!local.pinned !== !!cloud.pinned)) { local.pinned = !!cloud.pinned; changed = true; }
                     if (!local || (cloud.updated && cloud.updated > (local.updated || 0))) {
@@ -12576,7 +12579,9 @@ body {
                         var found = false;
                         for (var i = 0; i < localList.length; i++) {
                             if (localList[i].id === conv.id) {
-                                if (!localList[i]._dirty && (conv.updated || 0) > (localList[i].updated || 0)) {
+                                // 云端严格更新就采用（时间戳已保证本地不会更新：本地更新的话上面不会进 toFetch）。
+                                // 不再用 !_dirty 卡死——配合上面的时间戳判断，可让卡住的 dirty 设备自动恢复。
+                                if ((conv.updated || 0) > (localList[i].updated || 0)) {
                                     delete conv._dirty;
                                     localList[i] = conv;
                                     changed = true;
