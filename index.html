@@ -11676,6 +11676,11 @@ body {
                 container.appendChild(hostEl);
                 chatScrollBottom();
                 chatSaveCurrentConv(true);
+                // 翻译模式不请求 AI 正文，所以不会走到流式完成时的自动起标题逻辑。
+                // 这里按需补一次，否则标题会回退成带 [P] 标记的原文，很难看。
+                var _ttList = chatGetHistory(), _ttConv = null;
+                for (var _tti = 0; _tti < _ttList.length; _tti++) { if (_ttList[_tti].id === chatCurrentConvId) { _ttConv = _ttList[_tti]; break; } }
+                if (_ttConv && !_ttConv.aiTitle) chatGenTitle(false);
                 return;
             }
 
