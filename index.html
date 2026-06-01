@@ -12370,6 +12370,88 @@ body {
             if (!cfg.url || !cfg.token) { showToast('⚠️ 请先在同步设置中配置 Cloudflare D1'); return false; }
             return true;
         }
+
+        /* ===== 大对话自动分块存储（绕过 D1 单行 2MB 上限） =====
+           普通对话仍整存成 chat_<id>；超过阈值时拆成：
+             chat_<id>           = { __chunked:1, parts:N, ...少量元信息 }
+             chat_<id>::p0..pN-1 = { c: '<JSON 子串>' }
+           读取时自动识别并拼回；旧的单体对话照常读。云端 Worker 无需改动。 */
+        var CF_CONV_PLAIN_MAX = 1400000;   // 字节：低于此值直接整存（<2MB 留足余量）
+        var CF_CONV_CHUNK_CHARS = 250000;  // 每块字符数（最坏全中文约 0.75MB，转义后仍远 <2MB）
+
+        function _cfByteLen(s) {
+            try { return new TextEncoder().encode(s).length; }
+            catch (e) { return s.length * 3; }
+        }
+
+        function cfPutConv(id, conv) {
+            var key = 'chat_' + id;
+            var s;
+            try { s = JSON.stringify(conv); } catch (e) { return Promise.reject(e); }
+            var bytes = _cfByteLen(s);
+            // 先读云端旧状态，便于清掉多余的旧分块
+            return cfReq('GET', key).catch(function () { return null; }).then(function (old) {
+                var oldParts = (old && old.__chunked) ? (old.parts || 0) : 0;
+                if (bytes <= CF_CONV_PLAIN_MAX) {
+                    return cfReq('PUT', key, conv).then(function (r) {
+                        var dels = [];
+                        for (var i = 0; i < oldParts; i++) dels.push(cfReq('DELETE', key + '::p' + i).catch(function () {}));
+                        return Promise.all(dels).then(function () { return r; });
+                    });
+                }
+                // 分块存
+                var parts = [];
+                for (var off = 0; off < s.length; off += CF_CONV_CHUNK_CHARS) parts.push(s.slice(off, off + CF_CONV_CHUNK_CHARS));
+                var puts = parts.map(function (c, i) { return cfReq('PUT', key + '::p' + i, { c: c }); });
+                return Promise.all(puts).then(function () {
+                    var manifest = { __chunked: 1, parts: parts.length, len: s.length, id: conv.id, title: conv.title || '', updated: conv.updated || 0 };
+                    return cfReq('PUT', key, manifest);
+                }).then(function (r) {
+                    var dels = [];
+                    for (var i = parts.length; i < oldParts; i++) dels.push(cfReq('DELETE', key + '::p' + i).catch(function () {}));
+                    return Promise.all(dels).then(function () { return r; });
+                });
+            });
+        }
+
+        function cfGetConv(id) {
+            var key = 'chat_' + id;
+            return cfReq('GET', key).then(function (data) {
+                if (!data) return null;
+                if (!data.__chunked) return data; // 旧的单体对话
+                var n = data.parts || 0;
+                var gets = [];
+                for (var i = 0; i < n; i++) gets.push(cfReq('GET', key + '::p' + i));
+                return Promise.all(gets).then(function (chunks) {
+                    var s = '';
+                    for (var i = 0; i < chunks.length; i++) {
+                        if (!chunks[i] || typeof chunks[i].c !== 'string') throw new Error('分块缺失 p' + i);
+                        s += chunks[i].c;
+                    }
+                    return JSON.parse(s);
+                });
+            });
+        }
+
+        function cfDelConv(id) {
+            var key = 'chat_' + id;
+            return cfReq('GET', key).catch(function () { return null; }).then(function (old) {
+                var dels = [cfReq('DELETE', key)];
+                var n = (old && old.__chunked) ? (old.parts || 0) : 0;
+                for (var i = 0; i < n; i++) dels.push(cfReq('DELETE', key + '::p' + i).catch(function () {}));
+                return Promise.all(dels);
+            });
+        }
+
+        // 同步失败提醒（节流，避免刷屏）
+        var _chatSyncErrTs = 0;
+        function _chatSyncNotifyError(err) {
+            var now = Date.now();
+            if (now - _chatSyncErrTs < 8000) return;
+            _chatSyncErrTs = now;
+            var m = (err && err.message) ? err.message : '未知错误';
+            showToast('⚠️ 云同步失败：' + m + '（本地已保存，别急）');
+        }
         async function chatCloudUpload(id, e) {
             if (e) { e.stopPropagation(); e.preventDefault(); }
             if (!chatCloudCheck()) return;
@@ -12379,7 +12461,7 @@ body {
             for (var i = 0; i < list.length; i++) { if (list[i].id === id) { conv = list[i]; break; } }
             if (!conv) { showToast('❌ 对话不存在'); return; }
             try {
-                await cfReq('PUT', 'chat_' + id, conv);
+                await cfPutConv(id, conv);
                 // 更新清单
                 var manifest = await cfReq('GET', '_chat_manifest') || { chats: [] };
                 var chats = manifest.chats || [];
@@ -12444,7 +12526,7 @@ body {
         }
         async function chatCloudPull(id) {
             try {
-                var conv = await cfReq('GET', 'chat_' + id);
+                var conv = await cfGetConv(id);
                 if (!conv) { showToast('❌ 云端对话不存在'); return; }
                 var list = chatGetHistory();
                 var found = false;
@@ -12459,7 +12541,7 @@ body {
         async function chatCloudDel(id) {
             if (!confirm('从云端删除？不影响本地。')) return;
             try {
-                await cfReq('DELETE', 'chat_' + id);
+                await cfDelConv(id);
                 var manifest = await cfReq('GET', '_chat_manifest') || { chats: [] };
                 manifest.chats = (manifest.chats || []).filter(function(c) { return c.id !== id; });
                 await cfReq('PUT', '_chat_manifest', manifest);
@@ -12512,10 +12594,10 @@ body {
                     var clean = JSON.parse(JSON.stringify(conv));
                     delete clean._dirty;
                     delete clean._synced;
-                    cfReq('PUT', 'chat_' + conv.id, clean).then(function() {
+                    cfPutConv(conv.id, clean).then(function() {
                         // 仅当推送期间没有更新的改动时才清脏标记，否则保留以便下次把完整内容再推上去
                         if (conv.updated === snapUpdated) conv._dirty = false;
-                    }).catch(function() {});
+                    }).catch(function(err) { _chatSyncNotifyError(err); });
                 }
             });
 
@@ -12606,7 +12688,7 @@ body {
                     return;
                 }
                 return Promise.all(toFetch.map(function(id) {
-                    return cfReq('GET', 'chat_' + id).catch(function() { return null; });
+                    return cfGetConv(id).catch(function() { return null; });
                 })).then(function(results) {
                     results.forEach(function(conv) {
                         if (!conv || !conv.id) return;
@@ -12650,7 +12732,7 @@ body {
             tombs[id] = Date.now();
             _chatSetTombstones(tombs);
             // 删除云端数据并更新清单
-            cfReq('DELETE', 'chat_' + id).catch(function() {});
+            cfDelConv(id).catch(function() {});
             cfReq('GET', '_chat_manifest').then(function(manifest) {
                 if (!manifest) manifest = { chats: [] };
                 manifest.chats = (manifest.chats || []).filter(function(c) { return c.id !== id; });
