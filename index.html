@@ -4267,21 +4267,13 @@ body {
                         <span style="position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: rgb(255, 255, 255); border-radius: 50%; transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); box-shadow: rgba(0, 0, 0, 0.18) 0px 1px 4px, rgba(0, 0, 0, 0.04) 0px 0px 0px 0.5px; transform: translateX(18px);"></span>
                     </div>
                 </div>
-                <div id="translateModeRow" style="display:flex;align-items:center;justify-content:space-between">
-                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">翻译模式</span>
-                    <label style="position:relative;width:40px;height:22px;cursor:pointer;flex-shrink:0">
-                        <input type="checkbox" id="translateModeToggle" onchange="toggleTranslateMode(this.checked)" style="display:none">
-                        <span id="translateModeTrack" style="position:absolute;inset:0;background:var(--card-border);border-radius:11px;transition:background 0.3s cubic-bezier(0.4,0,0.2,1)"></span>
-                        <span id="translateModeThumb" style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 1px 4px rgba(0,0,0,0.18),0 0 0 0.5px rgba(0,0,0,0.04);transform:translateX(0)"></span>
-                    </label>
-                </div>
-                <div id="readingModeRow" style="display:flex;align-items:center;justify-content:space-between">
-                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">共读模式</span>
-                    <label style="position:relative;width:40px;height:22px;cursor:pointer;flex-shrink:0">
-                        <input type="checkbox" id="readingModeToggle" onchange="toggleReadingMode(this.checked)" style="display:none">
-                        <span id="readingModeTrack" style="position:absolute;inset:0;background:var(--card-border);border-radius:11px;transition:background 0.3s cubic-bezier(0.4,0,0.2,1)"></span>
-                        <span id="readingModeThumb" style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 1px 4px rgba(0,0,0,0.18),0 0 0 0.5px rgba(0,0,0,0.04);transform:translateX(0)"></span>
-                    </label>
+                <div id="chatModeRow" style="display:flex;align-items:center;justify-content:space-between">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">模式</span>
+                    <div style="display:flex;gap:6px">
+                        <button class="pagebtn-pos-opt" data-mode="normal" onclick="chatSetMode('normal')">对话</button>
+                        <button class="pagebtn-pos-opt" data-mode="translate" onclick="chatSetMode('translate')">翻译</button>
+                        <button class="pagebtn-pos-opt" data-mode="reading" onclick="chatSetMode('reading')">共读</button>
+                    </div>
                 </div>
                 <div id="pageBtnPosRow" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
                     <span style="font-size:12px;font-weight:600;color:var(--text-muted)">翻页按钮位置</span>
@@ -11317,8 +11309,8 @@ body {
         function chatInitSheetOpts() {
             renderDecoList();
             chatRenderThemeList();
-            document.getElementById('readingModeToggle').checked = chatReadingMode;
             toggleReadingMode(chatReadingMode);
+            chatSyncModeButtons();
             chatSyncReadingChip();
             document.getElementById('compressToggle').checked = chatCompressEnabled;
             syncCompressToggleStyle();
@@ -13402,6 +13394,28 @@ body {
             translateClearSel();
         }
 
+        // 三选一模式选择器：对话 / 翻译 / 共读（互斥）
+        function chatSetMode(mode) {
+            if (mode === 'reading') {
+                toggleReadingMode(true);      // 内部会关掉翻译
+            } else if (mode === 'translate') {
+                toggleTranslateMode(true);    // 内部会关掉共读
+            } else {
+                toggleReadingMode(false);
+                toggleTranslateMode(false);
+            }
+            chatSyncModeButtons();
+        }
+
+        // 把当前模式同步到三个分段按钮的高亮
+        function chatSyncModeButtons() {
+            var mode = chatReadingMode ? 'reading' : (chatTranslateMode ? 'translate' : 'normal');
+            var btns = document.querySelectorAll('#chatModeRow .pagebtn-pos-opt');
+            for (var i = 0; i < btns.length; i++) {
+                btns[i].classList.toggle('active', btns[i].getAttribute('data-mode') === mode);
+            }
+        }
+
         // 同步设置面板里的「剧本翻译模式」开关到当前状态
         function translateSyncToggle() {
             var chk = document.getElementById('translateModeToggle');
@@ -13410,6 +13424,7 @@ body {
             var thumb = document.getElementById('translateModeThumb');
             if (track) track.style.background = chatTranslateMode ? 'var(--accent)' : 'var(--card-border)';
             if (thumb) thumb.style.transform = chatTranslateMode ? 'translateX(18px)' : 'translateX(0)';
+            chatSyncModeButtons();
         }
 
         // 仅控制书签按钮显隐 + 翻页按钮
@@ -13903,6 +13918,7 @@ body {
             var rmThumb = document.getElementById('readingModeThumb');
             if (rmTrack) rmTrack.style.background = chatReadingMode ? 'var(--accent)' : 'var(--card-border)';
             if (rmThumb) rmThumb.style.transform = chatReadingMode ? 'translateX(18px)' : 'translateX(0)';
+            chatSyncModeButtons();
         }
 
         /* ===== 共读：点段评价 ===== */
