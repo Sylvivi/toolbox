@@ -2239,6 +2239,27 @@ body {
         .chat-settings-body {
             padding: 0 20px; overflow-y: auto; flex: 1;
         }
+        /* ===== 阅读书架 ===== */
+        .rb-btn { padding: 6px 12px; border: 1px solid var(--card-border); border-radius: 8px; background: var(--input-bg); color: var(--text); font-size: 12px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+        .rb-btn:hover { border-color: var(--accent); }
+        .rb-btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .rb-select, .rb-search { padding: 6px 10px; border: 1px solid var(--input-border); border-radius: 8px; background: var(--input-bg); color: var(--text); font-size: 12px; outline: none; }
+        .rb-search { flex: 1; min-width: 0; }
+        .rb-book { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--card-border); border-radius: 10px; margin-bottom: 8px; cursor: pointer; transition: border-color 0.15s; }
+        .rb-book:hover { border-color: var(--accent); }
+        .rb-book-icon { font-size: 22px; flex-shrink: 0; }
+        .rb-book-info { flex: 1; min-width: 0; }
+        .rb-book-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .rb-book-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+        .rb-book-del { background: none; border: none; color: var(--text-muted); font-size: 15px; cursor: pointer; padding: 4px; flex-shrink: 0; }
+        .rb-book-del:hover { color: #f56565; }
+        .rb-chap { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--card-border); border-radius: 8px; margin-bottom: 6px; cursor: pointer; transition: all 0.15s; }
+        .rb-chap:hover { border-color: var(--accent); background: var(--accent-light); }
+        .rb-chap.rb-read { opacity: 0.5; }
+        .rb-chap.rb-current { border-color: var(--accent); background: var(--accent-light); }
+        .rb-chap-info { flex: 1; min-width: 0; }
+        .rb-chap-title { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .rb-chap-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
         .clawd-skin-scroll {
             display: flex; gap: 6px; flex-wrap: wrap;
         }
@@ -4030,6 +4051,7 @@ body {
                 <button class="chat-sp-btn" id="chatBookmarkBtn" onclick="chatToggleBookmarkPanel()" title="书签" style="display:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg></button>
                 <button class="chat-sp-btn" id="chatNavBtn" onclick="chatToggleNavPanel()" title="消息导航"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button>
                 <button class="chat-sp-btn" id="chatSearchBtn" onclick="chatToggleSearch()" title="搜索"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></button>
+                <button class="chat-sp-btn" id="chatBookshelfBtn" onclick="rbOpenShelf()" title="书架"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg></button>
                 <button class="chat-sp-btn" id="chatSpBtn" onclick="chatOpenSettings()" title="设置">⋮</button>
                 <div class="chat-nav-panel" id="chatNavPanel"></div>
                 <div class="chat-nav-panel" id="chatBookmarkPanel"></div>
@@ -4096,6 +4118,41 @@ body {
         </div>
     </div>
 
+
+    <!-- 阅读书架 -->
+    <div class="chat-settings-bg" id="rbBg" onclick="rbCloseShelf()"></div>
+    <div class="chat-settings-modal" id="rbModal">
+        <div class="sheet-handle"></div>
+        <div class="chat-settings-body">
+            <div id="rbShelfView">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin:6px 0 14px">
+                    <div style="font-size:15px;font-weight:700;color:var(--text)">📚 书架</div>
+                    <button class="rb-btn rb-btn-primary" onclick="document.getElementById('rbFileInput').click()">＋ 添加书</button>
+                </div>
+                <input type="file" id="rbFileInput" accept=".txt,.md,.markdown,.text,.epub,.mobi,.azw,.azw3" style="display:none" onchange="rbOnFilePick(this)">
+                <div id="rbShelfList"></div>
+            </div>
+            <div id="rbChapterView" style="display:none">
+                <div style="display:flex;align-items:center;gap:8px;margin:6px 0 12px">
+                    <button class="rb-btn" onclick="rbBackToShelf()">‹ 书架</button>
+                    <div id="rbBookTitle" style="flex:1;min-width:0;font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+                    <button class="rb-btn rb-btn-primary" id="rbNextBtn" onclick="rbSendNext()">发下一章 ›</button>
+                </div>
+                <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+                    <select id="rbPresetSelect" class="rb-select">
+                        <option value="auto">自动检测</option>
+                        <option value="chinese">中文章节</option>
+                        <option value="markdown">Markdown 标题</option>
+                        <option value="numbered">数字编号</option>
+                        <option value="empty-line">空行分隔</option>
+                    </select>
+                    <button class="rb-btn" onclick="rbReSplit()">重新拆分</button>
+                    <input type="text" id="rbChapterSearch" class="rb-search" placeholder="搜索章节…" oninput="rbRenderChapters()">
+                </div>
+                <div id="rbChapterList"></div>
+            </div>
+        </div>
+    </div>
 
     <!-- 聊天设置弹窗 -->
     <div class="chat-settings-bg" id="chatSettingsBg" onclick="chatCloseSettings()"></div>
@@ -4301,7 +4358,7 @@ body {
         /* ===== IndexedDB 存储引擎 ===== */
         var _idbCache = {};
         var _idb = null;
-        var _idbKeys = ['api_manager_data', 'css_snippets_data', 'toolbox_imgbeds', 'toolbox_tombstones', 'toolbox_sort_order', 'toolbox_snapshots', 'chat_history', 'checkin_data', 'checkin_tasks'];
+        var _idbKeys = ['api_manager_data', 'css_snippets_data', 'toolbox_imgbeds', 'toolbox_tombstones', 'toolbox_sort_order', 'toolbox_snapshots', 'chat_history', 'checkin_data', 'checkin_tasks', 'reading_books'];
         var _idbPendingWrites = 0;
 
         function idbInit() {
@@ -11746,6 +11803,18 @@ body {
             var sp = document.getElementById('chatSysPrompt').value.trim();
             var _now = new Date();
             var _timeStr = '当前时间：' + _now.getFullYear() + '/' + ('0'+(_now.getMonth()+1)).slice(-2) + '/' + ('0'+_now.getDate()).slice(-2) + ' ' + ['周日','周一','周二','周三','周四','周五','周六'][_now.getDay()] + ' ' + ('0'+_now.getHours()).slice(-2) + ':' + ('0'+_now.getMinutes()).slice(-2);
+            // 计算距上一条消息过了多久，提醒模型按真实时间回应、别延续上次对话的时间感（如隔夜/跨天）
+            for (var _gi = chatMessages.length - 2; _gi >= 0; _gi--) {
+                if (chatMessages[_gi] && chatMessages[_gi].ts) {
+                    var _gapMin = Math.round((_now.getTime() - chatMessages[_gi].ts) / 60000);
+                    if (_gapMin >= 30) {
+                        var _gapTxt = _gapMin < 120 ? (_gapMin + ' 分钟')
+                            : (_gapMin < 1440 ? (Math.round(_gapMin / 60) + ' 小时') : (Math.round(_gapMin / 1440) + ' 天'));
+                        _timeStr += '（距上次对话已过去约 ' + _gapTxt + '，请以现在的真实时间为准，不要延续上次聊天时的时间或情境，比如上次说"该睡了"不代表现在还是深夜）';
+                    }
+                    break;
+                }
+            }
             var _uName = '汐'; // 硬编码用户名，让 AI 用名字称呼而非"用户"
             var _userIdentity = '和你对话的人叫"' + _uName + '"，称呼时直接用名字，不要用"用户"这种说法。';
             // 共读模式且系统提示词框为空时，静默兜底用蘑菇默认人设（仅当为空，绝不与已填内容叠加）
@@ -13215,47 +13284,76 @@ body {
 
             chatCompressing = true;
             var toCompress = chatMessages.slice(chatCompressedCount || 0, compressEnd);
-
-            // 共读模式下消息往往是整章原文（约 25000 字），按 600 字截断会丢掉 97% 内容，
-            // 摘要只剩开头几句。所以共读模式喂(近)全文，普通对话仍按 600 字截断省 token。
-            var _truncCap = chatReadingMode ? 40000 : 600;
-            var prompt = chatReadingMode ? '以下是小说共读的若干章节原文与点评：\n' : '以下是一段对话：\n';
-            for (var i = 0; i < toCompress.length; i++) {
-                var m = toCompress[i];
-                var c = typeof m.content === 'string' ? m.content : '[多模态内容]';
-                if (c.length > _truncCap) c = c.substring(0, _truncCap) + '…';
-                prompt += (m.role === 'user' ? '用户：' : '助手：') + c + '\n';
-            }
-            prompt += chatReadingMode
-                ? '\n请逐章总结上述内容，按时间顺序输出。每一章保留：登场人物、关键情节进展、重要设定/伏笔、关键对话与数值。不要遗漏任何一章，不要省略人物姓名。直接输出摘要，不要加前缀。'
-                : '\n请用简洁的语言总结以上对话要点，保留关键信息（数据、决策、代码片段名、具体数值等），去除寒暄和重复。直接输出摘要，不要加前缀。';
-
             var convId = chatCurrentConvId;
 
-            try {
+            // 单次摘要调用：把一组消息总结成一段。返回 trim 后的摘要文本或 null。
+            async function _doSummarize(msgs, truncCap, isReading) {
+                var prompt = isReading ? '以下是小说共读的章节原文与点评：\n' : '以下是一段对话：\n';
+                for (var i = 0; i < msgs.length; i++) {
+                    var m = msgs[i];
+                    var c = typeof m.content === 'string' ? m.content : '[多模态内容]';
+                    if (c.length > truncCap) c = c.substring(0, truncCap) + '…';
+                    prompt += (m.role === 'user' ? '用户：' : '助手：') + c + '\n';
+                }
+                prompt += isReading
+                    ? '\n请总结上述章节内容，保留：登场人物、关键情节进展、重要设定/伏笔、关键对话与数值。不要省略人物姓名。直接输出摘要，不要加前缀。控制在 400 字以内。'
+                    : '\n请用简洁的语言总结以上对话要点，保留关键信息（数据、决策、代码片段名、具体数值等），去除寒暄和重复。直接输出摘要，不要加前缀。';
                 var resp = await fetch(_useBaseUrl + '/chat/completions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _useApiKey },
                     body: JSON.stringify({
                         model: _useModel,
                         messages: [
-                            { role: 'system', content: '你是对话摘要助手。简洁准确地总结对话内容，保留关键信息。' + (chatReadingMode ? '可适当详尽，完整保留人物、情节、关键设定与数值。' : '控制在 300 字以内。') },
+                            { role: 'system', content: '你是对话摘要助手。简洁准确地总结内容，保留关键信息。' + (isReading ? '完整保留人物、情节、关键设定与数值。' : '控制在 300 字以内。') },
                             { role: 'user', content: prompt }
                         ],
-                        max_tokens: chatReadingMode ? 3000 : 500,
+                        max_tokens: isReading ? 1200 : 500,
                         stream: false
                     })
                 });
                 if (!resp.ok) throw new Error('HTTP ' + resp.status);
                 var json = await resp.json();
                 var summary = json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content;
-                if (summary && chatCurrentConvId === convId) {
-                    chatCompressSummaries.push(summary.trim());
-                    chatCompressedCount = compressEnd;
-                    chatSaveCurrentConv();
-                    chatUpdateCtxIndicator();
-                    console.log('[压缩] 段 ' + chatCompressSummaries.length + '，已压缩 ' + compressEnd + ' 条消息，摘要 ' + summary.trim().length + ' 字');
-                    showToast('📋 已生成摘要（第' + chatCompressSummaries.length + '段，' + summary.trim().length + '字）');
+                return summary ? summary.trim() : null;
+            }
+
+            try {
+                if (chatReadingMode) {
+                    // 共读模式：每个回合（一章 ≈ user+assistant 两条）单独总结成一段，
+                    // 分多段压缩。这样每段输出都短而完整，不会被 token 上限截断。
+                    var idx = 0;
+                    while (idx < toCompress.length) {
+                        // 以 user 消息为一章起点，吃掉其后连续的非 user 消息（通常是 1 条助手点评）
+                        var batch = [toCompress[idx]];
+                        var j = idx + 1;
+                        while (j < toCompress.length && toCompress[j].role !== 'user') {
+                            batch.push(toCompress[j]); j++;
+                        }
+                        var seg = await _doSummarize(batch, 40000, true);
+                        if (chatCurrentConvId !== convId) break;
+                        if (seg) {
+                            chatCompressSummaries.push(seg);
+                            // 逐段推进 compressedCount，断点续传更稳
+                            chatCompressedCount = (chatCompressedCount || 0) + batch.length;
+                            chatSaveCurrentConv();
+                            chatUpdateCtxIndicator();
+                            console.log('[压缩] 段 ' + chatCompressSummaries.length + '，本段 ' + batch.length + ' 条，摘要 ' + seg.length + ' 字');
+                        }
+                        idx = j;
+                    }
+                    if (chatCurrentConvId === convId) {
+                        showToast('📋 已生成 ' + chatCompressSummaries.length + ' 段摘要');
+                    }
+                } else {
+                    var summary = await _doSummarize(toCompress, 600, false);
+                    if (summary && chatCurrentConvId === convId) {
+                        chatCompressSummaries.push(summary);
+                        chatCompressedCount = compressEnd;
+                        chatSaveCurrentConv();
+                        chatUpdateCtxIndicator();
+                        console.log('[压缩] 段 ' + chatCompressSummaries.length + '，已压缩 ' + compressEnd + ' 条消息，摘要 ' + summary.length + ' 字');
+                        showToast('📋 已生成摘要（第' + chatCompressSummaries.length + '段，' + summary.length + '字）');
+                    }
                 }
             } catch(e) {
                 console.warn('[压缩] 失败:', e.message);
@@ -13382,6 +13480,405 @@ body {
             if (s < 0.8) s = 0.8; if (s > 1.6) s = 1.6;
             localStorage.setItem('reading_font_scale', String(s));
             readingApplyFontScale();
+        }
+
+        /* =========================================================================
+         * 阅读书架：上传整本书 → 自动按章拆分 → 点章节填入输入框 → 记进度
+         * 全部存本地 IndexedDB（reading_books），不参与云同步。
+         * ========================================================================= */
+        var rbBooks = [];
+        var rbActiveBookId = null;
+        var RB_PRESETS = {
+            markdown: '^#{1,6}\\s+.+',
+            chinese: '^第[一二三四五六七八九十百千\\d]+[章节篇部回]\\s*.*',
+            numbered: '^\\d+[\\.\\、]\\s*.+',
+            'empty-line': '__EMPTY_LINE__'
+        };
+
+        function rbLoad() { var d = idbGet('reading_books'); rbBooks = (d && d.books) ? d.books : []; }
+        function rbSave() { idbSet('reading_books', { books: rbBooks }); }
+        function rbGetBook(id) { for (var i = 0; i < rbBooks.length; i++) if (rbBooks[i].id === id) return rbBooks[i]; return null; }
+        function rbEsc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
+        function rbFileIcon(name) { var ext = (name.split('.').pop() || '').toLowerCase(); var m = { epub: '📗', mobi: '📕', azw: '📕', azw3: '📕', txt: '📄', md: '📝', markdown: '📝', text: '📄' }; return m[ext] || '📖'; }
+
+        function rbOpenShelf() {
+            rbLoad();
+            rbActiveBookId = null;
+            document.getElementById('rbShelfView').style.display = '';
+            document.getElementById('rbChapterView').style.display = 'none';
+            rbRenderShelf();
+            document.getElementById('rbBg').classList.add('show');
+            document.getElementById('rbModal').classList.add('show');
+        }
+        function rbCloseShelf() {
+            document.getElementById('rbBg').classList.remove('show');
+            document.getElementById('rbModal').classList.remove('show');
+        }
+
+        function rbRenderShelf() {
+            var box = document.getElementById('rbShelfList');
+            if (!rbBooks.length) {
+                box.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:34px 0;line-height:1.7">书架还是空的<br>点右上角「＋ 添加书」上传 txt / md / epub / mobi</div>';
+                return;
+            }
+            box.innerHTML = rbBooks.map(function (b) {
+                var prog = (b.lastChapter != null && b.lastChapter >= 0) ? ('读到 ' + (b.lastChapter + 1) + '/' + b.chapters.length + ' 章') : (b.chapters.length + ' 章');
+                return '<div class="rb-book" onclick="rbOpenBook(\'' + b.id + '\')">'
+                    + '<span class="rb-book-icon">' + rbFileIcon(b.fileName) + '</span>'
+                    + '<div class="rb-book-info"><div class="rb-book-name">' + rbEsc(b.fileName) + '</div><div class="rb-book-meta">' + prog + ' · ' + (b.fileSize / 1024).toFixed(0) + ' KB</div></div>'
+                    + '<button class="rb-book-del" onclick="event.stopPropagation();rbDeleteBook(\'' + b.id + '\')" title="删除">✕</button></div>';
+            }).join('');
+        }
+
+        function rbOpenBook(id) {
+            rbActiveBookId = id;
+            var b = rbGetBook(id);
+            if (!b) return;
+            document.getElementById('rbShelfView').style.display = 'none';
+            document.getElementById('rbChapterView').style.display = '';
+            document.getElementById('rbBookTitle').textContent = b.fileName;
+            var ps = document.getElementById('rbPresetSelect'); if (ps) ps.value = b.preset || 'auto';
+            var cs = document.getElementById('rbChapterSearch'); if (cs) cs.value = '';
+            rbRenderChapters();
+        }
+        function rbBackToShelf() {
+            rbActiveBookId = null;
+            document.getElementById('rbShelfView').style.display = '';
+            document.getElementById('rbChapterView').style.display = 'none';
+            rbRenderShelf();
+        }
+
+        function rbRenderChapters() {
+            var b = rbGetBook(rbActiveBookId); if (!b) return;
+            var q = (document.getElementById('rbChapterSearch').value || '').toLowerCase();
+            var box = document.getElementById('rbChapterList');
+            var html = b.chapters.map(function (ch, i) {
+                if (q && ch.title.toLowerCase().indexOf(q) < 0 && ch.body.toLowerCase().indexOf(q) < 0) return '';
+                var cls = 'rb-chap';
+                if (b.lastChapter != null) { if (i < b.lastChapter) cls += ' rb-read'; if (i === b.lastChapter) cls += ' rb-current'; }
+                return '<div class="' + cls + '" onclick="rbInsertChapter(\'' + b.id + '\',' + i + ')">'
+                    + '<div class="rb-chap-info"><div class="rb-chap-title">' + rbEsc(ch.title) + '</div><div class="rb-chap-meta">' + ch.body.length.toLocaleString() + ' 字' + (i === b.lastChapter ? ' · 当前' : '') + '</div></div>'
+                    + '<span style="font-size:11px;color:var(--accent);flex-shrink:0">填入 ›</span></div>';
+            }).join('');
+            box.innerHTML = html || '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px 0">没有匹配的章节</div>';
+        }
+
+        function rbInsertChapter(id, i) {
+            var b = rbGetBook(id); if (!b || !b.chapters[i]) return;
+            var ch = b.chapters[i];
+            var input = document.getElementById('chatInput');
+            input.value = ch.title + '\n\n' + ch.body;
+            if (typeof chatAutoGrow === 'function') chatAutoGrow(input);
+            if (typeof chatUpdateTokenHint === 'function') chatUpdateTokenHint();
+            b.lastChapter = i; rbSave();
+            rbCloseShelf();
+            setTimeout(function () { try { input.focus(); } catch (e) {} }, 150);
+            showToast('已填入「' + ch.title + '」，点发送即可');
+        }
+
+        function rbSendNext() {
+            var b = rbGetBook(rbActiveBookId); if (!b) return;
+            var next = (b.lastChapter == null ? -1 : b.lastChapter) + 1;
+            if (next >= b.chapters.length) { showToast('已经是最后一章啦'); return; }
+            rbInsertChapter(b.id, next);
+        }
+
+        function rbDeleteBook(id) {
+            var b = rbGetBook(id); if (!b) return;
+            if (!confirm('删除「' + b.fileName + '」？（只删本地书架，不影响已发出的对话）')) return;
+            rbBooks = rbBooks.filter(function (x) { return x.id !== id; });
+            if (rbActiveBookId === id) rbActiveBookId = null;
+            rbSave(); rbRenderShelf();
+            showToast('已删除「' + b.fileName + '」');
+        }
+
+        // ===== 上传与拆分 =====
+        function rbOnFilePick(inp) { var f = inp.files && inp.files[0]; inp.value = ''; if (f) rbHandleFile(f); }
+        function rbHandleFile(file) {
+            var fn = file.name.toLowerCase();
+            if (fn.endsWith('.epub')) { rbHandleEpub(file); }
+            else if (fn.endsWith('.mobi') || fn.endsWith('.azw') || fn.endsWith('.azw3')) { rbHandleMobi(file); }
+            else {
+                var reader = new FileReader();
+                reader.onload = function (e) { var raw = e.target.result; rbAddBook(file.name, file.size, 'text', rbAutoSplit(raw), raw); };
+                reader.readAsText(file, 'UTF-8');
+            }
+        }
+        function rbAddBook(fileName, fileSize, fileType, chapters, rawText) {
+            if (!chapters || !chapters.length) { chapters = [{ title: '全文', body: (rawText || '').trim() }]; }
+            if (!rawText) rawText = chapters.map(function (c) { return c.title + '\n\n' + c.body; }).join('\n\n');
+            var book = {
+                id: 'bk_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                fileName: fileName, fileSize: fileSize, fileType: fileType,
+                chapters: chapters, rawText: rawText, preset: 'auto', lastChapter: null, addedAt: Date.now()
+            };
+            rbBooks.unshift(book);
+            rbSave();
+            rbActiveBookId = book.id;
+            document.getElementById('rbShelfView').style.display = 'none';
+            document.getElementById('rbChapterView').style.display = '';
+            document.getElementById('rbBookTitle').textContent = fileName;
+            document.getElementById('rbPresetSelect').value = 'auto';
+            document.getElementById('rbChapterSearch').value = '';
+            rbRenderChapters();
+            showToast('已添加「' + fileName + '」，共 ' + chapters.length + ' 章');
+        }
+        function rbReSplit() {
+            var b = rbGetBook(rbActiveBookId); if (!b) return;
+            if (!b.rawText) { b.rawText = b.chapters.map(function (c) { return c.title + '\n\n' + c.body; }).join('\n\n'); }
+            var preset = document.getElementById('rbPresetSelect').value;
+            b.preset = preset;
+            b.chapters = (preset === 'auto') ? rbAutoSplit(b.rawText) : rbSplitByPattern(b.rawText, RB_PRESETS[preset]);
+            if (!b.chapters.length) b.chapters = [{ title: '全文', body: b.rawText.trim() }];
+            b.lastChapter = null;
+            rbSave(); rbRenderChapters();
+            showToast('重新拆分完成，共 ' + b.chapters.length + ' 章');
+        }
+
+        function rbAutoSplit(rawText) {
+            var lines = rawText.split('\n');
+            var patterns = [
+                { name: 'markdown', re: /^#{1,6}\s+.+/ },
+                { name: 'chinese', re: /^第[一二三四五六七八九十百千\d]+[章节篇部回]\s*/ },
+                { name: 'numbered', re: /^\d+[\.\、]\s*.+/ }
+            ];
+            var best = null, bestCount = 0;
+            for (var p = 0; p < patterns.length; p++) {
+                var c = 0;
+                for (var li = 0; li < lines.length; li++) { if (patterns[p].re.test(lines[li].trim())) c++; }
+                if (c > bestCount) { bestCount = c; best = patterns[p].name; }
+            }
+            var pattern;
+            if (bestCount >= 2 && best) { pattern = RB_PRESETS[best]; }
+            else {
+                var blocks = rawText.split(/\n\s*\n/).filter(function (b) { return b.trim().length > 0; });
+                if (blocks.length >= 2 && blocks.length <= 200) { pattern = '__EMPTY_LINE__'; }
+                else { pattern = '^#{1,6}\\s+.+|^第[一二三四五六七八九十百千\\d]+[章节篇部回]\\s*.*|^[Cc]hapter\\s*\\d+|^\\d+[\\.\\、]\\s*.+'; }
+            }
+            return rbSplitByPattern(rawText, pattern);
+        }
+        function rbSplitByPattern(rawText, pattern) {
+            var chapters = [];
+            if (pattern === '__EMPTY_LINE__') {
+                var blocks = rawText.split(/\n\s*\n/).filter(function (b) { return b.trim().length > 0; });
+                blocks.forEach(function (block, i) {
+                    var lines = block.trim().split('\n');
+                    var title = (lines[0].substring(0, 80).trim()) || ('段落 ' + (i + 1));
+                    chapters.push({ title: title, body: block.trim() });
+                });
+            } else {
+                var regex; try { regex = new RegExp(pattern); } catch (e) { return [{ title: '全文', body: rawText }]; }
+                var lines = rawText.split('\n');
+                var currentTitle = null, currentLines = [];
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i];
+                    if (regex.test(line.trim())) {
+                        if (currentTitle !== null || currentLines.length > 0) {
+                            chapters.push({ title: currentTitle || '前言 / 引言', body: currentLines.join('\n').trim() });
+                        }
+                        currentTitle = line.trim().replace(/^#+\s*/, '');
+                        currentLines = [];
+                    } else { currentLines.push(line); }
+                }
+                if (currentTitle !== null || currentLines.length > 0) {
+                    chapters.push({ title: currentTitle || '前言 / 引言', body: currentLines.join('\n').trim() });
+                }
+            }
+            return chapters.filter(function (c) { return c.body.length > 0; });
+        }
+        function rbHtmlToText(html) {
+            var text = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+            text = text.replace(/<style[\s\S]*?<\/style>/gi, '');
+            text = text.replace(/<\/(p|div|h[1-6]|li|tr|blockquote|br\s*\/?)>/gi, '\n');
+            text = text.replace(/<br\s*\/?>/gi, '\n');
+            text = text.replace(/<[^>]+>/g, '');
+            var ta = document.createElement('textarea'); ta.innerHTML = text; text = ta.value;
+            text = text.replace(/[ \t]+/g, ' ');
+            text = text.replace(/\n{3,}/g, '\n\n');
+            return text.trim();
+        }
+
+        // ===== EPUB（按需联网加载 JSZip 一次）=====
+        function rbEnsureJSZip() {
+            return new Promise(function (resolve, reject) {
+                if (window.JSZip) { resolve(); return; }
+                var s = document.createElement('script');
+                s.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+                s.onload = function () { resolve(); };
+                s.onerror = function () { reject(new Error('JSZip 加载失败（解析 epub 需联网一次）')); };
+                document.head.appendChild(s);
+            });
+        }
+        async function rbHandleEpub(file) {
+            try {
+                showToast('正在解析 EPUB…');
+                await rbEnsureJSZip();
+                var zip = await JSZip.loadAsync(file);
+                var cf = zip.file('META-INF/container.xml');
+                var containerXml = cf ? await cf.async('text') : '';
+                var opfPath = '';
+                if (containerXml) { var mm = containerXml.match(/full-path="([^"]+\.opf)"/); if (mm) opfPath = mm[1]; }
+                if (!opfPath) { zip.forEach(function (path) { if (path.endsWith('.opf')) opfPath = path; }); }
+                var orderedFiles = [];
+                var opfDir = opfPath.indexOf('/') >= 0 ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : '';
+                if (opfPath) {
+                    var of = zip.file(opfPath);
+                    var opfText = of ? await of.async('text') : '';
+                    if (opfText) {
+                        var manifest = {};
+                        var itemRe = /<item\s[^>]*id="([^"]*)"[^>]*href="([^"]*)"[^>]*media-type="([^"]*)"[^>]*\/?>/g;
+                        var itemRe2 = /<item\s[^>]*href="([^"]*)"[^>]*id="([^"]*)"[^>]*media-type="([^"]*)"[^>]*\/?>/g;
+                        var im;
+                        while ((im = itemRe.exec(opfText)) !== null) { manifest[im[1]] = { href: im[2], type: im[3] }; }
+                        while ((im = itemRe2.exec(opfText)) !== null) { manifest[im[2]] = { href: im[1], type: im[3] }; }
+                        var spineRe = /<itemref\s[^>]*idref="([^"]*)"/g;
+                        var sm;
+                        while ((sm = spineRe.exec(opfText)) !== null) {
+                            var entry = manifest[sm[1]];
+                            if (entry && entry.type.indexOf('html') >= 0) { orderedFiles.push(opfDir + decodeURIComponent(entry.href)); }
+                        }
+                    }
+                }
+                if (orderedFiles.length === 0) {
+                    zip.forEach(function (path) { if (/\.(xhtml|html|htm)$/i.test(path) && path.indexOf('META-INF') !== 0) orderedFiles.push(path); });
+                    orderedFiles.sort();
+                }
+                var chapters = [];
+                for (var fi = 0; fi < orderedFiles.length; fi++) {
+                    var fpath = orderedFiles[fi];
+                    var f = zip.file(fpath);
+                    if (!f) continue;
+                    var html = await f.async('text');
+                    var text = rbHtmlToText(html);
+                    if (text.trim().length < 5) continue;
+                    var title = '';
+                    var hMatch = html.match(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/i);
+                    var titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+                    if (hMatch) title = hMatch[1].replace(/<[^>]+>/g, '').trim();
+                    else if (titleMatch) title = titleMatch[1].trim();
+                    if (!title || title.length > 100) {
+                        var firstLine = text.split('\n').find(function (l) { return l.trim().length > 0; });
+                        title = (firstLine ? firstLine.substring(0, 80) : '') || fpath.split('/').pop();
+                    }
+                    chapters.push({ title: title, body: text.trim() });
+                }
+                rbAddBook(file.name, file.size, 'epub', chapters, '');
+            } catch (err) {
+                showToast('EPUB 解析失败：' + err.message);
+                console.error(err);
+            }
+        }
+
+        // ===== MOBI / AZW =====
+        async function rbHandleMobi(file) {
+            try {
+                showToast('正在解析 MOBI…');
+                var buf = await file.arrayBuffer();
+                var data = new Uint8Array(buf);
+                var view = new DataView(buf);
+                var numRecords = view.getUint16(76);
+                var records = [];
+                for (var i = 0; i < numRecords; i++) { records.push(view.getUint32(78 + i * 8)); }
+                records.push(data.length);
+                var r0 = records[0];
+                var compression = view.getUint16(r0);
+                var textRecordCount = view.getUint16(r0 + 8);
+                var mobiMagic = String.fromCharCode(data[r0 + 16], data[r0 + 17], data[r0 + 18], data[r0 + 19]);
+                var encoding = 'utf-8';
+                var mobiHeaderLen = 0;
+                var extraFlags = 0;
+                if (mobiMagic === 'MOBI') {
+                    mobiHeaderLen = view.getUint32(r0 + 20);
+                    var enc = view.getUint32(r0 + 28);
+                    if (enc === 65001) encoding = 'utf-8';
+                    else if (enc === 1252) encoding = 'windows-1252';
+                    else if (enc === 936 || enc === 54936) encoding = 'gbk';
+                    else if (enc === 950) encoding = 'big5';
+                    else if (enc === 949) encoding = 'euc-kr';
+                    else if (enc === 932) encoding = 'shift_jis';
+                    if (mobiHeaderLen >= 0xF4) { try { extraFlags = view.getUint16(r0 + 16 + 0xF2); } catch (e) { extraFlags = 0; } }
+                }
+                function rbGetTrailingSize(recBytes, flags) {
+                    var size = 0;
+                    for (var bit = 15; bit > 0; bit--) {
+                        if (flags & (1 << bit)) {
+                            var consumed = 0, idx = recBytes.length - size - 1;
+                            while (idx >= 0) { var b = recBytes[idx--]; consumed++; if (b & 0x80) break; }
+                            size += consumed;
+                        }
+                    }
+                    if (flags & 1) { var bb = recBytes[recBytes.length - size - 1]; size += (bb & 0x03) + 1; }
+                    return size;
+                }
+                var textChunks = [];
+                for (var ti = 1; ti <= textRecordCount && ti < records.length - 1; ti++) {
+                    var recData = data.slice(records[ti], records[ti + 1]);
+                    if (extraFlags > 0) {
+                        var trailSize = rbGetTrailingSize(recData, extraFlags);
+                        if (trailSize > 0 && trailSize < recData.length) { recData = recData.slice(0, recData.length - trailSize); }
+                    }
+                    if (compression === 2) { textChunks.push(rbPalmDocDecompress(recData)); }
+                    else { textChunks.push(recData); }
+                }
+                var totalLen = textChunks.reduce(function (s, c) { return s + c.length; }, 0);
+                var merged = new Uint8Array(totalLen);
+                var pos = 0;
+                for (var ci = 0; ci < textChunks.length; ci++) { merged.set(textChunks[ci], pos); pos += textChunks[ci].length; }
+                var htmlContent = new TextDecoder(encoding, { fatal: false }).decode(merged);
+                var garbledCount = (htmlContent.match(/�/g) || []).length;
+                if (garbledCount > 10) {
+                    var tryEncodings = ['gbk', 'gb18030', 'big5', 'shift_jis', 'euc-kr', 'windows-1252'];
+                    for (var ei = 0; ei < tryEncodings.length; ei++) {
+                        var tryEnc = tryEncodings[ei];
+                        if (tryEnc === encoding) continue;
+                        try {
+                            var attempt = new TextDecoder(tryEnc, { fatal: false }).decode(merged);
+                            var newGarbled = (attempt.match(/�/g) || []).length;
+                            if (newGarbled < garbledCount) { htmlContent = attempt; encoding = tryEnc; break; }
+                        } catch (e) {}
+                    }
+                }
+                var fullText = rbHtmlToText(htmlContent);
+                var chapterSplitRe = /<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/gi;
+                var parts = htmlContent.split(/<h[1-3][^>]*>[\s\S]*?<\/h[1-3]>/i);
+                var titles = [];
+                var mm2;
+                while ((mm2 = chapterSplitRe.exec(htmlContent)) !== null) { titles.push(mm2[1].replace(/<[^>]+>/g, '').trim()); }
+                var chapters = [];
+                if (titles.length >= 2) {
+                    var preface = rbHtmlToText(parts[0]).trim();
+                    if (preface.length > 20) chapters.push({ title: '前言', body: preface });
+                    for (var k = 0; k < titles.length; k++) {
+                        var body = rbHtmlToText(parts[k + 1] || '').trim();
+                        if (body.length > 0) chapters.push({ title: titles[k] || ('章节 ' + (k + 1)), body: body });
+                    }
+                }
+                if (chapters.length < 2) { rbAddBook(file.name, file.size, 'mobi', rbAutoSplit(fullText), fullText); }
+                else { rbAddBook(file.name, file.size, 'mobi', chapters, fullText); }
+            } catch (err) {
+                showToast('MOBI 解析失败：' + err.message);
+                console.error(err);
+            }
+        }
+        function rbPalmDocDecompress(input) {
+            var output = [];
+            var i = 0;
+            while (i < input.length) {
+                var byte = input[i++];
+                if (byte === 0) { output.push(0); }
+                else if (byte >= 0x01 && byte <= 0x08) { for (var j = 0; j < byte && i < input.length; j++) { output.push(input[i++]); } }
+                else if (byte >= 0x09 && byte <= 0x7F) { output.push(byte); }
+                else if (byte >= 0x80 && byte <= 0xBF) {
+                    if (i >= input.length) break;
+                    var next = input[i++];
+                    var combined = ((byte & 0x3F) << 8) | next;
+                    var dist = (combined >> 3) & 0x7FF;
+                    var len = (combined & 0x07) + 3;
+                    if (dist > 0) { for (var j2 = 0; j2 < len; j2++) { var srcIdx = output.length - dist; output.push(srcIdx >= 0 ? output[srcIdx] : 0); } }
+                }
+                else if (byte >= 0xC0) { output.push(0x20); output.push(byte ^ 0x80); }
+            }
+            return new Uint8Array(output);
         }
 
         // 共读：点一下，平滑下滑约一屏（留约一行重叠便于衔接）
