@@ -4233,6 +4233,7 @@ body {
                         <button class="pagebtn-pos-opt" data-pos="lb" onclick="readingSetPageBtnPos('lb')" title="左下">左下</button>
                         <button class="pagebtn-pos-opt" data-pos="rm" onclick="readingSetPageBtnPos('rm')" title="右中">右中</button>
                         <button class="pagebtn-pos-opt" data-pos="rb" onclick="readingSetPageBtnPos('rb')" title="右下">右下</button>
+                        <button class="pagebtn-pos-opt" data-pos="off" onclick="readingSetPageBtnPos('off')" title="隐藏翻页按钮（方便截图）">关</button>
                     </div>
                 </div>
                 <div id="readingFontRow" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
@@ -13215,14 +13216,19 @@ body {
             chatCompressing = true;
             var toCompress = chatMessages.slice(chatCompressedCount || 0, compressEnd);
 
-            var prompt = '以下是一段对话：\n';
+            // 共读模式下消息往往是整章原文（约 25000 字），按 600 字截断会丢掉 97% 内容，
+            // 摘要只剩开头几句。所以共读模式喂(近)全文，普通对话仍按 600 字截断省 token。
+            var _truncCap = chatReadingMode ? 40000 : 600;
+            var prompt = chatReadingMode ? '以下是小说共读的若干章节原文与点评：\n' : '以下是一段对话：\n';
             for (var i = 0; i < toCompress.length; i++) {
                 var m = toCompress[i];
                 var c = typeof m.content === 'string' ? m.content : '[多模态内容]';
-                if (c.length > 600) c = c.substring(0, 600) + '…';
+                if (c.length > _truncCap) c = c.substring(0, _truncCap) + '…';
                 prompt += (m.role === 'user' ? '用户：' : '助手：') + c + '\n';
             }
-            prompt += '\n请用简洁的语言总结以上对话要点，保留关键信息（数据、决策、代码片段名、具体数值等），去除寒暄和重复。直接输出摘要，不要加前缀。';
+            prompt += chatReadingMode
+                ? '\n请逐章总结上述内容，按时间顺序输出。每一章保留：登场人物、关键情节进展、重要设定/伏笔、关键对话与数值。不要遗漏任何一章，不要省略人物姓名。直接输出摘要，不要加前缀。'
+                : '\n请用简洁的语言总结以上对话要点，保留关键信息（数据、决策、代码片段名、具体数值等），去除寒暄和重复。直接输出摘要，不要加前缀。';
 
             var convId = chatCurrentConvId;
 
@@ -13236,7 +13242,7 @@ body {
                             { role: 'system', content: '你是对话摘要助手。简洁准确地总结对话内容，保留关键信息。' + (chatReadingMode ? '可适当详尽，完整保留人物、情节、关键设定与数值。' : '控制在 300 字以内。') },
                             { role: 'user', content: prompt }
                         ],
-                        max_tokens: chatReadingMode ? 1500 : 500,
+                        max_tokens: chatReadingMode ? 3000 : 500,
                         stream: false
                     })
                 });
@@ -13310,7 +13316,8 @@ body {
 
         // 仅控制书签按钮显隐 + 翻页按钮
         function readingSyncAutoScrollUI() {
-            var show = (chatView === 'conv') && (chatReadingMode || chatTranslateMode);
+            var pgPos = localStorage.getItem('reading_pagebtn_pos') || 'rb';
+            var show = (chatView === 'conv') && (chatReadingMode || chatTranslateMode) && pgPos !== 'off';
             var bmShow = (chatView === 'conv') && chatReadingMode;
             var bmBtn = document.getElementById('chatBookmarkBtn');
             if (bmBtn) bmBtn.style.display = bmShow ? '' : 'none';
@@ -13331,7 +13338,11 @@ body {
             var pos = localStorage.getItem('reading_pagebtn_pos') || 'rb';
             var pu = document.getElementById('chatPageUpBtn');
             var pd = document.getElementById('chatPageDownBtn');
-            if (pu && pd) {
+            if (pu && pd && pos === 'off') {
+                // 关：隐藏翻页按钮（截图用）
+                pu.classList.remove('show');
+                pd.classList.remove('show');
+            } else if (pu && pd) {
                 var leftSide = (pos === 'lm' || pos === 'lb');
                 [pu, pd].forEach(function(b) {
                     b.style.left = leftSide ? '14px' : 'auto';
@@ -13353,6 +13364,7 @@ body {
         }
         function readingSetPageBtnPos(pos) {
             localStorage.setItem('reading_pagebtn_pos', pos);
+            readingSyncAutoScrollUI();
             readingApplyPageBtnPos();
         }
 
@@ -13394,11 +13406,6 @@ body {
             var rmThumb = document.getElementById('readingModeThumb');
             if (rmTrack) rmTrack.style.background = chatReadingMode ? 'var(--accent)' : 'var(--card-border)';
             if (rmThumb) rmThumb.style.transform = chatReadingMode ? 'translateX(18px)' : 'translateX(0)';
-            // 翻页位置 / 正文字号只在共读开启时显示
-            var posRow = document.getElementById('pageBtnPosRow');
-            var fontRow = document.getElementById('readingFontRow');
-            if (posRow) posRow.style.display = chatReadingMode ? 'flex' : 'none';
-            if (fontRow) fontRow.style.display = chatReadingMode ? 'flex' : 'none';
         }
 
         /* ===== 共读：点段评价 ===== */
