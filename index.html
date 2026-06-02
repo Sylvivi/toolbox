@@ -2117,8 +2117,18 @@ body {
         .chat-input-area.reading-collapsed #chatInput,
         .chat-input-area.reading-collapsed .chat-input-toolbar,
         .chat-input-area.reading-collapsed .chat-token-hint,
-        .chat-input-area.reading-collapsed .chat-img-preview { display: none !important; }
-        .chat-input-area.reading-collapsed .reading-collapse-hint { display: flex; }
+        .chat-input-area.reading-collapsed .chat-img-preview,
+        .chat-input-area.reading-collapsed .reading-collapse-hint { display: none !important; }
+        /* 共读模式：输入框全部隐藏，只留一个 clawd 图标浮在底部 */
+        .chat-input-area.reading-collapsed { padding-top: 0; padding-bottom: max(6px, env(safe-area-inset-bottom)); }
+        .chat-input-area.reading-collapsed .chat-input-box {
+            background: transparent !important; border-color: transparent !important;
+            box-shadow: none !important; padding: 0; min-height: 36px;
+        }
+        .chat-input-area.reading-collapsed .clawd-model-btn {
+            position: static; align-self: flex-end;
+            top: auto; right: auto; margin-right: 20px;
+        }
         .chat-send-btn {
             width: 32px; height: 32px; border: none; border-radius: 50%;
             background: var(--accent-mid); color: #fff; font-size: 16px;
@@ -13428,6 +13438,32 @@ body {
             if (inp) inp.addEventListener('blur', function() {
                 if (chatReadingMode && !inp.value.trim()) readingCollapseInput();
             });
+        })();
+        // 共读折叠态下：长按 clawd 图标展开输入框（短按仍是打开模型面板）
+        (function() {
+            var btn = document.getElementById('clawdModelBtn');
+            if (!btn) return;
+            var timer = null, longPressed = false;
+            function isCollapsed() {
+                var a = document.getElementById('chatInputArea');
+                return a && a.classList.contains('reading-collapsed');
+            }
+            function start() {
+                if (!isCollapsed()) return;
+                longPressed = false;
+                timer = setTimeout(function() { longPressed = true; readingExpandInput(); }, 500);
+            }
+            function cancel() { if (timer) { clearTimeout(timer); timer = null; } }
+            btn.addEventListener('touchstart', start, { passive: true });
+            btn.addEventListener('touchend', cancel);
+            btn.addEventListener('touchmove', cancel);
+            btn.addEventListener('mousedown', start);
+            btn.addEventListener('mouseup', cancel);
+            btn.addEventListener('mouseleave', cancel);
+            // 长按已展开输入框时，阻止随后的 click 打开模型面板
+            btn.addEventListener('click', function(e) {
+                if (longPressed) { e.preventDefault(); e.stopPropagation(); longPressed = false; }
+            }, true);
         })();
         function toggleReadingMode(on) {
             var changed = (chatReadingMode !== on);
