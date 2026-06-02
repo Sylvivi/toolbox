@@ -11374,6 +11374,7 @@ body {
             document.getElementById('compressKeepLabel').textContent = chatCompressKeep + ' 条';
             updateRangeFill(document.getElementById('compressThresholdInput'));
             updateRangeFill(document.getElementById('compressKeepInput'));
+            chatSyncCompressThresholdUI();
             chatRenderCompressModelSelect();
             var maskOn = localStorage.getItem('chat_mask') === '1';
             document.getElementById('chatMaskToggle').checked = maskOn;
@@ -13327,10 +13328,16 @@ body {
         /* ===== 上下文压缩 ===== */
         async function chatCompressContext() {
             if (chatCompressing || chatStreaming) return;
+            // 触发阈值按模式区分，保证一致、不再时灵时不灵：
+            //   翻译 / 共读模式：固定 10 条触发、保留最近 5 条（章节体量大，需更早压缩）
+            //   对话模式：用设置里的「触发」值（默认 40）、保留 chatCompressKeep（默认 20）
+            var _otherMode = chatReadingMode || chatTranslateMode;
+            var _effThreshold = _otherMode ? 10 : chatCompressThreshold;
+            var _effKeep = _otherMode ? 5 : chatCompressKeep;
             var uncompressed = chatMessages.length - (chatCompressedCount || 0);
-            if (uncompressed <= chatCompressThreshold) return;
+            if (uncompressed <= _effThreshold) return;
 
-            var compressEnd = chatMessages.length - chatCompressKeep;
+            var compressEnd = chatMessages.length - _effKeep;
             if (compressEnd <= (chatCompressedCount || 0)) return;
 
             var _compressModelCfg = chatGetCompressModel();
@@ -13544,6 +13551,7 @@ body {
             for (var i = 0; i < btns.length; i++) {
                 btns[i].classList.toggle('active', btns[i].getAttribute('data-mode') === mode);
             }
+            chatSyncCompressThresholdUI();
         }
 
         // 同步设置面板里的「剧本翻译模式」开关到当前状态
@@ -15160,6 +15168,24 @@ body {
             localStorage.setItem('chat_compress_threshold', t);
             localStorage.setItem('chat_compress_keep', k);
             updateRangeFill(document.getElementById('compressThresholdInput'));
+        }
+        // 翻译/共读模式下触发阈值恒为 10（自动），滑块仅对对话模式生效——
+        // 据此禁用滑块并把标签改成「10 条（自动）」，避免误以为还能调。
+        function chatSyncCompressThresholdUI() {
+            var inp = document.getElementById('compressThresholdInput');
+            var lbl = document.getElementById('compressThresholdLabel');
+            if (!inp || !lbl) return;
+            if (chatReadingMode || chatTranslateMode) {
+                inp.disabled = true;
+                inp.style.opacity = '0.45';
+                inp.style.cursor = 'not-allowed';
+                lbl.textContent = '10 条（自动）';
+            } else {
+                inp.disabled = false;
+                inp.style.opacity = '';
+                inp.style.cursor = '';
+                lbl.textContent = chatCompressThreshold + ' 条';
+            }
         }
         function syncCompressToggleStyle() {
             var cb = document.getElementById('compressToggle');
