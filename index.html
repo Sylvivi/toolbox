@@ -13595,13 +13595,15 @@ body {
             if (!bmShow) { chatCloseBookmarkPanel(); }
             // 下滑一屏按钮仅共读模式显示；共读模式下直接隐藏「回到底部」
             // （点输入框会自动回到底部，无需该按钮，避免与下滑一屏重叠）
+            // 翻页小按钮：仅翻译模式保留；共读模式改用「左右点击翻页」，不再显示小按钮
+            var pageShow = show && chatTranslateMode;
             var pd = document.getElementById('chatPageDownBtn');
-            if (pd) pd.classList.toggle('show', show);
+            if (pd) pd.classList.toggle('show', pageShow);
             var pu = document.getElementById('chatPageUpBtn');
-            if (pu) pu.classList.toggle('show', show);
+            if (pu) pu.classList.toggle('show', pageShow);
             var sb = document.getElementById('chatScrollBtn');
             if (sb) sb.style.display = show ? 'none' : '';
-            if (show) readingApplyPageBtnPos();
+            if (pageShow) readingApplyPageBtnPos();
         }
 
         // 共读：翻页按钮位置（按设备保存，不参与云同步——握姿/设备相关）
@@ -14893,6 +14895,7 @@ body {
         (function() {
             var el = document.getElementById('chatMessages');
             if (!el) return;
+            var _readingTapTimer = null;   // 共读左右点击翻页：延迟确认非双击
             el.addEventListener('click', function(e) {
                 if (!e.target.closest) return;
                 // 长按刚触发过追问 → 吞掉随之而来的 click，避免误触
@@ -14900,6 +14903,19 @@ body {
                 // translate-merged 同时带 reading-merged 类，必须先判翻译模式
                 var tp = e.target.closest('.translate-merged p[data-p]');
                 if (tp) { translateOnParaClick(tp); return; }
+                // 共读模式：左半屏点击 = 上一屏，右半屏点击 = 下一屏
+                // （双击留给段落评价、拖选/已选中文字留给复制，故排除并延迟确认）
+                if (chatReadingMode) {
+                    if (e.target.closest('button, input, textarea, a, svg, img, .reading-actbar')) return;
+                    var sel = window.getSelection && window.getSelection();
+                    if (sel && String(sel).length > 0) return;
+                    var rect = el.getBoundingClientRect();
+                    var leftHalf = (e.clientX - rect.left) < rect.width / 2;
+                    clearTimeout(_readingTapTimer);
+                    _readingTapTimer = setTimeout(function() {
+                        if (leftHalf) readingPageUp(); else readingPageDown();
+                    }, 250);
+                }
             });
             // 翻译模式：长按译文块 = 追问（双击/拖选留给浏览器选词复制，避免误触）
             var _lpTimer = null, _lpStart = null, _lpFired = false;
@@ -14929,6 +14945,7 @@ body {
             // 共读模式：双击段落 = 选中并提问（单击/拖选留给复制原文，避免误触）
             el.addEventListener('dblclick', function(e) {
                 if (!e.target.closest) return;
+                clearTimeout(_readingTapTimer);   // 双击评价时取消左右点击翻页
                 // 共读模式段落（排除翻译模式：translate-merged 同带 reading-merged 类）
                 var rp = e.target.closest('.reading-merged p[data-p]');
                 if (rp && !e.target.closest('.translate-merged')) readingOnParaClick(rp);
