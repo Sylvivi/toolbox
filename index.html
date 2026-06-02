@@ -2291,6 +2291,9 @@ body {
         .rb-chap-info { flex: 1; min-width: 0; }
         .rb-chap-title { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .rb-chap-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+        .rb-chap-append { flex-shrink: 0; width: 28px; height: 28px; border: 1px solid var(--card-border); border-radius: 7px; background: transparent; color: var(--accent); font-size: 17px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
+        .rb-chap-append:hover { background: var(--accent-light); border-color: var(--accent); }
+        .rb-chap-append:active { transform: scale(0.9); }
         .clawd-skin-scroll {
             display: flex; gap: 6px; flex-wrap: wrap;
         }
@@ -13666,6 +13669,7 @@ body {
                 if (b.lastChapter != null) { if (i < b.lastChapter) cls += ' rb-read'; if (i === b.lastChapter) cls += ' rb-current'; }
                 return '<div class="' + cls + '" onclick="rbInsertChapter(\'' + b.id + '\',' + i + ')">'
                     + '<div class="rb-chap-info"><div class="rb-chap-title">' + rbEsc(ch.title) + '</div><div class="rb-chap-meta">' + ch.body.length.toLocaleString() + ' 字' + (i === b.lastChapter ? ' · 当前' : '') + '</div></div>'
+                    + '<button class="rb-chap-append" onclick="event.stopPropagation();rbAppendChapter(\'' + b.id + '\',' + i + ')" title="追加到输入框（不替换，用于合并被拆错的章节）">＋</button>'
                     + '<span style="font-size:11px;color:var(--accent);flex-shrink:0">填入 ›</span></div>';
             }).join('');
             box.innerHTML = html || '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px 0">没有匹配的章节</div>';
@@ -13682,6 +13686,21 @@ body {
             rbCloseShelf();
             setTimeout(function () { try { input.focus(); } catch (e) {} }, 150);
             showToast('已填入「' + ch.title + '」，点发送即可');
+        }
+
+        // 追加：把这一段接到输入框已有内容后面（不替换），用于合并被拆错的章节
+        function rbAppendChapter(id, i) {
+            var b = rbGetBook(id); if (!b || !b.chapters[i]) return;
+            var ch = b.chapters[i];
+            var input = document.getElementById('chatInput');
+            var cur = (input.value || '');
+            var add = ch.title + '\n\n' + ch.body;
+            input.value = cur.trim() ? (cur.replace(/\s+$/, '') + '\n\n' + add) : add;
+            if (typeof chatAutoGrow === 'function') chatAutoGrow(input);
+            if (typeof chatUpdateTokenHint === 'function') chatUpdateTokenHint();
+            b.lastChapter = i; rbSave();
+            rbRenderChapters();
+            showToast('已追加「' + ch.title + '」，可继续追加或点发送');
         }
 
         function rbSendNext() {
