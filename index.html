@@ -2112,6 +2112,13 @@ body {
             -webkit-tap-highlight-color: transparent;
         }
         .chat-topmenu-item:hover { background: var(--accent-light); }
+        /* 共读模式：输入框折叠成细条，只留 clawd 图标 + 提示，点一下展开 */
+        .reading-collapse-hint { display: none; flex: 1; min-width: 0; align-items: center; color: var(--text-muted); font-size: 13px; padding-left: 4px; cursor: text; -webkit-tap-highlight-color: transparent; }
+        .chat-input-area.reading-collapsed #chatInput,
+        .chat-input-area.reading-collapsed .chat-input-toolbar,
+        .chat-input-area.reading-collapsed .chat-token-hint,
+        .chat-input-area.reading-collapsed .chat-img-preview { display: none !important; }
+        .chat-input-area.reading-collapsed .reading-collapse-hint { display: flex; }
         .chat-send-btn {
             width: 32px; height: 32px; border: none; border-radius: 50%;
             background: var(--accent-mid); color: #fff; font-size: 16px;
@@ -4106,6 +4113,7 @@ body {
                 <div class="chat-img-preview" id="chatImgPreview" style="display:none"></div>
                 <div class="chat-input-box">
                     <button class="clawd-model-btn" id="clawdModelBtn" onclick="chatOpenModelSheet()" title="切换模型"><span class="clawd-px clawd-xmas" id="clawdPx"></span></button>
+                    <div class="reading-collapse-hint" id="readingCollapseHint" onclick="readingExpandInput()">写点什么…</div>
                     <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this);chatUpdateTokenHint()"></textarea>
                     <div class="chat-input-toolbar">
                         <div style="position:relative">
@@ -4207,7 +4215,7 @@ body {
             <div class="sheet-tabs">
                 <button class="sheet-tab active" id="sheetTabBtnOpts" onclick="switchSheetTab('opts')">设置</button>
                 <button class="sheet-tab" id="sheetTabBtnModel" onclick="switchSheetTab('model')">模型</button>
-                <button class="sheet-tab" id="sheetTabBtnPreset" onclick="switchSheetTab('preset')">预设 · 上下文</button>
+                <button class="sheet-tab" id="sheetTabBtnPreset" onclick="switchSheetTab('preset')">预设</button>
             </div>
             <div id="sheetTabModel" class="sheet-tab-body">
             <div style="display:flex;gap:6px;margin-bottom:8px">
@@ -10525,6 +10533,7 @@ body {
             chatSelectedKeyStr = conv.keyStr || '';
             chatReadingMode = conv.readingMode || false;
             chatTranslateMode = conv.translateMode || false;
+            if (chatReadingMode) readingCollapseInput(); else readingExpandInput(false);
             chatContextMax = conv.contextMax || 0;
             document.getElementById('chatCtxRange').value = chatContextMax;
             document.getElementById('chatCtxLabel').textContent = chatContextMax === 0 ? '全部' : chatContextMax + ' 轮';
@@ -13399,9 +13408,31 @@ body {
             chatCompressing = false;
         }
 
+        // 共读：输入框折叠/展开（只留 clawd 图标 + 提示，点一下展开）
+        function readingCollapseInput() {
+            var a = document.getElementById('chatInputArea');
+            if (a) a.classList.add('reading-collapsed');
+        }
+        function readingExpandInput(focusInput) {
+            var a = document.getElementById('chatInputArea');
+            if (!a) return;
+            a.classList.remove('reading-collapsed');
+            if (focusInput !== false) {
+                var inp = document.getElementById('chatInput');
+                if (inp) setTimeout(function() { inp.focus(); }, 0);
+            }
+        }
+        // 失焦且为空时自动收回（仅共读模式）
+        (function() {
+            var inp = document.getElementById('chatInput');
+            if (inp) inp.addEventListener('blur', function() {
+                if (chatReadingMode && !inp.value.trim()) readingCollapseInput();
+            });
+        })();
         function toggleReadingMode(on) {
             var changed = (chatReadingMode !== on);
             chatReadingMode = on;
+            if (changed) { if (on) readingCollapseInput(); else readingExpandInput(false); }
             if (on && chatTranslateMode) { chatTranslateMode = false; translateSyncToggle(); }
             var track = document.getElementById('readingModeTrack');
             var thumb = document.getElementById('readingModeThumb');
@@ -13432,6 +13463,7 @@ body {
         function toggleTranslateMode(on) {
             chatTranslateMode = on;
             if (on && chatReadingMode) { chatReadingMode = false; readingSyncReadingModeToggle(); }
+            if (on) readingExpandInput(false);
             translateSyncToggle();
             chatSyncReadingChip();
             chatSaveCurrentConv();
@@ -13511,8 +13543,9 @@ body {
                     pu.style.top = 'calc(50% - 82px)'; pu.style.bottom = 'auto';
                     pd.style.top = 'calc(50% - 40px)'; pd.style.bottom = 'auto';
                 } else {
-                    pu.style.top = 'auto'; pu.style.bottom = '54px';
-                    pd.style.top = 'auto'; pd.style.bottom = '12px';
+                    // 右下/左下：整体上移，避开屏幕最底部，拇指更好够到
+                    pu.style.top = 'auto'; pu.style.bottom = '108px';
+                    pd.style.top = 'auto'; pd.style.bottom = '66px';
                 }
             }
             var opts = document.querySelectorAll('#pageBtnPosRow .pagebtn-pos-opt');
