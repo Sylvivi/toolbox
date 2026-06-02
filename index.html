@@ -4294,12 +4294,10 @@ body {
                 </div>
                 <div id="readingFontFamilyRow" style="display:flex;flex-direction:column;gap:6px;margin-top:10px">
                     <span style="font-size:12px;font-weight:600;color:var(--text-muted)">正文字体（网络字体，需联网）</span>
+                    <div id="readingFontList" style="display:flex;flex-wrap:wrap;gap:6px"></div>
                     <input id="readingFontUrlInput" type="text" placeholder="字体 CSS 网址，如 https://.../result.css" style="width:100%;box-sizing:border-box;font-size:12px;padding:7px 9px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);color:var(--text)">
                     <input id="readingFontNameInput" type="text" placeholder="字体名称，如 Huiwen-mincho" style="width:100%;box-sizing:border-box;font-size:12px;padding:7px 9px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);color:var(--text)">
-                    <div style="display:flex;gap:6px;align-items:center">
-                        <button class="pagebtn-pos-opt" onclick="readingApplyFontFromInput()" style="flex:1">应用字体</button>
-                        <button class="pagebtn-pos-opt" onclick="readingClearFont()" title="恢复默认字体">默认</button>
-                    </div>
+                    <button class="pagebtn-pos-opt" onclick="readingAddFont()" style="width:100%">保存并应用</button>
                     <span id="readingFontStatus" style="font-size:11px;color:var(--text-muted);opacity:.8"></span>
                 </div>
             </div>
@@ -13652,54 +13650,87 @@ body {
             return s;
         }
 
-        // 共读：正文网络字体（填网址+字体名）。按设备保存，不参与云同步。
+        // 共读：正文网络字体。支持「字体库」——存多个，点一下切换。按设备保存，不云同步。
         var _readingFontLink = null;
+        // 读出已保存的字体库：[{name,url}, ...]
+        function readingFontsLoad() {
+            try { var a = JSON.parse(localStorage.getItem('reading_fonts') || '[]'); return Array.isArray(a) ? a : []; }
+            catch (e) { return []; }
+        }
+        function readingFontsSave(arr) { localStorage.setItem('reading_fonts', JSON.stringify(arr)); }
+        // 应用「当前选中」的字体（由 reading_font_name 记录），并刷新 <link> 与 CSS 变量
         function readingApplyFont() {
-            var url = localStorage.getItem('reading_font_url') || '';
             var name = localStorage.getItem('reading_font_name') || '';
-            // 同步输入框显示
-            var ui = document.getElementById('readingFontUrlInput'); if (ui) ui.value = url;
-            var ni = document.getElementById('readingFontNameInput'); if (ni) ni.value = name;
+            var fonts = readingFontsLoad();
+            var cur = null;
+            for (var i = 0; i < fonts.length; i++) { if (fonts[i].name === name) { cur = fonts[i]; break; } }
             var st = document.getElementById('readingFontStatus');
-            if (!url || !name) {
+            if (!cur) {
+                // 默认：移除字体
                 if (_readingFontLink) { _readingFontLink.remove(); _readingFontLink = null; }
                 document.documentElement.style.removeProperty('--reading-font');
                 if (st) st.textContent = '当前：默认字体';
+                readingRenderFontList();
                 return;
             }
-            // 注入/更新字体 CSS <link>
             if (!_readingFontLink) {
                 _readingFontLink = document.createElement('link');
                 _readingFontLink.rel = 'stylesheet';
                 _readingFontLink.id = 'readingFontLink';
                 document.head.appendChild(_readingFontLink);
             }
-            if (_readingFontLink.href !== url) _readingFontLink.href = url;
+            if (_readingFontLink.href !== cur.url) _readingFontLink.href = cur.url;
             // 注意：font-family 列表里不能出现 inherit（会让整条声明失效），只放字体名 + 通用兜底
-            document.documentElement.style.setProperty('--reading-font', '"' + name + '", serif');
-            if (st) st.textContent = '当前：' + name + '（联网时生效）';
+            document.documentElement.style.setProperty('--reading-font', '"' + cur.name + '", serif');
+            if (st) st.textContent = '当前：' + cur.name + '（联网时生效）';
+            readingRenderFontList();
         }
-        function readingApplyFontFromInput() {
+        // 渲染字体库：默认 + 每个已存字体（点切换，× 删除）
+        function readingRenderFontList() {
+            var box = document.getElementById('readingFontList');
+            if (!box) return;
+            var fonts = readingFontsLoad();
+            var active = localStorage.getItem('reading_font_name') || '';
+            var html = '<button class="pagebtn-pos-opt' + (active ? '' : ' active') + '" onclick="readingUseFont(\'\')">默认</button>';
+            for (var i = 0; i < fonts.length; i++) {
+                var nm = fonts[i].name;
+                var safe = nm.replace(/'/g, "\\'");
+                var on = (nm === active) ? ' active' : '';
+                html += '<span class="reading-font-chip' + on + '" style="display:inline-flex;align-items:center;gap:4px">'
+                      + '<button class="pagebtn-pos-opt' + on + '" onclick="readingUseFont(\'' + safe + '\')">' + esc(nm) + '</button>'
+                      + '<button class="pagebtn-pos-opt" title="删除" onclick="readingDeleteFont(\'' + safe + '\')" style="min-width:24px;padding:4px 6px">×</button>'
+                      + '</span>';
+            }
+            box.innerHTML = html;
+        }
+        // 切换到某个已存字体（空字符串=默认）
+        function readingUseFont(name) {
+            if (name) localStorage.setItem('reading_font_name', name);
+            else localStorage.removeItem('reading_font_name');
+            readingApplyFont();
+        }
+        // 从输入框「保存并应用」一个新字体（若同名则更新）
+        function readingAddFont() {
             var url = (document.getElementById('readingFontUrlInput').value || '').trim();
             var name = (document.getElementById('readingFontNameInput').value || '').trim();
             var st = document.getElementById('readingFontStatus');
-            if (!url || !name) {
-                if (st) st.textContent = '请把「字体网址」和「字体名称」都填上';
-                return;
-            }
-            if (!/^https?:\/\//i.test(url)) {
-                if (st) st.textContent = '网址要以 http:// 或 https:// 开头';
-                return;
-            }
-            localStorage.setItem('reading_font_url', url);
+            if (!url || !name) { if (st) st.textContent = '请把「字体网址」和「字体名称」都填上'; return; }
+            if (!/^https?:\/\//i.test(url)) { if (st) st.textContent = '网址要以 http:// 或 https:// 开头'; return; }
+            var fonts = readingFontsLoad();
+            var found = false;
+            for (var i = 0; i < fonts.length; i++) { if (fonts[i].name === name) { fonts[i].url = url; found = true; break; } }
+            if (!found) fonts.push({ name: name, url: url });
+            readingFontsSave(fonts);
             localStorage.setItem('reading_font_name', name);
+            document.getElementById('readingFontUrlInput').value = '';
+            document.getElementById('readingFontNameInput').value = '';
             readingApplyFont();
         }
-        function readingClearFont() {
-            localStorage.removeItem('reading_font_url');
-            localStorage.removeItem('reading_font_name');
-            var ui = document.getElementById('readingFontUrlInput'); if (ui) ui.value = '';
-            var ni = document.getElementById('readingFontNameInput'); if (ni) ni.value = '';
+        // 删除字体库里某项（若正在用则回退默认）
+        function readingDeleteFont(name) {
+            var fonts = readingFontsLoad().filter(function(f) { return f.name !== name; });
+            readingFontsSave(fonts);
+            if ((localStorage.getItem('reading_font_name') || '') === name) localStorage.removeItem('reading_font_name');
             readingApplyFont();
         }
 
