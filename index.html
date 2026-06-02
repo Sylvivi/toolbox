@@ -14114,6 +14114,9 @@ body {
             var st = el.scrollTop;
             // 顶部附近始终显示
             if (st <= 4) { readingShowTopbar(); _topbarLastScroll = st; return; }
+            // 靠近底部时不切换：藏横条会改变正文高度→滚动位置被回弹→反复触发抖动
+            var gap = el.scrollHeight - st - el.clientHeight;
+            if (gap <= bar.offsetHeight + 8) { _topbarLastScroll = st; return; }
             var delta = st - _topbarLastScroll;
             if (delta > 6) {
                 // 下滑 → 隐藏
