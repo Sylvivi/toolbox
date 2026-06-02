@@ -10317,6 +10317,14 @@ body {
             e.preventDefault();
         }
 
+        // 直接进入最近一次对话；没有任何对话时开新对话
+        function chatOpenMostRecent() {
+            var list = chatGetHistory();
+            if (!list || list.length === 0) { chatNewConv(); return; }
+            list.sort(function(a, b) { return (b.updated || b.created || 0) - (a.updated || a.created || 0); });
+            chatLoadConv(list[0].id);
+        }
+
         function openChatModal() {
             document.getElementById('chatModalOverlay').classList.add('show');
             document.body.classList.add('modal-open');
@@ -10327,7 +10335,7 @@ body {
             document.body.style.top = -window.scrollY + 'px';
             var modal = document.querySelector('.modal.chat-modal');
             if (modal && window.visualViewport) modal.style.height = window.visualViewport.height + 'px';
-            chatSwitchView('list');
+            chatOpenMostRecent();
         }
 
         function closeChatModal() {
