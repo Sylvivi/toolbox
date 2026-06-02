@@ -1265,7 +1265,9 @@ body {
             background: transparent;
             position: relative; z-index: 20;
             max-width: 768px; width: 100%; margin: 0 auto;
+            transition: margin-top 0.3s cubic-bezier(0.32,0.72,0,1);
         }
+        .chat-topbar.topbar-hidden { /* margin-top 由 JS 按实际高度设置 */ }
         .chat-close-btn {
             width: 36px; height: 36px; border: none; border-radius: 10px;
             background: transparent; color: var(--accent-mid); font-size: 18px;
@@ -10276,6 +10278,7 @@ body {
                 inputArea.style.display = '';
                 chatCloseSettings();
             }
+            if (typeof readingShowTopbar === 'function') { readingShowTopbar(); _topbarLastScroll = 0; }
             readingSyncAutoScrollUI();
         }
 
@@ -13554,6 +13557,7 @@ body {
                 toggleTranslateMode(false);
             }
             chatSyncModeButtons();
+            if (typeof readingShowTopbar === 'function') readingShowTopbar();
         }
 
         // 把当前模式同步到三个分段按钮的高亮
@@ -14094,6 +14098,39 @@ body {
             if (pct < 0) pct = 0; if (pct > 100) pct = 100;
             badge.textContent = '已读 ' + pct + '%';
         }
+        // 共读/翻译：顶栏「下滑藏、上滑显」
+        var _topbarHidden = false;
+        var _topbarLastScroll = 0;
+        function readingShowTopbar() {
+            var bar = document.getElementById('chatTopbarConv');
+            if (bar) bar.style.marginTop = '';
+            _topbarHidden = false;
+        }
+        function readingAutoHideTopbar() {
+            var bar = document.getElementById('chatTopbarConv');
+            var el = document.getElementById('chatMessages');
+            if (!bar || !el) return;
+            if (!(chatReadingMode || chatTranslateMode)) { readingShowTopbar(); return; }
+            var st = el.scrollTop;
+            // 顶部附近始终显示
+            if (st <= 4) { readingShowTopbar(); _topbarLastScroll = st; return; }
+            var delta = st - _topbarLastScroll;
+            if (delta > 6) {
+                // 下滑 → 隐藏
+                if (!_topbarHidden) {
+                    bar.style.marginTop = '-' + bar.offsetHeight + 'px';
+                    _topbarHidden = true;
+                    chatHideTopMenu();
+                    chatCloseNavPanel();
+                    chatCloseBookmarkPanel();
+                }
+                _topbarLastScroll = st;
+            } else if (delta < -6) {
+                // 上滑 → 显示
+                if (_topbarHidden) readingShowTopbar();
+                _topbarLastScroll = st;
+            }
+        }
         (function() {
             var el = document.getElementById('chatMessages');
             if (!el) return;
@@ -14101,7 +14138,7 @@ body {
             el.addEventListener('scroll', function() {
                 if (ticking) return;
                 ticking = true;
-                requestAnimationFrame(function() { readingUpdateProgress(); ticking = false; });
+                requestAnimationFrame(function() { readingUpdateProgress(); readingAutoHideTopbar(); ticking = false; });
             }, { passive: true });
         })();
 
