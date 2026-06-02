@@ -13927,6 +13927,7 @@ body {
 
         /* ===== 共读：点段评价 ===== */
         var readingCommenting = false;
+        var readingAbortCtl = null;  // 共读「思考中」可中止
 
         function readingClearActbar() {
             var bar = document.querySelector('.reading-actbar');
@@ -14052,7 +14053,7 @@ body {
 
         // 共读：对某段提问（单轮问答），答案以引用形式接在该段下方
         async function readingAskOne(msgIdx, pNum, question, bar) {
-            if (readingCommenting) return;
+            if (readingCommenting) { if (readingAbortCtl) readingAbortCtl.abort(); return; }
             question = (question || '').trim();
             var input = bar && bar.querySelector('.rp-ask');
             if (!question) { if (input) input.focus(); return; }
@@ -14099,12 +14100,14 @@ body {
                 commentBlock +
                 '\n\n我的问题是：' + question;
             readingCommenting = true;
+            readingAbortCtl = new AbortController();
             var sendBtn = bar && bar.querySelector('.rp-ask-send');
-            if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '思考中…'; }
+            // 不禁用按钮：加载中点它即可中止（再次进入会命中上面的中止分支）
+            if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '思考中… ✕'; }
             if (input) input.disabled = true;
             var _askT0 = Date.now();
             var _askTimer = setInterval(function() {
-                if (sendBtn) sendBtn.textContent = '思考中… ' + chatFmtElapsed(Math.floor((Date.now() - _askT0) / 1000));
+                if (sendBtn) sendBtn.textContent = '思考中… ' + chatFmtElapsed(Math.floor((Date.now() - _askT0) / 1000)) + ' ✕';
             }, 1000);
             try {
                 var baseUrl = getBaseUrl(item.url);
@@ -14119,7 +14122,8 @@ body {
                             { role: 'user', content: userMsg }
                         ],
                         stream: false
-                    })
+                    }),
+                    signal: readingAbortCtl.signal
                 });
                 if (!resp.ok) { var et = ''; try { et = await resp.text(); } catch (x) {} throw new Error('HTTP ' + resp.status + (et ? ': ' + et.substring(0, 120) : '')); }
                 var data = await resp.json();
@@ -14137,12 +14141,13 @@ body {
                 readingClearActbar();
                 readingRerenderMsg(msgIdx, pNum);
             } catch (e) {
-                if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '重试'; }
+                if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = e.name === 'AbortError' ? '提问' : '重试'; }
                 if (input) input.disabled = false;
-                alert('提问失败：' + (e.message || e));
+                if (e.name !== 'AbortError') alert('提问失败：' + (e.message || e));
             } finally {
                 clearInterval(_askTimer);
                 readingCommenting = false;
+                readingAbortCtl = null;
             }
         }
 
@@ -14162,6 +14167,7 @@ body {
 
         /* ===== 剧本翻译模式：区间点选 + 按需翻译 ===== */
         var translateSelMsgIdx = -1, translateSelAnchor = -1, translateSelEnd = -1, translateBusy = false;
+        var translateAbortCtl = null;  // 翻译 / 翻译追问「思考中」可中止
 
         function translateClearSel() {
             translateSelMsgIdx = -1; translateSelAnchor = -1; translateSelEnd = -1;
@@ -14266,7 +14272,7 @@ body {
         }
 
         async function translateRunSelected() {
-            if (translateBusy) return;
+            if (translateBusy) { if (translateAbortCtl) translateAbortCtl.abort(); return; }
             if (translateSelMsgIdx < 0 || translateSelAnchor < 0) return;
             var msgIdx = translateSelMsgIdx;
             var msg = chatMessages[msgIdx];
@@ -14281,12 +14287,14 @@ body {
             if (lo < 1 || hi > paras.length) { translateClearSel(); return; }
             var segment = paras.slice(lo - 1, hi).join('\n');
             translateBusy = true;
+            translateAbortCtl = new AbortController();
             var bar = document.getElementById('translateActBar');
             var runBtn = bar && bar.querySelector('.ta-run');
-            if (runBtn) { runBtn.disabled = true; runBtn.textContent = '翻译中…'; }
+            // 不禁用按钮：加载中点它即可中止
+            if (runBtn) { runBtn.disabled = false; runBtn.textContent = '翻译中… ✕'; }
             var _trT0 = Date.now();
             var _trTimer = setInterval(function() {
-                if (runBtn) runBtn.textContent = '翻译中… ' + chatFmtElapsed(Math.floor((Date.now() - _trT0) / 1000));
+                if (runBtn) runBtn.textContent = '翻译中… ' + chatFmtElapsed(Math.floor((Date.now() - _trT0) / 1000)) + ' ✕';
             }, 1000);
             try {
                 var baseUrl = getBaseUrl(item.url);
@@ -14301,7 +14309,8 @@ body {
                             { role: 'user', content: segment }
                         ],
                         stream: false
-                    })
+                    }),
+                    signal: translateAbortCtl.signal
                 });
                 if (!resp.ok) { var et = ''; try { et = await resp.text(); } catch (x) {} throw new Error('HTTP ' + resp.status + (et ? ': ' + et.substring(0, 120) : '')); }
                 var data = await resp.json();
@@ -14315,11 +14324,12 @@ body {
                 translateClearSel();
                 readingRerenderMsg(msgIdx, hi);
             } catch (e) {
-                if (runBtn) { runBtn.disabled = false; runBtn.textContent = '重试'; }
-                alert('翻译失败：' + (e.message || e));
+                if (runBtn) { runBtn.disabled = false; runBtn.textContent = e.name === 'AbortError' ? '翻译' : '重试'; }
+                if (e.name !== 'AbortError') alert('翻译失败：' + (e.message || e));
             } finally {
                 clearInterval(_trTimer);
                 translateBusy = false;
+                translateAbortCtl = null;
             }
         }
 
@@ -14363,7 +14373,7 @@ body {
         }
 
         async function translateAskRun(msgIdx, s, e, question, bar) {
-            if (translateBusy) return;
+            if (translateBusy) { if (translateAbortCtl) translateAbortCtl.abort(); return; }
             question = (question || '').trim();
             var input = bar && bar.querySelector('.ta-ask');
             if (!question) { if (input) input.focus(); return; }
@@ -14406,12 +14416,14 @@ body {
                 priorQA +
                 '\n\n我的问题是：' + question;
             translateBusy = true;
+            translateAbortCtl = new AbortController();
             var send = bar && bar.querySelector('.ta-ask-send');
-            if (send) { send.disabled = true; send.textContent = '思考中…'; }
+            // 不禁用按钮：加载中点它即可中止
+            if (send) { send.disabled = false; send.textContent = '思考中… ✕'; }
             if (input) input.disabled = true;
             var _taT0 = Date.now();
             var _taTimer = setInterval(function() {
-                if (send) send.textContent = '思考中… ' + chatFmtElapsed(Math.floor((Date.now() - _taT0) / 1000));
+                if (send) send.textContent = '思考中… ' + chatFmtElapsed(Math.floor((Date.now() - _taT0) / 1000)) + ' ✕';
             }, 1000);
             try {
                 var baseUrl = getBaseUrl(item.url);
@@ -14426,7 +14438,8 @@ body {
                             { role: 'user', content: userMsg }
                         ],
                         stream: false
-                    })
+                    }),
+                    signal: translateAbortCtl.signal
                 });
                 if (!resp.ok) { var et = ''; try { et = await resp.text(); } catch (x) {} throw new Error('HTTP ' + resp.status + (et ? ': ' + et.substring(0, 120) : '')); }
                 var data = await resp.json();
@@ -14437,12 +14450,13 @@ body {
                 chatSaveCurrentConv(true);
                 readingRerenderMsg(msgIdx, hi);
             } catch (err) {
-                if (send) { send.disabled = false; send.textContent = '重试'; }
+                if (send) { send.disabled = false; send.textContent = err.name === 'AbortError' ? '提问' : '重试'; }
                 if (input) input.disabled = false;
-                alert('追问失败：' + (err.message || err));
+                if (err.name !== 'AbortError') alert('追问失败：' + (err.message || err));
             } finally {
                 clearInterval(_taTimer);
                 translateBusy = false;
+                translateAbortCtl = null;
             }
         }
 
