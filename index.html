@@ -2421,6 +2421,7 @@ body {
         /* 共读正文字号（按设备调节，作用于整段正文与问答，不影响操作栏） */
         .reading-merged { font-size: var(--reading-fs, 1em); }
         .reading-merged blockquote .reading-q-name { color: var(--accent); font-weight: 600; }
+        .reading-merged blockquote .reading-a-name { color: var(--accent); font-weight: 600; }
         .reading-merged p[data-p] {
             cursor: pointer; border-radius: 5px; padding: 1px 4px; margin-left: -4px; margin-right: -4px;
             transition: background 0.15s;
@@ -2477,6 +2478,7 @@ body {
         }
         .translate-block .tb-qa .tb-q { font-weight: 600; color: var(--text-sub); margin-bottom: 4px; }
         .translate-block .tb-qa .tb-q .tb-q-name { color: var(--accent); }
+        .translate-block .tb-qa .tb-a .tb-a-name { color: var(--accent); }
         .translate-block .tb-qa .tb-a { color: var(--text); }
         .translate-askbar {
             display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
@@ -2512,6 +2514,7 @@ body {
 
         /* ===== 共读：点段评价 ===== */
         .reading-merged blockquote .reading-q-name { color: var(--accent); font-weight: 600; }
+        .reading-merged blockquote .reading-a-name { color: var(--accent); font-weight: 600; }
         .reading-merged p[data-p] {
             cursor: pointer; border-radius: 5px; padding: 1px 4px; margin-left: -4px; margin-right: -4px;
             transition: background 0.15s;
@@ -14968,9 +14971,21 @@ body {
                 html += '<p data-p="' + pNum + '" style="white-space:pre-wrap;word-break:break-word;margin:0.5em 0">' + esc(paragraphs[j]) + '</p>';
                 if (commentMap[pNum]) {
                     for (var k = 0; k < commentMap[pNum].length; k++) {
-                        var _cmtRendered = renderText(commentMap[pNum][k]);
-                        // 追问以「汐：」开头，把名字单独标成强调色（与翻译模式署名一致）
-                        if (/^\s*汐：/.test(commentMap[pNum][k])) _cmtRendered = _cmtRendered.replace('汐：', '<span class="reading-q-name">汐</span>：');
+                        var _cmtRaw = commentMap[pNum][k];
+                        var _cmtRendered;
+                        // 追问以「汐：」开头：第一行是问题（标「汐：」），其余是 AI 回答（标「🍄：」）
+                        var _qm = /^\s*汐：/.test(_cmtRaw);
+                        if (_qm) {
+                            var _nl = _cmtRaw.indexOf('\n');
+                            var _qLine = _nl >= 0 ? _cmtRaw.slice(0, _nl) : _cmtRaw;
+                            var _aLine = _nl >= 0 ? _cmtRaw.slice(_nl + 1) : '';
+                            _cmtRendered = renderText(_qLine).replace('汐：', '<span class="reading-q-name">汐</span>：');
+                            if (_aLine.trim()) {
+                                _cmtRendered += '<div style="margin-top:0.4em"><span class="reading-a-name">🍄</span>：' + renderText(_aLine) + '</div>';
+                            }
+                        } else {
+                            _cmtRendered = renderText(_cmtRaw);
+                        }
                         html += '<blockquote style="margin:0.4em 0 0.6em;padding:6px 12px;border-left:3px solid var(--accent);background:var(--quote-bg, var(--accent-light));border-radius:0 8px 8px 0;font-size:0.92em;color:var(--text-sub);line-height:1.6">' + _cmtRendered + '</blockquote>';
                     }
                 }
@@ -15030,7 +15045,7 @@ body {
                         var parsed = translateBlockSplitQA(blk.text);
                         var body = renderText(parsed.main);
                         for (var q = 0; q < parsed.qas.length; q++) {
-                            body += '<div class="tb-qa"><div class="tb-q"><span class="tb-q-name">汐</span>：' + esc(parsed.qas[q].q) + '</div><div class="tb-a">' + renderText(parsed.qas[q].a) + '</div></div>';
+                            body += '<div class="tb-qa"><div class="tb-q"><span class="tb-q-name">汐</span>：' + esc(parsed.qas[q].q) + '</div><div class="tb-a"><span class="tb-a-name">🍄</span>：' + renderText(parsed.qas[q].a) + '</div></div>';
                         }
                         html += '<div class="translate-block" data-s="' + blk.s + '" data-e="' + blk.e + '">' +
                             '<div class="tb-body">' + body + '</div></div>';
