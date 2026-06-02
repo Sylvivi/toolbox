@@ -10278,7 +10278,11 @@ body {
                 inputArea.style.display = '';
                 chatCloseSettings();
             }
-            if (typeof readingShowTopbar === 'function') { readingShowTopbar(); _topbarLastScroll = 0; }
+            if (typeof readingShowTopbar === 'function') {
+                readingShowTopbar();
+                _topbarLastScroll = 0;
+                if (view === 'conv') readingSuppressTopbar(900);  // 进入对话后约 0.9s 内不自动隐藏，避开滚到底部的程序化滚动
+            }
             readingSyncAutoScrollUI();
         }
 
@@ -14101,10 +14105,15 @@ body {
         // 共读/翻译：顶栏「下滑藏、上滑显」
         var _topbarHidden = false;
         var _topbarLastScroll = 0;
+        var _topbarSuppressUntil = 0;   // 该时间戳之前不做显隐判断（进入对话/自身动画期间）
         function readingShowTopbar() {
             var bar = document.getElementById('chatTopbarConv');
             if (bar) bar.style.marginTop = '';
             _topbarHidden = false;
+        }
+        // 临时屏蔽自动显隐：进入对话或横条自身动画时调用，避免连锁触发抖动
+        function readingSuppressTopbar(ms) {
+            _topbarSuppressUntil = Date.now() + (ms || 700);
         }
         function readingAutoHideTopbar() {
             var bar = document.getElementById('chatTopbarConv');
@@ -14112,13 +14121,15 @@ body {
             if (!bar || !el) return;
             if (!(chatReadingMode || chatTranslateMode)) { readingShowTopbar(); return; }
             var st = el.scrollTop;
+            // 屏蔽期内：只同步基准位置，不切换（吸收进入对话的程序化滚动 & 自身动画引发的回弹）
+            if (Date.now() < _topbarSuppressUntil) { _topbarLastScroll = st; return; }
             // 顶部附近始终显示
             if (st <= 4) { readingShowTopbar(); _topbarLastScroll = st; return; }
             // 靠近底部时不切换：藏横条会改变正文高度→滚动位置被回弹→反复触发抖动
             var gap = el.scrollHeight - st - el.clientHeight;
             if (gap <= bar.offsetHeight + 8) { _topbarLastScroll = st; return; }
             var delta = st - _topbarLastScroll;
-            if (delta > 6) {
+            if (delta > 8) {
                 // 下滑 → 隐藏
                 if (!_topbarHidden) {
                     bar.style.marginTop = '-' + bar.offsetHeight + 'px';
@@ -14126,11 +14137,12 @@ body {
                     chatHideTopMenu();
                     chatCloseNavPanel();
                     chatCloseBookmarkPanel();
+                    readingSuppressTopbar(380);   // 动画期间忽略自身引发的滚动
                 }
                 _topbarLastScroll = st;
-            } else if (delta < -6) {
+            } else if (delta < -8) {
                 // 上滑 → 显示
-                if (_topbarHidden) readingShowTopbar();
+                if (_topbarHidden) { readingShowTopbar(); readingSuppressTopbar(380); }
                 _topbarLastScroll = st;
             }
         }
