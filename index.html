@@ -2034,6 +2034,11 @@ body {
             font-size: 10px; color: var(--text-muted); padding: 2px 14px;
             display: none; line-height: 1; opacity: 0.7;
         }
+        .chat-input-modelmeta {
+            font-size: 10px; color: var(--text-muted); padding: 2px 14px;
+            line-height: 1; opacity: 0.7; letter-spacing: 0.03em;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
         @keyframes readingCommentIn {
             from { opacity: 1; transform: none; }
             to { opacity: 1; transform: none; }
@@ -4122,6 +4127,7 @@ body {
                 </div>
             </div>
             <div class="chat-input-area" id="chatInputArea" style="">
+                <div class="chat-input-modelmeta" id="chatInputModelMeta" style="display:none"></div>
                 <div class="chat-token-hint" id="chatTokenHint"></div>
                 <div class="chat-img-preview" id="chatImgPreview" style="display:none"></div>
                 <div class="chat-input-box">
@@ -13450,6 +13456,27 @@ body {
             if (inp) inp.addEventListener('blur', function() {
                 if ((chatReadingMode || chatTranslateMode) && !inp.value.trim()) readingCollapseInput();
             });
+        })();
+        // 聚焦输入框时，用小字显示当前正在使用的中转站与模型
+        function chatUpdateInputModelMeta() {
+            var el = document.getElementById('chatInputModelMeta');
+            if (!el) return;
+            var sel = document.getElementById('chatProviderSelect');
+            var prov = '';
+            if (sel && sel.selectedIndex >= 0) prov = (sel.options[sel.selectedIndex].text || '').trim();
+            if (prov === '选择中转站…') prov = '';
+            var model = chatSelectedModel || '';
+            var parts = [];
+            if (prov) parts.push(prov);
+            if (model) parts.push(model);
+            el.textContent = parts.length ? parts.join(' · ') : '未选择模型';
+        }
+        (function() {
+            var inp = document.getElementById('chatInput');
+            var meta = document.getElementById('chatInputModelMeta');
+            if (!inp || !meta) return;
+            inp.addEventListener('focus', function() { chatUpdateInputModelMeta(); meta.style.display = 'block'; });
+            inp.addEventListener('blur', function() { meta.style.display = 'none'; });
         })();
         function toggleReadingMode(on) {
             var changed = (chatReadingMode !== on);
