@@ -4285,20 +4285,25 @@ body {
                     </div>
                 </div>
                 <div id="readingQuoteRow" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
-                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">引号高亮<span style="font-weight:400;color:var(--text-muted);opacity:.7">（对话用主题色）</span></span>
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">引号高亮</span>
                     <div style="position:relative;width:40px;height:22px;cursor:pointer;flex-shrink:0" onclick="readingToggleQuoteHl()">
                         <input type="checkbox" id="readingQuoteToggle" style="display:none">
                         <span id="readingQuoteTrack" style="position:absolute;inset:0;background:var(--card-border);border-radius:11px;transition:background 0.3s cubic-bezier(0.4,0,0.2,1);"></span>
                         <span id="readingQuoteKnob" style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);box-shadow:rgba(0,0,0,0.18) 0px 1px 4px;"></span>
                     </div>
                 </div>
-                <div id="readingFontFamilyRow" style="display:flex;flex-direction:column;gap:6px;margin-top:10px">
-                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">正文字体（网络字体，需联网）</span>
-                    <div id="readingFontList" style="display:flex;flex-wrap:wrap;gap:6px"></div>
-                    <input id="readingFontUrlInput" type="text" placeholder="字体 CSS 网址，如 https://.../result.css" style="width:100%;box-sizing:border-box;font-size:12px;padding:7px 9px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);color:var(--text)">
-                    <input id="readingFontNameInput" type="text" placeholder="字体名称，如 Huiwen-mincho" style="width:100%;box-sizing:border-box;font-size:12px;padding:7px 9px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);color:var(--text)">
-                    <button class="pagebtn-pos-opt" onclick="readingAddFont()" style="width:100%">保存并应用</button>
-                    <span id="readingFontStatus" style="font-size:11px;color:var(--text-muted);opacity:.8"></span>
+                <div id="readingFontFamilyRow" style="margin-top:10px">
+                    <div onclick="readingToggleFontPanel()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none">
+                        <span style="font-size:12px;font-weight:600;color:var(--text-muted)">正文字体</span>
+                        <span id="readingFontArrow" style="font-size:10px;color:var(--text-muted);transition:transform 0.2s;display:inline-block">▶</span>
+                    </div>
+                    <div id="readingFontPanel" style="display:none;flex-direction:column;gap:6px;margin-top:8px">
+                        <div id="readingFontList" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+                        <input id="readingFontUrlInput" type="text" placeholder="字体 CSS 网址，如 https://.../result.css" style="width:100%;box-sizing:border-box;font-size:12px;padding:7px 9px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);color:var(--text)">
+                        <input id="readingFontNameInput" type="text" placeholder="字体名称，如 Huiwen-mincho" style="width:100%;box-sizing:border-box;font-size:12px;padding:7px 9px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);color:var(--text)">
+                        <button class="pagebtn-pos-opt" onclick="readingAddFont()" style="width:100%">保存并应用</button>
+                        <span id="readingFontStatus" style="font-size:11px;color:var(--text-muted);opacity:.8"></span>
+                    </div>
                 </div>
             </div>
             <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--card-border)">
@@ -13682,8 +13687,17 @@ body {
             if (_readingFontLink.href !== cur.url) _readingFontLink.href = cur.url;
             // 注意：font-family 列表里不能出现 inherit（会让整条声明失效），只放字体名 + 通用兜底
             document.documentElement.style.setProperty('--reading-font', '"' + cur.name + '", serif');
-            if (st) st.textContent = '当前：' + cur.name + '（联网时生效）';
+            if (st) st.textContent = '当前：' + cur.name;
             readingRenderFontList();
+        }
+        // 共读：字体设置块折叠开关（默认收起，省面积）
+        function readingToggleFontPanel() {
+            var p = document.getElementById('readingFontPanel');
+            var arrow = document.getElementById('readingFontArrow');
+            if (!p) return;
+            var open = p.style.display !== 'none';
+            p.style.display = open ? 'none' : 'flex';
+            if (arrow) arrow.style.transform = open ? '' : 'rotate(90deg)';
         }
         // 渲染字体库：默认 + 每个已存字体（点切换，× 删除）
         function readingRenderFontList() {
