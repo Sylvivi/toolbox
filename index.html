@@ -4978,20 +4978,33 @@ body {
             purplepink: '#f0ecfc',
             iceblue: '#e8f2fa'
         };
+        // 更新 PWA 状态栏颜色：聊天弹窗打开且统一遮罩生效（遮罩开+引号高亮开+非深色）时用暖奶白，
+        // 否则用各自主题色。弹窗关掉自动回到主题色。
+        function updateStatusBarColor() {
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (!meta) return;
+            var themeId = localStorage.getItem('toolbox_theme') || 'clay';
+            var overlay = document.getElementById('chatModalOverlay');
+            var chatOpen = overlay && overlay.classList.contains('show');
+            var unifiedMask = chatOpen
+                && document.body.classList.contains('chat-mask-on')
+                && document.body.classList.contains('reading-quote-on')
+                && !document.body.classList.contains('dark');
+            meta.setAttribute('content', unifiedMask ? '#FFF8F0' : (THEME_STATUS_COLORS[themeId] || '#EEF4FB'));
+        }
         function applyTheme(idx) {
             var t = THEMES[idx];
             document.body.classList.remove('dark', 'theme-warm', 'theme-clay', 'theme-blueorange', 'theme-tealblue', 'theme-dream', 'theme-purplepink', 'theme-iceblue');
             if (t.cls) document.body.classList.add(t.cls);
             localStorage.setItem('toolbox_theme', t.id);
-            // 更新 PWA 状态栏颜色
-            var meta = document.querySelector('meta[name="theme-color"]');
-            if (meta) meta.setAttribute('content', THEME_STATUS_COLORS[t.id] || '#EEF4FB');
             // 同步遮罩状态
             if (t.id === 'dark') {
                 document.body.classList.remove('chat-mask-on');
             } else if (localStorage.getItem('chat_mask') === '1') {
                 document.body.classList.add('chat-mask-on');
             }
+            // 更新 PWA 状态栏颜色
+            updateStatusBarColor();
         }
         function cycleTheme() {
             var idx = (getThemeIdx() + 1) % THEMES.length;
@@ -10380,6 +10393,7 @@ body {
             document.body.style.top = -window.scrollY + 'px';
             var modal = document.querySelector('.modal.chat-modal');
             if (modal && window.visualViewport) modal.style.height = window.visualViewport.height + 'px';
+            updateStatusBarColor();
             chatOpenMostRecent();
         }
 
@@ -10393,6 +10407,7 @@ body {
             if (modal) modal.style.height = '';
             document.getElementById('chatModalOverlay').classList.remove('show');
             document.body.classList.remove('modal-open');
+            updateStatusBarColor();
             var scrollY = parseInt(document.body.dataset.chatScrollY || '0');
             document.body.style.overflow = '';
             document.body.style.position = '';
@@ -11432,6 +11447,7 @@ body {
             } else {
                 document.body.classList.remove('chat-mask-on');
             }
+            updateStatusBarColor();
             syncChatMaskToggleStyle();
         }
         function syncChatMaskToggleStyle() {
@@ -13644,6 +13660,7 @@ body {
             var knob = document.getElementById('readingQuoteKnob');
             if (track) track.style.background = on ? 'var(--accent)' : 'var(--card-border)';
             if (knob) knob.style.transform = on ? 'translateX(18px)' : 'translateX(0)';
+            updateStatusBarColor();
         }
         function readingToggleQuoteHl() {
             var on = localStorage.getItem('reading_quote_hl') === '1';
