@@ -10533,7 +10533,7 @@ body {
             chatSelectedKeyStr = conv.keyStr || '';
             chatReadingMode = conv.readingMode || false;
             chatTranslateMode = conv.translateMode || false;
-            if (chatReadingMode) readingCollapseInput(); else readingExpandInput(false);
+            if (chatReadingMode || chatTranslateMode) readingCollapseInput(); else readingExpandInput(false);
             chatContextMax = conv.contextMax || 0;
             document.getElementById('chatCtxRange').value = chatContextMax;
             document.getElementById('chatCtxLabel').textContent = chatContextMax === 0 ? '全部' : chatContextMax + ' 轮';
@@ -13426,7 +13426,7 @@ body {
         (function() {
             var inp = document.getElementById('chatInput');
             if (inp) inp.addEventListener('blur', function() {
-                if (chatReadingMode && !inp.value.trim()) readingCollapseInput();
+                if ((chatReadingMode || chatTranslateMode) && !inp.value.trim()) readingCollapseInput();
             });
         })();
         function toggleReadingMode(on) {
@@ -13463,7 +13463,7 @@ body {
         function toggleTranslateMode(on) {
             chatTranslateMode = on;
             if (on && chatReadingMode) { chatReadingMode = false; readingSyncReadingModeToggle(); }
-            if (on) readingExpandInput(false);
+            if (on) readingCollapseInput(); else readingExpandInput(false);
             translateSyncToggle();
             chatSyncReadingChip();
             chatSaveCurrentConv();
