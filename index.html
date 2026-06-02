@@ -1283,10 +1283,12 @@ body {
         }
         .chat-topbar select:focus { border-color: var(--accent-mid); }
 
-        /* 共读/翻译：本章阅读进度小字（显示在折叠输入条 clawd 旁边） */
+        /* 共读/翻译：本章阅读进度小字（绝对定位，正对齐在 clawd 图标正下方） */
         .reading-progress-inline {
-            font-size: 12px; color: var(--accent); font-weight: 600;
-            flex-shrink: 0; white-space: nowrap; letter-spacing: 0.2px;
+            position: absolute; right: 32px; width: 50px; top: 50%;
+            transform: translateY(-50%); text-align: center;
+            font-size: 11px; color: var(--accent); font-weight: 600;
+            letter-spacing: 0.2px; white-space: nowrap; pointer-events: none;
         }
 
         .chat-search-bar {
@@ -2120,7 +2122,7 @@ body {
         }
         .chat-topmenu-item:hover { background: var(--accent-light); }
         /* 共读模式：输入框折叠成细条，只留 clawd 图标 + 提示，点一下展开 */
-        .reading-collapse-hint { display: none; flex: 1; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; color: var(--text-muted); font-size: 13px; padding-left: 4px; padding-right: 48px; cursor: text; -webkit-tap-highlight-color: transparent; }
+        .reading-collapse-hint { display: none; flex: 1; min-width: 0; align-items: center; color: var(--text-muted); font-size: 13px; padding-left: 4px; cursor: text; -webkit-tap-highlight-color: transparent; }
         .chat-input-area.reading-collapsed #chatInput,
         .chat-input-area.reading-collapsed .chat-input-toolbar,
         .chat-input-area.reading-collapsed .chat-token-hint,
@@ -13604,15 +13606,25 @@ body {
         function rbLoad() { var d = idbGet('reading_books'); rbBooks = (d && d.books) ? d.books : []; }
         function rbSave() { idbSet('reading_books', { books: rbBooks }); }
         function rbGetBook(id) { for (var i = 0; i < rbBooks.length; i++) if (rbBooks[i].id === id) return rbBooks[i]; return null; }
+        // 记忆：当前对话上次填入的是哪本书（按对话 ID 存）
+        function rbConvBookMap() { try { return JSON.parse(localStorage.getItem('reading_conv_book') || '{}'); } catch (e) { return {}; } }
+        function rbGetConvBook() { if (!chatCurrentConvId) return null; return rbConvBookMap()[chatCurrentConvId] || null; }
+        function rbSetConvBook(bookId) { if (!chatCurrentConvId) return; var m = rbConvBookMap(); m[chatCurrentConvId] = bookId; try { localStorage.setItem('reading_conv_book', JSON.stringify(m)); } catch (e) {} }
         function rbEsc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
         function rbFileIcon(name) { var ext = (name.split('.').pop() || '').toLowerCase(); var m = { epub: '📗', mobi: '📕', azw: '📕', azw3: '📕', txt: '📄', md: '📝', markdown: '📝', text: '📄' }; return m[ext] || '📖'; }
 
         function rbOpenShelf() {
             rbLoad();
-            rbActiveBookId = null;
-            document.getElementById('rbShelfView').style.display = '';
-            document.getElementById('rbChapterView').style.display = 'none';
-            rbRenderShelf();
+            var remembered = rbGetConvBook();
+            if (remembered && rbGetBook(remembered)) {
+                // 本对话之前填过这本书，直接打开它的目录
+                rbOpenBook(remembered);
+            } else {
+                rbActiveBookId = null;
+                document.getElementById('rbShelfView').style.display = '';
+                document.getElementById('rbChapterView').style.display = 'none';
+                rbRenderShelf();
+            }
             document.getElementById('rbBg').classList.add('show');
             document.getElementById('rbModal').classList.add('show');
         }
@@ -13678,6 +13690,7 @@ body {
             if (typeof chatAutoGrow === 'function') chatAutoGrow(input);
             if (typeof chatUpdateTokenHint === 'function') chatUpdateTokenHint();
             b.lastChapter = i; rbSave();
+            rbSetConvBook(b.id);
             rbCloseShelf();
             setTimeout(function () { try { input.focus(); } catch (e) {} }, 150);
             showToast('已填入「' + ch.title + '」，点发送即可');
@@ -13694,6 +13707,7 @@ body {
             if (typeof chatAutoGrow === 'function') chatAutoGrow(input);
             if (typeof chatUpdateTokenHint === 'function') chatUpdateTokenHint();
             b.lastChapter = i; rbSave();
+            rbSetConvBook(b.id);
             rbRenderChapters();
             showToast('已追加「' + ch.title + '」，可继续追加或点发送');
         }
