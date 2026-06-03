@@ -14841,8 +14841,11 @@ body {
             var fresh = chatBuildMsgEl('ai', chatMessages[msgIdx].content, chatMessages[msgIdx].thinking, msgIdx, msgIdx === lastAiIdx);
             old.replaceWith(fresh);
             if (focusP) {
-                var p = fresh.querySelector('p[data-p="' + focusP + '"]');
-                if (p) p.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // 多轮共读后，要定位到「我们刚聊的那条」——也就是该段最后一个问答块，
+                // 而不是上方的原文段落，否则每次生成完都落在原文、还得手动往下翻找。
+                var bqs = fresh.querySelectorAll('blockquote[data-cp="' + focusP + '"]');
+                var target = bqs.length ? bqs[bqs.length - 1] : fresh.querySelector('p[data-p="' + focusP + '"]');
+                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }
 
