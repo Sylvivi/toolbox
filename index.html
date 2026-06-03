@@ -10408,7 +10408,10 @@ body {
             }
             if (typeof readingApplyTopbarMode === 'function') {
                 _topbarLastScroll = 0;
-                if (view === 'conv') readingSuppressTopbar(900);  // 进入对话后约 0.9s 内不自动切换，避开滚到底部的程序化滚动
+                if (view === 'conv') {
+                    readingSuppressTopbar(900);  // 进入对话后约 0.9s 内不自动切换，避开滚到底部的程序化滚动
+                    _readingTapSuppressUntil = Date.now() + 600;  // 同时屏蔽点击翻页，吃掉从列表进入时的「幽灵点击」
+                }
                 readingApplyTopbarMode();   // 阅读/翻译模式直接藏起横栏，其余显示
             }
             readingSyncAutoScrollUI();
@@ -14454,6 +14457,7 @@ body {
         var _topbarHidden = false;
         var _topbarLastScroll = 0;
         var _topbarSuppressUntil = 0;   // 该时间戳之前不做显隐判断（进入对话/自身动画期间）
+        var _readingTapSuppressUntil = 0;   // 该时间戳之前忽略点击翻页（避免从列表进入时的「幽灵点击」误翻页）
         function readingShowTopbar() {
             var bar = document.getElementById('chatTopbarConv');
             if (bar) bar.style.marginTop = '';
@@ -15264,6 +15268,8 @@ body {
                 // 共读模式：左半屏点击 = 上一屏，右半屏点击 = 下一屏
                 // （双击留给段落评价、拖选/已选中文字留给复制，故排除并延迟确认）
                 if (chatReadingMode) {
+                    // 刚从列表进入对话的极短时间内忽略翻页，避免「幽灵点击」把阅读位置翻走
+                    if (Date.now() < _readingTapSuppressUntil) return;
                     if (e.target.closest('button, input, textarea, a, svg, img, .reading-actbar')) return;
                     var sel = window.getSelection && window.getSelection();
                     if (sel && String(sel).length > 0) return;
