@@ -4207,9 +4207,12 @@ body {
                 <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
                     <select id="rbPresetSelect" class="rb-select">
                         <option value="auto">自动检测</option>
-                        <option value="chinese">中文章节</option>
-                        <option value="markdown">Markdown 标题</option>
+                        <option value="chinese">中文章节（第X章）</option>
+                        <option value="bracket">成对符号【】（）</option>
+                        <option value="paren-num">括号数字（一）（1）</option>
                         <option value="numbered">数字编号</option>
+                        <option value="english">英文 Chapter</option>
+                        <option value="markdown">Markdown 标题</option>
                         <option value="empty-line">空行分隔</option>
                     </select>
                     <button class="rb-btn" onclick="rbReSplit()">重新拆分</button>
@@ -13780,8 +13783,13 @@ body {
         var rbActiveBookId = null;
         var RB_PRESETS = {
             markdown: '^#{1,6}\\s+.+',
-            chinese: '^第[一二三四五六七八九十百千\\d]+[章节篇部回]\\s*.*',
+            chinese: '^第[一二三四五六七八九十百千零两\\d]+[章节篇部卷回话]\\s*.*',
+            // 成对符号开头：行首是【】〖〗〔〕（）《》［］之一，如「【无争】（一）天降」
+            bracket: '^\\s*[【〖〔（(《［\\[][^\\n]{0,40}?[】〗〕）)》］\\]]',
+            // 括号数字：行首是（一）（二）/（1）这类括号包着的序号
+            'paren-num': '^\\s*[（(][零〇一二三四五六七八九十百千两\\d]+[）)]\\s*',
             numbered: '^\\d+[\\.\\、]\\s*.+',
+            english: '^\\s*[Cc]hapter\\s+\\d+\\b.*',
             'empty-line': '__EMPTY_LINE__'
         };
 
@@ -13957,8 +13965,11 @@ body {
             var lines = rawText.split('\n');
             var patterns = [
                 { name: 'markdown', re: /^#{1,6}\s+.+/ },
-                { name: 'chinese', re: /^第[一二三四五六七八九十百千\d]+[章节篇部回]\s*/ },
-                { name: 'numbered', re: /^\d+[\.\、]\s*.+/ }
+                { name: 'chinese', re: /^第[一二三四五六七八九十百千零两\d]+[章节篇部卷回话]\s*/ },
+                { name: 'bracket', re: /^\s*[【〖〔（(《［\[][^\n]{0,40}?[】〗〕）)》］\]]/ },
+                { name: 'paren-num', re: /^\s*[（(][零〇一二三四五六七八九十百千两\d]+[）)]\s*/ },
+                { name: 'numbered', re: /^\d+[\.\、]\s*.+/ },
+                { name: 'english', re: /^\s*[Cc]hapter\s+\d+/ }
             ];
             var best = null, bestCount = 0;
             for (var p = 0; p < patterns.length; p++) {
