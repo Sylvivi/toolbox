@@ -4230,11 +4230,10 @@ body {
                     <button class="clawd-model-btn" id="clawdModelBtn" onclick="clawdBtnClick(event)" title="切换模型"><span class="clawd-px clawd-xmas" id="clawdPx"></span></button>
                     <div class="clawd-reading-menu" id="clawdReadingMenu">
                         <button onclick="clawdMenuAct('back')">← 退出阅读</button>
-                        <button onclick="clawdMenuAct('shelf')">📚 书架</button>
-                        <button onclick="clawdMenuAct('bookmark')" id="clawdMenuBookmark">🔖 书签</button>
-                        <button onclick="clawdMenuAct('nav')">🧭 消息跳转</button>
                         <button onclick="clawdMenuAct('search')">🔍 搜索</button>
-                        <button onclick="clawdMenuAct('model')">🔄 切换模型</button>
+                        <button onclick="clawdMenuAct('topbar')">☰ 横栏</button>
+                        <button onclick="clawdMenuAct('shelf')">📚 书架</button>
+                        <button onclick="clawdMenuAct('model')">🦀 clawd</button>
                     </div>
                     <div class="reading-collapse-hint" id="readingCollapseHint" onclick="readingExpandInput()"><span class="reading-hint-motto" id="readingHintMotto"></span><span class="reading-progress-inline" id="readingProgressInline"></span></div>
                     <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this);chatUpdateTokenHint()"></textarea>
@@ -13150,12 +13149,7 @@ body {
         function clawdToggleMenu() {
             var m = document.getElementById('clawdReadingMenu');
             if (!m) return;
-            if (m.classList.contains('show')) { m.classList.remove('show'); return; }
-            // 「书签」是否可用：跟横栏里的书签按钮保持一致
-            var bm = document.getElementById('clawdMenuBookmark');
-            var topBm = document.getElementById('chatBookmarkBtn');
-            if (bm) bm.style.display = (topBm && topBm.style.display !== 'none') ? '' : 'none';
-            m.classList.add('show');
+            m.classList.toggle('show');
         }
         function clawdCloseMenu() {
             var m = document.getElementById('clawdReadingMenu');
@@ -13166,12 +13160,10 @@ body {
             if (what === 'back') { chatBackToList(); return; }
             if (what === 'shelf') { rbOpenShelf(); return; }
             if (what === 'model') { chatOpenModelSheet(); return; }
-            // 书签/跳转/搜索的面板挂在横栏下方，需要横栏当锚点——先把横栏显出来再开
+            // 搜索/横栏需要横栏当锚点——先把横栏显出来（书签/跳转在横栏的 ⋮ 菜单里）
             readingShowTopbar();
-            readingSuppressTopbar(900);   // 临时显示期间不被滚动自动收回
-            if (what === 'bookmark') chatToggleBookmarkPanel();
-            else if (what === 'nav') chatToggleNavPanel();
-            else if (what === 'search') chatToggleSearch();
+            readingSuppressTopbar(what === 'topbar' ? 3000 : 900);  // 临时显示期间不被滚动自动收回
+            if (what === 'search') chatToggleSearch();
         }
         document.addEventListener('click', function(e) {
             var m = document.getElementById('clawdReadingMenu');
