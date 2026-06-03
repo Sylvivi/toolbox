@@ -14590,7 +14590,7 @@ body {
             var bar = document.createElement('div');
             bar.className = 'reading-actbar';
             var inputHtml = '<textarea class="rp-ask" rows="1" placeholder="问问这一段…（如：他这句话什么意思？）"></textarea>';
-            var askHtml = '<button class="rp-ask-send">提问</button>';
+            var askHtml = '<button class="rp-ask-send">讨论</button>';
             bar.innerHTML = leftSide ? (askHtml + inputHtml) : (inputHtml + askHtml);
             anchorEl.insertAdjacentElement('afterend', bar);
             // 一步式：直接出输入框；不自动聚焦弹键盘，等用户点输入框再唤起；点「提问」发送；再点该段收起
@@ -14654,6 +14654,15 @@ body {
                 input.style.height = Math.min(input.scrollHeight, window.innerHeight * 0.4) + 'px';
             }
             input.addEventListener('input', grow);
+            // 回车直接发送（手机上点「换行」即提交），Shift+回车才真换行
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+                    e.preventDefault();
+                    var bar = input.closest('.reading-actbar');
+                    var sendBtn = bar && bar.querySelector('.rp-ask-send');
+                    if (sendBtn) sendBtn.click();
+                }
+            });
             setTimeout(grow, 0);
         }
 
