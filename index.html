@@ -10706,6 +10706,14 @@ body {
             chatEditingPresetIdx = -1;
             // 渲染消息
             chatRenderAllMessages();
+            // 共读/翻译：渲染后自动回到上次阅读位置（覆盖默认的「滚到底」）
+            if (chatReadingMode || chatTranslateMode) {
+                requestAnimationFrame(function() {
+                    if (readingRestoreScrollPos()) {
+                        requestAnimationFrame(function() { readingRestoreScrollPos(); readingUpdateProgress(); });
+                    }
+                });
+            }
             chatUpdateCtxIndicator();
             chatSyncReadingChip();
             setTimeout(function() { document.getElementById('chatInput').focus(); }, 300);
@@ -14291,6 +14299,59 @@ body {
             el.scrollTop = el.scrollTop + Math.max(100, el.clientHeight - 48);
         }
 
+        // 共读/翻译：自动记住/恢复上次阅读位置（不用手动书签）
+        // 用「屏幕最上面那一段」当锚点存起来；因为开了 content-visibility 只渲染可视段落，纯像素位置不准，靠锚点最稳。
+        function readingScrollKey() {
+            return chatCurrentConvId ? ('reading_pos_' + chatCurrentConvId) : null;
+        }
+        function readingSaveScrollPos() {
+            if (!(chatReadingMode || chatTranslateMode)) return;
+            var key = readingScrollKey();
+            if (!key) return;
+            var el = document.getElementById('chatMessages');
+            if (!el) return;
+            var ctop = el.getBoundingClientRect().top;
+            var ps = el.querySelectorAll('.reading-merged p[data-p]');
+            var anchor = null;
+            for (var i = 0; i < ps.length; i++) {
+                if (ps[i].getBoundingClientRect().bottom > ctop + 4) { anchor = ps[i]; break; }
+            }
+            try {
+                var data = { top: el.scrollTop };
+                if (anchor) {
+                    var msgEl = anchor.closest('.chat-msg');
+                    data.idx = msgEl ? msgEl.getAttribute('data-idx') : null;
+                    data.p = anchor.getAttribute('data-p');
+                    data.off = Math.round(anchor.getBoundingClientRect().top - ctop);
+                }
+                localStorage.setItem(key, JSON.stringify(data));
+            } catch (e) {}
+        }
+        function readingRestoreScrollPos() {
+            if (!(chatReadingMode || chatTranslateMode)) return false;
+            var key = readingScrollKey();
+            if (!key) return false;
+            var raw = null;
+            try { raw = localStorage.getItem(key); } catch (e) {}
+            if (!raw) return false;
+            var pos = null;
+            try { pos = JSON.parse(raw); } catch (e) {}
+            if (!pos) return false;
+            var el = document.getElementById('chatMessages');
+            if (!el) return false;
+            var anchor = null;
+            if (pos.idx != null && pos.p != null) {
+                anchor = el.querySelector('.chat-msg[data-idx="' + pos.idx + '"] p[data-p="' + pos.p + '"]');
+            }
+            if (anchor) {
+                var ctop = el.getBoundingClientRect().top;
+                var cur = anchor.getBoundingClientRect().top - ctop;
+                el.scrollTop = el.scrollTop + cur - (pos.off || 0);
+                return true;
+            }
+            if (typeof pos.top === 'number') { el.scrollTop = pos.top; return true; }
+            return false;
+        }
         // 共读/翻译：更新本章阅读进度小标志
         function readingUpdateProgress() {
             var badge = document.getElementById('readingProgressInline');
@@ -14351,10 +14412,14 @@ body {
             var el = document.getElementById('chatMessages');
             if (!el) return;
             var ticking = false;
+            var saveTimer = null;
             el.addEventListener('scroll', function() {
-                if (ticking) return;
-                ticking = true;
-                requestAnimationFrame(function() { readingUpdateProgress(); readingAutoHideTopbar(); ticking = false; });
+                if (!ticking) {
+                    ticking = true;
+                    requestAnimationFrame(function() { readingUpdateProgress(); readingAutoHideTopbar(); ticking = false; });
+                }
+                if (saveTimer) clearTimeout(saveTimer);
+                saveTimer = setTimeout(readingSaveScrollPos, 400);
             }, { passive: true });
         })();
 
