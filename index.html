@@ -13608,7 +13608,7 @@ body {
 
             // 单次摘要调用：把一组消息总结成一段。返回 trim 后的摘要文本或 null。
             async function _doSummarize(msgs, truncCap, isReading) {
-                var prompt = isReading ? '以下是小说共读的章节原文与点评：\n' : '以下是一段对话：\n';
+                var prompt = isReading ? '以下是小说共读的内容：本章正文、AI 的逐段点评，可能还有读者读完后围绕本章的多轮讨论。\n' : '以下是一段对话：\n';
                 for (var i = 0; i < msgs.length; i++) {
                     var m = msgs[i];
                     var c = typeof m.content === 'string' ? m.content : '[多模态内容]';
@@ -13616,7 +13616,7 @@ body {
                     prompt += (m.role === 'user' ? '用户：' : '助手：') + c + '\n';
                 }
                 prompt += isReading
-                    ? '\n请总结上述章节内容，保留：登场人物、关键情节进展、重要设定/伏笔、关键对话与数值。不要省略人物姓名。直接输出摘要，不要加前缀。控制在 400 字以内。'
+                    ? '\n请输出两部分：①「剧情核心」——用尽量精简的文字记录本章登场人物（保留姓名）、关键情节进展、重要设定或伏笔；② 若有读者讨论（包括正文里以「汐：」开头的逐段问答，以及章节后围绕本章的多轮对话），都不要逐轮复述，只用一句话概括大致聊了什么主题即可（没有讨论就省略这部分）。直接输出摘要，不要加前缀，控制在 180 字以内。'
                     : '\n请用简洁的语言总结以上对话要点，保留关键信息（数据、决策、代码片段名、具体数值等），去除寒暄和重复。直接输出摘要，不要加前缀。';
                 var resp = await fetch(_useBaseUrl + '/chat/completions', {
                     method: 'POST',
@@ -13624,10 +13624,10 @@ body {
                     body: JSON.stringify({
                         model: _useModel,
                         messages: [
-                            { role: 'system', content: '你是对话摘要助手。简洁准确地总结内容，保留关键信息。' + (isReading ? '完整保留人物、情节、关键设定与数值。' : '控制在 300 字以内。') },
+                            { role: 'system', content: '你是对话摘要助手。简洁准确地总结内容，保留关键信息。' + (isReading ? '聚焦小说剧情核心，人物姓名与关键情节不可省略；读者的讨论（无论正文中「汐：」问答还是章节后的多轮对话）只需一句话带过，不要逐轮展开。' : '控制在 300 字以内。') },
                             { role: 'user', content: prompt }
                         ],
-                        max_tokens: isReading ? 1200 : 500,
+                        max_tokens: isReading ? 600 : 500,
                         stream: false
                     })
                 });
@@ -13639,15 +13639,21 @@ body {
 
             try {
                 if (chatReadingMode) {
-                    // 共读模式：每个回合（一章 ≈ user+assistant 两条）单独总结成一段，
-                    // 分多段压缩。这样每段输出都短而完整，不会被 token 上限截断。
+                    // 共读模式：以「一章正文」为单位分段压缩。每段 = 本章正文 + 助手点评
+                    // + 读完后围绕本章的多轮讨论，全部并到同一段总结里（讨论只一句话带过）。
+                    // 用长度区分：较长的 user 消息＝新一章正文，较短的＝读后讨论，并进当前章。
+                    var CHAPTER_MIN_LEN = 200;
                     var idx = 0;
                     while (idx < toCompress.length) {
-                        // 以 user 消息为一章起点，吃掉其后连续的非 user 消息（通常是 1 条助手点评）
                         var batch = [toCompress[idx]];
                         var j = idx + 1;
-                        while (j < toCompress.length && toCompress[j].role !== 'user') {
-                            batch.push(toCompress[j]); j++;
+                        while (j < toCompress.length) {
+                            var _nxt = toCompress[j];
+                            if (_nxt.role === 'user') {
+                                var _ulen = (typeof _nxt.content === 'string') ? _nxt.content.length : 0;
+                                if (_ulen >= CHAPTER_MIN_LEN) break; // 遇到下一章正文，切段
+                            }
+                            batch.push(_nxt); j++;
                         }
                         var seg = await _doSummarize(batch, 40000, true);
                         if (chatCurrentConvId !== convId) break;
