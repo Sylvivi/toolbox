@@ -10766,7 +10766,7 @@ body {
             }
             chatUpdateCtxIndicator();
             chatSyncReadingChip();
-            setTimeout(function() { document.getElementById('chatInput').focus(); }, 300);
+            // 进入对话不自动聚焦输入框/弹键盘，等用户主动点输入框再唤起
         }
 
         function onChatProviderChangeRestore(conv) {
@@ -14565,13 +14565,12 @@ body {
             var askHtml = '<button class="rp-ask-send">提问</button>';
             bar.innerHTML = leftSide ? (askHtml + bmHtml + inputHtml) : (inputHtml + bmHtml + askHtml);
             pEl.insertAdjacentElement('afterend', bar);
-            // 一步式：直接出输入框，自动聚焦弹键盘；回车换行、点「提问」发送；再点该段收起
+            // 一步式：直接出输入框；不自动聚焦弹键盘，等用户点输入框再唤起；点「提问」发送；再点该段收起
             var input = bar.querySelector('.rp-ask');
             var send = bar.querySelector('.rp-ask-send');
             function go() { readingAskOne(msgIdx, pNum, input.value, bar); }
             send.onclick = go;
             readingBindAskBox(input);
-            input.focus();
         }
 
         // 点「提问」：把操作条切换成一个小输入框，回车或「发送」提交
@@ -14587,7 +14586,6 @@ body {
             function go() { readingAskOne(msgIdx, pNum, input.value, bar); }
             send.onclick = go;
             readingBindAskBox(input);
-            input.focus();
         }
         // 共读追问输入框：随内容自动长高（换行交给键盘的回车键，发送用按钮）
         function readingBindAskBox(input) {
@@ -14973,7 +14971,7 @@ body {
             function go() { translateAskRun(msgIdx, s, e, input.value, bar); }
             send.onclick = go;
             input.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); go(); } });
-            input.focus();
+            // 不自动聚焦弹键盘，等用户点输入框再唤起
         }
 
         // 把一条问答追加进对应 [[TR s e]] 块（插在该块 [[/TR]] 之前）
