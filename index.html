@@ -2431,6 +2431,51 @@ body {
             background: var(--accent-light); border-color: var(--accent-mid); color: var(--text);
         }
 
+        /* ===== 共读：字体库 UI ===== */
+        .rfont-chip {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 5px 6px 5px 11px; font-size: 11.5px; line-height: 1;
+            border-radius: 999px; border: 1px solid var(--card-border);
+            background: var(--card-bg); color: var(--text-muted);
+            cursor: pointer; white-space: nowrap;
+            transition: background 0.15s, color 0.15s, border-color 0.15s;
+        }
+        .rfont-chip.no-x { padding: 5px 11px; }
+        .rfont-chip:hover { border-color: var(--accent-mid); }
+        .rfont-chip.on {
+            background: var(--accent-light); border-color: var(--accent-mid);
+            color: var(--text); font-weight: 600;
+        }
+        .rfont-chip-name { cursor: pointer; }
+        .rfont-chip-x {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 16px; height: 16px; border-radius: 50%; font-size: 13px;
+            color: var(--text-muted); opacity: 0.55; cursor: pointer;
+            transition: background 0.15s, color 0.15s, opacity 0.15s;
+        }
+        .rfont-chip-x:hover { background: rgba(255,80,80,0.14); color: #e55; opacity: 1; }
+        .rfont-add {
+            display: flex; flex-direction: column; gap: 7px;
+            margin-top: 2px; padding: 11px; border-radius: 10px;
+            background: var(--accent-light);
+        }
+        .rfont-add-label { font-size: 11px; font-weight: 600; color: var(--text-muted); }
+        .rfont-input {
+            width: 100%; box-sizing: border-box; font-size: 12px;
+            padding: 8px 10px; border: 1px solid var(--card-border);
+            border-radius: 8px; background: var(--card-bg); color: var(--text);
+            transition: border-color 0.15s;
+        }
+        .rfont-input:focus { outline: none; border-color: var(--accent-mid); }
+        .rfont-save {
+            width: 100%; padding: 8px; font-size: 12px; font-weight: 600;
+            border: none; border-radius: 8px; background: var(--accent);
+            color: #fff; cursor: pointer; transition: opacity 0.15s, transform 0.1s;
+        }
+        .rfont-save:hover { opacity: 0.9; }
+        .rfont-save:active { transform: scale(0.98); }
+        .rfont-status { font-size: 11px; color: var(--text-muted); opacity: 0.85; min-height: 14px; }
+
         /* ===== 共读：点段评价 ===== */
         /* 共读正文字号（按设备调节，作用于整段正文与问答，不影响操作栏） */
         .reading-merged { font-size: var(--reading-fs, 1em); font-family: var(--reading-font, inherit); }
@@ -4311,12 +4356,15 @@ body {
                         <span style="font-size:12px;font-weight:600;color:var(--text-muted)">正文字体</span>
                         <span id="readingFontArrow" style="font-size:10px;color:var(--text-muted);transition:transform 0.2s;display:inline-block">▶</span>
                     </div>
-                    <div id="readingFontPanel" style="display:none;flex-direction:column;gap:6px;margin-top:8px">
-                        <div id="readingFontList" style="display:flex;flex-wrap:wrap;gap:6px"></div>
-                        <input id="readingFontUrlInput" type="text" placeholder="字体 CSS 网址，如 https://.../result.css" style="width:100%;box-sizing:border-box;font-size:12px;padding:7px 9px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);color:var(--text)">
-                        <input id="readingFontNameInput" type="text" placeholder="字体名称，如 Huiwen-mincho" style="width:100%;box-sizing:border-box;font-size:12px;padding:7px 9px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);color:var(--text)">
-                        <button class="pagebtn-pos-opt" onclick="readingAddFont()" style="width:100%">保存并应用</button>
-                        <span id="readingFontStatus" style="font-size:11px;color:var(--text-muted);opacity:.8"></span>
+                    <div id="readingFontPanel" style="display:none;flex-direction:column;gap:10px;margin-top:8px">
+                        <div id="readingFontList" style="display:flex;flex-wrap:wrap;gap:7px"></div>
+                        <div class="rfont-add">
+                            <div class="rfont-add-label">＋ 添加字体</div>
+                            <input id="readingFontUrlInput" class="rfont-input" type="text" placeholder="字体 CSS 网址，如 https://.../result.css">
+                            <input id="readingFontNameInput" class="rfont-input" type="text" placeholder="字体名称，如 Huiwen-mincho">
+                            <button class="rfont-save" onclick="readingAddFont()">保存并应用</button>
+                            <span id="readingFontStatus" class="rfont-status"></span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -13736,14 +13784,15 @@ body {
             if (!box) return;
             var fonts = readingFontsLoad();
             var active = localStorage.getItem('reading_font_name') || '';
-            var html = '<button class="pagebtn-pos-opt' + (active ? '' : ' active') + '" onclick="readingUseFont(\'\')">默认</button>';
+            var html = '<span class="rfont-chip no-x' + (active ? '' : ' on') + '" onclick="readingUseFont(\'\')">'
+                     + '<span class="rfont-chip-name">默认</span></span>';
             for (var i = 0; i < fonts.length; i++) {
                 var nm = fonts[i].name;
                 var safe = nm.replace(/'/g, "\\'");
-                var on = (nm === active) ? ' active' : '';
-                html += '<span class="reading-font-chip' + on + '" style="display:inline-flex;align-items:center;gap:4px">'
-                      + '<button class="pagebtn-pos-opt' + on + '" onclick="readingUseFont(\'' + safe + '\')">' + esc(nm) + '</button>'
-                      + '<button class="pagebtn-pos-opt" title="删除" onclick="readingDeleteFont(\'' + safe + '\')" style="min-width:24px;padding:4px 6px">×</button>'
+                var on = (nm === active) ? ' on' : '';
+                html += '<span class="rfont-chip' + on + '">'
+                      + '<span class="rfont-chip-name" onclick="readingUseFont(\'' + safe + '\')">' + esc(nm) + '</span>'
+                      + '<span class="rfont-chip-x" title="删除" onclick="readingDeleteFont(\'' + safe + '\')">×</span>'
                       + '</span>';
             }
             box.innerHTML = html;
