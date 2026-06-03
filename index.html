@@ -10412,7 +10412,7 @@ body {
                     readingSuppressTopbar(900);  // 进入对话后约 0.9s 内不自动切换，避开滚到底部的程序化滚动
                     _readingTapSuppressUntil = Date.now() + 600;  // 同时屏蔽点击翻页，吃掉从列表进入时的「幽灵点击」
                 }
-                readingApplyTopbarMode();   // 阅读/翻译模式直接藏起横栏，其余显示
+                readingApplyTopbarMode(view === 'conv');   // 进对话时瞬间藏横栏（无动画），避免高度跳变；其余照常
             }
             readingSyncAutoScrollUI();
         }
@@ -14463,9 +14463,19 @@ body {
             if (bar) bar.style.marginTop = '';
             _topbarHidden = false;
         }
-        function readingHideTopbar() {
+        function readingHideTopbar(instant) {
             var bar = document.getElementById('chatTopbarConv');
             if (!bar) return;
+            if (instant) {
+                // 进入对话时瞬间收起（关掉过渡动画），避免横条先显示再滑上去造成画面高度跳变
+                var prev = bar.style.transition;
+                bar.style.transition = 'none';
+                bar.style.marginTop = '-' + bar.offsetHeight + 'px';
+                _topbarHidden = true;
+                void bar.offsetHeight;          // 强制重排，锁定无动画的收起状态
+                bar.style.transition = prev || '';
+                return;
+            }
             bar.style.marginTop = '-' + bar.offsetHeight + 'px';
             _topbarHidden = true;
         }
@@ -14485,8 +14495,8 @@ body {
             _topbarSuppressUntil = Date.now() + (ms || 700);
         }
         // 按当前模式决定横栏显隐：阅读/翻译模式永久藏，其余模式显示
-        function readingApplyTopbarMode() {
-            if (chatReadingMode || chatTranslateMode) readingHideTopbar();
+        function readingApplyTopbarMode(instant) {
+            if (chatReadingMode || chatTranslateMode) readingHideTopbar(instant);
             else readingShowTopbar();
         }
         function readingAutoHideTopbar() {
