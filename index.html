@@ -2302,13 +2302,13 @@ body {
         .rb-book-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
         .rb-book-del { background: none; border: none; color: var(--text-muted); font-size: 15px; cursor: pointer; padding: 4px; flex-shrink: 0; }
         .rb-book-del:hover { color: #f56565; }
-        .rb-chap { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--card-border); border-radius: 8px; margin-bottom: 6px; cursor: pointer; transition: all 0.15s; }
+        .rb-chap { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--card-border); border-radius: 8px; margin-bottom: 5px; cursor: pointer; transition: all 0.15s; }
         .rb-chap:hover { border-color: var(--accent); background: var(--accent-light); }
         .rb-chap.rb-read { opacity: 0.5; }
         .rb-chap.rb-current { border-color: var(--accent); background: var(--accent-light); }
-        .rb-chap-info { flex: 1; min-width: 0; }
-        .rb-chap-title { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .rb-chap-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+        .rb-chap-info { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+        .rb-chap-title { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+        .rb-chap-meta { font-size: 11px; color: var(--text-muted); flex-shrink: 0; white-space: nowrap; }
         .rb-chap-append { flex-shrink: 0; width: 28px; height: 28px; border: 1px solid var(--card-border); border-radius: 7px; background: transparent; color: var(--accent); font-size: 17px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
         .rb-chap-append:hover { background: var(--accent-light); border-color: var(--accent); }
         .rb-chap-append:active { transform: scale(0.9); }
@@ -4359,11 +4359,16 @@ body {
                     <div id="readingFontPanel" style="display:none;flex-direction:column;gap:10px;margin-top:8px">
                         <div id="readingFontList" style="display:flex;flex-wrap:wrap;gap:7px"></div>
                         <div class="rfont-add">
-                            <div class="rfont-add-label">＋ 添加字体</div>
-                            <input id="readingFontUrlInput" class="rfont-input" type="text" placeholder="字体 CSS 网址，如 https://.../result.css">
-                            <input id="readingFontNameInput" class="rfont-input" type="text" placeholder="字体名称，如 Huiwen-mincho">
-                            <button class="rfont-save" onclick="readingAddFont()">保存并应用</button>
-                            <span id="readingFontStatus" class="rfont-status"></span>
+                            <div class="rfont-add-label" onclick="readingToggleAddFont()" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between">
+                                <span>＋ 添加字体</span>
+                                <span id="readingFontAddArrow" style="font-size:10px;transition:transform 0.2s;display:inline-block">▶</span>
+                            </div>
+                            <div id="readingFontAddBody" style="display:none;flex-direction:column;gap:7px;margin-top:7px">
+                                <input id="readingFontUrlInput" class="rfont-input" type="text" placeholder="字体 CSS 网址，如 https://.../result.css">
+                                <input id="readingFontNameInput" class="rfont-input" type="text" placeholder="字体名称，如 Huiwen-mincho">
+                                <button class="rfont-save" onclick="readingAddFont()">保存并应用</button>
+                                <span id="readingFontStatus" class="rfont-status"></span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -13776,6 +13781,15 @@ body {
             if (!p) return;
             var open = p.style.display !== 'none';
             p.style.display = open ? 'none' : 'flex';
+            if (arrow) arrow.style.transform = open ? '' : 'rotate(90deg)';
+        }
+        // 「＋ 添加字体」：默认收起，点击才展开两个填入框
+        function readingToggleAddFont() {
+            var body = document.getElementById('readingFontAddBody');
+            var arrow = document.getElementById('readingFontAddArrow');
+            if (!body) return;
+            var open = body.style.display !== 'none';
+            body.style.display = open ? 'none' : 'flex';
             if (arrow) arrow.style.transform = open ? '' : 'rotate(90deg)';
         }
         // 渲染字体库：默认 + 每个已存字体（点切换，× 删除）
