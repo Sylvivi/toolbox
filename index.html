@@ -1333,6 +1333,12 @@ body {
             scrollbar-width: thin; scrollbar-color: var(--card-border) transparent;
         }
         .chat-nav-panel.show { display: flex; }
+        /* 阅读/翻译模式：面板不再挂在横栏下方，改为独立浮在右下（贴近 clawd 图标），横栏始终不露面 */
+        .chat-nav-panel.panel-float {
+            position: fixed; top: auto; right: 14px; bottom: 70px;
+            width: min(320px, calc(100vw - 28px));
+            max-height: min(60vh, 420px); z-index: 70;
+        }
         .chat-nav-panel::-webkit-scrollbar { width: 4px; }
         .chat-nav-panel::-webkit-scrollbar-track { background: transparent; }
         .chat-nav-panel::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 4px; }
@@ -4233,7 +4239,6 @@ body {
                         <button onclick="clawdMenuAct('back')">← 退出阅读</button>
                         <button onclick="clawdMenuAct('bookmark')">🔖 书签</button>
                         <button onclick="clawdMenuAct('nav')">🧭 消息跳转</button>
-                        <button onclick="clawdMenuAct('topbar')">☰ 横栏</button>
                         <button onclick="clawdMenuAct('search')">🔍 搜索</button>
                         <button onclick="clawdMenuAct('shelf')">📚 书架</button>
                         <button onclick="clawdMenuAct('model')">🦀 clawd</button>
@@ -13166,9 +13171,7 @@ body {
             if (what === 'back') { chatBackToList(); return; }
             if (what === 'shelf') { rbOpenShelf(); return; }
             if (what === 'model') { chatOpenModelSheet(); return; }
-            // 搜索/书签/消息跳转/横栏都挂在横栏下方，需要横栏当锚点——先把横栏显出来
-            readingShowTopbar();
-            readingSuppressTopbar(what === 'topbar' ? 3000 : 900);  // 临时显示期间不被滚动自动收回
+            // 阅读/翻译模式下，书签/搜索/导航不再依赖横栏——直接浮出来，横栏始终不露面
             if (what === 'search') chatToggleSearch();
             else if (what === 'bookmark') chatToggleBookmarkPanel();
             else if (what === 'nav') chatToggleNavPanel();
@@ -13189,6 +13192,7 @@ body {
                 return;
             }
             chatBuildNavPanel();
+            panel.classList.toggle('panel-float', !!(chatReadingMode || chatTranslateMode));
             panel.classList.add('show');
             btn.classList.add('active');
             panel.scrollTop = panel.scrollHeight;
@@ -15230,6 +15234,7 @@ body {
                 panel.classList.remove('show'); btn.classList.remove('active'); return;
             }
             chatBuildBookmarkPanel();
+            panel.classList.toggle('panel-float', !!(chatReadingMode || chatTranslateMode));
             panel.classList.add('show'); btn.classList.add('active');
             panel.scrollTop = panel.scrollHeight;
         }
