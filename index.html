@@ -1333,12 +1333,19 @@ body {
             scrollbar-width: thin; scrollbar-color: var(--card-border) transparent;
         }
         .chat-nav-panel.show { display: flex; }
-        /* 阅读/翻译模式：面板不再挂在横栏下方，改为独立浮在右下（贴近 clawd 图标），横栏始终不露面 */
+        /* 阅读/翻译模式：面板脱离横栏，改为居中弹窗（手机上 backdrop-filter 会劫持 fixed，居中最稳不会跑偏/被裁） */
         .chat-nav-panel.panel-float {
-            position: fixed; top: auto; right: 14px; bottom: 70px;
-            width: min(320px, calc(100vw - 28px));
-            max-height: min(60vh, 420px); z-index: 70;
+            position: fixed; top: 50%; left: 50%; right: auto; bottom: auto;
+            transform: translate(-50%, -50%);
+            width: min(340px, calc(100vw - 40px));
+            max-height: min(70vh, 480px); z-index: 70;
         }
+        /* 弹窗背后的暗幕：点一下关闭面板 */
+        .reading-panel-mask {
+            display: none; position: fixed; inset: 0; z-index: 65;
+            background: rgba(0,0,0,0.28);
+        }
+        .reading-panel-mask.show { display: block; }
         .chat-nav-panel::-webkit-scrollbar { width: 4px; }
         .chat-nav-panel::-webkit-scrollbar-track { background: transparent; }
         .chat-nav-panel::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 4px; }
@@ -4202,6 +4209,7 @@ body {
                         <button class="chat-topmenu-item" id="chatNavBtn" onclick="chatHideTopMenu();chatToggleNavPanel()">🧭 消息跳转</button>
                     </div>
                 </div>
+                <div class="reading-panel-mask" id="readingPanelMask" onclick="readingCloseFloatPanels()"></div>
                 <div class="chat-nav-panel" id="chatNavPanel"></div>
                 <div class="chat-nav-panel" id="chatBookmarkPanel"></div>
             </div>
@@ -13183,18 +13191,26 @@ body {
                 m.classList.remove('show');
             }
         });
+        // 阅读/翻译模式下，书签/导航以居中弹窗形式出现，背后的暗幕统一开关
+        function readingShowPanelMask() { var m = document.getElementById('readingPanelMask'); if (m) m.classList.add('show'); }
+        function readingHidePanelMask() { var m = document.getElementById('readingPanelMask'); if (m) m.classList.remove('show'); }
+        function readingCloseFloatPanels() { chatCloseNavPanel(); chatCloseBookmarkPanel(); readingHidePanelMask(); }
         function chatToggleNavPanel() {
             var panel = document.getElementById('chatNavPanel');
             var btn = document.getElementById('chatNavBtn');
             if (panel.classList.contains('show')) {
                 panel.classList.remove('show');
                 btn.classList.remove('active');
+                readingHidePanelMask();
                 return;
             }
+            var floating = !!(chatReadingMode || chatTranslateMode);
+            if (floating) chatCloseBookmarkPanel();  // 两个弹窗不叠在一起
             chatBuildNavPanel();
-            panel.classList.toggle('panel-float', !!(chatReadingMode || chatTranslateMode));
+            panel.classList.toggle('panel-float', floating);
             panel.classList.add('show');
             btn.classList.add('active');
+            if (floating) readingShowPanelMask();
             panel.scrollTop = panel.scrollHeight;
         }
         function chatCloseNavPanel() {
@@ -13202,6 +13218,7 @@ body {
             var btn = document.getElementById('chatNavBtn');
             panel.classList.remove('show');
             btn.classList.remove('active');
+            if (!document.getElementById('chatBookmarkPanel').classList.contains('show')) readingHidePanelMask();
         }
         function chatBuildNavPanel() {
             var panel = document.getElementById('chatNavPanel');
@@ -15231,11 +15248,14 @@ body {
             var panel = document.getElementById('chatBookmarkPanel');
             var btn = document.getElementById('chatBookmarkBtn');
             if (panel.classList.contains('show')) {
-                panel.classList.remove('show'); btn.classList.remove('active'); return;
+                panel.classList.remove('show'); btn.classList.remove('active'); readingHidePanelMask(); return;
             }
+            var floating = !!(chatReadingMode || chatTranslateMode);
+            if (floating) chatCloseNavPanel();  // 两个弹窗不叠在一起
             chatBuildBookmarkPanel();
-            panel.classList.toggle('panel-float', !!(chatReadingMode || chatTranslateMode));
+            panel.classList.toggle('panel-float', floating);
             panel.classList.add('show'); btn.classList.add('active');
+            if (floating) readingShowPanelMask();
             panel.scrollTop = panel.scrollHeight;
         }
         function chatCloseBookmarkPanel() {
@@ -15243,6 +15263,8 @@ body {
             var btn = document.getElementById('chatBookmarkBtn');
             if (panel) panel.classList.remove('show');
             if (btn) btn.classList.remove('active');
+            var nav = document.getElementById('chatNavPanel');
+            if (!nav || !nav.classList.contains('show')) readingHidePanelMask();
         }
         function chatBuildBookmarkPanel() {
             var panel = document.getElementById('chatBookmarkPanel');
