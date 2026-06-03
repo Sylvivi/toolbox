@@ -10707,12 +10707,20 @@ body {
             // 渲染消息
             chatRenderAllMessages();
             // 共读/翻译：渲染后自动回到上次阅读位置（覆盖默认的「滚到底」）
+            // content-visibility 只渲染可视段落、屏外段落高度是估算值，单次定位会偏；
+            // 这里逐帧反复校正，直到锚点真实位置与上次偏差 <1px 才停（一般 2~4 帧收敛）。
             if (chatReadingMode || chatTranslateMode) {
-                requestAnimationFrame(function() {
-                    if (readingRestoreScrollPos()) {
-                        requestAnimationFrame(function() { readingRestoreScrollPos(); readingUpdateProgress(); });
+                var _rTries = 0;
+                var _rStep = function() {
+                    var moved = readingRestoreScrollPos();
+                    _rTries++;
+                    if (moved && _rTries < 20) {
+                        requestAnimationFrame(_rStep);
+                    } else {
+                        readingUpdateProgress();
                     }
-                });
+                };
+                requestAnimationFrame(_rStep);
             }
             chatUpdateCtxIndicator();
             chatSyncReadingChip();
@@ -14346,10 +14354,14 @@ body {
             if (anchor) {
                 var ctop = el.getBoundingClientRect().top;
                 var cur = anchor.getBoundingClientRect().top - ctop;
-                el.scrollTop = el.scrollTop + cur - (pos.off || 0);
+                var delta = cur - (pos.off || 0);
+                // 已经对齐（偏差 <1px）：不再调整，返回 false 结束逐帧校正
+                if (Math.abs(delta) < 1) return false;
+                el.scrollTop = el.scrollTop + delta;
+                // 仍有偏移：返回 true，让上层再跑一帧（等 content-visibility 渲染出真实高度后复测）
                 return true;
             }
-            if (typeof pos.top === 'number') { el.scrollTop = pos.top; return true; }
+            if (typeof pos.top === 'number') { el.scrollTop = pos.top; return false; }
             return false;
         }
         // 共读/翻译：更新本章阅读进度小标志
