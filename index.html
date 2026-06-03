@@ -2452,10 +2452,14 @@ body {
             background: var(--accent-light); border-radius: 10px;
             font-size: 12px; animation: readingCommentIn 0.18s ease;
         }
-        .reading-actbar input.rp-ask {
+        .reading-actbar input.rp-ask, .reading-actbar textarea.rp-ask {
             flex: 1 1 140px; min-width: 0; border: 1px solid var(--accent-mid);
             background: var(--card-bg); color: var(--text); border-radius: 8px;
             padding: 5px 10px; font-size: 12px; outline: none;
+        }
+        .reading-actbar textarea.rp-ask {
+            resize: none; line-height: 1.5; font-family: inherit;
+            min-height: 32px; max-height: 40vh; overflow-y: auto;
         }
         .reading-actbar button {
             border: none; background: var(--accent); color: #fff;
@@ -14329,19 +14333,17 @@ body {
             var leftSide = (pos === 'lm' || pos === 'lb');
             var bar = document.createElement('div');
             bar.className = 'reading-actbar';
-            var inputHtml = '<input class="rp-ask" type="text" placeholder="问问这一段…（如：他这句话什么意思？）">';
+            var inputHtml = '<textarea class="rp-ask" rows="1" placeholder="问问这一段…（如：他这句话什么意思？）"></textarea>';
             var bmHtml = '<button class="rp-bookmark' + (marked ? ' on' : '') + '" onclick="readingToggleBookmarkFromBar(' + msgIdx + ',' + pNum + ',this)">' + (marked ? '🔖 已加' : '🔖 书签') + '</button>';
             var askHtml = '<button class="rp-ask-send">提问</button>';
             bar.innerHTML = leftSide ? (askHtml + bmHtml + inputHtml) : (inputHtml + bmHtml + askHtml);
             pEl.insertAdjacentElement('afterend', bar);
-            // 一步式：直接出输入框，自动聚焦弹键盘；回车或「提问」发送；再点该段收起
+            // 一步式：直接出输入框，自动聚焦弹键盘；回车换行、点「提问」发送；再点该段收起
             var input = bar.querySelector('.rp-ask');
             var send = bar.querySelector('.rp-ask-send');
             function go() { readingAskOne(msgIdx, pNum, input.value, bar); }
             send.onclick = go;
-            input.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') { e.preventDefault(); go(); }
-            });
+            readingBindAskBox(input);
             input.focus();
         }
 
@@ -14350,17 +14352,25 @@ body {
             if (readingCommenting) return;
             var bar = btn.closest('.reading-actbar');
             if (!bar) return;
-            bar.innerHTML = '<input class="rp-ask" type="text" placeholder="问问这一段…（如：他这句话什么意思？）">' +
+            bar.innerHTML = '<textarea class="rp-ask" rows="1" placeholder="问问这一段…（如：他这句话什么意思？）"></textarea>' +
                 '<button class="rp-ask-send">发送</button>' +
                 '<button class="rp-cancel" onclick="readingClearActbar()">取消</button>';
             var input = bar.querySelector('.rp-ask');
             var send = bar.querySelector('.rp-ask-send');
             function go() { readingAskOne(msgIdx, pNum, input.value, bar); }
             send.onclick = go;
-            input.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') { e.preventDefault(); go(); }
-            });
+            readingBindAskBox(input);
             input.focus();
+        }
+        // 共读追问输入框：随内容自动长高（换行交给键盘的回车键，发送用按钮）
+        function readingBindAskBox(input) {
+            if (!input) return;
+            function grow() {
+                input.style.height = 'auto';
+                input.style.height = Math.min(input.scrollHeight, window.innerHeight * 0.4) + 'px';
+            }
+            input.addEventListener('input', grow);
+            setTimeout(grow, 0);
         }
 
         async function readingCommentOne(msgIdx, pNum, btn) {
