@@ -10467,6 +10467,7 @@ body {
             if (chatStreaming && chatAbortCtrl) chatAbortCtrl.abort();
             chatStreaming = false;
             if (chatThinkInterval) { clearInterval(chatThinkInterval); chatThinkInterval = null; }
+            readingSaveScrollPos();
             chatSaveCurrentConv();
             chatCloseModelSheet();
             var modal = document.querySelector('.modal.chat-modal');
@@ -10484,6 +10485,7 @@ body {
 
         function chatBackToList() {
             if (chatStreaming) return;
+            readingSaveScrollPos();
             chatSaveCurrentConv();
             chatResetConvState();
             chatSwitchView('list');
@@ -10703,23 +10705,33 @@ body {
             // 恢复预设选中状态
             chatActivePresetIdx = (conv.spPresetIdx !== undefined && conv.spPresetIdx !== null) ? conv.spPresetIdx : -1;
             chatEditingPresetIdx = -1;
+            // 共读/翻译：若本对话存过阅读位置，渲染时别滚到底（交给下面的定位逻辑）
+            var _hasReadingPos = false;
+            if (chatReadingMode || chatTranslateMode) {
+                try { _hasReadingPos = !!localStorage.getItem(readingScrollKey()); } catch (e) {}
+                if (_hasReadingPos) chatSkipNextAutoBottom = true;
+            }
             // 渲染消息
             chatRenderAllMessages();
-            // 共读/翻译：渲染后自动回到上次阅读位置（覆盖默认的「滚到底」）
-            // content-visibility 只渲染可视段落、屏外段落高度是估算值，单次定位会偏；
-            // 这里逐帧反复校正，直到锚点真实位置与上次偏差 <1px 才停（一般 2~4 帧收敛）。
-            if (chatReadingMode || chatTranslateMode) {
-                var _rTries = 0;
-                var _rStep = function() {
-                    var moved = readingRestoreScrollPos();
-                    _rTries++;
-                    if (moved && _rTries < 20) {
-                        requestAnimationFrame(_rStep);
-                    } else {
-                        readingUpdateProgress();
-                    }
+            // 共读/翻译：渲染后回到上次阅读位置（覆盖默认的「滚到底」）
+            // 逐帧收敛校正到 <1px；并在短延时、网络字体加载完后各补一轮——
+            // 因为网络字体是异步到的，到了会让整篇行高变化、位置整体偏移，必须复位。
+            if (_hasReadingPos) {
+                var _restoreLoop = function() {
+                    var tries = 0;
+                    var step = function() {
+                        var moved = readingRestoreScrollPos();
+                        tries++;
+                        if (moved && tries < 30) requestAnimationFrame(step);
+                        else readingUpdateProgress();
+                    };
+                    requestAnimationFrame(step);
                 };
-                requestAnimationFrame(_rStep);
+                _restoreLoop();                 // 立即按当前布局定位
+                setTimeout(_restoreLoop, 250);  // 吃掉短延时内的重排（图片等）
+                if (document.fonts && document.fonts.ready && document.fonts.ready.then) {
+                    document.fonts.ready.then(function() { setTimeout(_restoreLoop, 30); });
+                }
             }
             chatUpdateCtxIndicator();
             chatSyncReadingChip();
@@ -14307,7 +14319,8 @@ body {
         }
 
         // 共读/翻译：自动记住/恢复上次阅读位置（不用手动书签）
-        // 用「屏幕最上面那一段」当锚点存起来；因为开了 content-visibility 只渲染可视段落，纯像素位置不准，靠锚点最稳。
+        // 用「屏幕最上面那一段」当锚点存起来（段落 idx + data-p + 偏移）；
+        // 锚点比纯像素 scrollTop 更稳——换字体/重排后能按段落重新定位，不会错位。
         function readingScrollKey() {
             return chatCurrentConvId ? ('reading_pos_' + chatCurrentConvId) : null;
         }
@@ -14430,7 +14443,7 @@ body {
                     requestAnimationFrame(function() { readingUpdateProgress(); readingAutoHideTopbar(); ticking = false; });
                 }
                 if (saveTimer) clearTimeout(saveTimer);
-                saveTimer = setTimeout(readingSaveScrollPos, 400);
+                saveTimer = setTimeout(readingSaveScrollPos, 150);
             }, { passive: true });
         })();
 
@@ -15719,8 +15732,11 @@ body {
             return bar;
         }
 
+        var chatSkipNextAutoBottom = false;
         function chatScrollBottom() {
             var el = document.getElementById('chatMessages');
+            // 共读/翻译恢复阅读位置时，跳过这一次「滚到底」，避免和定位打架闪一下
+            if (chatSkipNextAutoBottom) { chatSkipNextAutoBottom = false; return; }
             requestAnimationFrame(function() { el.scrollTop = el.scrollHeight; });
         }
 
