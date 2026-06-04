@@ -10297,6 +10297,52 @@ body {
             return '新对话';
         }
 
+        /* ===== 统一流式请求 =====
+         * 阅读/翻译/标题/压缩等辅助调用统一走流式（stream:true），逐块拼接 delta.content 后返回完整文本。
+         * 很多中转站只支持流式、会拒绝 stream:false，故全部改用此函数兼容。
+         * onDelta(已拼接文本) 可选，用于实时显示；不传则等拼完一次性返回。 */
+        async function chatStreamChat(opts) {
+            var body = { model: opts.model, messages: opts.messages, stream: true };
+            if (opts.max_tokens) body.max_tokens = opts.max_tokens;
+            var resp = await fetch(opts.baseUrl + '/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + opts.apiKey },
+                body: JSON.stringify(body),
+                signal: opts.signal
+            });
+            if (!resp.ok) {
+                var errText = '';
+                try { errText = await resp.text(); } catch (x) {}
+                throw new Error('HTTP ' + resp.status + (errText ? ': ' + errText.substring(0, 200) : ''));
+            }
+            var reader = resp.body.getReader();
+            var decoder = new TextDecoder();
+            var buffer = '';
+            var full = '';
+            while (true) {
+                var result = await reader.read();
+                if (result.done) break;
+                buffer += decoder.decode(result.value, { stream: true });
+                var lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+                for (var li = 0; li < lines.length; li++) {
+                    var line = lines[li].trim();
+                    if (!line || line.indexOf('data:') !== 0) continue;
+                    var payload = line.slice(5).trim();
+                    if (payload === '[DONE]') continue;
+                    try {
+                        var chunk = JSON.parse(payload);
+                        var delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
+                        if (delta && delta.content) {
+                            full += delta.content;
+                            if (opts.onDelta) opts.onDelta(full);
+                        }
+                    } catch (e) { /* 跳过不完整 / 非 JSON 的行 */ }
+                }
+            }
+            return full;
+        }
+
         /* ===== AI 生成对话标题 ===== */
         var chatTitleGenerating = false;
         async function chatGenTitle(manual) {
@@ -10328,25 +10374,14 @@ body {
             chatTitleGenerating = true;
             if (manual) showToast('✨ 正在生成标题…');
             try {
-                var resp = await fetch(baseUrl + '/chat/completions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-                    body: JSON.stringify({
-                        model: chatSelectedModel,
-                        messages: [
-                            { role: 'system', content: '根据以下对话内容生成一个简短的中文标题。要求：1.不超过15个字 2.纯文本，不要任何markdown格式、符号、引号、标点 3.直接输出标题文字' },
-                            { role: 'user', content: summary }
-                        ],
-                        max_tokens: 30,
-                        stream: false
-                    })
-                });
-                if (!resp.ok) throw new Error('HTTP ' + resp.status);
-                var json = await resp.json();
-                var title = '';
-                if (json.choices && json.choices[0]) {
-                    title = (json.choices[0].message && json.choices[0].message.content || '').trim();
-                }
+                var title = (await chatStreamChat({
+                    baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel,
+                    messages: [
+                        { role: 'system', content: '根据以下对话内容生成一个简短的中文标题。要求：1.不超过15个字 2.纯文本，不要任何markdown格式、符号、引号、标点 3.直接输出标题文字' },
+                        { role: 'user', content: summary }
+                    ],
+                    max_tokens: 30
+                })).trim();
                 // 清理：去引号、markdown符号、截断到15字
                 title = title.replace(/^["'「《【]|["'」》】]$/g, '').trim();
                 title = title.replace(/[#*_`~\[\]()>|\\-]/g, '').trim();
@@ -13642,22 +13677,14 @@ body {
                 prompt += isReading
                     ? '\n请把「本章内容」浓缩成一段连贯、简洁的剧情摘要，供日后回忆前情：\n· 必须保留本章登场人物姓名、关键情节进展、重要设定与伏笔；\n· 若上方提供了前文摘要，只补充本章新增的进展，不要重复前文已写过的内容；\n· 读者讨论（正文里以「汐：」开头的问答，或章节后的多轮对话）最多用一句话带过，没有就不写；\n· 若本段没有新的小说正文、只有讨论，就用一句话概括讨论主题即可，不要硬凑、不要写「本章未涉及正文」之类的说明；\n· 直接输出一段流畅的中文，不分小标题、不加粗、不写「本章」「以下是摘要」之类的开场白或客套话，控制在 200 字以内。'
                     : '\n请用简洁的语言总结以上对话要点，保留关键信息（数据、决策、代码片段名、具体数值等），去除寒暄和重复。直接输出摘要，不要加前缀。';
-                var resp = await fetch(_useBaseUrl + '/chat/completions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _useApiKey },
-                    body: JSON.stringify({
-                        model: _useModel,
-                        messages: [
-                            { role: 'system', content: isReading ? '你是小说共读摘要助手。把当前章节浓缩成一段连贯、客观的剧情摘要：人物姓名、关键情节与伏笔不可省略；读者讨论只一句话带过。只输出纯摘要正文，不分小标题、不加粗、不写开场白或客套话。' : '你是对话摘要助手。简洁准确地总结内容，保留关键信息。控制在 300 字以内。' },
-                            { role: 'user', content: prompt }
-                        ],
-                        max_tokens: isReading ? 600 : 500,
-                        stream: false
-                    })
+                var summary = await chatStreamChat({
+                    baseUrl: _useBaseUrl, apiKey: _useApiKey, model: _useModel,
+                    messages: [
+                        { role: 'system', content: isReading ? '你是小说共读摘要助手。把当前章节浓缩成一段连贯、客观的剧情摘要：人物姓名、关键情节与伏笔不可省略；读者讨论只一句话带过。只输出纯摘要正文，不分小标题、不加粗、不写开场白或客套话。' : '你是对话摘要助手。简洁准确地总结内容，保留关键信息。控制在 300 字以内。' },
+                        { role: 'user', content: prompt }
+                    ],
+                    max_tokens: isReading ? 600 : 500
                 });
-                if (!resp.ok) throw new Error('HTTP ' + resp.status);
-                var json = await resp.json();
-                var summary = json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content;
                 return summary ? summary.trim() : null;
             }
 
@@ -14821,21 +14848,13 @@ body {
                 // 人设：系统提示词框为空时静默兜底用蘑菇默认，使点段评论与主流程风格一致
                 var _spOne = document.getElementById('chatSysPrompt').value.trim();
                 if (!_spOne) _spOne = READING_MODE_DEFAULT_PERSONA;
-                var resp = await fetch(baseUrl + '/chat/completions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-                    body: JSON.stringify({
-                        model: chatSelectedModel,
-                        messages: [
-                            { role: 'system', content: _spOne + '\n\n' + READING_MODE_INSTRUCTION },
-                            { role: 'user', content: userMsg }
-                        ],
-                        stream: false
-                    })
-                });
-                if (!resp.ok) { var et = ''; try { et = await resp.text(); } catch (x) {} throw new Error('HTTP ' + resp.status + (et ? ': ' + et.substring(0, 120) : '')); }
-                var data = await resp.json();
-                var content = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '').trim();
+                var content = (await chatStreamChat({
+                    baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel,
+                    messages: [
+                        { role: 'system', content: _spOne + '\n\n' + READING_MODE_INSTRUCTION },
+                        { role: 'user', content: userMsg }
+                    ]
+                })).trim();
                 if (!content) throw new Error('空回复');
                 var parsed = readingModeParseComments(content);
                 var commentText = '';
@@ -14921,19 +14940,11 @@ body {
                     _askMsgs.push({ role: 'system', content: '以下是本书前文已读章节的摘要（剧情核心、人物姓名、关键伏笔），请据此理解上下文；但绝不要剧透摘要之后、用户尚未读到的情节：\n' + chatCompressSummaries.join('\n\n---\n\n') });
                 }
                 _askMsgs.push({ role: 'user', content: userMsg });
-                var resp = await fetch(baseUrl + '/chat/completions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-                    body: JSON.stringify({
-                        model: chatSelectedModel,
-                        messages: _askMsgs,
-                        stream: false
-                    }),
+                var answer = (await chatStreamChat({
+                    baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel,
+                    messages: _askMsgs,
                     signal: readingAbortCtl.signal
-                });
-                if (!resp.ok) { var et = ''; try { et = await resp.text(); } catch (x) {} throw new Error('HTTP ' + resp.status + (et ? ': ' + et.substring(0, 120) : '')); }
-                var data = await resp.json();
-                var answer = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '').trim();
+                })).trim();
                 // 去掉段落标记，并把答案内部的空行折叠为单换行——
                 // 否则空行会被 readingModeParseComments 当作该段评论的结束，
                 // 导致答案被丢到整条消息末尾的 trailing 区而非贴在本段下方。
@@ -15108,22 +15119,14 @@ body {
             try {
                 var baseUrl = getBaseUrl(item.url);
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
-                var resp = await fetch(baseUrl + '/chat/completions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-                    body: JSON.stringify({
-                        model: chatSelectedModel,
-                        messages: [
-                            { role: 'system', content: TRANSLATE_MODE_INSTRUCTION },
-                            { role: 'user', content: segment }
-                        ],
-                        stream: false
-                    }),
+                var answer = (await chatStreamChat({
+                    baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel,
+                    messages: [
+                        { role: 'system', content: TRANSLATE_MODE_INSTRUCTION },
+                        { role: 'user', content: segment }
+                    ],
                     signal: translateAbortCtl.signal
-                });
-                if (!resp.ok) { var et = ''; try { et = await resp.text(); } catch (x) {} throw new Error('HTTP ' + resp.status + (et ? ': ' + et.substring(0, 120) : '')); }
-                var data = await resp.json();
-                var answer = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '').trim();
+                })).trim();
                 // 去掉模型可能误带的 [[TR]] 标记，避免破坏存储块
                 answer = answer.replace(/\[\[\/?TR[^\]]*\]\]/g, '').trim();
                 if (!answer) throw new Error('空回复');
@@ -15237,22 +15240,14 @@ body {
             try {
                 var baseUrl = getBaseUrl(item.url);
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
-                var resp = await fetch(baseUrl + '/chat/completions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-                    body: JSON.stringify({
-                        model: chatSelectedModel,
-                        messages: [
-                            { role: 'system', content: sysPrompt },
-                            { role: 'user', content: userMsg }
-                        ],
-                        stream: false
-                    }),
+                var answer = (await chatStreamChat({
+                    baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel,
+                    messages: [
+                        { role: 'system', content: sysPrompt },
+                        { role: 'user', content: userMsg }
+                    ],
                     signal: translateAbortCtl.signal
-                });
-                if (!resp.ok) { var et = ''; try { et = await resp.text(); } catch (x) {} throw new Error('HTTP ' + resp.status + (et ? ': ' + et.substring(0, 120) : '')); }
-                var data = await resp.json();
-                var answer = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '').trim();
+                })).trim();
                 answer = answer.replace(/\[\[\/?(?:TR|QA|ANS)[^\]]*\]\]/g, '').trim();
                 if (!answer) throw new Error('空回复');
                 msg.content = translateAppendQA(msg.content, s, e, question, answer);
