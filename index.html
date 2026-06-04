@@ -14885,15 +14885,18 @@ body {
             try {
                 var baseUrl = getBaseUrl(item.url);
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
+                // 带上前文已读章节的摘要，否则双击提问时 AI 看不到被压缩掉的前情（剧情/人物/伏笔）
+                var _askMsgs = [{ role: 'system', content: sysPrompt }];
+                if (chatCompressSummaries && chatCompressSummaries.length) {
+                    _askMsgs.push({ role: 'system', content: '以下是本书前文已读章节的摘要（剧情核心、人物姓名、关键伏笔），请据此理解上下文；但绝不要剧透摘要之后、用户尚未读到的情节：\n' + chatCompressSummaries.join('\n\n---\n\n') });
+                }
+                _askMsgs.push({ role: 'user', content: userMsg });
                 var resp = await fetch(baseUrl + '/chat/completions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
                     body: JSON.stringify({
                         model: chatSelectedModel,
-                        messages: [
-                            { role: 'system', content: sysPrompt },
-                            { role: 'user', content: userMsg }
-                        ],
+                        messages: _askMsgs,
                         stream: false
                     }),
                     signal: readingAbortCtl.signal
