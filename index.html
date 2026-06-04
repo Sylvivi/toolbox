@@ -13571,17 +13571,31 @@ body {
         /* ===== 上下文压缩 ===== */
         async function chatCompressContext() {
             if (chatCompressing || chatStreaming) return;
-            // 触发阈值按模式区分，保证一致、不再时灵时不灵：
-            //   翻译 / 共读模式：固定 10 条触发、保留最近 5 条（章节体量大，需更早压缩）
-            //   对话模式：用设置里的「触发」值（默认 40）、保留 chatCompressKeep（默认 20）
-            var _otherMode = chatReadingMode || chatTranslateMode;
-            var _effThreshold = _otherMode ? 10 : chatCompressThreshold;
-            var _effKeep = _otherMode ? 5 : chatCompressKeep;
-            var uncompressed = chatMessages.length - (chatCompressedCount || 0);
-            if (uncompressed <= _effThreshold) return;
-
-            var compressEnd = chatMessages.length - _effKeep;
-            if (compressEnd <= (chatCompressedCount || 0)) return;
+            // 触发方式按模式区分：
+            //   共读模式：按「章」触发——贴入新一章时，把它之前所有未压内容压掉，
+            //             正在读的当前章保持原文（方便逐段点评 / 双击提问），不再凑条数。
+            //   翻译模式：固定 10 条触发、保留最近 5 条。
+            //   对话模式：用设置里的「触发」值（默认 40）、保留 chatCompressKeep（默认 20）。
+            var _CHAPTER_MIN_LEN = 200;
+            var _alreadyDone = chatCompressedCount || 0;
+            var compressEnd;
+            if (chatReadingMode) {
+                // 找最后一章正文（≥200字的 user 消息）的起点，压缩它之前的全部内容
+                var _lastChap = -1;
+                for (var _ci = chatMessages.length - 1; _ci >= _alreadyDone; _ci--) {
+                    var _cm = chatMessages[_ci];
+                    if (_cm.role === 'user' && typeof _cm.content === 'string' && _cm.content.length >= _CHAPTER_MIN_LEN) { _lastChap = _ci; break; }
+                }
+                if (_lastChap <= _alreadyDone) return; // 还没有「上一章」可压（仍在第一章）
+                compressEnd = _lastChap;
+            } else {
+                var _effThreshold = chatTranslateMode ? 10 : chatCompressThreshold;
+                var _effKeep = chatTranslateMode ? 5 : chatCompressKeep;
+                var uncompressed = chatMessages.length - _alreadyDone;
+                if (uncompressed <= _effThreshold) return;
+                compressEnd = chatMessages.length - _effKeep;
+                if (compressEnd <= _alreadyDone) return;
+            }
 
             var _compressModelCfg = chatGetCompressModel();
             var _useModel, _useBaseUrl, _useApiKey;
@@ -13649,22 +13663,30 @@ body {
 
             try {
                 if (chatReadingMode) {
-                    // 共读模式：以「一章正文」为单位分段压缩。每段 = 本章正文 + 助手点评
-                    // + 读完后围绕本章的多轮讨论，全部并到同一段总结里（讨论只一句话带过）。
-                    // 用长度区分：较长的 user 消息＝新一章正文，较短的＝读后讨论，并进当前章。
+                    // 共读分两种段：
+                    //   ① 一章 = 正文(≥200字 user) + 紧随其后的逐段点评(assistant，双击讨论已贴在点评里)；
+                    //   ② 章间讨论 = 两章之间在主输入框里的自由问答，连续并成单独一段。
+                    // 各段独立总结，但把已生成的前文摘要喂进去防止重复。
                     var CHAPTER_MIN_LEN = 200;
                     var idx = 0;
                     while (idx < toCompress.length) {
-                        var batch = [toCompress[idx]];
-                        var j = idx + 1;
-                        while (j < toCompress.length) {
-                            var _nxt = toCompress[j];
-                            if (_nxt.role === 'user') {
-                                var _ulen = (typeof _nxt.content === 'string') ? _nxt.content.length : 0;
-                                if (_ulen >= CHAPTER_MIN_LEN) break; // 遇到下一章正文，切段
+                        var first = toCompress[idx];
+                        var firstIsChapter = first.role === 'user' && typeof first.content === 'string' && first.content.length >= CHAPTER_MIN_LEN;
+                        var batch, j;
+                        if (firstIsChapter) {
+                            // 一章：正文 + 其后连续的 assistant 点评，遇到下一条 user 消息即止
+                            batch = [first]; j = idx + 1;
+                            while (j < toCompress.length && toCompress[j].role !== 'user') { batch.push(toCompress[j]); j++; }
+                        } else {
+                            // 章间讨论：连续的非「新章正文」消息并成一段，遇到下一章正文即止
+                            batch = []; j = idx;
+                            while (j < toCompress.length) {
+                                var _it = toCompress[j];
+                                if (_it.role === 'user' && typeof _it.content === 'string' && _it.content.length >= CHAPTER_MIN_LEN) break;
+                                batch.push(_it); j++;
                             }
-                            batch.push(_nxt); j++;
                         }
+                        if (!batch.length) { idx = j + 1; continue; }
                         // 把已生成的前文摘要喂给本段，避免各段独立生成导致重复
                         var _prevSums = chatCompressSummaries.slice(-6);
                         var _prevText = _prevSums.length ? _prevSums.join('\n\n---\n\n') : '';
@@ -13677,7 +13699,7 @@ body {
                             chatCompressedCount = (chatCompressedCount || 0) + batch.length;
                             chatSaveCurrentConv();
                             chatUpdateCtxIndicator();
-                            console.log('[压缩] 段 ' + chatCompressSummaries.length + '，本段 ' + batch.length + ' 条，摘要 ' + seg.length + ' 字');
+                            console.log('[压缩] 段 ' + chatCompressSummaries.length + '，本段 ' + batch.length + ' 条' + (firstIsChapter ? '（章）' : '（章间讨论）') + '，摘要 ' + seg.length + ' 字');
                         }
                         idx = j;
                     }
@@ -15826,8 +15848,8 @@ body {
             localStorage.setItem('chat_compress_keep', k);
             updateRangeFill(document.getElementById('compressThresholdInput'));
         }
-        // 翻译/共读模式下触发阈值恒为 10（自动），滑块仅对对话模式生效——
-        // 据此禁用滑块并把标签改成「10 条（自动）」，避免误以为还能调。
+        // 触发阈值滑块仅对对话模式生效——共读按「章」自动触发、翻译固定 10 条，
+        // 两者都禁用滑块并改标签，避免误以为还能调。
         function chatSyncCompressThresholdUI() {
             var inp = document.getElementById('compressThresholdInput');
             var lbl = document.getElementById('compressThresholdLabel');
@@ -15836,7 +15858,7 @@ body {
                 inp.disabled = true;
                 inp.style.opacity = '0.45';
                 inp.style.cursor = 'not-allowed';
-                lbl.textContent = '10 条（自动）';
+                lbl.textContent = chatReadingMode ? '按章自动' : '10 条（自动）';
             } else {
                 inp.disabled = false;
                 inp.style.opacity = '';
