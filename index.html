@@ -14993,10 +14993,23 @@ body {
             var fresh = chatBuildMsgEl('ai', chatMessages[msgIdx].content, chatMessages[msgIdx].thinking, msgIdx, msgIdx === lastAiIdx);
             old.replaceWith(fresh);
             if (focusP) {
-                // 多轮共读后，要定位到「我们刚聊的那条」——也就是该段最后一个问答块，
+                // 多轮共读/翻译后，要定位到「我们刚聊的那条」——也就是该段最后一个问答块，
                 // 而不是上方的原文段落，否则每次生成完都落在原文、还得手动往下翻找。
-                var bqs = fresh.querySelectorAll('blockquote[data-cp="' + focusP + '"]');
-                var target = bqs.length ? bqs[bqs.length - 1] : fresh.querySelector('p[data-p="' + focusP + '"]');
+                var target = null;
+                // 翻译模式：问答在 .translate-block[data-e] 里的 .tb-qa（按区间末段归位）
+                var tblocks = fresh.querySelectorAll('.translate-block[data-e="' + focusP + '"]');
+                if (tblocks.length) {
+                    var lastTb = tblocks[tblocks.length - 1];
+                    var qas = lastTb.querySelectorAll('.tb-qa');
+                    target = qas.length ? qas[qas.length - 1] : lastTb;
+                }
+                // 共读模式：评论块 blockquote[data-cp]
+                if (!target) {
+                    var bqs = fresh.querySelectorAll('blockquote[data-cp="' + focusP + '"]');
+                    if (bqs.length) target = bqs[bqs.length - 1];
+                }
+                // 兜底：原文段落
+                if (!target) target = fresh.querySelector('p[data-p="' + focusP + '"]');
                 if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }
