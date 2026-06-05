@@ -1767,6 +1767,9 @@ body {
             padding-bottom: max(10px, env(safe-area-inset-bottom));
             max-width: 768px; width: 100%; margin: 0 auto;
         }
+        /* iPad 装成 App 后，env(safe-area-inset-bottom) 常报得比实际需要的大，
+           底部进度横条会浮高一截；单独认出 iPad 把这截留白收紧（iPhone 不受影响）。 */
+        body.is-ipad .chat-input-area { padding-bottom: max(8px, calc(env(safe-area-inset-bottom) - 14px)); }
         .clawd-model-btn {
             position: absolute; right: 32px; top: -29px;
             cursor: pointer; border: none; background: none;
@@ -8062,6 +8065,12 @@ body {
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            // 认出 iPad（含 iPadOS 13+ 伪装成 Mac 的情况：有触摸点的 Mac UA），给 body 打标记做底部留白适配
+            try {
+                var _isIPad = /iPad/.test(navigator.userAgent)
+                    || (navigator.maxTouchPoints > 1 && /Macintosh|Mac OS X/.test(navigator.userAgent));
+                if (_isIPad) document.body.classList.add('is-ipad');
+            } catch (e) {}
             var ta = document.getElementById('snipFormCode');
             ta.addEventListener('click', updateCursorPos);
             ta.addEventListener('keyup', updateCursorPos);
