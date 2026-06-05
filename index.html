@@ -9047,6 +9047,9 @@ body {
                 checkinTasksTs: getCheckinTasksTs(),
                 bookmarks: readingGetAllBookmarks(),
                 bookmarksTs: readingGetBookmarksTs(),
+                fonts: readingFontsLoad(),
+                fontsTs: readingGetFontsTs(),
+                fontName: localStorage.getItem('reading_font_name') || '',
                 cardTimestamps: cardTs,
                 lastModified: new Date().toISOString()
             };
@@ -9274,6 +9277,21 @@ body {
                     if (cloudBmTs > localBmTs) {
                         localStorage.setItem('reading_bookmarks', JSON.stringify(manifest.bookmarks));
                         localStorage.setItem('reading_bookmarks_ts', cloudBmTs);
+                    }
+                }
+
+                // fonts: 字体库整块按时间戳后写覆盖（含当前选中的字体名）
+                if (manifest.fonts) {
+                    var cloudFontTs = manifest.fontsTs || '';
+                    var localFontTs = readingGetFontsTs();
+                    if (cloudFontTs > localFontTs) {
+                        localStorage.setItem('reading_fonts', JSON.stringify(manifest.fonts));
+                        localStorage.setItem('reading_fonts_ts', cloudFontTs);
+                        if (typeof manifest.fontName === 'string') {
+                            if (manifest.fontName) localStorage.setItem('reading_font_name', manifest.fontName);
+                            else localStorage.removeItem('reading_font_name');
+                        }
+                        try { readingApplyFont(); } catch (e) {}
                     }
                 }
 
@@ -9574,6 +9592,7 @@ body {
                 if (manifest.checkin) setCheckinDataSilent(manifest.checkin);
                 if (manifest.checkinTasks) { idbSet(CHECKIN_TASKS_KEY, manifest.checkinTasks); if (manifest.checkinTasksTs) idbSet(CHECKIN_TASKS_TS_KEY, manifest.checkinTasksTs); }
                 if (manifest.bookmarks) { localStorage.setItem('reading_bookmarks', JSON.stringify(manifest.bookmarks)); if (manifest.bookmarksTs) localStorage.setItem('reading_bookmarks_ts', manifest.bookmarksTs); }
+                if (manifest.fonts) { localStorage.setItem('reading_fonts', JSON.stringify(manifest.fonts)); if (manifest.fontsTs) localStorage.setItem('reading_fonts_ts', manifest.fontsTs); if (typeof manifest.fontName === 'string') { if (manifest.fontName) localStorage.setItem('reading_font_name', manifest.fontName); else localStorage.removeItem('reading_font_name'); } try { readingApplyFont(); } catch (e) {} }
                 if (allKeys.length === 0) { setKeyDataSilent([]); setSnipDataSilent([]); return; }
                 return cfBatchGet(allKeys).then(function(results) {
                     var keys = [], snips = [];
@@ -13951,14 +13970,23 @@ body {
             return s;
         }
 
-        // 共读：正文网络字体。支持「字体库」——存多个，点一下切换。按设备保存，不云同步。
+        // 共读：正文网络字体。支持「字体库」——存多个，点一下切换。随云同步（CF manifest，按时间戳整块覆盖）。
         var _readingFontLink = null;
         // 读出已保存的字体库：[{name,url}, ...]
         function readingFontsLoad() {
             try { var a = JSON.parse(localStorage.getItem('reading_fonts') || '[]'); return Array.isArray(a) ? a : []; }
             catch (e) { return []; }
         }
-        function readingFontsSave(arr) { localStorage.setItem('reading_fonts', JSON.stringify(arr)); }
+        var _fontPushTimer = null;
+        function readingFontsTouch() {
+            localStorage.setItem('reading_fonts_ts', new Date().toISOString());
+            if (activeSyncProvider === 'cf') {
+                if (_fontPushTimer) clearTimeout(_fontPushTimer);
+                _fontPushTimer = setTimeout(syncPushData, 3000);
+            }
+        }
+        function readingGetFontsTs() { return localStorage.getItem('reading_fonts_ts') || ''; }
+        function readingFontsSave(arr) { localStorage.setItem('reading_fonts', JSON.stringify(arr)); readingFontsTouch(); }
         // 应用「当前选中」的字体（由 reading_font_name 记录），并刷新 <link> 与 CSS 变量
         function readingApplyFont() {
             var name = localStorage.getItem('reading_font_name') || '';
@@ -14027,6 +14055,7 @@ body {
         function readingUseFont(name) {
             if (name) localStorage.setItem('reading_font_name', name);
             else localStorage.removeItem('reading_font_name');
+            readingFontsTouch();
             readingApplyFont();
         }
         // 从输入框「保存并应用」一个新字体（若同名则更新）
