@@ -13775,7 +13775,9 @@ body {
                             chatCompressSummaries.push(seg);
                             // 逐段推进 compressedCount，断点续传更稳
                             chatCompressedCount = (chatCompressedCount || 0) + batch.length;
-                            chatSaveCurrentConv();
+                            // 必须强制标脏：摘要不是消息，消息条数没变，不带 true 的话这条对话
+                            // 不会被标记为「需推送」，导致自动生成的摘要永远同步不到其它设备。
+                            chatSaveCurrentConv(true);
                             chatUpdateCtxIndicator();
                             console.log('[压缩] 段 ' + chatCompressSummaries.length + '，本段 ' + batch.length + ' 条' + (firstIsChapter ? '（章）' : '（章间讨论）') + '，摘要 ' + seg.length + ' 字');
                         }
@@ -13789,7 +13791,8 @@ body {
                     if (summary && chatCurrentConvId === convId) {
                         chatCompressSummaries.push(summary);
                         chatCompressedCount = compressEnd;
-                        chatSaveCurrentConv();
+                        // 同上：强制标脏，否则自动生成的摘要不会推送到云端。
+                        chatSaveCurrentConv(true);
                         chatUpdateCtxIndicator();
                         console.log('[压缩] 段 ' + chatCompressSummaries.length + '，已压缩 ' + compressEnd + ' 条消息，摘要 ' + summary.length + ' 字');
                         showToast('📋 已生成摘要（第' + chatCompressSummaries.length + '段，' + summary.length + '字）');
