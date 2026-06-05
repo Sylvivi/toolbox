@@ -12979,22 +12979,6 @@ body {
             localStorage.setItem('chat_tombstones', JSON.stringify(t));
         }
 
-        // 内容指纹：对整条对话的消息做一个轻量哈希，用来判断「内容到底变没变」。
-        // 共读追问是往已有消息里追加文字（消息条数不变、标题不变），仅靠时间戳跨设备
-        // 时钟偏差时会误判，导致接收端跳过拉取。加上这个指纹后，纯缓存端只要发现指纹和
-        // 云端不一样就会拉取，绝不依赖时间戳猜测。
-        function chatConvSig(conv) {
-            var msgs = (conv && conv.messages) || [];
-            var s = '';
-            for (var i = 0; i < msgs.length; i++) {
-                var c = msgs[i].content;
-                if (typeof c !== 'string') { try { c = JSON.stringify(c); } catch (e) { c = ''; } }
-                s += (msgs[i].role || '') + ':' + c + '';
-            }
-            var h = 5381;
-            for (var k = 0; k < s.length; k++) { h = ((h << 5) + h + s.charCodeAt(k)) | 0; }
-            return h;
-        }
         function chatSyncPush() {
             if (activeSyncProvider !== 'cf') return;
             var cfg = cfGetConfig();
@@ -13041,7 +13025,7 @@ body {
                     // 否则保留云端已有的置顶值，避免「尚未拉取到别的设备刚置顶状态」的
                     // 本设备在推送时把云端的置顶覆盖回去（这正是置顶不能同步的根因）。
                     var pinnedVal = (prev && !dirtyIds[c.id]) ? !!prev.pinned : !!c.pinned;
-                    cloudMap[c.id] = { id: c.id, title: c.title || '新对话', model: c.model || '', providerName: c.providerName || '', updated: c.updated || 0, msgCount: (c.messages || []).length, pinned: pinnedVal, sig: chatConvSig(c) };
+                    cloudMap[c.id] = { id: c.id, title: c.title || '新对话', model: c.model || '', providerName: c.providerName || '', updated: c.updated || 0, msgCount: (c.messages || []).length, pinned: pinnedVal };
                 });
                 // 移除墓碑中的条目
                 Object.keys(tombs).forEach(function(id) { delete cloudMap[id]; });
@@ -13098,10 +13082,7 @@ body {
                     if (local && local._dirty && (local.updated || 0) >= (cloud.updated || 0)) return;
                     // 置顶状态轻量同步：直接从清单字段取，无需重新拉取整条对话
                     if (local && (!!local.pinned !== !!cloud.pinned)) { local.pinned = !!cloud.pinned; changed = true; }
-                    // 内容指纹兜底：本地是纯缓存（没有未推送改动）且内容和云端不一致时就拉取，
-                    // 不再依赖时间戳猜测。这能修复「共读追问只追加文字、时钟偏差导致接收端漏拉」的死锁。
-                    var sigDiff = local && !local._dirty && (typeof cloud.sig !== 'undefined') && (chatConvSig(local) !== cloud.sig);
-                    if (!local || (cloud.updated && cloud.updated > (local.updated || 0)) || sigDiff) {
+                    if (!local || (cloud.updated && cloud.updated > (local.updated || 0))) {
                         toFetch.push(cloud.id);
                     }
                 });
@@ -13124,9 +13105,7 @@ body {
                             if (localList[i].id === conv.id) {
                                 // 云端严格更新就采用（时间戳已保证本地不会更新：本地更新的话上面不会进 toFetch）。
                                 // 不再用 !_dirty 卡死——配合上面的时间戳判断，可让卡住的 dirty 设备自动恢复。
-                                // 另外：本地是纯缓存（无未推送改动）且内容指纹与云端不同也采用，绕过时钟偏差。
-                                var adoptBySig = !localList[i]._dirty && (chatConvSig(conv) !== chatConvSig(localList[i]));
-                                if ((conv.updated || 0) > (localList[i].updated || 0) || adoptBySig) {
+                                if ((conv.updated || 0) > (localList[i].updated || 0)) {
                                     delete conv._dirty;
                                     localList[i] = conv;
                                     changed = true;
