@@ -13116,7 +13116,6 @@ body {
                 return Promise.all(toFetch.map(function(id) {
                     return cfGetConv(id).catch(function() { return null; });
                 })).then(function(results) {
-                    var openConvChanged = false; // 当前正打开着的对话是否被云端更新了
                     results.forEach(function(conv) {
                         if (!conv || !conv.id) return;
                         if (mergedTombs[conv.id]) return;
@@ -13131,7 +13130,6 @@ body {
                                     delete conv._dirty;
                                     localList[i] = conv;
                                     changed = true;
-                                    if (conv.id === chatCurrentConvId) openConvChanged = true;
                                 }
                                 found = true;
                                 break;
@@ -13147,12 +13145,6 @@ body {
                         localList.sort(function(a, b) { return (b.updated || 0) - (a.updated || 0); });
                         chatSetHistory(localList);
                         if (chatView === 'list') chatRenderHistoryList();
-                        // 关键：若云端更新的正是当前打开着的对话（且不在生成中、不是列表视图），
-                        // 重新载入它，让新内容立刻显示在屏幕上——否则用户停在对话里看不到自动同步的内容，
-                        // 只能手动「拉取」后再重进。共读模式 chatLoadConv 会自动恢复阅读位置。
-                        if (openConvChanged && !chatStreaming && chatView !== 'list' && chatCurrentConvId) {
-                            chatLoadConv(chatCurrentConvId);
-                        }
                     }
                     _chatSyncingPull = false;
                 });
