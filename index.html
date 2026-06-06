@@ -12166,6 +12166,20 @@ body {
             var src = chatMessages;
             // 如果有压缩，从压缩点之后开始取消息
             var sliceStart = chatCompressedCount || 0;
+            // 共读兜底：当前正在读的这一章可能已被后台压缩（compressedCount 越过了它），
+            // 但只要还没翻到下一章，就把它的原文拉回上下文——否则「重 roll 当前章评论」
+            // 或「压缩刚跑完立刻重发」时模型手里没有本章原文，会答非所问。
+            // 只回拉「最后一章」，更早的章节仍只用摘要，所以不会把旧章原文带回来重新评论。
+            if (chatReadingMode) {
+                for (var _lcIdx = chatMessages.length - 1; _lcIdx >= 0; _lcIdx--) {
+                    var _lcm = chatMessages[_lcIdx];
+                    if (_lcm.role === 'user' && typeof _lcm.content === 'string' && _lcm.content.length >= 200) {
+                        if (_lcIdx < sliceStart) sliceStart = _lcIdx;
+                        break;
+                    }
+                }
+            }
+            if (sliceStart > chatMessages.length) sliceStart = chatMessages.length;
             if (sliceStart > 0) {
                 src = src.slice(sliceStart);
             }
@@ -13676,14 +13690,20 @@ body {
             var _alreadyDone = chatCompressedCount || 0;
             var compressEnd;
             if (chatReadingMode) {
-                // 找最后一章正文（≥200字的 user 消息）的起点，压缩它之前的全部内容
+                // 找最后一段未压缩的章节正文（≥200字的 user 消息）
                 var _lastChap = -1;
                 for (var _ci = chatMessages.length - 1; _ci >= _alreadyDone; _ci--) {
                     var _cm = chatMessages[_ci];
                     if (_cm.role === 'user' && typeof _cm.content === 'string' && _cm.content.length >= _CHAPTER_MIN_LEN) { _lastChap = _ci; break; }
                 }
-                if (_lastChap <= _alreadyDone) return; // 还没有「上一章」可压（仍在第一章）
-                compressEnd = _lastChap;
+                if (_lastChap < 0) return; // 没有未压缩的章节正文（只剩纯讨论），留作上下文不压
+                // 关键：把「当前刚读完的这一章正文 + 它的逐段点评」也一并压成摘要（compressEnd 取到末尾），
+                // 而不是像以前那样只压到「上一章」、把当前章留在原始上下文里。
+                // 这样下次发新章时，上下文 = 历次摘要(含上一章) + 仅新章原文，模型不会再被
+                // 上一章的原文和旧 [Px] 点评带跑（老毛病：发新章却在评上一章）。
+                // 当前章在「还没翻到下一章」期间仍由 chatDoRequest 里的兜底逻辑拉回原文，
+                // 所以「重 roll 当前章评论 / 双击问段」都不受影响。
+                compressEnd = chatMessages.length;
             } else {
                 var _effThreshold = chatTranslateMode ? 10 : chatCompressThreshold;
                 var _effKeep = chatTranslateMode ? 5 : chatCompressKeep;
