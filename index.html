@@ -13003,6 +13003,26 @@ body {
             localStorage.setItem('chat_tombstones', JSON.stringify(t));
         }
 
+        // 消息身份签名：role + content（content 可能是字符串，也可能是图片/文件数组）
+        function _chatMsgSig(m) {
+            if (!m) return '';
+            var c = m.content;
+            if (typeof c !== 'string') { try { c = JSON.stringify(c); } catch (e) { c = '' + c; } }
+            return (m.role || '') + '' + c;
+        }
+        // 合并两份消息数组：先找最长「公共开头」。
+        // - 若一方正好是另一方的开头（纯追加，最常见的「接着往下读」）→ 返回更长的那份，一条不丢。
+        // - 若中途分叉（重新生成/编辑/各自离线追加了不同内容）→ 返回消息更多的一方，尽量不丢。
+        // - 条数相同且分叉 → 返回 null，交给调用方按时间戳取舍。
+        function _chatMergeMessages(a, b) {
+            a = a || []; b = b || [];
+            var n = Math.min(a.length, b.length), i = 0;
+            for (; i < n; i++) { if (_chatMsgSig(a[i]) !== _chatMsgSig(b[i])) break; }
+            if (i === n) return a.length >= b.length ? a : b;       // 一方是另一方前缀
+            if (a.length !== b.length) return a.length > b.length ? a : b;  // 分叉→保留更长
+            return null;                                            // 同长度分叉→上层决定
+        }
+
         function chatSyncPush() {
             if (activeSyncProvider !== 'cf') return;
             var cfg = cfGetConfig();
@@ -13015,9 +13035,27 @@ body {
             var dirtyIds = {};
             list.forEach(function(c) { if (c._dirty) dirtyIds[c.id] = true; });
 
-            // 先推送 dirty 的对话数据
-            list.forEach(function(conv) {
-                if (conv._dirty) {
+            // 先读云端清单，再决定怎么推：清单里带每条对话的 msgCount（云端消息条数），
+            // 用它做「防缩水」判断——绝不让本地较短的版本把云端较长的盖掉（修复「条数少的覆盖条数多的」）。
+            cfReq('GET', '_chat_manifest').then(function(cloudManifest) {
+                var cloudMap = {};
+                if (cloudManifest && cloudManifest.chats) {
+                    cloudManifest.chats.forEach(function(c) { cloudMap[c.id] = c; });
+                }
+
+                // 防缩水判断：只要云端这条消息比本地多，就别推（哪怕本地时间戳更新——比如本地只是
+                // 改了标题/重新生成但还停留在旧的短版本）。留着 _dirty，等下次拉取把云端较长版本合并进来。
+                // 代价：在某台设备「删掉对话里的某几条消息」不会同步（会被补回）——优先保证不丢消息。
+                function _wouldShrink(conv) {
+                    var prev = cloudMap[conv.id];
+                    if (!prev) return false;
+                    return (prev.msgCount || 0) > (conv.messages || []).length;
+                }
+
+                // 推送 dirty 的对话数据（带防缩水保护）
+                list.forEach(function(conv) {
+                    if (!conv._dirty) return;
+                    if (_wouldShrink(conv)) return;   // 云端更长更新 → 不覆盖，保留脏标记待合并
                     // 记录本次推送对应的版本时间戳：上传是异步的，期间用户可能又追加了
                     // 提问/追问（conv.updated 会被顶新）。若回调里无条件清脏标记，会把新改动的
                     // 脏标记一并抹掉，导致后续推送被跳过、云端停留在旧版本（表现为「只同步了第一条」）。
@@ -13029,22 +13067,17 @@ body {
                         // 仅当推送期间没有更新的改动时才清脏标记，否则保留以便下次把完整内容再推上去
                         if (conv.updated === snapUpdated) conv._dirty = false;
                     }).catch(function(err) { _chatSyncNotifyError(err); });
-                }
-            });
+                });
 
-            // 读取云端清单后合并再写回，避免覆盖其他设备的对话
-            cfReq('GET', '_chat_manifest').then(function(cloudManifest) {
-                var cloudMap = {};
-                if (cloudManifest && cloudManifest.chats) {
-                    cloudManifest.chats.forEach(function(c) { cloudMap[c.id] = c; });
-                }
-                // 用本地数据更新（仅当本地不比云端旧时才覆盖云端条目）
+                // 用本地数据更新清单（仅当本地不比云端旧时才覆盖云端条目）
                 list.forEach(function(c) {
                     var prev = cloudMap[c.id];
                     // 关键：若云端这条记录「严格更新」（别的设备刚改过、本机还没拉到），不要用本机
                     // 较旧的时间戳把它盖回去——否则其它设备会以为这条没更新而拉不到新内容，表现为
                     // 「这台同步了、那台就丢了」的轮流丢失。直接保留云端条目即可。
                     if (prev && (prev.updated || 0) > (c.updated || 0)) return;
+                    // 防缩水：云端消息更多且不比本地旧 → 保留云端清单条目（与上面不推 body 保持一致）。
+                    if (_wouldShrink(c)) return;
                     // 置顶状态：仅当本地这条对话有未推送的改动(_dirty)时才以本地为准；
                     // 否则保留云端已有的置顶值，避免「尚未拉取到别的设备刚置顶状态」的
                     // 本设备在推送时把云端的置顶覆盖回去（这正是置顶不能同步的根因）。
@@ -13100,13 +13133,16 @@ body {
                 manifest.chats.forEach(function(cloud) {
                     if (mergedTombs[cloud.id]) return;
                     var local = localMap[cloud.id];
+                    var localLen = local ? (local.messages || []).length : 0;
+                    // 云端消息比本地多 → 一定要拉来合并（防丢消息），这一条优先于下面所有「跳过」判断。
+                    var cloudHasMore = (cloud.msgCount || 0) > localLen;
                     // 仅当本地有未推送改动「且不比云端旧」时才保留本地，避免覆盖本机更新的改动。
                     // 若云端严格更新（其它设备改得更晚），即使本地是 dirty 也要拉取——否则一旦本机
                     // 某次推送失败导致 _dirty 卡住，这条对话会永远拒绝接收云端更新（死锁，单台设备卡住）。
-                    if (local && local._dirty && (local.updated || 0) >= (cloud.updated || 0)) return;
+                    if (local && local._dirty && (local.updated || 0) >= (cloud.updated || 0) && !cloudHasMore) return;
                     // 置顶状态轻量同步：直接从清单字段取，无需重新拉取整条对话
                     if (local && (!!local.pinned !== !!cloud.pinned)) { local.pinned = !!cloud.pinned; changed = true; }
-                    if (!local || (cloud.updated && cloud.updated > (local.updated || 0))) {
+                    if (!local || (cloud.updated && cloud.updated > (local.updated || 0)) || cloudHasMore) {
                         toFetch.push(cloud.id);
                     }
                 });
@@ -13118,6 +13154,7 @@ body {
                     _chatSyncingPull = false;
                     return;
                 }
+                var needRepush = false;   // 合并后本地比云端长（补齐了云端缺的消息）→ 末尾再推一次
                 return Promise.all(toFetch.map(function(id) {
                     return cfGetConv(id).catch(function() { return null; });
                 })).then(function(results) {
@@ -13127,14 +13164,34 @@ body {
                         var found = false;
                         for (var i = 0; i < localList.length; i++) {
                             if (localList[i].id === conv.id) {
-                                // 云端严格更新就采用（时间戳已保证本地不会更新：本地更新的话上面不会进 toFetch）。
-                                // 不再用 !_dirty 卡死——配合上面的时间戳判断，可让卡住的 dirty 设备自动恢复。
-                                if ((conv.updated || 0) > (localList[i].updated || 0)) {
-                                    delete conv._dirty;
-                                    localList[i] = conv;
-                                    changed = true;
-                                }
                                 found = true;
+                                var localConv = localList[i];
+                                // 不再「云端整条覆盖本地」，而是按公共开头合并消息，绝不让消息变少。
+                                var mergedMsgs = _chatMergeMessages(localConv.messages, conv.messages);
+                                if (mergedMsgs === null) {
+                                    // 同长度分叉 → 退回时间戳：云端更新才整条采用
+                                    if ((conv.updated || 0) > (localConv.updated || 0)) {
+                                        delete conv._dirty; localList[i] = conv; changed = true;
+                                    }
+                                } else {
+                                    var localLen = (localConv.messages || []).length;
+                                    var cloudLen = (conv.messages || []).length;
+                                    // 其余字段（标题/置顶/压缩摘要等）以「更新时间较新」的一方为准，消息用并集。
+                                    var base = (conv.updated || 0) >= (localConv.updated || 0) ? conv : localConv;
+                                    if (mergedMsgs.length !== localLen || base !== localConv) {
+                                        var mc = JSON.parse(JSON.stringify(base));
+                                        mc.messages = mergedMsgs;
+                                        mc.updated = Math.max(conv.updated || 0, localConv.updated || 0);
+                                        delete mc._dirty;
+                                        // 合并后比云端长（本地有云端缺的尾巴），或本地这条本就有未推送改动且元数据以本地为准
+                                        // （如在短版本上改了标题）→ 标脏并安排补推，让云端也补全。
+                                        if (mergedMsgs.length > cloudLen || (base === localConv && localConv._dirty)) {
+                                            mc._dirty = true; needRepush = true;
+                                        }
+                                        localList[i] = mc;
+                                        changed = true;
+                                    }
+                                }
                                 break;
                             }
                         }
@@ -13150,6 +13207,8 @@ body {
                         if (chatView === 'list') chatRenderHistoryList();
                     }
                     _chatSyncingPull = false;
+                    // 本地合并后补齐了云端缺的消息 → 推回云端，让云端也变完整
+                    if (needRepush) chatScheduleSyncPush();
                 });
             }).catch(function() { _chatSyncingPull = false; });
         }
