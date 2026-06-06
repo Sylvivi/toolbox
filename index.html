@@ -15570,19 +15570,17 @@ body {
                 // translate-merged 同时带 reading-merged 类，必须先判翻译模式
                 var tp = e.target.closest('.translate-merged p[data-p]');
                 if (tp) { translateOnParaClick(tp); return; }
-                // 共读模式：左半屏点击 = 上一屏，右半屏点击 = 下一屏
-                // （双击留给段落评价、拖选/已选中文字留给复制，故排除并延迟确认）
+                // 共读模式：点屏幕任意一边都往下翻一屏（左手握机随便点都能继续读，
+                // 往回看用手指上滑滚动）。双击留给段落评价、拖选/已选中文字留给复制，故排除并延迟确认。
                 if (chatReadingMode) {
                     // 刚从列表进入对话的极短时间内忽略翻页，避免「幽灵点击」把阅读位置翻走
                     if (Date.now() < _readingTapSuppressUntil) return;
                     if (e.target.closest('button, input, textarea, a, svg, img, .reading-actbar')) return;
                     var sel = window.getSelection && window.getSelection();
                     if (sel && String(sel).length > 0) return;
-                    var rect = el.getBoundingClientRect();
-                    var leftHalf = (e.clientX - rect.left) < rect.width / 2;
                     clearTimeout(_readingTapTimer);
                     _readingTapTimer = setTimeout(function() {
-                        if (leftHalf) readingPageUp(); else readingPageDown();
+                        readingPageDown();
                     }, 250);
                 }
             });
