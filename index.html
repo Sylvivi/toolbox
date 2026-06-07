@@ -10394,6 +10394,13 @@ body {
         var chatCompressKeep = parseInt(localStorage.getItem('chat_compress_keep')) || 20;
         var chatCompressing = false;   // 正在压缩中
         var chatReadingMode = false;    // 共读模式
+        // 共读/翻译：进入会话时只渲染「存档位置 → 末尾」这一窗口，避免一次性重排整本书卡几十秒；
+        // 往上滚到顶再按需补渲染更早章节。chatRenderStartIdx = 当前已渲染的首条消息下标（0 表示全渲染）。
+        var chatRenderStartIdx = 0;
+        var READING_RENDER_BUFFER = 4;   // 锚点之前多带几条做缓冲，免得锚点贴在最顶端
+        var READING_RENDER_WINDOW = 8;   // 没有存档位置时，默认只渲染最后这么多条
+        var READING_RENDER_CHUNK = 8;    // 上滑到顶时，每次补渲染的条数
+        var _chatLoadingEarlier = false; // 补渲染进行中的防重入标记
         var _readingModeOrigText = '';  // 流式渲染用：当前原文
         var READING_MODE_INSTRUCTION = '【共读模式格式要求】当用户发送带有 [P1] [P2] 等段落编号的小说原文时，你只需要输出你的评论，不要重复原文。每条评论格式为：[P段落号] 评论内容。例如：\n[P3] 这段描写太细腻了\n[P7] 这里有个伏笔\n\n最重要的一条：每一轮你只评论【用户本次最新发来的这一条带 [P] 编号的章节原文】。之前已经读过、已经评过的章节，不要再补评论、不要再引用它们的段落编号。段落编号 [P1] [P2]… 每一章都是从头重新计数的，所以你输出的 [Px] 必须严格对应本章原文里的那一段，绝不能拿来指代上一章的内容。\n\n严格格式：每条评论开头只写一个 [Px] 标记，不要写成 [P25] [P26] 或 [P25-26] 这种合并格式。如果要同时评论多段，请分开写：\n[P25] 评论内容\n[P26] 评论内容\n\n重要：请模拟顺序阅读的视角写评论，评论某段时只基于该段及其之前的内容，不要引用或暗示后文还没出现的信息。你可以运用对作品已读部分（当前文本之前的剧情）的了解来丰富评论，但绝不剧透当前阅读位置之后的情节发展。像一个读过前文、但还没翻到下一页的读友一样。\n\n评论密度自己把握，有感觉的地方就评，没感觉的不要硬评。不需要每段都评。评论结束后可以简短聊两句整体感受。\n如果用户没发原文而是在聊天讨论，就正常回复，不用加 [P] 标记。';
         // 共读模式：模型没按 [Px] 格式输出时，自动重试一次用的强化纠正提示
@@ -11029,8 +11036,8 @@ body {
                 try { _hasReadingPos = !!localStorage.getItem(readingScrollKey()); } catch (e) {}
                 if (_hasReadingPos) chatSkipNextAutoBottom = true;
             }
-            // 渲染消息
-            chatRenderAllMessages();
+            // 渲染消息（进入会话时窗口化：共读/翻译只渲染「存档位置→末尾」，更早的上滑再补）
+            chatRenderAllMessages(true);
             // 共读/翻译：渲染后回到上次阅读位置（覆盖默认的「滚到底」）
             // 逐帧收敛校正到 <1px；并在短延时、网络字体加载完后各补一轮——
             // 因为网络字体是异步到的，到了会让整篇行高变化、位置整体偏移，必须复位。
@@ -11105,43 +11112,106 @@ body {
             if (isYest) return '昨天 ' + hm;
             return (d.getMonth()+1) + '/' + d.getDate() + ' ' + hm;
         }
-        function chatRenderAllMessages() {
+        // 时间分隔线小节点
+        function chatMakeTimeSep(ts) {
+            var sep = document.createElement('div');
+            sep.className = 'chat-time-sep';
+            sep.innerHTML = '<span>' + chatFmtTimeSep(ts) + '</span>';
+            return sep;
+        }
+        // 把 [from, to) 区间的消息（含时间分隔线）依次 append 到 target（可为容器或 fragment）。
+        // lastTs 为上一条消息时间戳（用于判断要不要插分隔线）；showFirstSep=true 时本区间首条强制带时间。
+        function chatAppendMsgRange(target, from, to, lastTs, lastAiIdx, showFirstSep) {
+            for (var i = from; i < to; i++) {
+                var msg = chatMessages[i];
+                var role = msg.role === 'assistant' ? 'ai' : (msg.role === 'user' ? 'user' : null);
+                if (!role) continue;
+                if (msg.ts) {
+                    var gap = msg.ts - lastTs;
+                    var crossDay = lastTs > 0 && new Date(msg.ts).toDateString() !== new Date(lastTs).toDateString();
+                    if (crossDay || (lastTs > 0 && gap > 3600000)) {
+                        target.appendChild(chatMakeTimeSep(msg.ts));
+                    } else if (showFirstSep && i === from) {
+                        target.appendChild(chatMakeTimeSep(msg.ts));
+                    }
+                    lastTs = msg.ts;
+                }
+                target.appendChild(chatBuildMsgEl(role, msg.content, msg.thinking, i, i === lastAiIdx));
+            }
+            return lastTs;
+        }
+        // 共读/翻译：算出进入会话时只渲染的起点下标。优先以「上次阅读位置」那条消息为锚点，
+        // 往前多带 BUFFER 条；没有存档位置时退而渲染最后 WINDOW 条。短会话直接全渲染（返回 0）。
+        function chatComputeRenderStart() {
+            var n = chatMessages.length;
+            if (n <= READING_RENDER_WINDOW) return 0;
+            var anchorIdx = -1;
+            try {
+                var raw = localStorage.getItem(readingScrollKey());
+                if (raw) { var pos = JSON.parse(raw); if (pos && pos.idx != null) anchorIdx = parseInt(pos.idx, 10); }
+            } catch (e) {}
+            var start;
+            if (anchorIdx >= 0 && anchorIdx < n) start = anchorIdx - READING_RENDER_BUFFER;
+            else start = n - READING_RENDER_WINDOW;
+            if (start < 0) start = 0;
+            return start;
+        }
+        // 顶部「载入更早章节」哨兵：既是提示，也是点一下手动补渲染的入口（上滑到顶也会自动触发）
+        function chatMakeEarlierSentinel() {
+            var d = document.createElement('div');
+            d.id = 'chatEarlierSentinel';
+            d.style.cssText = 'text-align:center;padding:14px 0;font-size:12px;color:var(--text-muted);cursor:pointer;user-select:none';
+            d.textContent = '↑ 载入更早章节';
+            d.onclick = chatLoadEarlier;
+            return d;
+        }
+        // 往上补渲染一段更早的消息，并用高度差修正 scrollTop，保证视觉位置不跳动
+        function chatLoadEarlier() {
+            if (_chatLoadingEarlier || chatRenderStartIdx <= 0) return;
+            _chatLoadingEarlier = true;
+            try {
+                var container = document.getElementById('chatMessages');
+                if (!container) return;
+                var oldStart = chatRenderStartIdx;
+                var newStart = Math.max(0, oldStart - READING_RENDER_CHUNK);
+                var lastAiIdx = -1;
+                for (var k = chatMessages.length - 1; k >= 0; k--) { if (chatMessages[k].role === 'assistant') { lastAiIdx = k; break; } }
+                var oldH = container.scrollHeight;
+                var oldTop = container.scrollTop;
+                var oldSentinel = document.getElementById('chatEarlierSentinel');
+                if (oldSentinel) oldSentinel.remove();
+                var frag = document.createDocumentFragment();
+                var seed = newStart > 0 ? ((chatMessages[newStart - 1] && chatMessages[newStart - 1].ts) || 0) : 0;
+                chatAppendMsgRange(frag, newStart, oldStart, seed, lastAiIdx, true);
+                container.insertBefore(frag, container.firstChild);
+                chatRenderStartIdx = newStart;
+                if (newStart > 0) container.insertBefore(chatMakeEarlierSentinel(), container.firstChild);
+                // 高度增量补到 scrollTop 上，视图保持原地
+                container.scrollTop = oldTop + (container.scrollHeight - oldH);
+            } finally {
+                _chatLoadingEarlier = false;
+            }
+        }
+        // windowed=true（仅进入会话时传）：共读/翻译模式下只渲染「存档位置→末尾」，避免一次性重排整本书。
+        // 其余调用（编辑/重生成/截断等）保持全量渲染，行为不变。
+        function chatRenderAllMessages(windowed) {
             var container = document.getElementById('chatMessages');
             container.innerHTML = '';
             if (chatMessages.length === 0) {
                 container.innerHTML = '<div class="chat-empty">选择模型，开始对话</div>';
+                chatRenderStartIdx = 0;
                 return;
             }
             var lastAiIdx = -1;
             for (var k = chatMessages.length - 1; k >= 0; k--) {
                 if (chatMessages[k].role === 'assistant') { lastAiIdx = k; break; }
             }
-            var lastTs = 0;
-            for (var i = 0; i < chatMessages.length; i++) {
-                var msg = chatMessages[i];
-                var role = msg.role === 'assistant' ? 'ai' : (msg.role === 'user' ? 'user' : null);
-                if (!role) continue;
-                // 时间分隔线：跨天或间隔>1小时
-                if (msg.ts) {
-                    var gap = msg.ts - lastTs;
-                    var crossDay = lastTs > 0 && new Date(msg.ts).toDateString() !== new Date(lastTs).toDateString();
-                    if (crossDay || (lastTs > 0 && gap > 3600000)) {
-                        var sep = document.createElement('div');
-                        sep.className = 'chat-time-sep';
-                        sep.innerHTML = '<span>' + chatFmtTimeSep(msg.ts) + '</span>';
-                        container.appendChild(sep);
-                    } else if (i === 0) {
-                        // 第一条消息也显示时间
-                        var sep = document.createElement('div');
-                        sep.className = 'chat-time-sep';
-                        sep.innerHTML = '<span>' + chatFmtTimeSep(msg.ts) + '</span>';
-                        container.appendChild(sep);
-                    }
-                    lastTs = msg.ts;
-                }
-                var el = chatBuildMsgEl(role, msg.content, msg.thinking, i, i === lastAiIdx);
-                container.appendChild(el);
-            }
+            var startIdx = 0;
+            if (windowed && (chatReadingMode || chatTranslateMode)) startIdx = chatComputeRenderStart();
+            chatRenderStartIdx = startIdx;
+            if (startIdx > 0) container.appendChild(chatMakeEarlierSentinel());
+            var seed = startIdx > 0 ? ((chatMessages[startIdx - 1] && chatMessages[startIdx - 1].ts) || 0) : 0;
+            chatAppendMsgRange(container, startIdx, chatMessages.length, seed, lastAiIdx, true);
             chatScrollBottom();
         }
 
@@ -14954,6 +15024,10 @@ body {
                 if (!ticking) {
                     ticking = true;
                     requestAnimationFrame(function() { readingUpdateProgress(); readingAutoHideTopbar(); ticking = false; });
+                }
+                // 上滑接近顶部且还有更早内容没渲染 → 自动补渲染（窗口化的「按需向上加载」）
+                if ((chatReadingMode || chatTranslateMode) && chatRenderStartIdx > 0 && !_chatLoadingEarlier && el.scrollTop < 600) {
+                    chatLoadEarlier();
                 }
                 if (saveTimer) clearTimeout(saveTimer);
                 saveTimer = setTimeout(readingSaveScrollPos, 150);
