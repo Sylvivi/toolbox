@@ -28,6 +28,7 @@ html:has(.theme-tealblue) { background-color: #EFF6F2; }
 html:has(.theme-dream) { background-color: #f5f0fa; }
 html:has(.theme-purplepink) { background-color: #f0ecfc; }
 html:has(.theme-iceblue) { background-color: #e8f2fa; }
+html:has(.theme-nightblue) { background-color: #0f1a2e; }
 
         :root {
             --bg: linear-gradient(135deg, #EEF4FB 0%, #F0E8F5 25%, #E8F4F0 50%, #FBF0F3 75%, #EEF4FB 100%);
@@ -89,6 +90,44 @@ html:has(.theme-iceblue) { background-color: #e8f2fa; }
         .dark select, .dark select option {
             background-color: #233228;
             color: #d4e4db;
+        }
+
+        /* 靛夜金：深蓝夜色 + 金色强调（呼应浅色「蔚蓝金」）。
+           本主题的 body 同时挂 .dark 和 .theme-nightblue 两个类：
+           .dark 负责一切「深色特殊处理」（共读不加暖遮罩、状态栏等自动继承），
+           .theme-nightblue 紧跟其后覆盖颜色变量，把绿调换成蓝金调。
+           ★ 以后新增深色皮肤都照此套路：cls 写 'dark theme-xxx' 即可，无需改任何深色判断逻辑。 */
+        .theme-nightblue {
+            --bg: linear-gradient(135deg, #0f1a2e 0%, #13213a 25%, #182947 50%, #13213a 75%, #0f1a2e 100%);
+            --text: #dce6f5;
+            --text-sub: #9fb3d0;
+            --text-light: #7e93b3;
+            --text-muted: #62769a;
+            --accent: #f5c842;
+            --accent-mid: #e0b020;
+            --accent-light: rgba(245,200,66,0.16);
+            --accent-chip: rgba(245,200,66,0.5);
+            --card-bg: rgba(255,255,255,0.06);
+            --card-border: rgba(255,255,255,0.1);
+            --card-inner: rgba(255,255,255,0.05);
+            --input-bg: rgba(255,255,255,0.07);
+            --input-border: rgba(255,255,255,0.12);
+            --modal-bg: rgba(20,33,58,0.8);
+            --overlay-bg: rgba(0,0,0,0.5);
+            --nav-bg: rgba(15,26,46,0.85);
+            --nav-border: rgba(255,255,255,0.08);
+            --code-bg: rgba(200,220,255,0.06);
+            --code-text: #bcd2f0;
+            --red: #fb7185;
+            --red-bg: rgba(239,68,68,0.12);
+            --blue: #60a5fa;
+            --blue-bg: rgba(59,130,246,0.15);
+            --gold: #f5c842;
+            --dup-bg: rgba(245,200,66,0.14);
+        }
+        .theme-nightblue select, .theme-nightblue select option {
+            background-color: #16243f;
+            color: #dce6f5;
         }
 
         .theme-warm {
@@ -5096,7 +5135,8 @@ body {
             { id: 'tealblue', name: '青蓝', cls: 'theme-tealblue' },
             { id: 'dream', name: '绮梦', cls: 'theme-dream' },
             { id: 'purplepink', name: '紫粉', cls: 'theme-purplepink' },
-            { id: 'iceblue', name: '冰蓝', cls: 'theme-iceblue' }
+            { id: 'iceblue', name: '冰蓝', cls: 'theme-iceblue' },
+            { id: 'nightblue', name: '靛夜金', cls: 'dark theme-nightblue' }
         ];
         function getThemeIdx() {
             var saved = localStorage.getItem('toolbox_theme') || 'clay';
@@ -5112,7 +5152,8 @@ body {
             tealblue: '#EFF6F2',
             dream: '#f5f0fa',
             purplepink: '#f0ecfc',
-            iceblue: '#e8f2fa'
+            iceblue: '#e8f2fa',
+            nightblue: '#0f1a2e'
         };
         // 更新 PWA 状态栏颜色：聊天弹窗打开且统一遮罩生效（遮罩开+引号高亮开+非深色）时用暖奶白，
         // 否则用各自主题色。弹窗关掉自动回到主题色。
@@ -5130,8 +5171,8 @@ body {
         }
         function applyTheme(idx) {
             var t = THEMES[idx];
-            document.body.classList.remove('dark', 'theme-warm', 'theme-clay', 'theme-blueorange', 'theme-tealblue', 'theme-dream', 'theme-purplepink', 'theme-iceblue');
-            if (t.cls) document.body.classList.add(t.cls);
+            document.body.classList.remove('dark', 'theme-warm', 'theme-clay', 'theme-blueorange', 'theme-tealblue', 'theme-dream', 'theme-purplepink', 'theme-iceblue', 'theme-nightblue');
+            if (t.cls) t.cls.split(' ').forEach(function(c) { if (c) document.body.classList.add(c); });
             localStorage.setItem('toolbox_theme', t.id);
             // 同步遮罩状态
             if (t.id === 'dark') {
