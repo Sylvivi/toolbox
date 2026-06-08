@@ -4470,7 +4470,7 @@ body {
                         <option value="empty-line">空行分隔</option>
                     </select>
                     <button class="rb-btn" onclick="rbReSplit()">重新拆分</button>
-                    <input type="text" id="rbChapterSearch" class="rb-search" placeholder="搜索章节…" oninput="rbRenderChapters()">
+                    <input type="text" id="rbChapterSearch" class="rb-search" placeholder="搜索章节…" oninput="rbChapterSearchInput()">
                 </div>
                 </div>
                 <div id="rbChapterList"></div>
@@ -14574,6 +14574,8 @@ body {
             }).join('');
             box.innerHTML = html || '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px 0">没有匹配的章节</div>';
         }
+        // 搜索框防抖：等停手 200ms 再扫全书，避免每敲一个字母就把整本几百万字重扫一遍（结果完全一致，只是少做无用功）
+        var rbChapterSearchInput = debounce(rbRenderChapters, 200);
 
         function rbInsertChapter(id, i) {
             var b = rbGetBook(id); if (!b || !b.chapters[i]) return;
@@ -16058,14 +16060,25 @@ body {
             return comments;
         }
 
+        // 原文段落 HTML 缓存：AI 边写点评时整章正文不变，避免每 0.1 秒把整章重新转义+高亮一遍（输出完全一致，只是少做重复活）
+        var _readingMergeCache = { text: null, ps: null };
         function readingModeRenderMerged(originalText, aiText) {
-            var lines = originalText.split('\n');
-            var paragraphs = [];
-            for (var i = 0; i < lines.length; i++) {
-                var line = lines[i].trim();
-                if (line.length > 0) {
-                    paragraphs.push(line);
+            // 原文段落的 <p> 串只跟原文有关，与 AI 文本无关 → 同一章流式期间只算一次
+            var pHtml;
+            if (_readingMergeCache.text === originalText && _readingMergeCache.ps) {
+                pHtml = _readingMergeCache.ps;
+            } else {
+                var lines = originalText.split('\n');
+                var paras = [];
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i].trim();
+                    if (line.length > 0) paras.push(line);
                 }
+                pHtml = [];
+                for (var p = 0; p < paras.length; p++) {
+                    pHtml.push('<p data-p="' + (p + 1) + '" style="white-space:pre-wrap;word-break:break-word;margin:0.5em 0">' + readingHighlightQuotes(esc(paras[p])) + '</p>');
+                }
+                _readingMergeCache = { text: originalText, ps: pHtml };
             }
             var comments = readingModeParseComments(aiText);
             var commentMap = {};
@@ -16080,9 +16093,9 @@ body {
             }
 
             var html = '<div class="reading-merged">';
-            for (var j = 0; j < paragraphs.length; j++) {
+            for (var j = 0; j < pHtml.length; j++) {
                 var pNum = j + 1;
-                html += '<p data-p="' + pNum + '" style="white-space:pre-wrap;word-break:break-word;margin:0.5em 0">' + readingHighlightQuotes(esc(paragraphs[j])) + '</p>';
+                html += pHtml[j];
                 if (commentMap[pNum]) {
                     for (var k = 0; k < commentMap[pNum].length; k++) {
                         var _cmtRaw = commentMap[pNum][k];
