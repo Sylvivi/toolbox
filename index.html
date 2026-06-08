@@ -14579,13 +14579,23 @@ body {
             try { localStorage.setItem('reader_progress', JSON.stringify(all)); } catch (e) {}
         }
 
-        // 「阅读」入口：打开书架选书（记得上次这本对话填过的书就直接进它的目录）
+        // 「阅读」入口：记得上次在读的书就直接打开它的目录，否则才回书架列表
         function readerEnter() {
             chatReaderMode = true;
             rbPickForReader = true;
             if (typeof chatSyncModeButtons === 'function') chatSyncModeButtons();
             if (typeof chatCloseModelSheet === 'function') chatCloseModelSheet();
-            rbOpenShelf();
+            if (typeof rbLoad === 'function') rbLoad();
+            var lastBook = null;
+            try { lastBook = localStorage.getItem('reader_last_book'); } catch (e) {}
+            if (lastBook && rbGetBook(lastBook)) {
+                // 直接进上次在读那本书的章节目录（书架弹窗照常打开，只是停在目录页）
+                document.getElementById('rbBg').classList.add('show');
+                document.getElementById('rbModal').classList.add('show');
+                rbOpenBook(lastBook);
+            } else {
+                rbOpenShelf();
+            }
         }
 
         // 每本书一个专属阅读会话（id 形如 reader_<bookId>，本身带 readingMode），
@@ -14614,41 +14624,38 @@ body {
         }
 
         // 从书架点章节进入阅读：直接进共读那套沉浸式聊天界面，整章渲染，不调用 AI
+        // 从目录点章节 = 从该章「顶部」开始读（重建会话只含这一章，往下滚到底自动续下一章）
         function readerOpenChapter(bookId, idx) {
             var b = rbGetBook(bookId); if (!b || !b.chapters[idx]) return;
             rbPickForReader = false; // 已真正选章进入阅读，避免关书架时被误判成「没进阅读」而清掉阅读态
             readerBookId = bookId;
             readerChapterIdx = idx;
             var cid = readerConvId(bookId);
-            var prog = readerGetProgress(bookId);
-            var existing = readerFindConv(bookId);
             rbCloseShelf();
+            chatResetConvState();
+            chatCurrentConvId = cid;
+            chatMessages = readerChapterPair(b.chapters[idx], idx);
+            chatReadingMode = true;
+            chatTranslateMode = false;
             chatReaderMode = true;
-            // 点的就是上次在读那一章、且该书已有阅读会话 → 直接载入（含历史章节，靠会话锚点回到上次位置）
-            if (existing && prog.chapter === idx) {
-                chatLoadConv(cid);
-            } else {
-                // 从这一章另起：重建该书阅读会话，只含这一章，往下滚到底自动续下一章
-                chatResetConvState();
-                chatCurrentConvId = cid;
-                chatMessages = readerChapterPair(b.chapters[idx], idx);
-                chatReadingMode = true;
-                chatTranslateMode = false;
-                chatReaderMode = true;
-                readingCollapseInput();
-                chatSwitchView('conv');
-                chatRenderAllMessages(false);
-                // 跳转到新章节：滚到顶部，并清除旧的阅读位置锚点
-                var container = document.getElementById('chatMessages');
-                if (container) container.scrollTop = 0;
-                var key = readingScrollKey();
-                if (key) {
-                    try { localStorage.removeItem(key); } catch (e) {}
-                }
-                readerSetProgress(bookId, { chapter: idx, pp: null, off: 0 });
-                chatSaveCurrentConv(true);
-                setTimeout(readingUpdateProgress, 120);
+            readingCollapseInput();
+            chatSwitchView('conv');
+            // 清除旧的阅读位置锚点，避免渲染后被拉回上次滚动到的地方（多半是上次读到的章节底部）
+            var key = readingScrollKey();
+            if (key) { try { localStorage.removeItem(key); } catch (e) {} }
+            // 关键：渲染完不要自动滚到底，停在章节顶部
+            chatSkipNextAutoBottom = true;
+            chatRenderAllMessages(false);
+            var container = document.getElementById('chatMessages');
+            if (container) {
+                container.scrollTop = 0;
+                requestAnimationFrame(function () { container.scrollTop = 0; });
+                setTimeout(function () { container.scrollTop = 0; }, 60);
             }
+            readerSetProgress(bookId, { chapter: idx, pp: null, off: 0 });
+            try { localStorage.setItem('reader_last_book', bookId); } catch (e) {}
+            chatSaveCurrentConv(true);
+            setTimeout(readingUpdateProgress, 120);
             chatSyncReadingChip();
             chatSyncModeButtons();
             if (typeof readingApplyTopbarMode === 'function') readingApplyTopbarMode();
