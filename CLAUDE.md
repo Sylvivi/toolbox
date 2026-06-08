@@ -28,3 +28,5 @@
 - **翻译模式追问**：长按译文块触发（约 0.5s，移动超 10px 取消），双击/拖选留给浏览器选词复制。
 - **等待中可中止**：翻译、翻译追问、共读提问加载时按钮带 `✕`，点击用 `AbortController` 掐断请求；中止不弹报错。
 - **遮罩**：`chat_mask` localStorage（'1'/'0'）控制 `body.chat-mask-on`，初始化时按保存值强制对齐（加或删）。
+- **夜间模式**：clawd「主题」子面板有 🌙 开关（`setNightMode`，存 `toolbox_night`）。每个浅色皮肤有对应 `.theme-xxx-night` 类，**7 个夜间皮肤共用同一套深蓝底**（`linear-gradient 135deg #0e1726→#16284a→#0e1726`），只有强调色各自不同；`深林绿(dark)` 无夜间版。`applyTheme` 里 `cls = (nightMode && t.night) ? t.night : t.cls`。
+- **窗口化渲染（进会话防卡顿）**：长篇共读/翻译会话原本进入时一次性同步重排整本书，章节多了卡几十秒。现改为**只渲染「上次阅读位置→末尾」这一窗口**，更早章节上滑到顶自动补渲染（顶部有「↑ 载入更早章节」哨兵，也可点）。关键函数：`chatRenderAllMessages(windowed)`（**只有进会话那次传 `true`**；编辑/重生成等仍全量）、`chatComputeRenderStart`（以存档锚点 `reading_pos_<convId>.idx` 为基准，前留 `READING_RENDER_BUFFER=4`）、`chatLoadEarlier`（上滑补渲染并用高度差修正 scrollTop，防跳）、`chatAppendMsgRange`/`chatMakeTimeSep` 抽出的复用逻辑。`chatRenderStartIdx` 记当前已渲染首条下标（0=全渲染）。**阅读位置定位靠「第几条消息+第几段」锚点（在 AI 共读消息的 `.reading-merged p[data-p]` 上），不靠像素，所以少渲染早章节不影响回到原位。**
