@@ -2775,6 +2775,49 @@ body {
         }
         .reading-merged p[data-p].rp-active { background: var(--accent-light); }
         .reading-merged blockquote[data-cp].rp-active { box-shadow: 0 0 0 2px var(--accent-mid); }
+
+        /* ===== 阅读器（纯看书）覆盖层 ===== */
+        .reader-overlay {
+            position: fixed; inset: 0; z-index: 1200;
+            display: none; flex-direction: column;
+            background: var(--bg, #fff); color: var(--text);
+        }
+        .reader-overlay.show { display: flex; }
+        .reader-topbar, .reader-botbar {
+            flex-shrink: 0; display: flex; align-items: center; gap: 8px;
+            padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top, 0px));
+            border-bottom: 1px solid var(--card-border); background: var(--card-bg, var(--bg));
+        }
+        .reader-botbar {
+            border-bottom: none; border-top: 1px solid var(--card-border);
+            justify-content: space-between;
+            padding-top: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+        }
+        .reader-title { flex: 1; min-width: 0; text-align: center; }
+        .reader-bookname { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .reader-chapname { font-size: 14px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .reader-tbtn {
+            flex-shrink: 0; padding: 6px 12px; border: 1px solid var(--card-border);
+            border-radius: 9px; background: transparent; color: var(--text);
+            font-size: 13px; cursor: pointer; transition: background 0.12s, opacity 0.12s;
+        }
+        .reader-tbtn:active { opacity: 0.6; }
+        .reader-tbtn:disabled { opacity: 0.35; cursor: default; }
+        .reader-prog { font-size: 12px; color: var(--text-muted); }
+        .reader-content {
+            flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+            padding: 18px 20px 40px; padding-left: calc(20px + env(safe-area-inset-left, 0px)); padding-right: calc(20px + env(safe-area-inset-right, 0px));
+            line-height: 1.85;
+        }
+        .reader-content .reading-merged p[data-p] { cursor: default; margin: 0.5em 0; }
+        .reader-settings {
+            display: none; flex-shrink: 0; flex-direction: column; gap: 10px;
+            padding: 12px 16px; border-bottom: 1px solid var(--card-border); background: var(--card-bg, var(--bg));
+        }
+        .reader-settings.show { display: flex; }
+        .reader-set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .reader-set-label { font-size: 12px; font-weight: 600; color: var(--text-muted); flex-shrink: 0; }
+
         /* 注：原先这里用 content-visibility 省渲染，但会让屏外段落高度变估算值，
            导致「记忆阅读位置」对不准，故移除——改回全量真实排版，定位天然精准。 */
         .reading-actbar {
@@ -4478,6 +4521,45 @@ body {
         </div>
     </div>
 
+    <!-- 阅读器全屏覆盖层（纯阅读，复用 .reading-merged 渲染 + 全局字号/字体/引号高亮） -->
+    <div id="readerOverlay" class="reader-overlay">
+        <div class="reader-topbar">
+            <button class="reader-tbtn" onclick="readerBackToShelf()">‹ 目录</button>
+            <div class="reader-title">
+                <div id="readerBookName" class="reader-bookname"></div>
+                <div id="readerChapName" class="reader-chapname"></div>
+            </div>
+            <button class="reader-tbtn" onclick="readerToggleSettings()">Aa</button>
+        </div>
+        <div id="readerSettings" class="reader-settings">
+            <div class="reader-set-row">
+                <span class="reader-set-label">正文字号</span>
+                <div style="display:flex;gap:6px;align-items:center">
+                    <button class="pagebtn-pos-opt" onclick="readingStepFontScale(-0.1);readerSyncSettings()" style="min-width:30px">A−</button>
+                    <span id="readerFontVal" style="font-size:12px;color:var(--text-muted);min-width:40px;text-align:center">100%</span>
+                    <button class="pagebtn-pos-opt" onclick="readingStepFontScale(0.1);readerSyncSettings()" style="min-width:30px">A+</button>
+                </div>
+            </div>
+            <div class="reader-set-row">
+                <span class="reader-set-label">引号高亮</span>
+                <div style="position:relative;width:40px;height:22px;cursor:pointer;flex-shrink:0" onclick="readingToggleQuoteHl();readerSyncSettings()">
+                    <span id="readerQuoteTrack" style="position:absolute;inset:0;background:var(--card-border);border-radius:11px;transition:background 0.3s;"></span>
+                    <span id="readerQuoteKnob" style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.3s;box-shadow:rgba(0,0,0,0.18) 0px 1px 4px;"></span>
+                </div>
+            </div>
+            <div class="reader-set-row" style="align-items:flex-start">
+                <span class="reader-set-label" style="padding-top:5px">正文字体</span>
+                <div id="readerFontList" style="display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end;flex:1"></div>
+            </div>
+        </div>
+        <div id="readerContent" class="reader-content"></div>
+        <div class="reader-botbar">
+            <button class="reader-tbtn" onclick="readerPrevChapter()">‹ 上一章</button>
+            <span id="readerProgress" class="reader-prog"></span>
+            <button class="reader-tbtn" onclick="readerNextChapter()">下一章 ›</button>
+        </div>
+    </div>
+
     <!-- 聊天设置弹窗 -->
 
     <!-- 系统提示词预设管理 sheet -->
@@ -4531,6 +4613,7 @@ body {
                         <button class="pagebtn-pos-opt" data-mode="normal" onclick="chatSetMode('normal')">对话</button>
                         <button class="pagebtn-pos-opt" data-mode="translate" onclick="chatSetMode('translate')">翻译</button>
                         <button class="pagebtn-pos-opt" data-mode="reading" onclick="chatSetMode('reading')">共读</button>
+                        <button class="pagebtn-pos-opt" data-mode="reader" onclick="chatSetMode('reader')">阅读</button>
                     </div>
                 </div>
                 <div id="readingFontRow" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
@@ -10404,6 +10487,7 @@ body {
         var chatCompressKeep = parseInt(localStorage.getItem('chat_compress_keep')) || 20;
         var chatCompressing = false;   // 正在压缩中
         var chatReadingMode = false;    // 共读模式
+        var chatReaderMode = false;     // 阅读器模式（纯看书，临时态：仅在阅读器/选书覆盖层打开期间为 true，不写入会话）
         // 共读/翻译：进入会话时只渲染「存档位置 → 末尾」这一窗口，避免一次性重排整本书卡几十秒；
         // 往上滚到顶再按需补渲染更早章节。chatRenderStartIdx = 当前已渲染的首条消息下标（0 表示全渲染）。
         var chatRenderStartIdx = 0;
@@ -14272,8 +14356,14 @@ body {
             if (typeof readingApplyTopbarMode === 'function') readingApplyTopbarMode();
         }
 
-        // 三选一模式选择器：对话 / 翻译 / 共读（互斥）
+        // 四选一模式选择器：对话 / 翻译 / 共读 / 阅读（互斥）
         function chatSetMode(mode) {
+            // 「阅读」是覆盖层式入口，不改变底层会话模式：打开书架选书 → 进阅读器
+            if (mode === 'reader') {
+                readerEnter();
+                return;
+            }
+            chatReaderMode = false;
             if (mode === 'reading') {
                 toggleReadingMode(true);      // 内部会关掉翻译
             } else if (mode === 'translate') {
@@ -14286,9 +14376,9 @@ body {
             if (typeof readingApplyTopbarMode === 'function') readingApplyTopbarMode();
         }
 
-        // 把当前模式同步到三个分段按钮的高亮
+        // 把当前模式同步到分段按钮的高亮
         function chatSyncModeButtons() {
-            var mode = chatReadingMode ? 'reading' : (chatTranslateMode ? 'translate' : 'normal');
+            var mode = chatReaderMode ? 'reader' : (chatReadingMode ? 'reading' : (chatTranslateMode ? 'translate' : 'normal'));
             var btns = document.querySelectorAll('#chatModeRow .pagebtn-pos-opt');
             for (var i = 0; i < btns.length; i++) {
                 btns[i].classList.toggle('active', btns[i].getAttribute('data-mode') === mode);
@@ -14484,6 +14574,7 @@ body {
          * ========================================================================= */
         var rbBooks = [];
         var rbActiveBookId = null;
+        var rbPickForReader = false;   // true=书架是为「阅读器」选书（点章节进阅读器）；false=为「共读」填入输入框
         var RB_PRESETS = {
             markdown: '^#{1,6}\\s+.+',
             chinese: '^第[一二三四五六七八九十百千零两\\d]+[章节篇部卷回话]\\s*.*',
@@ -14524,6 +14615,200 @@ body {
         function rbCloseShelf() {
             document.getElementById('rbBg').classList.remove('show');
             document.getElementById('rbModal').classList.remove('show');
+            // 若是「阅读」入口打开的书架，但用户没进阅读器就关掉了：清掉阅读态，按钮高亮还原
+            if (rbPickForReader && !(document.getElementById('readerOverlay') && document.getElementById('readerOverlay').classList.contains('show'))) {
+                rbPickForReader = false;
+                chatReaderMode = false;
+                if (typeof chatSyncModeButtons === 'function') chatSyncModeButtons();
+            }
+        }
+
+        // ===== 阅读器（纯看书，第一步：不接 AI） =====
+        var readerBookId = null;
+        var readerChapterIdx = 0;
+        var _readerSaveTimer = null;
+
+        function readerProgressAll() {
+            try { return JSON.parse(localStorage.getItem('reader_progress') || '{}'); } catch (e) { return {}; }
+        }
+        // 阅读模式各书进度（独立于共读的 book.lastChapter）：{ chapter, pp, off }
+        function readerGetProgress(bookId) {
+            var all = readerProgressAll();
+            var p = all[bookId];
+            if (p && typeof p === 'object') return { chapter: (p.chapter == null ? null : (p.chapter | 0)), pp: p.pp || null, off: p.off || 0 };
+            return { chapter: null, pp: null, off: 0 };
+        }
+        function readerSetProgress(bookId, data) {
+            var all = readerProgressAll();
+            all[bookId] = data;
+            try { localStorage.setItem('reader_progress', JSON.stringify(all)); } catch (e) {}
+        }
+
+        // 「阅读」入口：打开书架选书（记得上次这本对话填过的书就直接进它的目录）
+        function readerEnter() {
+            chatReaderMode = true;
+            rbPickForReader = true;
+            if (typeof chatSyncModeButtons === 'function') chatSyncModeButtons();
+            if (typeof chatCloseModelSheet === 'function') chatCloseModelSheet();
+            rbOpenShelf();
+        }
+
+        function readerOpenChapter(bookId, idx) {
+            var b = rbGetBook(bookId); if (!b || !b.chapters[idx]) return;
+            readerBookId = bookId;
+            readerChapterIdx = idx;
+            // 先显示阅读器再关书架：rbCloseShelf 会检查阅读器是否已显示，避免误清阅读态
+            var ov = document.getElementById('readerOverlay');
+            ov.classList.add('show');
+            document.getElementById('readerSettings').classList.remove('show');
+            rbCloseShelf();
+            readerBindContentOnce();
+            readerRenderChapter();
+            readerSyncSettings();
+            var prog = readerGetProgress(bookId);
+            var c = document.getElementById('readerContent');
+            if (prog.chapter === idx && prog.pp) {
+                requestAnimationFrame(function () { readerRestorePos(); requestAnimationFrame(readerRestorePos); });
+            } else if (c) { c.scrollTop = 0; }
+            readerSaveProgress();
+        }
+
+        function readerRenderChapter() {
+            var b = rbGetBook(readerBookId); if (!b) return;
+            var ch = b.chapters[readerChapterIdx]; if (!ch) return;
+            document.getElementById('readerBookName').textContent = b.fileName;
+            document.getElementById('readerChapName').textContent = ch.title;
+            document.getElementById('readerProgress').textContent = '第 ' + (readerChapterIdx + 1) + ' / ' + b.chapters.length + ' 章';
+            // 正文：按换行拆段，每段一个 <p data-p>，复用引号高亮（与共读同一套 .reading-merged 样式/字号/字体）
+            var paras = (ch.body || '').split(/\n+/).filter(function (s) { return s.trim().length > 0; });
+            var html = '<div class="reading-merged">';
+            for (var i = 0; i < paras.length; i++) {
+                html += '<p data-p="' + (i + 1) + '">' + readingHighlightQuotes(rbEsc(paras[i])) + '</p>';
+            }
+            html += '</div>';
+            document.getElementById('readerContent').innerHTML = html;
+            var pv = document.querySelector('.reader-botbar .reader-tbtn:first-child');
+            var nx = document.querySelector('.reader-botbar .reader-tbtn:last-child');
+            if (pv) pv.disabled = (readerChapterIdx <= 0);
+            if (nx) nx.disabled = (readerChapterIdx >= b.chapters.length - 1);
+        }
+
+        function readerPrevChapter() {
+            if (readerChapterIdx <= 0) return;
+            readerSaveProgress();
+            readerChapterIdx--;
+            readerRenderChapter();
+            var c = document.getElementById('readerContent'); if (c) c.scrollTop = 0;
+            readerSaveProgress();
+        }
+        function readerNextChapter() {
+            var b = rbGetBook(readerBookId); if (!b) return;
+            if (readerChapterIdx >= b.chapters.length - 1) { showToast('已经是最后一章啦'); return; }
+            readerSaveProgress();
+            readerChapterIdx++;
+            readerRenderChapter();
+            var c = document.getElementById('readerContent'); if (c) c.scrollTop = 0;
+            readerSaveProgress();
+        }
+
+        function readerBackToShelf() {
+            readerSaveProgress();
+            document.getElementById('readerOverlay').classList.remove('show');
+            rbPickForReader = true;
+            chatReaderMode = true;
+            rbOpenBook(readerBookId);
+            document.getElementById('rbBg').classList.add('show');
+            document.getElementById('rbModal').classList.add('show');
+        }
+
+        // 进度：章 + 段落锚点（参照共读 readingSaveScrollPos，作用于 #readerContent，不靠像素）
+        function readerSaveProgress() {
+            if (!readerBookId) return;
+            var c = document.getElementById('readerContent');
+            var data = { chapter: readerChapterIdx, pp: null, off: 0 };
+            if (c) {
+                var ctop = c.getBoundingClientRect().top;
+                var ps = c.querySelectorAll('.reading-merged p[data-p]');
+                for (var i = 0; i < ps.length; i++) {
+                    if (ps[i].getBoundingClientRect().bottom > ctop + 4) {
+                        data.pp = ps[i].getAttribute('data-p');
+                        data.off = Math.round(ps[i].getBoundingClientRect().top - ctop);
+                        break;
+                    }
+                }
+            }
+            readerSetProgress(readerBookId, data);
+        }
+        function readerRestorePos() {
+            var prog = readerGetProgress(readerBookId);
+            if (prog.chapter !== readerChapterIdx || !prog.pp) return false;
+            var c = document.getElementById('readerContent'); if (!c) return false;
+            var anchor = c.querySelector('.reading-merged p[data-p="' + prog.pp + '"]');
+            if (!anchor) return false;
+            var ctop = c.getBoundingClientRect().top;
+            var cur = anchor.getBoundingClientRect().top - ctop;
+            var delta = cur - (prog.off || 0);
+            if (Math.abs(delta) < 1) return false;
+            c.scrollTop = c.scrollTop + delta;
+            return true;
+        }
+
+        // 翻页 + 滚动存进度：只绑一次
+        function readerBindContentOnce() {
+            var c = document.getElementById('readerContent');
+            if (!c || c._readerBound) return;
+            c._readerBound = true;
+            c.addEventListener('scroll', function () {
+                if (_readerSaveTimer) clearTimeout(_readerSaveTimer);
+                _readerSaveTimer = setTimeout(readerSaveProgress, 400);
+            });
+            // 左右点击翻页（中间留白给阅读，不误触）
+            c.addEventListener('click', function (e) {
+                // 选中文字时不翻页
+                var sel = window.getSelection && window.getSelection();
+                if (sel && String(sel).length > 0) return;
+                var r = c.getBoundingClientRect();
+                var x = e.clientX - r.left;
+                if (x < r.width * 0.32) readerPageUp();
+                else if (x > r.width * 0.68) readerPageDown();
+            });
+        }
+        function readerPageDown() {
+            var c = document.getElementById('readerContent'); if (!c) return;
+            c.scrollTop = c.scrollTop + Math.max(100, c.clientHeight - 48);
+        }
+        function readerPageUp() {
+            var c = document.getElementById('readerContent'); if (!c) return;
+            c.scrollTop = c.scrollTop - Math.max(100, c.clientHeight - 48);
+        }
+
+        // 设置面板（Aa）：复用全局字号/字体/引号高亮
+        function readerToggleSettings() {
+            var s = document.getElementById('readerSettings');
+            if (!s) return;
+            s.classList.toggle('show');
+            if (s.classList.contains('show')) readerSyncSettings();
+        }
+        function readerSyncSettings() {
+            var s = parseFloat(localStorage.getItem('reading_font_scale') || '1') || 1;
+            var fv = document.getElementById('readerFontVal'); if (fv) fv.textContent = Math.round(s * 100) + '%';
+            var on = document.body.classList.contains('reading-quote-on');
+            var tr = document.getElementById('readerQuoteTrack'); var kn = document.getElementById('readerQuoteKnob');
+            if (tr) tr.style.background = on ? 'var(--accent)' : 'var(--card-border)';
+            if (kn) kn.style.transform = on ? 'translateX(18px)' : 'translateX(0)';
+            readerRenderFontList();
+        }
+        function readerRenderFontList() {
+            var box = document.getElementById('readerFontList'); if (!box) return;
+            var fonts = readingFontsLoad();
+            var active = localStorage.getItem('reading_font_name') || '';
+            var html = '<span class="rfont-chip no-x' + (active ? '' : ' on') + '" onclick="readingUseFont(\'\');readerSyncSettings()"><span class="rfont-chip-name">默认</span></span>';
+            for (var i = 0; i < fonts.length; i++) {
+                var nm = fonts[i].name; var safe = nm.replace(/'/g, "\\'");
+                var on = (nm === active) ? ' on' : '';
+                html += '<span class="rfont-chip' + on + '"><span class="rfont-chip-name" onclick="readingUseFont(\'' + safe + '\');readerSyncSettings()">' + esc(nm) + '</span></span>';
+            }
+            box.innerHTML = html;
         }
 
         function rbRenderShelf() {
@@ -14550,6 +14835,8 @@ body {
             document.getElementById('rbBookTitle').textContent = b.fileName;
             var ps = document.getElementById('rbPresetSelect'); if (ps) ps.value = b.preset || 'auto';
             var cs = document.getElementById('rbChapterSearch'); if (cs) cs.value = '';
+            // 阅读模式下「发下一章」是共读专用，隐藏掉
+            var nb = document.getElementById('rbNextBtn'); if (nb) nb.style.display = rbPickForReader ? 'none' : '';
             rbRenderChapters();
         }
         function rbBackToShelf() {
@@ -14563,12 +14850,19 @@ body {
             var b = rbGetBook(rbActiveBookId); if (!b) return;
             var q = (document.getElementById('rbChapterSearch').value || '').toLowerCase();
             var box = document.getElementById('rbChapterList');
+            // 阅读模式按「阅读器进度」标记当前章；共读模式按 lastChapter 标记
+            var markCur = rbPickForReader ? readerGetProgress(b.id).chapter : b.lastChapter;
             var html = b.chapters.map(function (ch, i) {
                 if (q && ch.title.toLowerCase().indexOf(q) < 0 && ch.body.toLowerCase().indexOf(q) < 0) return '';
                 var cls = 'rb-chap';
-                if (b.lastChapter != null) { if (i < b.lastChapter) cls += ' rb-read'; if (i === b.lastChapter) cls += ' rb-current'; }
+                if (markCur != null) { if (i < markCur) cls += ' rb-read'; if (i === markCur) cls += ' rb-current'; }
+                if (rbPickForReader) {
+                    return '<div class="' + cls + '" onclick="readerOpenChapter(\'' + b.id + '\',' + i + ')">'
+                        + '<div class="rb-chap-info"><div class="rb-chap-title">' + rbEsc(ch.title) + '</div><div class="rb-chap-meta">' + ch.body.length.toLocaleString() + ' 字' + (i === markCur ? ' · 在读' : '') + '</div></div>'
+                        + '<span style="font-size:11px;color:var(--accent);flex-shrink:0">阅读 ›</span></div>';
+                }
                 return '<div class="' + cls + '" onclick="rbInsertChapter(\'' + b.id + '\',' + i + ')">'
-                    + '<div class="rb-chap-info"><div class="rb-chap-title">' + rbEsc(ch.title) + '</div><div class="rb-chap-meta">' + ch.body.length.toLocaleString() + ' 字' + (i === b.lastChapter ? ' · 当前' : '') + '</div></div>'
+                    + '<div class="rb-chap-info"><div class="rb-chap-title">' + rbEsc(ch.title) + '</div><div class="rb-chap-meta">' + ch.body.length.toLocaleString() + ' 字' + (i === markCur ? ' · 当前' : '') + '</div></div>'
                     + '<button class="rb-chap-append" onclick="event.stopPropagation();rbAppendChapter(\'' + b.id + '\',' + i + ')" title="追加到输入框（不替换，用于合并被拆错的章节）">＋</button>'
                     + '<span style="font-size:11px;color:var(--accent);flex-shrink:0">填入 ›</span></div>';
             }).join('');
