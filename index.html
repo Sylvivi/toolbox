@@ -10799,6 +10799,8 @@ body {
         // 直接进入最近一次对话；没有任何对话时开新对话
         function chatOpenMostRecent() {
             var list = chatGetHistory();
+            // 阅读会话（reader_）不算「最近对话」——否则长按搜索键会去打开整本书，又慢又跑偏
+            if (list && list.length) list = list.filter(function(c) { return !(c.id && c.id.indexOf('reader_') === 0); });
             if (!list || list.length === 0) { chatNewConv(); return; }
             list.sort(function(a, b) { return (b.updated || b.created || 0) - (a.updated || a.created || 0); });
             chatLoadConv(list[0].id);
