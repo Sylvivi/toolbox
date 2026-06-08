@@ -3,7 +3,10 @@
 ## 项目概况
 - **单文件 HTML PWA**：核心就是 `index.html`（约 1.6 万行，JS/CSS 全部内联，约 1MB）。不要拆分成多文件，用户要求保持单文件。
 - **部署**：GitHub Pages，线上地址 https://sylvivi.github.io/toolbox/ ，仓库 `Sylvivi/toolbox`，分支 `main`。
+- **自定义域名（已绑定，免梯子）**：工具站 `https://tool.masterofmydomain.top`（CF DNS CNAME → sylvivi.github.io，橙色已代理）；云同步 Worker `https://sync.masterofmydomain.top`（CF Workers 自定义域，原 `toolbox-api.wanwanviavia.workers.dev`）。SSL/TLS 模式必须「完全(Full)」否则重定向死循环。域名 `masterofmydomain.top`（阿里云注册，NS 已搬到 Cloudflare）。
+- **PWA 安装注意**：装 PWA 到桌面要**挂梯子**（WebAPK 需要 Google 服务器签发，国内被墙）；不挂梯子会退化成「带 Google 标识的快捷方式」，状态栏颜色被冻死、跟不上主题。装完之后日常使用不需要梯子。
 - **更新机制**：network-first 的 service worker，会自动更新；推送后过一两分钟刷新页面即可生效。
+- **PWA 排障经验**：装 PWA 到桌面要**挂梯子**（WebAPK 需 Google 服务器签发，国内被墙）；不挂梯子会退化成「带 Google 标识的快捷方式」，状态栏颜色被冻死、跟不上主题。装完之后日常用不需要梯子。遇到「状态栏不变色 / 图标变样」先往这个方向查。
 - **主要用途**：用户主要用「共读模式」读长篇小说（如天龙八部），其次有翻译模式、普通对话模式。
 
 ## 用户偏好（重要）
@@ -16,7 +19,7 @@
 2. 用预览服务器验证：`preview_start` 名称 `tbx`（端口 8732），服务器根目录就是 toolbox 文件夹，所以 URL 是 **`/index.html`**（不是 `/toolbox/index.html`）。
 3. `location.reload()` 后用 `preview_eval` 检查逻辑、`preview_console_logs` 看有无报错。
 4. 验证通过 → 直接提交并推送。
-5. Git 命令带路径：`git -C "C:/Users/86177/Downloads/toolbox" ...`。
+5. Git 命令带路径：`git -C "C:/Users/Administrator/Downloads/toolbox-repo" ...`。
 
 ## 关键功能笔记
 - **三模式选择器**：`对话 / 翻译 / 共读`（无 emoji），分段按钮，互斥。`chatSetMode()` / `chatSyncModeButtons()`。
