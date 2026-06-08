@@ -9271,6 +9271,7 @@ body {
                 fonts: readingFontsLoad(),
                 fontsTs: readingGetFontsTs(),
                 fontName: localStorage.getItem('reading_font_name') || '',
+                readerPos: (function () { try { return JSON.parse(localStorage.getItem('reader_pos') || '{}'); } catch (e) { return {}; } })(),
                 cardTimestamps: cardTs,
                 lastModified: new Date().toISOString()
             };
@@ -9514,6 +9515,20 @@ body {
                         }
                         try { readingApplyFont(); } catch (e) {}
                     }
+                }
+
+                // 阅读进度：逐本书按时间戳取较新的（两台设备读不同的书不会互相覆盖）
+                if (manifest.readerPos) {
+                    try {
+                        var localRP = JSON.parse(localStorage.getItem('reader_pos') || '{}');
+                        var cloudRP = manifest.readerPos || {};
+                        var rpChanged = false;
+                        Object.keys(cloudRP).forEach(function (k) {
+                            var c = cloudRP[k], l = localRP[k];
+                            if (c && (!l || (c.ts || 0) > (l.ts || 0))) { localRP[k] = c; rpChanged = true; }
+                        });
+                        if (rpChanged) localStorage.setItem('reader_pos', JSON.stringify(localRP));
+                    } catch (e) {}
                 }
 
                 // 本地数据
@@ -10734,7 +10749,7 @@ body {
             var topbarBtns = document.querySelectorAll('#chatTopbarList .chat-sp-btn');
             topbarBtns.forEach(function(btn) { btn.style.display = ''; });
             var container = document.getElementById('chatMessages');
-            var list = chatGetHistory();
+            var list = chatGetHistory().filter(function(c) { return !(c.id && c.id.indexOf('reader_') === 0); }); // 阅读会话不在对话历史里露出
             list.sort(function(a, b) {
                 if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1; // 置顶优先
                 return (b.updated || b.created || 0) - (a.updated || a.created || 0);
@@ -13355,6 +13370,7 @@ body {
 
                 // 推送 dirty 的对话数据（带防缩水保护）
                 list.forEach(function(conv) {
+                    if (conv.id && conv.id.indexOf('reader_') === 0) return; // 阅读会话不当普通对话同步
                     if (!conv._dirty) return;
                     if (_wouldShrink(conv)) return;   // 云端更长更新 → 不覆盖，保留脏标记待合并
                     // 记录本次推送对应的版本时间戳：上传是异步的，期间用户可能又追加了
@@ -13372,6 +13388,7 @@ body {
 
                 // 用本地数据更新清单（仅当本地不比云端旧时才覆盖云端条目）
                 list.forEach(function(c) {
+                    if (c.id && c.id.indexOf('reader_') === 0) return; // 阅读会话不进同步清单
                     var prev = cloudMap[c.id];
                     // 关键：若云端这条记录「严格更新」（别的设备刚改过、本机还没拉到），不要用本机
                     // 较旧的时间戳把它盖回去——否则其它设备会以为这条没更新而拉不到新内容，表现为
@@ -13387,6 +13404,8 @@ body {
                 });
                 // 移除墓碑中的条目
                 Object.keys(tombs).forEach(function(id) { delete cloudMap[id]; });
+                // 清掉云端可能残留的旧阅读会话（早期版本误传上去的），保持清单干净
+                Object.keys(cloudMap).forEach(function(id) { if (id.indexOf('reader_') === 0) delete cloudMap[id]; });
                 var merged = [];
                 Object.keys(cloudMap).forEach(function(id) { merged.push(cloudMap[id]); });
                 merged.sort(function(a, b) { return (b.updated || 0) - (a.updated || 0); });
@@ -13432,6 +13451,7 @@ body {
                 localList.forEach(function(c) { localMap[c.id] = c; });
                 var toFetch = [];
                 manifest.chats.forEach(function(cloud) {
+                    if (cloud.id && cloud.id.indexOf('reader_') === 0) return; // 阅读会话不从云端拉取
                     if (mergedTombs[cloud.id]) return;
                     var local = localMap[cloud.id];
                     var localLen = local ? (local.messages || []).length : 0;
@@ -14563,20 +14583,41 @@ body {
         var readerChapterIdx = 0;
         var _readerSaveTimer = null;
 
-        function readerProgressAll() {
-            try { return JSON.parse(localStorage.getItem('reader_progress') || '{}'); } catch (e) { return {}; }
+        // 多设备互通的关键：进度按「文件名+大小」存，而不是按本地随机生成的 book.id
+        //（同一本书在每台设备上 id 不同，但文件名+大小一样，这样云端互相认得出是同一本）
+        function readerBookKey(bookId) {
+            var b = (typeof rbGetBook === 'function') ? rbGetBook(bookId) : null;
+            if (b && b.fileName != null) return b.fileName + '|' + (b.fileSize || 0);
+            return bookId; // 兜底：书没了就退回用 id
         }
-        // 阅读模式各书进度（独立于共读的 book.lastChapter）：{ chapter, pp, off }
+        function readerPosAll() {
+            try { return JSON.parse(localStorage.getItem('reader_pos') || '{}'); } catch (e) { return {}; }
+        }
+        // 阅读模式各书进度（独立于共读的 book.lastChapter）：返回 { chapter, p, off }
+        // p=章内第几段（data-p），off=该段距顶像素，用于精确回到「读到哪段」
         function readerGetProgress(bookId) {
-            var all = readerProgressAll();
-            var p = all[bookId];
-            if (p && typeof p === 'object') return { chapter: (p.chapter == null ? null : (p.chapter | 0)), pp: p.pp || null, off: p.off || 0 };
-            return { chapter: null, pp: null, off: 0 };
+            var all = readerPosAll();
+            var p = all[readerBookKey(bookId)];
+            if (p && typeof p === 'object') return { chapter: (p.ch == null ? null : (p.ch | 0)), p: (p.p == null ? null : p.p), off: p.off || 0 };
+            // 兼容旧版本（按 book.id 存的 reader_progress），让老进度还能用上
+            try {
+                var old = JSON.parse(localStorage.getItem('reader_progress') || '{}')[bookId];
+                if (old && old.chapter != null) return { chapter: old.chapter | 0, p: null, off: 0 };
+            } catch (e) {}
+            return { chapter: null, p: null, off: 0 };
         }
+        // data 字段都显式传：{ chapter, p, off }。带上 ts 供云端逐书按时间取较新的。
         function readerSetProgress(bookId, data) {
-            var all = readerProgressAll();
-            all[bookId] = data;
-            try { localStorage.setItem('reader_progress', JSON.stringify(all)); } catch (e) {}
+            var all = readerPosAll();
+            var key = readerBookKey(bookId);
+            var cur = all[key] || {};
+            all[key] = {
+                ch: (data.chapter == null ? cur.ch : (data.chapter | 0)),
+                p: (data.p === undefined ? cur.p : data.p),
+                off: (data.off === undefined ? cur.off : data.off),
+                ts: Date.now()
+            };
+            try { localStorage.setItem('reader_pos', JSON.stringify(all)); } catch (e) {}
         }
 
         // 「阅读」入口：记得上次在读的书就直接打开它的目录，否则才回书架列表
@@ -14643,16 +14684,33 @@ body {
             // 清除旧的阅读位置锚点，避免渲染后被拉回上次滚动到的地方（多半是上次读到的章节底部）
             var key = readingScrollKey();
             if (key) { try { localStorage.removeItem(key); } catch (e) {} }
-            // 关键：渲染完不要自动滚到底，停在章节顶部
+            // 点的就是「在读」的那一章 → 回到上次读到的那一段（含多设备同步过来的位置）；
+            // 点的是别的章 → 从该章顶部开始读。
+            var prog = readerGetProgress(bookId);
+            var resume = (prog.chapter === idx && prog.p != null);
+            // 关键：渲染完不要自动滚到底
             chatSkipNextAutoBottom = true;
             chatRenderAllMessages(false);
             var container = document.getElementById('chatMessages');
             if (container) {
-                container.scrollTop = 0;
-                requestAnimationFrame(function () { container.scrollTop = 0; });
-                setTimeout(function () { container.scrollTop = 0; }, 60);
+                if (resume) {
+                    var goPara = function () {
+                        var pEl = container.querySelector('.reading-merged p[data-p="' + prog.p + '"]');
+                        if (pEl) {
+                            var ctop = container.getBoundingClientRect().top;
+                            container.scrollTop = container.scrollTop + (pEl.getBoundingClientRect().top - ctop) - (prog.off || 0);
+                        } else { container.scrollTop = 0; }
+                    };
+                    requestAnimationFrame(goPara);
+                    setTimeout(goPara, 60);
+                    setTimeout(goPara, 180);
+                } else {
+                    container.scrollTop = 0;
+                    requestAnimationFrame(function () { container.scrollTop = 0; });
+                    setTimeout(function () { container.scrollTop = 0; }, 60);
+                }
             }
-            readerSetProgress(bookId, { chapter: idx, pp: null, off: 0 });
+            if (!resume) readerSetProgress(bookId, { chapter: idx, p: null, off: 0 });
             try { localStorage.setItem('reader_last_book', bookId); } catch (e) {}
             chatSaveCurrentConv(true);
             setTimeout(readingUpdateProgress, 120);
@@ -14680,7 +14738,7 @@ body {
                 var lastTs = base > 0 ? (chatMessages[base - 1].ts || 0) : 0;
                 chatAppendMsgRange(container, base, chatMessages.length, lastTs, -1, false);
                 readerChapterIdx = nextIdx;
-                readerSetProgress(readerBookId, { chapter: nextIdx });
+                readerSetProgress(readerBookId, { chapter: nextIdx, p: null, off: 0 });
                 chatSaveCurrentConv(true);
             } finally { _readerAppending = false; }
             return true;
@@ -15119,6 +15177,12 @@ body {
                     data.off = Math.round(anchor.getBoundingClientRect().top - ctop);
                 }
                 localStorage.setItem(key, JSON.stringify(data));
+                // 阅读模式：把「读到哪章哪段」也记进可同步的 reader_pos（按文件名+大小为键）
+                if (chatReaderMode && readerBookId && anchor && data.idx != null) {
+                    var rcMsg = chatMessages[data.idx | 0];
+                    var rc = rcMsg ? rcMsg.readerChapter : null;
+                    if (rc != null) readerSetProgress(readerBookId, { chapter: rc, p: data.p, off: data.off });
+                }
             } catch (e) {}
         }
         function readingRestoreScrollPos() {
