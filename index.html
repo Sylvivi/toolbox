@@ -12667,7 +12667,30 @@ body {
                 if (oldReroll) oldReroll.remove();
                 aiDiv.appendChild(chatBuildToolbar(newIdx, fullContent, true));
             }
-            chatScrollBottom();
+            // 共读：发完整章、评论生成完后，定位到「这一章的开头」而不是甩到最底下，省得每次手动往上翻
+            var _readingJumpEl = null;
+            if (chatReadingMode && _userSentChapter && fullContent && readingModeHasMarkers(fullContent)) {
+                _readingJumpEl = aiDiv.previousElementSibling; // 用户这条章节卡片
+                if (_readingJumpEl && _readingJumpEl.previousElementSibling
+                    && _readingJumpEl.previousElementSibling.classList
+                    && _readingJumpEl.previousElementSibling.classList.contains('chat-time-sep')) {
+                    _readingJumpEl = _readingJumpEl.previousElementSibling; // 连同时间分隔线一起顶到最上
+                }
+            }
+            if (_readingJumpEl) {
+                chatSkipNextAutoBottom = false;
+                var _doReadingJump = function() {
+                    var _cm = document.getElementById('chatMessages');
+                    if (!_cm || !_readingJumpEl) return;
+                    var _cr = _cm.getBoundingClientRect();
+                    var _tr = _readingJumpEl.getBoundingClientRect();
+                    _cm.scrollTop += (_tr.top - _cr.top) - 8;
+                };
+                requestAnimationFrame(_doReadingJump); // 渲染稳定后定位
+                setTimeout(_doReadingJump, 160);       // 字体/重排到达后再补一刀，防漂移
+            } else {
+                chatScrollBottom();
+            }
             document.getElementById('chatSendBtn').disabled = !chatSelectedModel;
             chatSaveCurrentConv();
             // 后台上下文压缩
