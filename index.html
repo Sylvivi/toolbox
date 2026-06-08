@@ -14638,7 +14638,14 @@ body {
                 readingCollapseInput();
                 chatSwitchView('conv');
                 chatRenderAllMessages(false);
-                readerSetProgress(bookId, { chapter: idx });
+                // 跳转到新章节：滚到顶部，并清除旧的阅读位置锚点
+                var container = document.getElementById('chatMessages');
+                if (container) container.scrollTop = 0;
+                var key = readingScrollKey();
+                if (key) {
+                    try { localStorage.removeItem(key); } catch (e) {}
+                }
+                readerSetProgress(bookId, { chapter: idx, pp: null, off: 0 });
                 chatSaveCurrentConv(true);
                 setTimeout(readingUpdateProgress, 120);
             }
