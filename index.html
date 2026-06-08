@@ -4349,6 +4349,7 @@ body {
                 <div class="chat-handle-bar"></div>
                 <button class="chat-close-btn" onclick="closeChatModal()" title="关闭">✕</button>
                 <div style="flex:1"></div>
+                <button class="chat-sp-btn" onclick="readerResumeLast()" title="继续阅读"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg></button>
                 <button class="chat-sp-btn" onclick="chatCloudShowList()" title="云端"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg></button>
                 <button class="chat-sp-btn" onclick="chatNewConv()" title="新对话"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
             </div>
@@ -14640,6 +14641,30 @@ body {
                 rbOpenBook(lastBook);
             } else {
                 rbOpenShelf();
+            }
+        }
+
+        // 列表顶栏「继续阅读」快捷入口：直接进上次在读的书 + 上次看到的位置（不停在书架/目录）
+        function readerResumeLast() {
+            var lastBook = null;
+            try { lastBook = localStorage.getItem('reader_last_book'); } catch (e) {}
+            if (typeof rbLoad === 'function') rbLoad();
+            // 没有上次在读的书（或书已删/换设备没同步过来）→ 退回正常阅读入口：打开书架选书
+            if (!lastBook || !rbGetBook(lastBook)) { readerEnter(); return; }
+            chatReaderMode = true;
+            if (typeof chatCloseModelSheet === 'function') chatCloseModelSheet();
+            var b = rbGetBook(lastBook);
+            var prog = readerGetProgress(lastBook);
+            var idx = (prog.chapter != null && prog.chapter >= 0 && b.chapters && b.chapters[prog.chapter]) ? (prog.chapter | 0) : 0;
+            // 本机若已有该书的阅读会话且存过滚动锚点 → 直接载入会话（保留已读多章 + 精确回到位置）；
+            // 否则（如换了设备）→ 从进度所在章进入，回到上次那一段。
+            var conv = (typeof readerFindConv === 'function') ? readerFindConv(lastBook) : null;
+            var hasAnchor = false;
+            try { hasAnchor = !!localStorage.getItem('reading_pos_' + readerConvId(lastBook)); } catch (e) {}
+            if (conv && hasAnchor) {
+                chatLoadConv(readerConvId(lastBook));
+            } else {
+                readerOpenChapter(lastBook, idx);
             }
         }
 
