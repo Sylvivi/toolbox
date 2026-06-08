@@ -14799,6 +14799,20 @@ body {
             // 阅读模式下「发下一章」是共读专用，隐藏掉
             var nb = document.getElementById('rbNextBtn'); if (nb) nb.style.display = rbPickForReader ? 'none' : '';
             rbRenderChapters();
+            // 打开目录时自动定位到「当前在读的那一章」，省得每次从头下滑找
+            rbScrollToCurrentChapter();
+        }
+        // 把目录滚到当前章（rb-current）大致居中；仅在打开书时调用，搜索过滤时不动
+        function rbScrollToCurrentChapter() {
+            requestAnimationFrame(function () {
+                var cur = document.querySelector('#rbChapterList .rb-current');
+                var scroller = document.querySelector('#rbModal .chat-settings-body');
+                if (!cur || !scroller) return;
+                var cRect = cur.getBoundingClientRect();
+                var sRect = scroller.getBoundingClientRect();
+                var delta = (cRect.top - sRect.top) - (scroller.clientHeight / 2) + (cur.offsetHeight / 2);
+                scroller.scrollTop = Math.max(0, scroller.scrollTop + delta);
+            });
         }
         function rbBackToShelf() {
             rbActiveBookId = null;
