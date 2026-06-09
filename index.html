@@ -9277,6 +9277,8 @@ body {
                 fontsTs: readingGetFontsTs(),
                 fontName: localStorage.getItem('reading_font_name') || '',
                 readerPos: (function () { try { return JSON.parse(localStorage.getItem('reader_pos') || '{}'); } catch (e) { return {}; } })(),
+                readerQA: (function () { try { return JSON.parse(localStorage.getItem('reader_qa') || '{}'); } catch (e) { return {}; } })(),
+                readerSummaries: (function () { try { return JSON.parse(localStorage.getItem('reader_summaries') || '{}'); } catch (e) { return {}; } })(),
                 cardTimestamps: cardTs,
                 lastModified: new Date().toISOString()
             };
@@ -9533,6 +9535,20 @@ body {
                             if (c && (!l || (c.ts || 0) > (l.ts || 0))) { localRP[k] = c; rpChanged = true; }
                         });
                         if (rpChanged) localStorage.setItem('reader_pos', JSON.stringify(localRP));
+                    } catch (e) {}
+                }
+
+                // 阅读模式问答 / 前情摘要：按「书 → 章」两层时间戳合并（last-write-wins，每章独立）
+                if (manifest.readerQA) {
+                    try {
+                        var localQA = JSON.parse(localStorage.getItem('reader_qa') || '{}');
+                        if (readerMergeByChapter(localQA, manifest.readerQA || {})) localStorage.setItem('reader_qa', JSON.stringify(localQA));
+                    } catch (e) {}
+                }
+                if (manifest.readerSummaries) {
+                    try {
+                        var localSum = JSON.parse(localStorage.getItem('reader_summaries') || '{}');
+                        if (readerMergeByChapter(localSum, manifest.readerSummaries || {})) localStorage.setItem('reader_summaries', JSON.stringify(localSum));
                     } catch (e) {}
                 }
 
@@ -9834,6 +9850,9 @@ body {
                 if (manifest.checkinTasks) { idbSet(CHECKIN_TASKS_KEY, manifest.checkinTasks); if (manifest.checkinTasksTs) idbSet(CHECKIN_TASKS_TS_KEY, manifest.checkinTasksTs); }
                 if (manifest.bookmarks) { localStorage.setItem('reading_bookmarks', JSON.stringify(manifest.bookmarks)); if (manifest.bookmarksTs) localStorage.setItem('reading_bookmarks_ts', manifest.bookmarksTs); }
                 if (manifest.fonts) { localStorage.setItem('reading_fonts', JSON.stringify(manifest.fonts)); if (manifest.fontsTs) localStorage.setItem('reading_fonts_ts', manifest.fontsTs); if (typeof manifest.fontName === 'string') { if (manifest.fontName) localStorage.setItem('reading_font_name', manifest.fontName); else localStorage.removeItem('reading_font_name'); } try { readingApplyFont(); } catch (e) {} }
+                if (manifest.readerPos) { try { localStorage.setItem('reader_pos', JSON.stringify(manifest.readerPos)); } catch (e) {} }
+                if (manifest.readerQA) { try { localStorage.setItem('reader_qa', JSON.stringify(manifest.readerQA)); } catch (e) {} }
+                if (manifest.readerSummaries) { try { localStorage.setItem('reader_summaries', JSON.stringify(manifest.readerSummaries)); } catch (e) {} }
                 if (allKeys.length === 0) { setKeyDataSilent([]); setSnipDataSilent([]); return; }
                 return cfBatchGet(allKeys).then(function(results) {
                     var keys = [], snips = [];
@@ -14629,6 +14648,137 @@ body {
             try { localStorage.setItem('reader_pos', JSON.stringify(all)); } catch (e) {}
         }
 
+        /* ===== 阅读模式：问答 & 前情摘要（独立存储、可同步，不拖原文） =====
+         * 都按 readerBookKey（文件名|大小）为键，跨设备对齐；每章一格，绝不重复堆积。
+         * 问答用「单点同步」：每次变动后用 readerPersistQA 把该章消息里的问答整体抽出覆盖那一格
+         *（含删空时写空列表当墓碑，避免云端旧数据回灌）。 */
+        var READER_SUMMARY_LOOKBACK = 10; // 提问时往前最多带几章摘要
+
+        function readerQAAll() { try { return JSON.parse(localStorage.getItem('reader_qa') || '{}'); } catch (e) { return {}; } }
+        function readerQASaveAll(all) { try { localStorage.setItem('reader_qa', JSON.stringify(all)); } catch (e) {} }
+        function readerQAGet(fileKey, chap) {
+            var book = readerQAAll()[fileKey];
+            var cell = book && book[chap];
+            return (cell && Array.isArray(cell.list)) ? cell.list : [];
+        }
+        // 把某章存好的问答拼成渲染用文本（[Pn] 汐：问/答，与共读同款，复用 readingModeParseComments 解析）
+        function readerQABuildContent(fileKey, chap) {
+            return readerQAGet(fileKey, chap).map(function (it) {
+                return '[P' + it.p + '] 汐：' + it.q + '\n' + (it.a || '');
+            }).join('\n');
+        }
+        // 单点同步：把某条阅读章节消息里的问答整体抽出，覆盖进可同步的 reader_qa（删空写空列表当墓碑）
+        function readerPersistQA(msgIdx) {
+            if (!chatReaderMode || readerBookId == null) return;
+            var msg = chatMessages[msgIdx];
+            if (!msg || msg.readerChapter == null) return;
+            var fileKey = readerBookKey(readerBookId);
+            var chap = msg.readerChapter;
+            var comments = readingModeParseComments(typeof msg.content === 'string' ? msg.content : '');
+            var list = [];
+            for (var i = 0; i < comments.length; i++) {
+                var c = comments[i];
+                if (!(c.p > 0)) continue;
+                var m = /^\s*汐：([\s\S]*)$/.exec(c.text || '');
+                if (!m) continue; // 阅读模式只持久化问答（汐：开头）
+                var body = m[1];
+                var nl = body.indexOf('\n');
+                list.push({ p: c.p, q: (nl >= 0 ? body.slice(0, nl) : body).trim(), a: (nl >= 0 ? body.slice(nl + 1) : '').trim() });
+            }
+            var all = readerQAAll();
+            if (!all[fileKey]) all[fileKey] = {};
+            all[fileKey][chap] = { list: list, ts: Date.now() }; // 即使空也写，靠新时间戳压过云端旧值
+            readerQASaveAll(all);
+            if (activeSyncProvider === 'cf') syncPushData();
+        }
+
+        function readerSummariesAll() { try { return JSON.parse(localStorage.getItem('reader_summaries') || '{}'); } catch (e) { return {}; } }
+        function readerSummariesSaveAll(all) { try { localStorage.setItem('reader_summaries', JSON.stringify(all)); } catch (e) {} }
+        function readerSummaryGet(fileKey, chap) {
+            var cell = readerSummariesAll()[fileKey];
+            cell = cell && cell[chap];
+            return cell && cell.sum ? cell.sum : '';
+        }
+        function readerSummarySet(fileKey, chap, sum) {
+            var all = readerSummariesAll();
+            if (!all[fileKey]) all[fileKey] = {};
+            all[fileKey][chap] = { sum: sum, ts: Date.now() };
+            readerSummariesSaveAll(all);
+        }
+
+        // 解析「便宜摘要模型」配置 → {model, baseUrl, apiKey}；没配就回退当前选中的模型，没有则 null
+        function chatResolveCompressModel() {
+            var cfg = (typeof chatGetCompressModel === 'function') ? chatGetCompressModel() : null;
+            if (cfg && cfg.model) {
+                var item = null;
+                if (cfg.url) {
+                    var allK = getKeyData();
+                    for (var i = 0; i < allK.length; i++) { if (allK[i].url === cfg.url) { item = allK[i]; break; } }
+                }
+                if (!item && cfg.providerId) item = getKeyItemById(cfg.providerId);
+                if (!item) item = getKeyItemById(document.getElementById('chatProviderSelect').value);
+                if (item) return { model: cfg.model, baseUrl: getBaseUrl(item.url), apiKey: getActiveKey(item) };
+            }
+            var it = getKeyItemById(document.getElementById('chatProviderSelect').value);
+            if (it && chatSelectedModel) return { model: chatSelectedModel, baseUrl: getBaseUrl(it.url), apiKey: chatSelectedKeyStr || getActiveKey(it) };
+            return null;
+        }
+
+        // 提问时按需补摘要：把 curChap 往前 lookback 章里「还没摘要的」补齐（已存的跳过、绝不重复），
+        // 返回这段区间内有序的摘要行。signal 可中止。
+        async function readerEnsureSummaries(bookId, curChap, lookback, signal) {
+            var b = rbGetBook(bookId);
+            if (!b || !b.chapters || curChap == null || curChap < 1) return [];
+            var fileKey = readerBookKey(bookId);
+            var start = Math.max(0, curChap - lookback);
+            var missing = [];
+            for (var i = start; i < curChap; i++) {
+                if (!readerSummaryGet(fileKey, i) && b.chapters[i] && (b.chapters[i].body || '').trim()) missing.push(i);
+            }
+            var mc = missing.length ? chatResolveCompressModel() : null;
+            var didWrite = false;
+            for (var k = 0; mc && k < missing.length; k++) {
+                var idx = missing[k];
+                var body = b.chapters[idx].body || '';
+                if (body.length > 16000) body = body.slice(0, 16000) + '…';
+                try {
+                    var sum = await chatStreamChat({
+                        baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, signal: signal,
+                        max_tokens: 400,
+                        messages: [
+                            { role: 'system', content: '你是小说前情摘要助手。把给到的章节正文浓缩成一段连贯客观的剧情摘要：登场人物姓名、关键情节进展、重要设定与伏笔不可省略。只输出纯摘要正文，不分小标题、不加粗、不写开场白，控制在 150 字以内。' },
+                            { role: 'user', content: '请概括这一章：\n\n' + body }
+                        ]
+                    });
+                    if (sum && sum.trim()) { readerSummarySet(fileKey, idx, sum.trim()); didWrite = true; }
+                } catch (e) {
+                    if (e && e.name === 'AbortError') throw e; // 用户中止：往上抛，由提问流程统一处理
+                    // 单章摘要失败就跳过，不挡回答
+                }
+            }
+            if (didWrite && activeSyncProvider === 'cf') syncPushData();
+            var out = [];
+            for (var m = start; m < curChap; m++) {
+                var s = readerSummaryGet(fileKey, m);
+                if (s) out.push('第 ' + (m + 1) + ' 章：' + s);
+            }
+            return out;
+        }
+
+        // 同步合并：两级结构 {文件键: {章: {..., ts}}}，逐章取较新时间戳的（不同书/不同章互不覆盖）
+        function readerMergeByChapter(local, cloud) {
+            var changed = false;
+            Object.keys(cloud || {}).forEach(function (fk) {
+                var cBook = cloud[fk]; if (!cBook) return;
+                if (!local[fk]) local[fk] = {};
+                Object.keys(cBook).forEach(function (ch) {
+                    var c = cBook[ch], l = local[fk][ch];
+                    if (c && (!l || (c.ts || 0) > (l.ts || 0))) { local[fk][ch] = c; changed = true; }
+                });
+            });
+            return changed;
+        }
+
         // 「阅读」入口：记得上次在读的书就直接打开它的目录，否则才回书架列表
         function readerEnter() {
             chatReaderMode = true;
@@ -14684,9 +14834,10 @@ body {
         //（content 为空、靠 readerChapter 标记，渲染时只出原文、无任何点评）
         function readerChapterPair(ch, idx, ts) {
             ts = ts || Date.now();
+            var qa = (readerBookId != null) ? readerQABuildContent(readerBookKey(readerBookId), idx) : '';
             return [
                 { role: 'user', content: (ch.title ? ch.title + '\n\n' : '') + (ch.body || ''), ts: ts },
-                { role: 'assistant', content: '', ts: ts, readingMode: true, readerChapter: idx }
+                { role: 'assistant', content: qa, ts: ts, readingMode: true, readerChapter: idx }
             ];
         }
         // 当前会话里已载入到第几章（最后一条 readerChapter）
@@ -15481,6 +15632,7 @@ body {
             comments.splice(absIdx, 1);
             msg.content = readingRebuildContent(comments);
             chatSaveCurrentConv(true);
+            readerPersistQA(msgIdx); // 阅读模式：删问答后同步覆盖该章（删空也写空列表当墓碑）
             readingClearActbar();
             readingRerenderMsg(msgIdx, pNum);
             showToast('已删除');
@@ -15505,6 +15657,7 @@ body {
             comments.splice(absIdx, 1);
             msg.content = readingRebuildContent(comments);
             chatSaveCurrentConv(true);
+            readerPersistQA(msgIdx); // 阅读模式：重生成前先把删旧块的状态同步出去（QA 重答后 readingAskOne 会再覆盖一次）
             readingClearActbar();
             readingRerenderMsg(msgIdx, pNum);
             showToast('重新回答中…');
@@ -15666,8 +15819,17 @@ body {
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
                 // 带上前文已读章节的摘要，否则双击提问时 AI 看不到被压缩掉的前情（剧情/人物/伏笔）
                 var _askMsgs = [{ role: 'system', content: sysPrompt }];
+                var _summaryLines = [];
                 if (chatCompressSummaries && chatCompressSummaries.length) {
-                    _askMsgs.push({ role: 'system', content: '以下是本书前文已读章节的摘要（剧情核心、人物姓名、关键伏笔），请据此理解上下文；但绝不要剧透摘要之后、用户尚未读到的情节：\n' + chatCompressSummaries.join('\n\n---\n\n') });
+                    _summaryLines = chatCompressSummaries.slice();
+                } else if (chatReaderMode && readerBookId != null && msg.readerChapter != null) {
+                    // 阅读模式没有自动压缩摘要：提问时按需把前若干章补成摘要（已存的跳过，绝不重复）
+                    try {
+                        _summaryLines = await readerEnsureSummaries(readerBookId, msg.readerChapter, READER_SUMMARY_LOOKBACK, readingAbortCtl.signal);
+                    } catch (eSum) { if (eSum && eSum.name === 'AbortError') throw eSum; _summaryLines = []; }
+                }
+                if (_summaryLines.length) {
+                    _askMsgs.push({ role: 'system', content: '以下是本书前文已读章节的摘要（剧情核心、人物姓名、关键伏笔），请据此理解上下文；但绝不要剧透摘要之后、用户尚未读到的情节：\n' + _summaryLines.join('\n\n---\n\n') });
                 }
                 _askMsgs.push({ role: 'user', content: userMsg });
                 var answer = (await chatStreamChat({
@@ -15684,6 +15846,7 @@ body {
                 // 问题与答案之间只用单换行，确保它们仍属于同一个 [Pn] 评论块。
                 msg.content += '\n[P' + pNum + '] 汐：' + question + '\n' + answer;
                 chatSaveCurrentConv(true);
+                readerPersistQA(msgIdx); // 阅读模式：把该章问答整体抽出存进可同步的 reader_qa
                 readingAddQuestionBookmark(msgIdx, pNum, question);
                 readingClearActbar();
                 readingRerenderMsg(msgIdx, pNum);
