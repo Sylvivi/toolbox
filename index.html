@@ -14598,10 +14598,15 @@ body {
             document.getElementById('rbModal').classList.remove('show');
             // 若是「阅读」入口打开的书架，但用户没选章进阅读就关掉了：清掉阅读态，按钮高亮还原
             // （真正进了阅读章节时 readerOpenChapter 已把 rbPickForReader 置 false，这里就不会误清）
+            // 但若已经在某本书的阅读会话里（id 以 reader_ 开头），只是打开目录看看又关掉——
+            // 这时阅读态是会话本身带的，绝不能清，否则会被悄悄降级成共读，下次开目录就错误显示「填入」。
             if (rbPickForReader) {
                 rbPickForReader = false;
-                chatReaderMode = false;
-                if (typeof chatSyncModeButtons === 'function') chatSyncModeButtons();
+                var inReaderConv = chatCurrentConvId && chatCurrentConvId.indexOf('reader_') === 0;
+                if (!inReaderConv) {
+                    chatReaderMode = false;
+                    if (typeof chatSyncModeButtons === 'function') chatSyncModeButtons();
+                }
             }
         }
 
