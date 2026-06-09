@@ -2664,9 +2664,11 @@ body {
         /* ===== 共读：点段评价 ===== */
         /* 共读正文字号（按设备调节，作用于整段正文与问答，不影响操作栏） */
         .reading-merged { font-size: var(--reading-fs, 1em); font-family: var(--reading-font, inherit); }
-        /* 引号高亮：默认不变色，开启后用主题色（略加深+加粗） */
+        /* 引号高亮：变色加粗、下划线两个独立开关。
+           变色作用于整段引号(.reading-quote，含符号)；下划线只画在内层文字(.reading-quote-inner)下，不压符号。 */
         .reading-quote { color: inherit; }
-        body.reading-quote-on .reading-merged .reading-quote { color: var(--accent); font-weight: 600; text-decoration: underline dashed; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+        body.reading-quote-on .reading-merged .reading-quote { color: var(--accent); font-weight: 600; }
+        body.reading-uline-on .reading-merged .reading-quote-inner { text-decoration: underline dashed var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
         .reading-merged blockquote { font-style: normal; }
         .reading-merged blockquote .reading-q { font-weight: 600; }
         .reading-merged blockquote .reading-q-name { color: var(--accent); font-weight: 600; }
@@ -4576,11 +4578,19 @@ body {
                     </div>
                 </div>
                 <div id="readingQuoteRow" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
-                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">引号高亮</span>
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">引号变色加粗</span>
                     <div style="position:relative;width:40px;height:22px;cursor:pointer;flex-shrink:0" onclick="readingToggleQuoteHl()">
                         <input type="checkbox" id="readingQuoteToggle" style="display:none">
                         <span id="readingQuoteTrack" style="position:absolute;inset:0;background:var(--card-border);border-radius:11px;transition:background 0.3s cubic-bezier(0.4,0,0.2,1);"></span>
                         <span id="readingQuoteKnob" style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);box-shadow:rgba(0,0,0,0.18) 0px 1px 4px;"></span>
+                    </div>
+                </div>
+                <div id="readingUlineRow" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">引号下划线</span>
+                    <div style="position:relative;width:40px;height:22px;cursor:pointer;flex-shrink:0" onclick="readingToggleQuoteUl()">
+                        <input type="checkbox" id="readingUlineToggle" style="display:none">
+                        <span id="readingUlineTrack" style="position:absolute;inset:0;background:var(--card-border);border-radius:11px;transition:background 0.3s cubic-bezier(0.4,0,0.2,1);"></span>
+                        <span id="readingUlineKnob" style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);box-shadow:rgba(0,0,0,0.18) 0px 1px 4px;"></span>
                     </div>
                 </div>
                 <div id="nightModeRow" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
@@ -8302,6 +8312,7 @@ body {
             });
             readingApplyFontScale();
             readingApplyQuoteHl();
+            readingApplyQuoteUl();
             readingApplyFont();
         });
 
@@ -14421,15 +14432,32 @@ body {
             localStorage.setItem('reading_quote_hl', on ? '0' : '1');
             readingApplyQuoteHl();
         }
+        // 共读：引号下划线（独立开关，只给引号内文字加主题色虚线，不挂暖奶白遮罩）
+        function readingApplyQuoteUl() {
+            var on = localStorage.getItem('reading_quote_ul') === '1';
+            document.body.classList.toggle('reading-uline-on', on);
+            var chk = document.getElementById('readingUlineToggle');
+            if (chk) chk.checked = on;
+            var track = document.getElementById('readingUlineTrack');
+            var knob = document.getElementById('readingUlineKnob');
+            if (track) track.style.background = on ? 'var(--accent)' : 'var(--card-border)';
+            if (knob) knob.style.transform = on ? 'translateX(18px)' : 'translateX(0)';
+        }
+        function readingToggleQuoteUl() {
+            var on = localStorage.getItem('reading_quote_ul') === '1';
+            localStorage.setItem('reading_quote_ul', on ? '0' : '1');
+            readingApplyQuoteUl();
+        }
         // 把段落里的引号对话包进 <span class="reading-quote">，供高亮上色。
         // 注意：传入的是已 esc 的文本（无 < > 标签），直接正则包裹安全。
         function readingHighlightQuotes(s) {
             if (!s) return s;
             // 成对引号：「」『』 “” ，以及英文直引号 &quot;…&quot;（esc 后）
-            s = s.replace(/「[^」]*」/g, function(m) { return '<span class="reading-quote">' + m + '</span>'; });
-            s = s.replace(/『[^』]*』/g, function(m) { return '<span class="reading-quote">' + m + '</span>'; });
-            s = s.replace(/“[^”]*”/g, function(m) { return '<span class="reading-quote">' + m + '</span>'; });
-            s = s.replace(/&quot;[^]*?&quot;/g, function(m) { return '<span class="reading-quote">' + m + '</span>'; });
+            // 外层 .reading-quote 含符号（管变色加粗）；内层 .reading-quote-inner 只包文字（管下划线，不压符号）
+            s = s.replace(/「([^」]*)」/g, function(m, inner) { return '<span class="reading-quote">「<span class="reading-quote-inner">' + inner + '</span>」</span>'; });
+            s = s.replace(/『([^』]*)』/g, function(m, inner) { return '<span class="reading-quote">『<span class="reading-quote-inner">' + inner + '</span>』</span>'; });
+            s = s.replace(/“([^”]*)”/g, function(m, inner) { return '<span class="reading-quote">“<span class="reading-quote-inner">' + inner + '</span>”</span>'; });
+            s = s.replace(/&quot;([^]*?)&quot;/g, function(m, inner) { return '<span class="reading-quote">&quot;<span class="reading-quote-inner">' + inner + '</span>&quot;</span>'; });
             return s;
         }
 
