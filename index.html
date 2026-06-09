@@ -2697,7 +2697,7 @@ body {
             -webkit-box-decoration-break: clone; box-decoration-break: clone;
         }
         /* 手绘波浪下划线：毛边波浪 SVG 平铺在底部，同样 background-image 不擦字，颜色存 --quote-wave-img。
-           长句(.rq-wide)换成波长更长、更平缓的「正常」波浪(--quote-wave-calm-img)，避免长句一串小波浪太眼花。 */
+           只有「短句」(不带 rq-wide)画波浪；长句换行后底下一长串波浪太眼花，改成直接整段着色。 */
         body.reading-wave-on .reading-merged .reading-quote-inner {
             background-image: var(--quote-wave-img);
             background-position: left bottom;
@@ -2706,12 +2706,10 @@ body {
             padding-bottom: 8px;
             -webkit-box-decoration-break: clone; box-decoration-break: clone;
         }
-        /* 长句小碎波单独上提，贴着本行字脚、不挨下一行；手画大波浪保持原来的低位 */
-        body.reading-wave-on .reading-merged .reading-quote-inner.rq-wide {
-            background-image: var(--quote-wave-calm-img);
-            background-size: auto 7px;
-            background-position: left bottom 0.1em;
-            padding-bottom: 5px;
+        /* 长句(外层 .rq-wide)：不画波浪，改为整段引号(含符号「」)着色加粗，等同「着色」效果 */
+        body.reading-wave-on .reading-merged .reading-quote.rq-wide { color: var(--accent); font-weight: 600; }
+        body.reading-wave-on .reading-merged .reading-quote.rq-wide .reading-quote-inner {
+            background-image: none; padding-bottom: 0;
         }
         .reading-merged blockquote { font-style: normal; }
         .reading-merged blockquote .reading-q { font-weight: 600; }
@@ -14531,14 +14529,11 @@ body {
             // viewBox 加宽到接近常见行宽，长行不再把竖边横向拉粗；毛刺位移调小，竖边毛刺不再挤得浓。
             var box = '<svg xmlns="http://www.w3.org/2000/svg" width="280" height="40"><filter id="r" x="-15%" y="-15%" width="130%" height="130%"><feTurbulence type="fractalNoise" baseFrequency="0.03 0.1" numOctaves="2" seed="3" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2"/></filter><rect x="3" y="3" width="274" height="34" rx="6" fill="none" stroke="' + A + '" stroke-width="1.8" filter="url(#r)"/></svg>';
             var wave = '<svg xmlns="http://www.w3.org/2000/svg" width="44" height="10"><filter id="r" x="-20%" y="-20%" width="140%" height="140%"><feTurbulence type="fractalNoise" baseFrequency="0.05 0.3" numOctaves="2" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2"/></filter><path d="M1 6 Q 11 1, 22 6 T 43 6" fill="none" stroke="' + A + '" stroke-width="1.8" stroke-linecap="round" filter="url(#r)"/></svg>';
-            // 长句用的「正常」波浪：波峰挨得很近的干净小碎波（波长约10，不加手抖毛边），比手画波浪规整不眼花。
-            var waveCalm = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="7"><path d="M0 4 Q 3 1.5, 6 4 T 12 4" fill="none" stroke="' + A + '" stroke-width="1.6" stroke-linecap="round"/></svg>';
             // 涂抹底纹：填充矩形 + feTurbulence 把上下缘揉成毛边，作为背景图（永不擦字），靠 background-size 把它压在字的下半截、不超出行间空白。
             function band(op) { return '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="24"><filter id="r" x="-10%" y="-40%" width="120%" height="180%"><feTurbulence type="fractalNoise" baseFrequency="0.05 0.14" numOctaves="2" seed="5" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="3" xChannelSelector="R" yChannelSelector="G"/></filter><rect x="0" y="4" width="120" height="16" fill="' + A + '" fill-opacity="' + op + '" filter="url(#r)"/></svg>'; }
             var root = document.documentElement.style;
             root.setProperty('--quote-box-img', 'url("data:image/svg+xml,' + encodeURIComponent(box) + '")');
             root.setProperty('--quote-wave-img', 'url("data:image/svg+xml,' + encodeURIComponent(wave) + '")');
-            root.setProperty('--quote-wave-calm-img', 'url("data:image/svg+xml,' + encodeURIComponent(waveCalm) + '")');
             root.setProperty('--quote-band-img', 'url("data:image/svg+xml,' + encodeURIComponent(band(0.24)) + '")');
             root.setProperty('--quote-band-img-dark', 'url("data:image/svg+xml,' + encodeURIComponent(band(0.5)) + '")');
         }
@@ -14566,14 +14561,18 @@ body {
         // 注意：传入的是已 esc 的文本（无 < > 标签），直接正则包裹安全。
         function readingHighlightQuotes(s) {
             if (!s) return s;
-            // 长句给内层加 rq-wide：波浪样式下，短句用手画波浪、长句换成平缓的「正常」波浪，避免长句一串小波浪太眼花。
-            function rqInner(inner) { var cls = inner.replace(/&[a-z]+;/g, ' ').length >= 14 ? ' rq-wide' : ''; return '<span class="reading-quote-inner' + cls + '">' + inner + '</span>'; }
+            // 长句给「外层」引号加 rq-wide（≥21 字算长句）：波浪样式下，短句用手画波浪、长句直接整段着色（不画波浪）。
+            // 标记放外层是为了让长句着色能连引号符号「」一起变色，和「着色」开关效果一致。
+            function rqWrap(open, inner, close) {
+                var wide = inner.replace(/&[a-z]+;/g, ' ').length >= 21 ? ' rq-wide' : '';
+                return '<span class="reading-quote' + wide + '">' + open + '<span class="reading-quote-inner">' + inner + '</span>' + close + '</span>';
+            }
             // 成对引号：「」『』 “” ，以及英文直引号 &quot;…&quot;（esc 后）
             // 外层 .reading-quote 含符号（管变色加粗）；内层 .reading-quote-inner 只包文字（管下划线，不压符号）
-            s = s.replace(/「([^」]*)」/g, function(m, inner) { return '<span class="reading-quote">「' + rqInner(inner) + '」</span>'; });
-            s = s.replace(/『([^』]*)』/g, function(m, inner) { return '<span class="reading-quote">『' + rqInner(inner) + '』</span>'; });
-            s = s.replace(/“([^”]*)”/g, function(m, inner) { return '<span class="reading-quote">“' + rqInner(inner) + '”</span>'; });
-            s = s.replace(/&quot;([^]*?)&quot;/g, function(m, inner) { return '<span class="reading-quote">&quot;' + rqInner(inner) + '&quot;</span>'; });
+            s = s.replace(/「([^」]*)」/g, function(m, inner) { return rqWrap('「', inner, '」'); });
+            s = s.replace(/『([^』]*)』/g, function(m, inner) { return rqWrap('『', inner, '』'); });
+            s = s.replace(/“([^”]*)”/g, function(m, inner) { return rqWrap('“', inner, '”'); });
+            s = s.replace(/&quot;([^]*?)&quot;/g, function(m, inner) { return rqWrap('&quot;', inner, '&quot;'); });
             return s;
         }
 
