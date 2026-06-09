@@ -4565,8 +4565,8 @@ body {
                     <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0">个性化</span>
                     <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
                         <button class="pagebtn-pos-opt" id="chipNight" onclick="setNightMode(!nightMode)">夜间</button>
-                        <button class="pagebtn-pos-opt" id="chipMask" onclick="toggleChatMaskChip()">遮罩</button>
                         <button class="pagebtn-pos-opt" id="chipWarmMask" onclick="readingToggleWarmMask()">暖白</button>
+                        <button class="pagebtn-pos-opt" id="chipMask" onclick="toggleChatMaskChip()">遮罩</button>
                         <button class="pagebtn-pos-opt" id="chipQuoteHl" onclick="readingToggleQuoteHl()">填色</button>
                         <button class="pagebtn-pos-opt" id="chipQuoteUl" onclick="readingToggleQuoteUl()">划线</button>
                         <button class="pagebtn-pos-opt" id="chipQuoteBand" onclick="readingToggleQuoteBand()">高亮</button>
@@ -14479,7 +14479,10 @@ body {
         }
         function readingToggleWarmMask() {
             var on = localStorage.getItem('reading_warm_mask') === '1';
-            localStorage.setItem('reading_warm_mask', on ? '0' : '1');
+            var next = on ? '0' : '1';
+            localStorage.setItem('reading_warm_mask', next);
+            // 开暖白时如果遮罩还没开，自动把遮罩也打开（省得用户多点一下）
+            if (next === '1' && localStorage.getItem('chat_mask') !== '1') toggleChatMask(true);
             readingApplyWarmMask();
         }
         // 把段落里的引号对话包进 <span class="reading-quote">，供高亮上色。
