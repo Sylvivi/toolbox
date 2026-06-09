@@ -1342,9 +1342,9 @@ body {
         body.chat-mask-on.theme-iceblue .modal.chat-modal {
             background: rgba(228,240,252,0.72);
         }
-        /* 引号高亮「开」时：所有主题统一暖奶白（用蔚蓝金的暖调，配主题色引号最舒服，盖过上面各主题色）
-           按用户偏好用 0.76 半透明，身后主题渐变会透出约 24%，切皮肤时背景带一点主题色调。 */
-        body.chat-mask-on.reading-quote-on .modal.chat-modal {
+        /* 「暖白」开关单独控制：开了遮罩再开暖白，所有主题统一换成暖奶白（蔚蓝金暖调，盖过上面各主题色）。
+           不开暖白则维持上面各主题自己的主题色遮罩。按用户偏好用 0.76 半透明，身后主题渐变透出约 24%。 */
+        body.chat-mask-on.warm-mask-on .modal.chat-modal {
             background: rgba(255,248,240,0.76);
         }
         /* 深色永远不上遮罩 */
@@ -1352,10 +1352,10 @@ body {
             background: transparent;
         }
         /* iPad 装成 App 后，阅读遮罩（暖色）有时铺不到屏幕最底边，
-           底下会露出页面主题底色（偏紫/偏冷）的一截。开着遮罩+引号高亮、
+           底下会露出页面主题底色（偏紫/偏冷）的一截。开着遮罩+暖白、
            又正打开对话页时，把整个 html 底色也换成同样的暖色，露出来的也是暖色。
            只在对话页打开时生效（modal-open），关掉就还原各主题底色，不影响首页。 */
-        html:has(body.modal-open.chat-mask-on.reading-quote-on:not(.dark)) {
+        html:has(body.modal-open.chat-mask-on.warm-mask-on:not(.dark)) {
             background-color: #FFF8F0;
         }
 
@@ -4566,6 +4566,7 @@ body {
                     <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
                         <button class="pagebtn-pos-opt" id="chipNight" onclick="setNightMode(!nightMode)">夜间</button>
                         <button class="pagebtn-pos-opt" id="chipMask" onclick="toggleChatMaskChip()">遮罩</button>
+                        <button class="pagebtn-pos-opt" id="chipWarmMask" onclick="readingToggleWarmMask()">暖白</button>
                         <button class="pagebtn-pos-opt" id="chipQuoteHl" onclick="readingToggleQuoteHl()">填色</button>
                         <button class="pagebtn-pos-opt" id="chipQuoteUl" onclick="readingToggleQuoteUl()">划线</button>
                         <button class="pagebtn-pos-opt" id="chipQuoteBand" onclick="readingToggleQuoteBand()">高亮</button>
@@ -5291,7 +5292,7 @@ body {
             var chatOpen = overlay && overlay.classList.contains('show');
             var unifiedMask = chatOpen
                 && document.body.classList.contains('chat-mask-on')
-                && document.body.classList.contains('reading-quote-on')
+                && document.body.classList.contains('warm-mask-on')
                 && !document.body.classList.contains('dark');
             // 夜间模式下用该皮肤的夜间状态栏色（深林绿无 night，仍走 dark 主题色）
             var baseColor = (nightMode && THEME_NIGHT_STATUS_COLORS[themeId])
@@ -8311,6 +8312,7 @@ body {
             readingApplyQuoteHl();
             readingApplyQuoteUl();
             readingApplyQuoteBand();
+            readingApplyWarmMask();
             readingApplyFont();
         });
 
@@ -11986,6 +11988,7 @@ body {
             readingApplyQuoteHl();
             readingApplyQuoteUl();
             readingApplyQuoteBand();
+            readingApplyWarmMask();
             chatSyncReadingToggleVis();
             var curSkin = localStorage.getItem('clawd_skin') || 'random';
             var btns = document.querySelectorAll('.clawd-skin-opt');
@@ -12021,10 +12024,12 @@ body {
             var isDark = document.body.classList.contains('dark');
             var isChat = !chatReadingMode && !chatTranslateMode && !chatReaderMode; // 普通对话模式
             var m = document.getElementById('chipMask');
+            var wm = document.getElementById('chipWarmMask');
             var hl = document.getElementById('chipQuoteHl');
             var ul = document.getElementById('chipQuoteUl');
             var bd = document.getElementById('chipQuoteBand');
             if (m) m.style.display = isDark ? 'none' : '';
+            if (wm) wm.style.display = isDark ? 'none' : ''; // 暖白跟遮罩同进退，夜间无意义
             if (hl) hl.style.display = isChat ? 'none' : '';
             if (ul) ul.style.display = isChat ? 'none' : '';
             if (bd) bd.style.display = isChat ? 'none' : '';
@@ -14459,6 +14464,23 @@ body {
             var on = localStorage.getItem('reading_quote_band') === '1';
             localStorage.setItem('reading_quote_band', on ? '0' : '1');
             readingApplyQuoteBand();
+        }
+        // 共读：暖白遮罩（独立开关，跟「遮罩」配合——遮罩开了再开暖白，遮罩就从主题色换成暖奶白）
+        function readingApplyWarmMask() {
+            // 迁移：暖白原先依附在「填色」上，没设过的老用户按当前填色状态继承一次，观感不突变
+            if (localStorage.getItem('reading_warm_mask') === null) {
+                localStorage.setItem('reading_warm_mask', localStorage.getItem('reading_quote_hl') === '1' ? '1' : '0');
+            }
+            var on = localStorage.getItem('reading_warm_mask') === '1';
+            document.body.classList.toggle('warm-mask-on', on);
+            var chip = document.getElementById('chipWarmMask');
+            if (chip) chip.classList.toggle('active', on);
+            updateStatusBarColor();
+        }
+        function readingToggleWarmMask() {
+            var on = localStorage.getItem('reading_warm_mask') === '1';
+            localStorage.setItem('reading_warm_mask', on ? '0' : '1');
+            readingApplyWarmMask();
         }
         // 把段落里的引号对话包进 <span class="reading-quote">，供高亮上色。
         // 注意：传入的是已 esc 的文本（无 < > 标签），直接正则包裹安全。
