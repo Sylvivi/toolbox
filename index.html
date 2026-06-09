@@ -4569,37 +4569,11 @@ body {
                         </div>
                     </div>
                 </div>
-                <div style="display: none; align-items: center; justify-content: space-between; margin-top:10px;" id="chatMaskRow">
-                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">背景遮罩</span>
-                    <div style="position:relative;width:40px;height:22px;cursor:pointer;flex-shrink:0" onclick="var c=document.getElementById('chatMaskToggle');c.checked=!c.checked;toggleChatMask(c.checked)">
-                        <input type="checkbox" id="chatMaskToggle" style="display:none">
-                        <span style="position: absolute; inset: 0px; background: var(--accent); border-radius: 11px; transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1);"></span>
-                        <span style="position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: rgb(255, 255, 255); border-radius: 50%; transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); box-shadow: rgba(0, 0, 0, 0.18) 0px 1px 4px, rgba(0, 0, 0, 0.04) 0px 0px 0px 0.5px; transform: translateX(18px);"></span>
-                    </div>
-                </div>
-                <div id="readingQuoteRow" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
-                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">引号变色加粗</span>
-                    <div style="position:relative;width:40px;height:22px;cursor:pointer;flex-shrink:0" onclick="readingToggleQuoteHl()">
-                        <input type="checkbox" id="readingQuoteToggle" style="display:none">
-                        <span id="readingQuoteTrack" style="position:absolute;inset:0;background:var(--card-border);border-radius:11px;transition:background 0.3s cubic-bezier(0.4,0,0.2,1);"></span>
-                        <span id="readingQuoteKnob" style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);box-shadow:rgba(0,0,0,0.18) 0px 1px 4px;"></span>
-                    </div>
-                </div>
-                <div id="readingUlineRow" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
-                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">引号下划线</span>
-                    <div style="position:relative;width:40px;height:22px;cursor:pointer;flex-shrink:0" onclick="readingToggleQuoteUl()">
-                        <input type="checkbox" id="readingUlineToggle" style="display:none">
-                        <span id="readingUlineTrack" style="position:absolute;inset:0;background:var(--card-border);border-radius:11px;transition:background 0.3s cubic-bezier(0.4,0,0.2,1);"></span>
-                        <span id="readingUlineKnob" style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);box-shadow:rgba(0,0,0,0.18) 0px 1px 4px;"></span>
-                    </div>
-                </div>
-                <div id="nightModeRow" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
-                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">🌙 夜间模式</span>
-                    <div style="position:relative;width:40px;height:22px;cursor:pointer;flex-shrink:0" onclick="setNightMode(!nightMode)">
-                        <input type="checkbox" id="nightModeToggle" style="display:none">
-                        <span id="nightModeTrack" style="position:absolute;inset:0;background:var(--card-border);border-radius:11px;transition:background 0.3s cubic-bezier(0.4,0,0.2,1);"></span>
-                        <span id="nightModeKnob" style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);box-shadow:rgba(0,0,0,0.18) 0px 1px 4px;"></span>
-                    </div>
+                <div id="readingTogglesRow" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
+                    <button class="pagebtn-pos-opt" id="chipMask" onclick="toggleChatMaskChip()">背景遮罩</button>
+                    <button class="pagebtn-pos-opt" id="chipQuoteHl" onclick="readingToggleQuoteHl()">变色加粗</button>
+                    <button class="pagebtn-pos-opt" id="chipQuoteUl" onclick="readingToggleQuoteUl()">下划线</button>
+                    <button class="pagebtn-pos-opt" id="chipNight" onclick="setNightMode(!nightMode)">🌙 夜间</button>
                 </div>
             </div>
             <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--card-border)">
@@ -5334,19 +5308,14 @@ body {
                 applyTheme(getThemeIdx());
             }
             if (typeof chatRenderThemeList === 'function') chatRenderThemeList();
-            var maskRow = document.getElementById('chatMaskRow');
-            if (maskRow) maskRow.style.display = document.body.classList.contains('dark') ? 'none' : 'flex';
             if (typeof syncChatMaskToggleStyle === 'function') syncChatMaskToggleStyle();
+            if (typeof chatSyncReadingToggleVis === 'function') chatSyncReadingToggleVis();
             syncNightToggleStyle();
         }
         // 同步夜间开关的视觉（滑块位置 + 轨道色）
         function syncNightToggleStyle() {
-            var input = document.getElementById('nightModeToggle');
-            var track = document.getElementById('nightModeTrack');
-            var knob = document.getElementById('nightModeKnob');
-            if (input) input.checked = nightMode;
-            if (track) track.style.background = nightMode ? 'var(--accent)' : 'var(--card-border)';
-            if (knob) knob.style.transform = nightMode ? 'translateX(18px)' : 'translateX(0)';
+            var chip = document.getElementById('chipNight');
+            if (chip) chip.classList.toggle('active', nightMode);
         }
 
         // 初始化主题
@@ -11955,18 +11924,16 @@ body {
             applyTheme(idx);
             localStorage.setItem('toolbox_theme', 'random');
             chatRenderThemeList();
-            var maskRow = document.getElementById('chatMaskRow');
-            if (maskRow) maskRow.style.display = document.body.classList.contains('dark') ? 'none' : 'flex';
             syncChatMaskToggleStyle();
+            chatSyncReadingToggleVis();
             showToast(THEMES[idx].name);
         }
         function chatSetTheme(idx) {
             applyTheme(idx);
             chatRenderThemeList();
             // 同步遮罩行显隐
-            var maskRow = document.getElementById('chatMaskRow');
-            if (maskRow) maskRow.style.display = document.body.classList.contains('dark') ? 'none' : 'flex';
             syncChatMaskToggleStyle();
+            chatSyncReadingToggleVis();
         }
         function chatInitSheetOpts() {
             renderDecoList();
@@ -11986,11 +11953,10 @@ body {
             updateRangeFill(document.getElementById('compressKeepInput'));
             chatSyncCompressThresholdUI();
             chatRenderCompressModelSelect();
-            var maskOn = localStorage.getItem('chat_mask') === '1';
-            document.getElementById('chatMaskToggle').checked = maskOn;
             syncChatMaskToggleStyle();
-            var maskRow = document.getElementById('chatMaskRow');
-            if (maskRow) maskRow.style.display = document.body.classList.contains('dark') ? 'none' : 'flex';
+            readingApplyQuoteHl();
+            readingApplyQuoteUl();
+            chatSyncReadingToggleVis();
             var curSkin = localStorage.getItem('clawd_skin') || 'random';
             var btns = document.querySelectorAll('.clawd-skin-opt');
             for (var i = 0; i < btns.length; i++) {
@@ -12010,17 +11976,26 @@ body {
             syncChatMaskToggleStyle();
         }
         function syncChatMaskToggleStyle() {
-            var cb = document.getElementById('chatMaskToggle');
-            if (!cb) return;
-            var track = cb.nextElementSibling;
-            var thumb = track.nextElementSibling;
-            if (cb.checked) {
-                track.style.background = 'var(--accent)';
-                thumb.style.transform = 'translateX(18px)';
-            } else {
-                track.style.background = 'var(--input-border)';
-                thumb.style.transform = 'translateX(0)';
-            }
+            var on = localStorage.getItem('chat_mask') === '1';
+            var chip = document.getElementById('chipMask');
+            if (chip) chip.classList.toggle('active', on);
+        }
+        // chip 点击：翻转背景遮罩
+        function toggleChatMaskChip() {
+            var on = localStorage.getItem('chat_mask') === '1';
+            toggleChatMask(!on);
+        }
+        // 统一同步「遮罩/变色加粗/下划线/夜间」四个 chip 的显隐：
+        // 遮罩在夜间模式下隐藏（暖奶白遮罩夜间无意义）；变色加粗/下划线在对话模式下隐藏。
+        function chatSyncReadingToggleVis() {
+            var isDark = document.body.classList.contains('dark');
+            var isChat = !chatReadingMode && !chatTranslateMode && !chatReaderMode; // 普通对话模式
+            var m = document.getElementById('chipMask');
+            var hl = document.getElementById('chipQuoteHl');
+            var ul = document.getElementById('chipQuoteUl');
+            if (m) m.style.display = isDark ? 'none' : '';
+            if (hl) hl.style.display = isChat ? 'none' : '';
+            if (ul) ul.style.display = isChat ? 'none' : '';
         }
 
         var _clawdAllSkins = ['normal','shy','love','rainy','boba','flower','music','coffee','sunglasses','xmas','coding'];
@@ -14373,6 +14348,7 @@ body {
                 btns[i].classList.toggle('active', btns[i].getAttribute('data-mode') === mode);
             }
             chatSyncCompressThresholdUI();
+            if (typeof chatSyncReadingToggleVis === 'function') chatSyncReadingToggleVis();
         }
 
         // 同步设置面板里的「剧本翻译模式」开关到当前状态
@@ -14419,12 +14395,8 @@ body {
         function readingApplyQuoteHl() {
             var on = localStorage.getItem('reading_quote_hl') === '1';
             document.body.classList.toggle('reading-quote-on', on);
-            var chk = document.getElementById('readingQuoteToggle');
-            if (chk) chk.checked = on;
-            var track = document.getElementById('readingQuoteTrack');
-            var knob = document.getElementById('readingQuoteKnob');
-            if (track) track.style.background = on ? 'var(--accent)' : 'var(--card-border)';
-            if (knob) knob.style.transform = on ? 'translateX(18px)' : 'translateX(0)';
+            var chip = document.getElementById('chipQuoteHl');
+            if (chip) chip.classList.toggle('active', on);
             updateStatusBarColor();
         }
         function readingToggleQuoteHl() {
@@ -14436,12 +14408,8 @@ body {
         function readingApplyQuoteUl() {
             var on = localStorage.getItem('reading_quote_ul') === '1';
             document.body.classList.toggle('reading-uline-on', on);
-            var chk = document.getElementById('readingUlineToggle');
-            if (chk) chk.checked = on;
-            var track = document.getElementById('readingUlineTrack');
-            var knob = document.getElementById('readingUlineKnob');
-            if (track) track.style.background = on ? 'var(--accent)' : 'var(--card-border)';
-            if (knob) knob.style.transform = on ? 'translateX(18px)' : 'translateX(0)';
+            var chip = document.getElementById('chipQuoteUl');
+            if (chip) chip.classList.toggle('active', on);
         }
         function readingToggleQuoteUl() {
             var on = localStorage.getItem('reading_quote_ul') === '1';
