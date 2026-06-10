@@ -4460,6 +4460,7 @@ body {
                         <button onclick="clawdMenuAct('nav')">🧭 跳转</button>
                         <button onclick="clawdMenuAct('summary')">📋 摘要</button>
                         <button onclick="clawdMenuAct('shelf')">📚 目录</button>
+                        <button onclick="clawdMenuAct('nextchap')">⏭️ 下一章</button>
                         <button onclick="clawdMenuAct('model')">🦀 clawd</button>
                     </div>
                     <div class="reading-collapse-hint" id="readingCollapseHint" onclick="readingExpandInput()"><span class="reading-hint-motto" id="readingHintMotto"></span><span class="reading-progress-inline" id="readingProgressInline"></span></div>
@@ -13819,12 +13820,30 @@ body {
             clawdCloseMenu();
             if (what === 'back') { chatBackToList(); return; }
             if (what === 'shelf') { rbOpenShelf(); return; }
+            if (what === 'nextchap') { clawdNextChapter(); return; }
             if (what === 'model') { chatOpenModelSheet(); return; }
             if (what === 'summary') { if (chatReaderMode) readerShowSummaryModal(); else chatShowSummaryModal(); return; }
             // 阅读/翻译模式下，书签/搜索/导航不再依赖横栏——直接浮出来，横栏始终不露面
             if (what === 'search') chatToggleSearch();
             else if (what === 'bookmark') chatToggleBookmarkPanel();
             else if (what === 'nav') chatToggleNavPanel();
+        }
+        // clawd 菜单「下一章」：不开目录，直接把本对话记住的那本书的下一章填进输入框
+        function clawdNextChapter() {
+            // 阅读模式（纯看书）滚到底自动续章，不需要这个按钮
+            if (chatReaderMode) { showToast('阅读模式滚到底部会自动接下一章'); return; }
+            if (typeof rbLoad === 'function') rbLoad();
+            var bookId = rbGetConvBook();
+            var b = bookId ? rbGetBook(bookId) : null;
+            if (!b) {
+                // 本对话还没填过书：打开目录让用户先选一次，之后就能一键下一章
+                rbOpenShelf();
+                showToast('先从目录填入一章，之后就能一键下一章啦');
+                return;
+            }
+            var next = (b.lastChapter == null ? -1 : b.lastChapter) + 1;
+            if (next >= b.chapters.length) { showToast('已经是最后一章啦'); return; }
+            rbInsertChapter(b.id, next);
         }
         document.addEventListener('click', function(e) {
             var m = document.getElementById('clawdReadingMenu');
