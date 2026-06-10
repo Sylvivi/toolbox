@@ -10492,7 +10492,9 @@ body {
          * ========================================================================= */
         var chatMessages = [];       // 当前对话的 {role, content} 数组
         var chatCompressSummaries = []; // 分段摘要数组，每段独立保存防止信息衰减
-        var CHAT_SUMMARY_MAX_SEGS = 5; // 共读/对话提问时最多带最近几段摘要（更早的不再发，控制长度和花费）
+        var CHAT_SUMMARY_MAX_SEGS = 5; // 发请求时最多带最近几段详细摘要；更早的折进「大纲」（两层记忆）
+        var chatCompressOutline = '';  // 两层记忆的上层：超出最近窗口的旧摘要段浓缩成的全程大纲（人物+主线+伏笔）
+        var chatOutlineCovers = 0;     // 大纲已覆盖 chatCompressSummaries 的前几段（下标 < covers 的已折入大纲）
         var chatCompressedCount = 0;   // 已压缩的消息条数
         var chatCompressEnabled = localStorage.getItem('chat_compress') !== '0'; // 默认开启
         var chatCompressThreshold = parseInt(localStorage.getItem('chat_compress_threshold')) || 40;
@@ -10581,6 +10583,8 @@ body {
                     list[i].keyStr = chatSelectedKeyStr;
                     list[i].contextMax = chatContextMax;
                     list[i].compressSummaries = chatCompressSummaries.length ? chatCompressSummaries : [];
+                    list[i].compressOutline = chatCompressOutline || '';
+                    list[i].outlineCovers = chatOutlineCovers || 0;
                     list[i].compressedCount = chatCompressedCount || 0;
                     list[i].compressEnabled = chatCompressEnabled;
                     list[i].compressThreshold = chatCompressThreshold;
@@ -10610,6 +10614,8 @@ body {
                     systemPrompt: document.getElementById('chatSysPrompt').value || '',
                     contextMax: chatContextMax,
                     compressSummaries: chatCompressSummaries.length ? chatCompressSummaries : [],
+                    compressOutline: chatCompressOutline || '',
+                    outlineCovers: chatOutlineCovers || 0,
                     compressedCount: chatCompressedCount || 0,
                     compressEnabled: chatCompressEnabled,
                     compressThreshold: chatCompressThreshold,
@@ -10770,6 +10776,7 @@ body {
                 chatCurrentConvId = null;
                 chatMessages = [];
                 chatCompressSummaries = [];
+                chatCompressOutline = ''; chatOutlineCovers = 0;
                 chatCompressedCount = 0;
                 chatUpdateCtxIndicator();
             }
@@ -11032,6 +11039,7 @@ body {
             translateClearSel();
             chatSyncReadingChip();
             chatCompressSummaries = [];
+            chatCompressOutline = ''; chatOutlineCovers = 0;
             chatCompressedCount = 0;
             chatAllModels = [];
             chatSelectedModel = '';
@@ -11111,6 +11119,8 @@ body {
             } else {
                 chatCompressSummaries = [];
             }
+            chatCompressOutline = conv.compressOutline || '';
+            chatOutlineCovers = conv.outlineCovers || 0;
             chatCompressedCount = conv.compressedCount || 0;
             chatSelectedModel = conv.model || '';
             chatSelectedKeyStr = conv.keyStr || '';
@@ -12554,8 +12564,12 @@ body {
             if (chatReadingMode && _readingRetry) _spContent += '\n\n' + READING_MODE_RETRY_HINT;
             reqMsgs.push({ role: 'system', content: _spContent });
             // 插入压缩摘要（如果有）
-            if (chatCompressSummaries.length) {
-                reqMsgs.push({ role: 'system', content: '以下是之前对话的摘要（当前时间：' + _timeStr.replace('当前时间：','') + '）：\n' + chatCompressSummaries.slice(-CHAT_SUMMARY_MAX_SEGS).join('\n\n---\n\n') });
+            if (chatCompressOutline || chatCompressSummaries.length) {
+                // 两层记忆：先发全程大纲（远期记忆），再发大纲还没折进去的近期摘要段
+                var _sumParts = [];
+                if (chatCompressOutline) _sumParts.push('【更早前情的大纲】\n' + chatCompressOutline);
+                _sumParts = _sumParts.concat(chatCompressSummaries.slice(chatOutlineCovers || 0));
+                reqMsgs.push({ role: 'system', content: '以下是之前对话的摘要（当前时间：' + _timeStr.replace('当前时间：','') + '）：\n' + _sumParts.join('\n\n---\n\n') });
             }
             var src = chatMessages;
             // 如果有压缩，从压缩点之后开始取消息
@@ -14089,10 +14103,13 @@ body {
                 return;
             }
             // 渲染摘要内容
-            if (!chatCompressSummaries.length) {
+            if (!chatCompressSummaries.length && !chatCompressOutline) {
                 popup.innerHTML = '<div class="empty">' + (chatCompressEnabled ? '压缩已开启，尚无摘要' : '压缩未开启') + '</div>';
             } else {
                 var html = '';
+                if (chatCompressOutline) {
+                    html += '<div class="seg"><div class="seg-label">📜 全程大纲</div>' + chatCompressOutline.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>') + '</div>';
+                }
                 for (var i = 0; i < chatCompressSummaries.length; i++) {
                     html += '<div class="seg"><div class="seg-label">段 ' + (i + 1) + '</div>' + chatCompressSummaries[i].replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>') + '</div>';
                 }
@@ -14118,7 +14135,16 @@ body {
             modal.className = 'chat-summary-modal';
             var header = '<div class="chat-summary-modal-header"><span>对话摘要</span><button onclick="this.closest(\'.chat-summary-modal-mask\').remove()">✕</button></div>';
             var body = '';
-            if (!chatCompressSummaries.length) {
+            if (chatCompressOutline) {
+                body += '<div class="seg">'
+                    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+                    + '<span class="seg-label" style="margin-bottom:0">📜 全程大纲（已折入前 ' + (chatOutlineCovers || 0) + ' 段）</span>'
+                    + '<button onclick="chatDeleteOutline()" style="background:none;border:none;font-size:12px;color:var(--text-muted);cursor:pointer;padding:2px 6px;border-radius:6px;transition:color 0.2s" onmouseover="this.style.color=\'#e55\'" onmouseout="this.style.color=\'var(--text-muted)\'">🗑 删除</button>'
+                    + '</div>'
+                    + '<textarea data-outline="1" oninput="chatEditOutline(this);this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'" style="width:100%;min-height:120px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:var(--text);resize:none;font-family:inherit;outline:none;overflow:hidden">' + chatCompressOutline.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>'
+                    + '</div>';
+            }
+            if (!chatCompressSummaries.length && !chatCompressOutline) {
                 body = '<div class="empty">' + (chatCompressEnabled ? '压缩已开启，尚无摘要' : '压缩未开启') + '</div>';
             } else {
                 for (var i = 0; i < chatCompressSummaries.length; i++) {
@@ -14150,9 +14176,23 @@ body {
                 chatSaveCurrentConv(true);
             }
         }
+        function chatEditOutline(el) {
+            chatCompressOutline = el.value;
+            chatSaveCurrentConv(true);
+        }
+        function chatDeleteOutline() {
+            // 删大纲后把覆盖计数清零：之前折进去的段重新随请求发送，下次压缩会重新折一份大纲
+            chatCompressOutline = '';
+            chatOutlineCovers = 0;
+            chatSaveCurrentConv(true);
+            var mask = document.querySelector('.chat-summary-modal-mask');
+            if (mask) mask.remove();
+            chatShowSummaryModal();
+        }
         function chatDeleteSummaryseg(idx) {
             if (idx >= 0 && idx < chatCompressSummaries.length) {
                 chatCompressSummaries.splice(idx, 1);
+                if (idx < (chatOutlineCovers || 0)) chatOutlineCovers--; // 删的是已折入大纲的段，计数跟着前移
                 chatSaveCurrentConv(true);
                 var mask = document.querySelector('.chat-summary-modal-mask');
                 if (mask) mask.remove();
@@ -14251,6 +14291,29 @@ body {
                 return summary ? summary.trim() : null;
             }
 
+            // 两层记忆的上层：超出「最近 5 段」窗口的旧摘要段攒满 3 段，就折进一份全程大纲
+            // （人物+主线+伏笔，400 字内）。发请求时带「大纲 + 未折的段」，远期记忆不再丢。
+            async function _foldOutline() {
+                var keepFrom = chatCompressSummaries.length - CHAT_SUMMARY_MAX_SEGS;
+                if (keepFrom - (chatOutlineCovers || 0) < 3) return;
+                var toFold = chatCompressSummaries.slice(chatOutlineCovers || 0, keepFrom);
+                var prompt = (chatCompressOutline ? '【现有大纲】：\n' + chatCompressOutline + '\n\n' : '')
+                    + '【新增前情摘要】：\n' + toFold.join('\n\n') + '\n\n请输出更新后的大纲全文。';
+                var sum = await chatStreamChat({
+                    baseUrl: _useBaseUrl, apiKey: _useApiKey, model: _useModel, max_tokens: 700,
+                    messages: [
+                        { role: 'system', content: '你是长篇前情大纲维护助手。把现有大纲与新增摘要合并成一份更新后的大纲：主要人物（姓名、身份、关系）、主线进展、未解伏笔，按时间顺序；旧大纲里仍然重要的信息必须保留，不要丢人名。只输出大纲正文，不分小标题、不写开场白，控制在 400 字以内。' },
+                        { role: 'user', content: prompt }
+                    ]
+                });
+                if (sum && sum.trim() && chatCurrentConvId === convId) {
+                    chatCompressOutline = sum.trim();
+                    chatOutlineCovers = keepFrom;
+                    chatSaveCurrentConv(true);
+                    console.log('[大纲] 已折入前 ' + keepFrom + ' 段，大纲 ' + chatCompressOutline.length + ' 字');
+                }
+            }
+
             try {
                 if (chatReadingMode) {
                     // 共读分两种段：
@@ -14297,6 +14360,7 @@ body {
                     }
                     if (chatCurrentConvId === convId) {
                         showToast('📋 已生成 ' + chatCompressSummaries.length + ' 段摘要');
+                        await _foldOutline();
                     }
                 } else {
                     var summary = await _doSummarize(toCompress, 600, false);
@@ -14308,6 +14372,7 @@ body {
                         chatUpdateCtxIndicator();
                         console.log('[压缩] 段 ' + chatCompressSummaries.length + '，已压缩 ' + compressEnd + ' 条消息，摘要 ' + summary.length + ' 字');
                         showToast('📋 已生成摘要（第' + chatCompressSummaries.length + '段，' + summary.length + '字）');
+                        await _foldOutline();
                     }
                 }
             } catch(e) {
@@ -14903,6 +14968,19 @@ body {
             all[fileKey][chap] = { sum: sum, ts: Date.now() };
             readerSummariesSaveAll(all);
         }
+        // 全书大纲：存在 reader_summaries 的特殊键 outline 下（{sum, ts, upTo}，upTo=已折入的最后一章下标），
+        // 跟章节摘要走同一套云同步（按时间戳合并）。sum 为空 = 墓碑，删除也能同步到其它设备。
+        function readerOutlineGet(fileKey) {
+            var cell = readerSummariesAll()[fileKey];
+            var o = cell && cell.outline;
+            return (o && o.sum) ? o : null;
+        }
+        function readerOutlineSet(fileKey, sum, upTo) {
+            var all = readerSummariesAll();
+            if (!all[fileKey]) all[fileKey] = {};
+            all[fileKey].outline = { sum: sum, ts: Date.now(), upTo: upTo };
+            readerSummariesSaveAll(all);
+        }
         // 「是否自动总结前情」总开关（默认关）：一个全局开关，决定阅读时要不要在后台总结，避免到书架随便翻翻也烧 API。
         // 存 reader_summary_on（'1'/'0'），参数保留只为兼容旧调用，实际忽略。
         function readerSummaryEnabled() {
@@ -14944,7 +15022,17 @@ body {
                 + '<span style="position:absolute;top:3px;left:' + (enabled ? '23px' : '3px') + ';width:20px;height:20px;border-radius:50%;background:#fff;transition:left 0.2s"></span></button>'
                 + '</div>';
             var body = toggle;
-            if (!chaps.length) {
+            var _ol = readerOutlineGet(fileKey);
+            if (_ol) {
+                body += '<div class="seg">'
+                    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+                    + '<span class="seg-label" style="margin-bottom:0">📜 全书大纲（至第 ' + (_ol.upTo + 1) + ' 章）</span>'
+                    + '<button onclick="readerDeleteOutline()" style="background:none;border:none;font-size:12px;color:var(--text-muted);cursor:pointer;padding:2px 6px;border-radius:6px;transition:color 0.2s" onmouseover="this.style.color=\'#e55\'" onmouseout="this.style.color=\'var(--text-muted)\'">🗑 删除</button>'
+                    + '</div>'
+                    + '<textarea data-rsum-outline="1" oninput="readerEditOutline(this);this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'" style="width:100%;min-height:90px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:var(--text);resize:none;font-family:inherit;outline:none;overflow:hidden">' + _ol.sum.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>'
+                    + '</div>';
+            }
+            if (!chaps.length && !_ol) {
                 body += enabled
                     ? '<div class="empty">还没有摘要。<br>继续往下读，后台会悄悄把前面章节总结好存这里；提问时也会自动补上。</div>'
                     : '<div class="empty">自动总结已关闭。<br>打开上面的开关，读这本书时就会在后台把前面章节总结好，供提问时给 AI 当前情。</div>';
@@ -14985,6 +15073,21 @@ body {
                 readerSummariesSaveAll(all);
                 if (activeSyncProvider === 'cf') syncPushData();
             }
+            var mask = document.querySelector('.chat-summary-modal-mask');
+            if (mask) mask.remove();
+            readerShowSummaryModal();
+        }
+        function readerEditOutline(el) {
+            var fileKey = readerBookKey(readerBookId);
+            var o = readerOutlineGet(fileKey);
+            readerOutlineSet(fileKey, el.value, o ? o.upTo : -1);
+            if (activeSyncProvider === 'cf') syncPushData();
+        }
+        function readerDeleteOutline() {
+            var fileKey = readerBookKey(readerBookId);
+            // 墓碑删除（sum 空 + 新时间戳）能同步到其它设备；upTo 归 -1，之后会从头重新折一份
+            readerOutlineSet(fileKey, '', -1);
+            if (activeSyncProvider === 'cf') syncPushData();
             var mask = document.querySelector('.chat-summary-modal-mask');
             if (mask) mask.remove();
             readerShowSummaryModal();
@@ -15064,8 +15167,47 @@ body {
                         if (w) wrote = true;
                     }
                 }
+                // 顺手维护全书大纲：滑出「5 章窗口」的旧章摘要攒满 3 章就折进大纲（远期记忆不丢）
+                if (chatCurrentConvId === convAtStart && chatReaderMode) {
+                    var ow = await readerUpdateOutline(fileKey, curChap, mc);
+                    if (ow) wrote = true;
+                }
             } finally { _readerPrefetchRunning = false; }
             if (wrote && activeSyncProvider === 'cf') syncPushData();
+        }
+        // 把已滑出提问窗口（curChap 往前 5 章之外）的章节摘要折进全书大纲。
+        // 攒满 3 章才折一次（省 API）；折叠失败下次再试，不会丢章。
+        var _readerOutlineRunning = false;
+        async function readerUpdateOutline(fileKey, curChap, mc) {
+            if (_readerOutlineRunning) return false;
+            var o = readerOutlineGet(fileKey);
+            var from = o ? (o.upTo + 1) : 0;
+            var end = curChap - 1 - READER_SUMMARY_LOOKBACK; // 只折窗口之外的旧章
+            if (end - from + 1 < 3) return false;
+            var lines = [];
+            for (var i = from; i <= end; i++) {
+                var s = readerSummaryGet(fileKey, i);
+                if (s) lines.push('第 ' + (i + 1) + ' 章：' + s);
+            }
+            if (!lines.length) return false; // 这段章节没有摘要可折（比如开关开晚了），跳过
+            _readerOutlineRunning = true;
+            try {
+                var prompt = (o ? '【现有大纲】：\n' + o.sum + '\n\n' : '')
+                    + '【新增章节摘要】：\n' + lines.join('\n') + '\n\n请输出更新后的大纲全文。';
+                var sum = await chatStreamChat({
+                    baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 700,
+                    messages: [
+                        { role: 'system', content: '你是小说全书大纲维护助手。把现有大纲与新增章节摘要合并成一份更新后的大纲：主要人物（姓名、身份、关系）、主线剧情进展、未解伏笔，按时间顺序；旧大纲里仍然重要的信息必须保留，不要丢人名。只输出大纲正文，不分小标题、不写开场白，控制在 400 字以内。' },
+                        { role: 'user', content: prompt }
+                    ]
+                });
+                if (sum && sum.trim()) {
+                    readerOutlineSet(fileKey, sum.trim(), end);
+                    console.log('[大纲] 已折入至第 ' + (end + 1) + ' 章，大纲 ' + sum.trim().length + ' 字');
+                    return true;
+                }
+            } catch (e) {} finally { _readerOutlineRunning = false; }
+            return false;
         }
         // 后台预生成的轻量触发：进章/续章后延后一点再跑，别和正文渲染抢资源。
         function readerSchedulePrefetch(curChap) {
@@ -15078,7 +15220,12 @@ body {
             var b = rbGetBook(bookId);
             if (!b || !b.chapters || curChap == null || curChap < 1) return [];
             var fileKey = readerBookKey(bookId);
+            // 全书大纲（两层记忆的上层）：只有大纲覆盖范围在当前章之前才带，往回翻读旧章时绝不剧透
+            var _o = readerOutlineGet(fileKey);
+            var _useOutline = _o && _o.upTo < curChap;
             var start = Math.max(0, curChap - lookback);
+            // 大纲折叠有节奏（攒3章折一次），它和 5 章窗口之间可能差一两章——把窗口往前延到大纲边界，不留记忆缝
+            if (_useOutline && _o.upTo + 1 < start && _o.upTo + 1 >= curChap - lookback - 4) start = _o.upTo + 1;
             var missing = [];
             for (var i = start; i < curChap; i++) {
                 if (!readerSummaryGet(fileKey, i) && b.chapters[i] && (b.chapters[i].body || '').trim()) missing.push(i);
@@ -15094,6 +15241,7 @@ body {
                 }
             }
             var out = [];
+            if (_useOutline) out.push('【全书前情大纲（至第 ' + (_o.upTo + 1) + ' 章）】\n' + _o.sum);
             for (var m = start; m < curChap; m++) {
                 var s = readerSummaryGet(fileKey, m);
                 if (s) out.push('第 ' + (m + 1) + ' 章：' + s);
@@ -16228,8 +16376,9 @@ body {
                 // 带上前文已读章节的摘要，否则双击提问时 AI 看不到被压缩掉的前情（剧情/人物/伏笔）
                 var _askMsgs = [{ role: 'system', content: sysPrompt }];
                 var _summaryLines = [];
-                if (chatCompressSummaries && chatCompressSummaries.length) {
-                    _summaryLines = chatCompressSummaries.slice(-CHAT_SUMMARY_MAX_SEGS);
+                if (chatCompressOutline || (chatCompressSummaries && chatCompressSummaries.length)) {
+                    _summaryLines = chatCompressSummaries.slice(chatOutlineCovers || 0);
+                    if (chatCompressOutline) _summaryLines.unshift('【更早前情的大纲】\n' + chatCompressOutline);
                 } else if (chatReaderMode && readerBookId != null && msg.readerChapter != null) {
                     // 阅读模式没有自动压缩摘要：开了「自动总结前情」才按需补摘要（已存的跳过）；没开就只发已备好的，不新烧 API
                     try {
