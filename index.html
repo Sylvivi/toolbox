@@ -15923,11 +15923,39 @@ body {
             return new Uint8Array(output);
         }
 
-        // 共读：点右半屏，无动画整页切到下一屏（留约一行重叠便于衔接，像翻页阅读器）
+        // 共读：点击翻到下一屏，并按「行」对齐——找到被屏幕底边切断的那一行，把它滚到顶部。
+        // 这样新一页顶部永远是完整的一行（不被遮半截），且上页切掉的半行在新页顶部完整重现，自然衔接。
+        // 行的位置用 Range.getClientRects() 取真实行框，不靠 line-height 估算，换字体/字号/行距都不受影响。
         function readingPageDown() {
             var el = document.getElementById('chatMessages');
             if (!el) return;
-            el.scrollTop = el.scrollTop + Math.max(100, el.clientHeight - 48);
+            var rect = el.getBoundingClientRect();
+            var bottomY = rect.bottom;
+            var target = null;
+            var ps = el.querySelectorAll('.reading-merged p[data-p], .reading-merged blockquote');
+            for (var i = 0; i < ps.length; i++) {
+                var r = ps[i].getBoundingClientRect();
+                if (r.bottom <= bottomY + 1) continue;          // 整段都在屏内 → 不是它
+                if (r.top >= bottomY - 1) { target = r.top; break; } // 底边落在段间空白 → 下一段顶行做新页首行
+                // 底边切在这一段中间：取段内所有行框，最靠上的「没完整露出来的行」就是新页首行
+                var range = document.createRange();
+                range.selectNodeContents(ps[i]);
+                var rs = range.getClientRects();
+                var best = null;
+                for (var j = 0; j < rs.length; j++) {
+                    if (rs[j].width > 0 && rs[j].bottom > bottomY + 1) {
+                        if (best === null || rs[j].top < best) best = rs[j].top;
+                    }
+                }
+                target = (best !== null) ? best : r.top;
+                break;
+            }
+            // 正常情况按行对齐；找不到行（开头结尾、纯图等）或算出来只挪一点点，退回整屏滚
+            if (target !== null && target - rect.top > 60) {
+                el.scrollTop = el.scrollTop + (target - rect.top);
+            } else {
+                el.scrollTop = el.scrollTop + Math.max(100, el.clientHeight - 48);
+            }
         }
 
         // 共读/翻译：自动记住/恢复上次阅读位置（不用手动书签）
