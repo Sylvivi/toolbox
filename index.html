@@ -2710,9 +2710,13 @@ body {
             padding-bottom: 8px;
             -webkit-box-decoration-break: clone; box-decoration-break: clone;
         }
-        /* 分工态(reading-split：先着色后装饰)：长句(rq-wide)交给着色，去掉它身上的画框/波浪/划线 */
+        /* 分工态(reading-split：先着色后装饰)：长句(rq-wide)交给着色，去掉它身上的画框/波浪背景 */
         body.reading-split .reading-merged .reading-quote.rq-wide { background-image: none !important; padding: 0; }
-        body.reading-split .reading-merged .reading-quote.rq-wide .reading-quote-inner { background-image: none !important; text-decoration: none !important; padding-bottom: 0; }
+        body.reading-split .reading-merged .reading-quote.rq-wide .reading-quote-inner { background-image: none !important; padding-bottom: 0; }
+        /* 分工·短句已被画框/波浪占住(reading-split-pd)：划线跟着着色只落长句，短句去掉划线 */
+        body.reading-split-pd .reading-merged .reading-quote:not(.rq-wide) .reading-quote-inner { text-decoration: none !important; }
+        /* 分工·只有划线(无画框/波浪)：划线当短句装饰，长句去掉划线(长句只着色) */
+        body.reading-split:not(.reading-split-pd) .reading-merged .reading-quote.rq-wide .reading-quote-inner { text-decoration: none !important; }
         .reading-merged blockquote { font-style: normal; }
         .reading-merged blockquote .reading-q { font-weight: 600; }
         .reading-merged blockquote .reading-q-name { color: var(--accent); font-weight: 600; }
@@ -14467,22 +14471,27 @@ body {
         }
 
         // 引号样式总应用：按各开关 + 「最后点谁(pick)」统一设置 body class 与 chip 高亮。
-        // 规则：画框/划线/波浪三者互斥、只渲染短句；着色可与其叠加。
-        //   只着色 → 全部句子着色；只装饰 → 仅短句装饰、长句留白；
-        //   两者都开看 pick：decor(后点装饰)=短句装饰·长句着色；hl(后点着色)=全部着色、装饰让位。
+        // 规则：画框↔波浪互斥(都铺在句底)；划线可与画框/波浪共存；着色可与任意装饰叠加。
+        //   只着色 → 全部着色；只装饰 → 仅短句装饰、长句留白；
+        //   着色+装饰看 pick：hl(后点着色)=全部都应用；decor(后点装饰)=分工(reading-split)。
+        //   分工时：短句被画框/波浪占住(reading-split-pd)→划线让给长句、跟着色叠在长句；
+        //           只有划线时→划线当短句装饰、长句只着色。
         function readingApplyQuoteStyles() {
             var hl = localStorage.getItem('reading_quote_hl') === '1';
             var box = localStorage.getItem('reading_quote_box') === '1';
             var ul = localStorage.getItem('reading_quote_ul') === '1';
             var wave = localStorage.getItem('reading_quote_wave') === '1';
             var anyDecor = box || ul || wave;
+            var primaryDecor = box || wave; // 铺在句底、占住短句的装饰
             var pick = localStorage.getItem('reading_quote_pick') || 'decor';
+            var split = hl && anyDecor && pick === 'decor';
             var b = document.body;
             b.classList.toggle('reading-quote-on', hl);
             b.classList.toggle('reading-box-on', box);
             b.classList.toggle('reading-uline-on', ul);
             b.classList.toggle('reading-wave-on', wave);
-            b.classList.toggle('reading-split', hl && anyDecor && pick === 'decor');
+            b.classList.toggle('reading-split', split);
+            b.classList.toggle('reading-split-pd', split && primaryDecor); // 分工且短句被画框/波浪占住
             var c;
             c = document.getElementById('chipQuoteHl'); if (c) c.classList.toggle('active', hl);
             c = document.getElementById('chipQuoteBox'); if (c) c.classList.toggle('active', box);
@@ -14503,11 +14512,7 @@ body {
         function readingToggleQuoteUl() {
             var on = localStorage.getItem('reading_quote_ul') === '1';
             localStorage.setItem('reading_quote_ul', on ? '0' : '1');
-            if (!on) { // 打开划线：互斥关掉画框/波浪，记装饰为最后点
-                localStorage.setItem('reading_quote_box', '0');
-                localStorage.setItem('reading_quote_wave', '0');
-                localStorage.setItem('reading_quote_pick', 'decor');
-            }
+            if (!on) localStorage.setItem('reading_quote_pick', 'decor'); // 打开划线：可与画框/波浪共存，只记装饰为最后点
             readingApplyQuoteUl();
         }
         // 共读：引号底纹高亮（独立开关，学自酒馆美化，给整段引号铺半透明灰底）
@@ -14521,8 +14526,7 @@ body {
         function readingToggleQuoteBox() {
             var on = localStorage.getItem('reading_quote_box') === '1';
             localStorage.setItem('reading_quote_box', on ? '0' : '1');
-            if (!on) { // 打开画框：互斥关掉划线/波浪，记装饰为最后点
-                localStorage.setItem('reading_quote_ul', '0');
+            if (!on) { // 打开画框：只跟波浪互斥(划线可共存)，记装饰为最后点
                 localStorage.setItem('reading_quote_wave', '0');
                 localStorage.setItem('reading_quote_pick', 'decor');
             }
@@ -14533,9 +14537,8 @@ body {
         function readingToggleQuoteWave() {
             var on = localStorage.getItem('reading_quote_wave') === '1';
             localStorage.setItem('reading_quote_wave', on ? '0' : '1');
-            if (!on) { // 打开波浪：互斥关掉画框/划线，记装饰为最后点
+            if (!on) { // 打开波浪：只跟画框互斥(划线可共存)，记装饰为最后点
                 localStorage.setItem('reading_quote_box', '0');
-                localStorage.setItem('reading_quote_ul', '0');
                 localStorage.setItem('reading_quote_pick', 'decor');
             }
             readingApplyQuoteWave();
