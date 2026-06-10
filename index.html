@@ -11120,6 +11120,7 @@ body {
             if (chatReaderMode) {
                 readerBookId = conv.id.slice(7);
                 readerChapterIdx = readerLastLoadedChapter();
+                if (typeof readerSchedulePrefetch === 'function' && readerChapterIdx >= 0) readerSchedulePrefetch(readerChapterIdx); // 进会话也后台备好前文摘要
             }
             if (chatReadingMode || chatTranslateMode) readingCollapseInput(); else readingExpandInput(false);
             setTimeout(readingUpdateProgress, 120);
@@ -14978,8 +14979,71 @@ body {
             return null;
         }
 
-        // 提问时按需补摘要：把 curChap 往前 lookback 章里「还没摘要的」补齐（已存的跳过、绝不重复），
-        // 返回这段区间内有序的摘要行。signal 可中止。
+        // 单章摘要的「去重生成」：同一章正在生成时，后台预生成和提问兜底共用同一个 Promise，绝不重复调 API。
+        // 已生成则直接返回 false（没新写）。生成成功则写入 reader_summaries 并返回 true。不接 signal——
+        // 摘要又短又便宜，且后台/提问两路共享同一请求，强行中止会互相干扰，索性让它跑完（答题那条大请求仍可中止）。
+        var _readerSumPromises = {}; // key: fileKey|idx → Promise<bool 是否新写入>
+        function readerSummarizeChapterOnce(b, fileKey, idx, mc) {
+            if (readerSummaryGet(fileKey, idx)) return Promise.resolve(false);
+            var key = fileKey + '|' + idx;
+            if (_readerSumPromises[key]) return _readerSumPromises[key];
+            if (!mc) mc = chatResolveCompressModel();
+            if (!mc || !b.chapters[idx] || !(b.chapters[idx].body || '').trim()) return Promise.resolve(false);
+            var body = b.chapters[idx].body || '';
+            if (body.length > 16000) body = body.slice(0, 16000) + '…';
+            var p = chatStreamChat({
+                baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model,
+                max_tokens: 400,
+                messages: [
+                    { role: 'system', content: '你是小说前情摘要助手。把给到的章节正文浓缩成一段连贯客观的剧情摘要：登场人物姓名、关键情节进展、重要设定与伏笔不可省略。只输出纯摘要正文，不分小标题、不加粗、不写开场白，控制在 150 字以内。' },
+                    { role: 'user', content: '请概括这一章：\n\n' + body }
+                ]
+            }).then(function (sum) {
+                if (sum && sum.trim()) { readerSummarySet(fileKey, idx, sum.trim()); return true; }
+                return false;
+            }).catch(function () { return false; }).then(function (wrote) {
+                delete _readerSumPromises[key]; return wrote;
+            });
+            _readerSumPromises[key] = p;
+            return p;
+        }
+        // 并发池：最多 limit 个同时跑，其余排队。返回各项结果数组。
+        async function _readerRunPool(items, limit, worker) {
+            var i = 0, results = [];
+            async function run() { while (i < items.length) { var c = i++; results[c] = await worker(items[c]); } }
+            var runners = []; for (var k = 0; k < Math.min(limit, items.length); k++) runners.push(run());
+            await Promise.all(runners); return results;
+        }
+
+        // 后台预生成（边读边悄悄备好）：进章/续章时触发，把 curChap 往前 lookback 章里没摘要的悄悄补上。
+        // 串行、低调，不挡 UI、不弹提示；读一章要好几分钟，单章摘要几秒，足够跟上。
+        var _readerPrefetchRunning = false;
+        async function readerPrefetchSummaries(curChap) {
+            if (_readerPrefetchRunning || !chatReaderMode || readerBookId == null || curChap == null) return;
+            var b = rbGetBook(readerBookId); if (!b || !b.chapters) return;
+            var mc = chatResolveCompressModel(); if (!mc) return;
+            var fileKey = readerBookKey(readerBookId);
+            var start = Math.max(0, curChap - READER_SUMMARY_LOOKBACK);
+            _readerPrefetchRunning = true;
+            var wrote = false, convAtStart = chatCurrentConvId;
+            try {
+                for (var i = start; i <= curChap; i++) { // 含当前章：读完翻页后它就已经备好
+                    if (chatCurrentConvId !== convAtStart || !chatReaderMode) break; // 中途切走就停
+                    if (b.chapters[i] && (b.chapters[i].body || '').trim() && !readerSummaryGet(fileKey, i)) {
+                        var w = await readerSummarizeChapterOnce(b, fileKey, i, mc);
+                        if (w) wrote = true;
+                    }
+                }
+            } finally { _readerPrefetchRunning = false; }
+            if (wrote && activeSyncProvider === 'cf') syncPushData();
+        }
+        // 后台预生成的轻量触发：进章/续章后延后一点再跑，别和正文渲染抢资源。
+        function readerSchedulePrefetch(curChap) {
+            setTimeout(function () { readerPrefetchSummaries(curChap); }, 1200);
+        }
+
+        // 提问时按需补摘要：把 curChap 往前 lookback 章里「还没摘要的」并行补齐（已存的跳过、与后台预生成共用
+        // in-flight 请求绝不重复），返回这段区间内有序的摘要行。多数情况下后台已备好，这里基本零等待。
         async function readerEnsureSummaries(bookId, curChap, lookback, signal) {
             var b = rbGetBook(bookId);
             if (!b || !b.chapters || curChap == null || curChap < 1) return [];
@@ -14989,28 +15053,15 @@ body {
             for (var i = start; i < curChap; i++) {
                 if (!readerSummaryGet(fileKey, i) && b.chapters[i] && (b.chapters[i].body || '').trim()) missing.push(i);
             }
-            var mc = missing.length ? chatResolveCompressModel() : null;
-            var didWrite = false;
-            for (var k = 0; mc && k < missing.length; k++) {
-                var idx = missing[k];
-                var body = b.chapters[idx].body || '';
-                if (body.length > 16000) body = body.slice(0, 16000) + '…';
-                try {
-                    var sum = await chatStreamChat({
-                        baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, signal: signal,
-                        max_tokens: 400,
-                        messages: [
-                            { role: 'system', content: '你是小说前情摘要助手。把给到的章节正文浓缩成一段连贯客观的剧情摘要：登场人物姓名、关键情节进展、重要设定与伏笔不可省略。只输出纯摘要正文，不分小标题、不加粗、不写开场白，控制在 150 字以内。' },
-                            { role: 'user', content: '请概括这一章：\n\n' + body }
-                        ]
-                    });
-                    if (sum && sum.trim()) { readerSummarySet(fileKey, idx, sum.trim()); didWrite = true; }
-                } catch (e) {
-                    if (e && e.name === 'AbortError') throw e; // 用户中止：往上抛，由提问流程统一处理
-                    // 单章摘要失败就跳过，不挡回答
+            if (missing.length) {
+                var mc = chatResolveCompressModel();
+                if (mc) {
+                    // 并行（最多 4 个同时）补齐缺的——比原来一章接一章串行快得多
+                    await _readerRunPool(missing, 4, function (idx) { return readerSummarizeChapterOnce(b, fileKey, idx, mc); });
+                    if (signal && signal.aborted) { var er = new Error('aborted'); er.name = 'AbortError'; throw er; }
+                    if (activeSyncProvider === 'cf') syncPushData();
                 }
             }
-            if (didWrite && activeSyncProvider === 'cf') syncPushData();
             var out = [];
             for (var m = start; m < curChap; m++) {
                 var s = readerSummaryGet(fileKey, m);
@@ -15157,6 +15208,7 @@ body {
             chatSyncReadingChip();
             chatSyncModeButtons();
             if (typeof readingApplyTopbarMode === 'function') readingApplyTopbarMode();
+            readerSchedulePrefetch(idx); // 边读边后台备好前文摘要，提问时基本不用等
         }
 
         // 翻到底自动续下一章（无 AI）：把下一章两条消息增量接到 #chatMessages 末尾，不动当前滚动
@@ -15181,6 +15233,7 @@ body {
                 readerSetProgress(readerBookId, { chapter: nextIdx, p: null, off: 0 });
                 chatSaveCurrentConv(true);
             } finally { _readerAppending = false; }
+            readerSchedulePrefetch(readerChapterIdx); // 续章后顺手把前文摘要后台备好
             return true;
         }
 
