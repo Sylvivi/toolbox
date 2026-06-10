@@ -4458,6 +4458,7 @@ body {
                         <button onclick="clawdMenuAct('search')">🔍 搜索</button>
                         <button onclick="clawdMenuAct('bookmark')">🔖 读痕</button>
                         <button onclick="clawdMenuAct('nav')">🧭 跳转</button>
+                        <button onclick="clawdMenuAct('summary')">📋 摘要</button>
                         <button onclick="clawdMenuAct('shelf')">📚 目录</button>
                         <button onclick="clawdMenuAct('model')">🦀 clawd</button>
                     </div>
@@ -13773,6 +13774,7 @@ body {
             if (what === 'back') { chatBackToList(); return; }
             if (what === 'shelf') { rbOpenShelf(); return; }
             if (what === 'model') { chatOpenModelSheet(); return; }
+            if (what === 'summary') { if (chatReaderMode) readerShowSummaryModal(); else chatShowSummaryModal(); return; }
             // 阅读/翻译模式下，书签/搜索/导航不再依赖横栏——直接浮出来，横栏始终不露面
             if (what === 'search') chatToggleSearch();
             else if (what === 'bookmark') chatToggleBookmarkPanel();
@@ -14898,6 +14900,64 @@ body {
             if (!all[fileKey]) all[fileKey] = {};
             all[fileKey][chap] = { sum: sum, ts: Date.now() };
             readerSummariesSaveAll(all);
+        }
+        // 阅读模式「本书摘要」弹窗：展示当前这本书已生成的各章摘要（可编辑、可删除）。
+        // 摘要不是自动压缩的——只在你对某段提问时，程序为给 AI 补前情才按需生成（每章一段，存 reader_summaries）。
+        function readerShowSummaryModal() {
+            var existing = document.querySelector('.chat-summary-modal-mask');
+            if (existing) { existing.remove(); return; }
+            var fileKey = readerBookKey(readerBookId);
+            var cell = readerSummariesAll()[fileKey] || {};
+            // 按章号升序排；删除留下的空墓碑（sum 为空）不显示
+            var chaps = Object.keys(cell).map(function (k) { return parseInt(k, 10); }).filter(function (n) { return !isNaN(n) && cell[n] && cell[n].sum; }).sort(function (a, b) { return a - b; });
+            var mask = document.createElement('div');
+            mask.className = 'chat-summary-modal-mask';
+            var modal = document.createElement('div');
+            modal.className = 'chat-summary-modal';
+            var header = '<div class="chat-summary-modal-header"><span>本书摘要</span><button onclick="this.closest(\'.chat-summary-modal-mask\').remove()">✕</button></div>';
+            var body = '';
+            if (!chaps.length) {
+                body = '<div class="empty">还没有摘要。<br>阅读时长按某段文字向 AI 提问，程序会自动把前面的章节各总结成一段摘要，存在这里供 AI 记住前情。</div>';
+            } else {
+                for (var i = 0; i < chaps.length; i++) {
+                    var ch = chaps[i];
+                    var sum = (cell[ch] && cell[ch].sum) || '';
+                    body += '<div class="seg" data-rsum-chap="' + ch + '">'
+                        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+                        + '<span class="seg-label" style="margin-bottom:0">第 ' + (ch + 1) + ' 章</span>'
+                        + '<button onclick="readerDeleteSummary(' + ch + ')" style="background:none;border:none;font-size:12px;color:var(--text-muted);cursor:pointer;padding:2px 6px;border-radius:6px;transition:color 0.2s" onmouseover="this.style.color=\'#e55\'" onmouseout="this.style.color=\'var(--text-muted)\'">🗑 删除</button>'
+                        + '</div>'
+                        + '<textarea data-rsum-chap="' + ch + '" oninput="readerEditSummary(this);this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'" style="width:100%;min-height:90px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:var(--text);resize:none;font-family:inherit;outline:none;overflow:hidden">' + sum.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>'
+                        + '</div>';
+                }
+                body += '<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:8px">共 ' + chaps.length + ' 章已生成摘要 · 删除后下次提问会重新生成</div>';
+            }
+            modal.innerHTML = header + '<div class="chat-summary-modal-body">' + body + '</div>';
+            mask.appendChild(modal);
+            mask.addEventListener('click', function (ev) { if (ev.target === mask) mask.remove(); });
+            document.body.appendChild(mask);
+            var tas = mask.querySelectorAll('textarea');
+            for (var j = 0; j < tas.length; j++) { tas[j].style.height = 'auto'; tas[j].style.height = tas[j].scrollHeight + 'px'; }
+        }
+        function readerEditSummary(el) {
+            var ch = parseInt(el.getAttribute('data-rsum-chap'), 10);
+            if (isNaN(ch)) return;
+            var fileKey = readerBookKey(readerBookId);
+            readerSummarySet(fileKey, ch, el.value);
+            if (activeSyncProvider === 'cf') syncPushData();
+        }
+        function readerDeleteSummary(ch) {
+            var fileKey = readerBookKey(readerBookId);
+            var all = readerSummariesAll();
+            if (all[fileKey] && all[fileKey][ch] != null) {
+                // 写空字符串当墓碑（带新时间戳），保证删除能同步到其它设备，而不是被旧数据盖回
+                all[fileKey][ch] = { sum: '', ts: Date.now() };
+                readerSummariesSaveAll(all);
+                if (activeSyncProvider === 'cf') syncPushData();
+            }
+            var mask = document.querySelector('.chat-summary-modal-mask');
+            if (mask) mask.remove();
+            readerShowSummaryModal();
         }
 
         // 解析「便宜摘要模型」配置 → {model, baseUrl, apiKey}；没配就回退当前选中的模型，没有则 null
