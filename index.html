@@ -11877,6 +11877,7 @@ body {
                 if (curFav) {
                     var prov = curFav.providerName || '';
                     txt += ' · 当前: ' + (prov ? prov + ' / ' : '') + cur;
+                    if (curFav.note) txt += '（' + curFav.note + '）';
                 }
             }
             el.textContent = txt;
@@ -11940,10 +11941,27 @@ body {
                         star.textContent = '⭐';
                         star.onclick = function(e) { e.stopPropagation(); chatRemoveFavByUrl(fav.url, fav.model); chatRenderFavSection(); };
                         row.appendChild(star);
-                        var nameSpan = document.createElement('span');
-                        nameSpan.style.cssText = 'flex:1;min-width:0;word-break:break-all;font-size:13px;color:var(--text);';
+                        // 名字 + 备注（备注另起一行小字，方便标「好用」「贵」等）
+                        var nameWrap = document.createElement('div');
+                        nameWrap.style.cssText = 'flex:1;min-width:0;';
+                        var nameSpan = document.createElement('div');
+                        nameSpan.style.cssText = 'word-break:break-all;font-size:13px;color:var(--text);';
                         nameSpan.textContent = fav.model;
-                        row.appendChild(nameSpan);
+                        nameWrap.appendChild(nameSpan);
+                        if (fav.note) {
+                            var noteSpan = document.createElement('div');
+                            noteSpan.style.cssText = 'font-size:11px;color:var(--accent);margin-top:2px;word-break:break-all;';
+                            noteSpan.textContent = '📝 ' + fav.note;
+                            nameWrap.appendChild(noteSpan);
+                        }
+                        row.appendChild(nameWrap);
+                        // 备注编辑铅笔
+                        var edit = document.createElement('span');
+                        edit.style.cssText = 'flex-shrink:0;font-size:12px;cursor:pointer;opacity:0.6;';
+                        edit.textContent = '✏️';
+                        edit.title = '加/改备注';
+                        edit.onclick = function(e) { e.stopPropagation(); chatSetFavNote(fav.url, fav.model); };
+                        row.appendChild(edit);
                         if (isActive) {
                             var check = document.createElement('span');
                             check.style.cssText = 'color:var(--accent);font-size:14px;flex-shrink:0;';
@@ -11954,6 +11972,21 @@ body {
                     })(groups[gn][mi]);
                 }
             }
+        }
+        // 给收藏的模型加/改备注（如「好用」「贵」「写作首选」）。留空即删除备注。
+        function chatSetFavNote(url, model) {
+            var target = null;
+            for (var i = 0; i < chatFavModels.length; i++) {
+                if (chatFavModels[i].url === url && chatFavModels[i].model === model) { target = chatFavModels[i]; break; }
+            }
+            if (!target) return;
+            var v = prompt('给「' + model + '」加备注（例：好用 / 贵 / 写作首选）。留空清除备注：', target.note || '');
+            if (v === null) return; // 用户取消
+            v = v.trim();
+            if (v) target.note = v; else delete target.note;
+            localStorage.setItem('chat_fav_models', JSON.stringify(chatFavModels));
+            chatRenderFavSection();
+            chatUpdateFavHeader();
         }
 
         /* ----- 设置弹窗 ----- */
