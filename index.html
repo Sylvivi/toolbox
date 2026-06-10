@@ -14849,7 +14849,7 @@ body {
          * 都按 readerBookKey（文件名|大小）为键，跨设备对齐；每章一格，绝不重复堆积。
          * 问答用「单点同步」：每次变动后用 readerPersistQA 把该章消息里的问答整体抽出覆盖那一格
          *（含删空时写空列表当墓碑，避免云端旧数据回灌）。 */
-        var READER_SUMMARY_LOOKBACK = 10; // 提问时往前最多带几章摘要
+        var READER_SUMMARY_LOOKBACK = 5; // 提问时往前最多带几章摘要
 
         function readerQAAll() { try { return JSON.parse(localStorage.getItem('reader_qa') || '{}'); } catch (e) { return {}; } }
         function readerQASaveAll(all) { try { localStorage.setItem('reader_qa', JSON.stringify(all)); } catch (e) {} }
@@ -14902,8 +14902,26 @@ body {
             all[fileKey][chap] = { sum: sum, ts: Date.now() };
             readerSummariesSaveAll(all);
         }
-        // 阅读模式「本书摘要」弹窗：展示当前这本书已生成的各章摘要（可编辑、可删除）。
-        // 摘要不是自动压缩的——只在你对某段提问时，程序为给 AI 补前情才按需生成（每章一段，存 reader_summaries）。
+        // 「是否自动总结前情」总开关（默认关）：一个全局开关，决定阅读时要不要在后台总结，避免到书架随便翻翻也烧 API。
+        // 存 reader_summary_on（'1'/'0'），参数保留只为兼容旧调用，实际忽略。
+        function readerSummaryEnabled() {
+            return localStorage.getItem('reader_summary_on') === '1';
+        }
+        function readerSetSummaryEnabled(on) {
+            try { localStorage.setItem('reader_summary_on', on ? '1' : '0'); } catch (e) {}
+        }
+        // 摘要弹窗里点开关：开 → 立刻后台把前文补起来；关 → 停止后台生成（已生成的摘要保留、提问仍会带上）。
+        function readerToggleSummaryEnabled() {
+            var on = !readerSummaryEnabled();
+            readerSetSummaryEnabled(on);
+            if (on) readerPrefetchSummaries(readerChapterIdx >= 0 ? readerChapterIdx : readerLastLoadedChapter());
+            var mask = document.querySelector('.chat-summary-modal-mask');
+            if (mask) mask.remove();
+            readerShowSummaryModal();
+        }
+
+        // 阅读模式「本书摘要」弹窗：展示当前这本书已生成的各章摘要（可编辑、可删除），顶部带「自动总结」开关。
+        // 摘要不是自动压缩的——开了开关后，阅读时后台悄悄生成、提问时并行兜底（每章一段，存 reader_summaries）。
         function readerShowSummaryModal() {
             var existing = document.querySelector('.chat-summary-modal-mask');
             if (existing) { existing.remove(); return; }
@@ -14916,9 +14934,19 @@ body {
             var modal = document.createElement('div');
             modal.className = 'chat-summary-modal';
             var header = '<div class="chat-summary-modal-header"><span>本书摘要</span><button onclick="this.closest(\'.chat-summary-modal-mask\').remove()">✕</button></div>';
-            var body = '';
+            // 顶部「自动总结前情」总开关（全局，默认关）
+            var enabled = readerSummaryEnabled();
+            var toggle = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;margin-bottom:10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px">'
+                + '<div style="min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text)">自动总结前情</div>'
+                + '<div style="font-size:11px;color:var(--text-muted);line-height:1.5;margin-top:2px">总开关：开启后，阅读时会在后台悄悄把前面章节总结好，提问时给 AI 当前情（会用一点 API）。只是先到书架翻翻就别开。</div></div>'
+                + '<button onclick="readerToggleSummaryEnabled()" style="flex-shrink:0;width:46px;height:26px;border:none;border-radius:13px;cursor:pointer;position:relative;transition:background 0.2s;background:' + (enabled ? 'var(--accent)' : 'var(--card-border)') + '">'
+                + '<span style="position:absolute;top:3px;left:' + (enabled ? '23px' : '3px') + ';width:20px;height:20px;border-radius:50%;background:#fff;transition:left 0.2s"></span></button>'
+                + '</div>';
+            var body = toggle;
             if (!chaps.length) {
-                body = '<div class="empty">还没有摘要。<br>阅读时长按某段文字向 AI 提问，程序会自动把前面的章节各总结成一段摘要，存在这里供 AI 记住前情。</div>';
+                body += enabled
+                    ? '<div class="empty">还没有摘要。<br>继续往下读，后台会悄悄把前面章节总结好存这里；提问时也会自动补上。</div>'
+                    : '<div class="empty">自动总结已关闭。<br>打开上面的开关，读这本书时就会在后台把前面章节总结好，供提问时给 AI 当前情。</div>';
             } else {
                 for (var i = 0; i < chaps.length; i++) {
                     var ch = chaps[i];
@@ -14931,7 +14959,7 @@ body {
                         + '<textarea data-rsum-chap="' + ch + '" oninput="readerEditSummary(this);this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'" style="width:100%;min-height:90px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:var(--text);resize:none;font-family:inherit;outline:none;overflow:hidden">' + sum.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>'
                         + '</div>';
                 }
-                body += '<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:8px">共 ' + chaps.length + ' 章已生成摘要 · 删除后下次提问会重新生成</div>';
+                body += '<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:8px">共 ' + chaps.length + ' 章已生成摘要' + (enabled ? ' · 删除后会重新生成' : ' · 已关闭自动总结，不再新增（已有的提问仍会带上）') + '</div>';
             }
             modal.innerHTML = header + '<div class="chat-summary-modal-body">' + body + '</div>';
             mask.appendChild(modal);
@@ -15020,6 +15048,7 @@ body {
         var _readerPrefetchRunning = false;
         async function readerPrefetchSummaries(curChap) {
             if (_readerPrefetchRunning || !chatReaderMode || readerBookId == null || curChap == null) return;
+            if (!readerSummaryEnabled()) return; // 总开关没开就不后台烧 API
             var b = rbGetBook(readerBookId); if (!b || !b.chapters) return;
             var mc = chatResolveCompressModel(); if (!mc) return;
             var fileKey = readerBookKey(readerBookId);
@@ -15044,7 +15073,7 @@ body {
 
         // 提问时按需补摘要：把 curChap 往前 lookback 章里「还没摘要的」并行补齐（已存的跳过、与后台预生成共用
         // in-flight 请求绝不重复），返回这段区间内有序的摘要行。多数情况下后台已备好，这里基本零等待。
-        async function readerEnsureSummaries(bookId, curChap, lookback, signal) {
+        async function readerEnsureSummaries(bookId, curChap, lookback, signal, genAllowed) {
             var b = rbGetBook(bookId);
             if (!b || !b.chapters || curChap == null || curChap < 1) return [];
             var fileKey = readerBookKey(bookId);
@@ -15053,7 +15082,8 @@ body {
             for (var i = start; i < curChap; i++) {
                 if (!readerSummaryGet(fileKey, i) && b.chapters[i] && (b.chapters[i].body || '').trim()) missing.push(i);
             }
-            if (missing.length) {
+            // genAllowed=false 时：不新生成（不烧 API），只把已经备好的摘要发过去
+            if (missing.length && genAllowed) {
                 var mc = chatResolveCompressModel();
                 if (mc) {
                     // 并行（最多 4 个同时）补齐缺的——比原来一章接一章串行快得多
@@ -16200,9 +16230,10 @@ body {
                 if (chatCompressSummaries && chatCompressSummaries.length) {
                     _summaryLines = chatCompressSummaries.slice();
                 } else if (chatReaderMode && readerBookId != null && msg.readerChapter != null) {
-                    // 阅读模式没有自动压缩摘要：提问时按需把前若干章补成摘要（已存的跳过，绝不重复）
+                    // 阅读模式没有自动压缩摘要：开了「自动总结前情」才按需补摘要（已存的跳过）；没开就只发已备好的，不新烧 API
                     try {
-                        _summaryLines = await readerEnsureSummaries(readerBookId, msg.readerChapter, READER_SUMMARY_LOOKBACK, readingAbortCtl.signal);
+                        var _genOK = readerSummaryEnabled();
+                        _summaryLines = await readerEnsureSummaries(readerBookId, msg.readerChapter, READER_SUMMARY_LOOKBACK, readingAbortCtl.signal, _genOK);
                     } catch (eSum) { if (eSum && eSum.name === 'AbortError') throw eSum; _summaryLines = []; }
                 }
                 if (_summaryLines.length) {
