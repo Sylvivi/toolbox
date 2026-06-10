@@ -15961,31 +15961,49 @@ body {
             return new Uint8Array(output);
         }
 
-        // 共读：点击翻到下一屏，并按「行」对齐——找到被屏幕底边切断的那一行，把它滚到顶部。
-        // 这样新一页顶部永远是完整的一行（不被遮半截），且上页切掉的半行在新页顶部完整重现，自然衔接。
+        // 共读：点击翻到下一屏，并按「行」对齐——把本页「最后一行完整露出的字」滚到新页顶部。
+        // 新页顶行 = 上页读过的最后一整行（保留一行接头，衔接不生硬），且永远是完整一行、不被切半截。
         // 行的位置用 Range.getClientRects() 取真实行框，不靠 line-height 估算，换字体/字号/行距都不受影响。
         function readingPageDown() {
             var el = document.getElementById('chatMessages');
             if (!el) return;
             var rect = el.getBoundingClientRect();
             var bottomY = rect.bottom;
-            var target = null;
-            var ps = el.querySelectorAll('.reading-merged p[data-p], .reading-merged blockquote');
-            for (var i = 0; i < ps.length; i++) {
-                var r = ps[i].getBoundingClientRect();
-                if (r.bottom <= bottomY + 1) continue;          // 整段都在屏内 → 不是它
-                if (r.top >= bottomY - 1) { target = r.top; break; } // 底边落在段间空白 → 下一段顶行做新页首行
-                // 底边切在这一段中间：取段内所有行框，最靠上的「没完整露出来的行」就是新页首行
+            // 取一段里所有行框
+            function lineRects(p) {
                 var range = document.createRange();
-                range.selectNodeContents(ps[i]);
-                var rs = range.getClientRects();
-                var best = null;
+                range.selectNodeContents(p);
+                return range.getClientRects();
+            }
+            // 段内「完整露出」(bottom 不超底边) 的行里最靠下那行的顶
+            function lastFullLineTop(p) {
+                var rs = lineRects(p), best = null;
                 for (var j = 0; j < rs.length; j++) {
-                    if (rs[j].width > 0 && rs[j].bottom > bottomY + 1) {
-                        if (best === null || rs[j].top < best) best = rs[j].top;
+                    if (rs[j].width > 0 && rs[j].bottom <= bottomY + 1) {
+                        if (best === null || rs[j].top > best) best = rs[j].top;
                     }
                 }
-                target = (best !== null) ? best : r.top;
+                return best;
+            }
+            var target = null;
+            var ps = el.querySelectorAll('.reading-merged p[data-p], .reading-merged blockquote');
+            var prevP = null;
+            for (var i = 0; i < ps.length; i++) {
+                var r = ps[i].getBoundingClientRect();
+                if (r.bottom <= bottomY + 1) { prevP = ps[i]; continue; } // 整段在屏内 → 记住，可能是「最后一整行」所在段
+                // 到这就是第一段没完整露出的：保留行优先取它自己屏内的行，没有（顶行就被切/底边在段间空白）则取上一段的末行
+                target = (r.top < bottomY - 1) ? lastFullLineTop(ps[i]) : null;
+                if (target === null && prevP) target = lastFullLineTop(prevP);
+                if (target === null) {
+                    // 找不到可保留的整行（开篇就是超长段等罕见情形）：退回「被切断那行顶上来」
+                    var rs = lineRects(ps[i]), best = null;
+                    for (var j = 0; j < rs.length; j++) {
+                        if (rs[j].width > 0 && rs[j].bottom > bottomY + 1) {
+                            if (best === null || rs[j].top < best) best = rs[j].top;
+                        }
+                    }
+                    target = (best !== null) ? best : r.top;
+                }
                 break;
             }
             // 正常情况按行对齐；找不到行（开头结尾、纯图等）或算出来只挪一点点，退回整屏滚
