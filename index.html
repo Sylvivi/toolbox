@@ -15071,6 +15071,8 @@ body {
             chatRenderAllMessages(false);
             var container = document.getElementById('chatMessages');
             if (container) {
+                // 不是第一章 → 顶部放「载入上一章」哨兵，向上滑可补前面章节
+                if (idx > 0) container.insertBefore(readerMakeEarlierSentinel(), container.firstChild);
                 if (resume) {
                     var goPara = function () {
                         var pEl = container.querySelector('.reading-merged p[data-p="' + prog.p + '"]');
@@ -15119,6 +15121,70 @@ body {
                 readerSetProgress(readerBookId, { chapter: nextIdx, p: null, off: 0 });
                 chatSaveCurrentConv(true);
             } finally { _readerAppending = false; }
+            return true;
+        }
+
+        // 上滑到顶自动补「上一章」（阅读模式专用，与下滑续章对称）。
+        // 思路：把上一章两条消息 unshift 到会话头 → 已渲染节点 data-idx 整体后移(保持 DOM 下标与数组对齐)
+        //      → 书签 msgIdx 同步后移 → 渲染新章插到容器最前 → 用高度差修正 scrollTop，视觉不跳。
+        var _readerPrepending = false;
+        function readerFirstLoadedChapter() {
+            for (var i = 0; i < chatMessages.length; i++) {
+                if (chatMessages[i] && chatMessages[i].readerChapter != null) return chatMessages[i].readerChapter;
+            }
+            return -1;
+        }
+        function readerMakeEarlierSentinel() {
+            var d = document.createElement('div');
+            d.id = 'readerEarlierSentinel';
+            d.style.cssText = 'text-align:center;padding:14px 0;font-size:12px;color:var(--text-muted);cursor:pointer;user-select:none';
+            d.textContent = '↑ 载入上一章';
+            d.onclick = readerPrependPrevChapter;
+            return d;
+        }
+        function readerPrependPrevChapter() {
+            if (_readerPrepending || !chatReaderMode || !readerBookId) return false;
+            var b = rbGetBook(readerBookId); if (!b) return false;
+            var first = readerFirstLoadedChapter();
+            if (first <= 0) return false; // 已经是第一章，前面没有了
+            var container = document.getElementById('chatMessages');
+            if (!container) return false;
+            _readerPrepending = true;
+            try {
+                var prevIdx = first - 1;
+                var pair = readerChapterPair(b.chapters[prevIdx], prevIdx);
+                // 1) 已渲染节点 data-idx 整体 +2（新章两条消息要插到数组最前）
+                var existed = container.querySelectorAll('.chat-msg[data-idx]');
+                for (var e = 0; e < existed.length; e++) {
+                    var di = parseInt(existed[e].getAttribute('data-idx'), 10);
+                    if (!isNaN(di)) existed[e].setAttribute('data-idx', di + 2);
+                }
+                // 2) 书签按 msgIdx 存，也整体 +2，跟上节点下标，避免会话内标记错位
+                try {
+                    var allBm = readingGetAllBookmarks();
+                    var lst = allBm[chatCurrentConvId];
+                    if (lst && lst.length) {
+                        for (var bi = 0; bi < lst.length; bi++) { if (typeof lst[bi].msgIdx === 'number') lst[bi].msgIdx += 2; }
+                        readingSaveAllBookmarks(allBm);
+                    }
+                } catch (e2) {}
+                // 3) 数组头插入新章（此后下标 0/1 即新章这一对）
+                chatMessages.unshift(pair[0], pair[1]);
+                // 4) 渲染新章到 fragment 插到容器最前；先撤掉旧哨兵
+                var oldH = container.scrollHeight, oldTop = container.scrollTop;
+                var oldSentinel = document.getElementById('readerEarlierSentinel');
+                if (oldSentinel) oldSentinel.remove();
+                var frag = document.createDocumentFragment();
+                chatAppendMsgRange(frag, 0, 2, 0, -1, true);
+                container.insertBefore(frag, container.firstChild);
+                // 5) 前面还有章 → 顶部继续挂哨兵
+                if (prevIdx > 0) container.insertBefore(readerMakeEarlierSentinel(), container.firstChild);
+                // 6) 高度增量补到 scrollTop，视图保持原地不跳
+                container.scrollTop = oldTop + (container.scrollHeight - oldH);
+                chatSaveCurrentConv(true);
+            } finally {
+                _readerPrepending = false;
+            }
             return true;
         }
 
@@ -15692,6 +15758,10 @@ body {
                 // 阅读模式：翻到接近底部，自动续下一章
                 if (chatReaderMode && el.scrollTop + el.clientHeight >= el.scrollHeight - 400) {
                     readerAppendNextChapter();
+                }
+                // 阅读模式：上滑接近顶部，自动补上一章
+                if (chatReaderMode && !_readerPrepending && el.scrollTop < 600) {
+                    readerPrependPrevChapter();
                 }
                 if (saveTimer) clearTimeout(saveTimer);
                 saveTimer = setTimeout(readingSaveScrollPos, 150);
