@@ -10492,6 +10492,7 @@ body {
          * ========================================================================= */
         var chatMessages = [];       // 当前对话的 {role, content} 数组
         var chatCompressSummaries = []; // 分段摘要数组，每段独立保存防止信息衰减
+        var CHAT_SUMMARY_MAX_SEGS = 5; // 共读/对话提问时最多带最近几段摘要（更早的不再发，控制长度和花费）
         var chatCompressedCount = 0;   // 已压缩的消息条数
         var chatCompressEnabled = localStorage.getItem('chat_compress') !== '0'; // 默认开启
         var chatCompressThreshold = parseInt(localStorage.getItem('chat_compress_threshold')) || 40;
@@ -12554,7 +12555,7 @@ body {
             reqMsgs.push({ role: 'system', content: _spContent });
             // 插入压缩摘要（如果有）
             if (chatCompressSummaries.length) {
-                reqMsgs.push({ role: 'system', content: '以下是之前对话的摘要（当前时间：' + _timeStr.replace('当前时间：','') + '）：\n' + chatCompressSummaries.join('\n\n---\n\n') });
+                reqMsgs.push({ role: 'system', content: '以下是之前对话的摘要（当前时间：' + _timeStr.replace('当前时间：','') + '）：\n' + chatCompressSummaries.slice(-CHAT_SUMMARY_MAX_SEGS).join('\n\n---\n\n') });
             }
             var src = chatMessages;
             // 如果有压缩，从压缩点之后开始取消息
@@ -16228,7 +16229,7 @@ body {
                 var _askMsgs = [{ role: 'system', content: sysPrompt }];
                 var _summaryLines = [];
                 if (chatCompressSummaries && chatCompressSummaries.length) {
-                    _summaryLines = chatCompressSummaries.slice();
+                    _summaryLines = chatCompressSummaries.slice(-CHAT_SUMMARY_MAX_SEGS);
                 } else if (chatReaderMode && readerBookId != null && msg.readerChapter != null) {
                     // 阅读模式没有自动压缩摘要：开了「自动总结前情」才按需补摘要（已存的跳过）；没开就只发已备好的，不新烧 API
                     try {
