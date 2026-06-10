@@ -2710,10 +2710,15 @@ body {
             padding-bottom: 8px;
             -webkit-box-decoration-break: clone; box-decoration-break: clone;
         }
-        /* 长短分工(reading-ls-on)：着色归长句、画框/波浪/划线归短句。
-           着色落短句的部分已被上面那条着色 strip 去掉；这里把长句(rq-wide)身上的画框/波浪/划线全清掉，长句只留着色。 */
+        /* 长短分工(reading-ls-on)：着色归长句、波浪/画框归短句。
+           着色落短句的部分已被上面那条着色 strip 去掉；这里把长句(rq-wide)的画框/波浪背景清掉，长句只着色。 */
         body.reading-ls-on .reading-merged .reading-quote.rq-wide { background-image: none !important; padding: 0; }
-        body.reading-ls-on .reading-merged .reading-quote.rq-wide .reading-quote-inner { background-image: none !important; padding-bottom: 0; text-decoration: none !important; }
+        body.reading-ls-on .reading-merged .reading-quote.rq-wide .reading-quote-inner { background-image: none !important; padding-bottom: 0; }
+        /* 划线永远不跟波浪/画框落在同一句上：
+           ① 短句没被波浪/画框占住(非 ls-pd)→划线当短句装饰，去掉长句的划线； */
+        body.reading-ls-on:not(.reading-ls-pd) .reading-merged .reading-quote.rq-wide .reading-quote-inner { text-decoration: none !important; }
+        /* ② 短句被波浪/画框占住(ls-pd)→划线移到长句、跟着色叠，去掉短句的划线。 */
+        body.reading-ls-pd .reading-merged .reading-quote:not(.rq-wide) .reading-quote-inner { text-decoration: none !important; }
         .reading-merged blockquote { font-style: normal; }
         .reading-merged blockquote .reading-q { font-weight: 600; }
         .reading-merged blockquote .reading-q-name { color: var(--accent); font-weight: 600; }
@@ -14471,10 +14476,10 @@ body {
         }
 
         // 引号样式总应用：按 4 个样式开关 + 「长短」开关统一设置 body class 与 chip 高亮。
-        // 样式互斥：画框↔波浪二选一(都铺在句底)；着色、划线可与任意样式叠加。
+        // 互斥规则：画框↔波浪二选一(都铺句底)；着色独立可叠加；划线绝不与波浪/画框落在同一句上。
         // 「长短」(reading-ls-on)：
-        //   开 → 着色只落长句(rq-wide)，画框/波浪/划线只落短句，长短分工；
-        //   关 → 所选样式对所有引号一视同仁。
+        //   开 → 着色只落长句；波浪/画框只落短句；划线没波浪/画框时落短句、有则让到长句跟着色叠(ls-pd)；
+        //   关 → 所选样式一视同仁，此时划线与波浪/画框互斥(三者只能开一个线条/框装饰)。
         function readingApplyQuoteStyles() {
             var hl = localStorage.getItem('reading_quote_hl') === '1';
             var box = localStorage.getItem('reading_quote_box') === '1';
@@ -14491,12 +14496,17 @@ body {
             } else {
                 split = splitRaw === '1';
             }
+            // 不变量：长短「关」时，划线绝不与波浪/画框落在同一句上（长短关=所有引号一视同仁，三者互斥）。
+            // 加载/迁移出来的异常状态在这里兜底：若同时开着，丢掉划线、保留波浪/画框。
+            if (!split && ul && (box || wave)) { ul = false; localStorage.setItem('reading_quote_ul', '0'); }
+            var primaryDecor = box || wave; // 铺在句底、占住短句的装饰
             var b = document.body;
             b.classList.toggle('reading-quote-on', hl);
             b.classList.toggle('reading-box-on', box);
             b.classList.toggle('reading-uline-on', ul);
             b.classList.toggle('reading-wave-on', wave);
             b.classList.toggle('reading-ls-on', split);
+            b.classList.toggle('reading-ls-pd', split && primaryDecor); // 长短分工且短句被波浪/画框占住→划线让给长句
             var c;
             c = document.getElementById('chipQuoteHl'); if (c) c.classList.toggle('active', hl);
             c = document.getElementById('chipQuoteBox'); if (c) c.classList.toggle('active', box);
@@ -14523,6 +14533,11 @@ body {
         function readingToggleQuoteUl() {
             var on = localStorage.getItem('reading_quote_ul') === '1';
             localStorage.setItem('reading_quote_ul', on ? '0' : '1');
+            // 长短「关」时划线与波浪/画框互斥(不能同句)；长短「开」时可共存(划线落长句、波浪/画框落短句)
+            if (!on && localStorage.getItem('reading_quote_split') !== '1') {
+                localStorage.setItem('reading_quote_wave', '0');
+                localStorage.setItem('reading_quote_box', '0');
+            }
             readingApplyQuoteUl();
         }
         // 共读：引号底纹高亮（独立开关，学自酒馆美化，给整段引号铺半透明灰底）
@@ -14536,7 +14551,10 @@ body {
         function readingToggleQuoteBox() {
             var on = localStorage.getItem('reading_quote_box') === '1';
             localStorage.setItem('reading_quote_box', on ? '0' : '1');
-            if (!on) localStorage.setItem('reading_quote_wave', '0'); // 画框/波浪都铺句底，二选一
+            if (!on) {
+                localStorage.setItem('reading_quote_wave', '0'); // 画框/波浪都铺句底，二选一
+                if (localStorage.getItem('reading_quote_split') !== '1') localStorage.setItem('reading_quote_ul', '0'); // 长短关：跟划线也互斥
+            }
             readingApplyQuoteBox();
         }
         // 共读：手绘波浪下划线（独立开关，毛边波浪平铺底部）
@@ -14544,7 +14562,10 @@ body {
         function readingToggleQuoteWave() {
             var on = localStorage.getItem('reading_quote_wave') === '1';
             localStorage.setItem('reading_quote_wave', on ? '0' : '1');
-            if (!on) localStorage.setItem('reading_quote_box', '0'); // 画框/波浪都铺句底，二选一
+            if (!on) {
+                localStorage.setItem('reading_quote_box', '0'); // 画框/波浪都铺句底，二选一
+                if (localStorage.getItem('reading_quote_split') !== '1') localStorage.setItem('reading_quote_ul', '0'); // 长短关：跟划线也互斥
+            }
             readingApplyQuoteWave();
         }
         // 手画框/波浪是 SVG 图，颜色不能写 CSS 变量，这里按当前强调色生成、存进 CSS 变量，切主题/夜间时刷新
