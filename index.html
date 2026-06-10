@@ -2666,8 +2666,12 @@ body {
         /* 引号高亮：变色加粗、下划线、底纹高亮三个独立开关。
            变色/底纹作用于整段引号(.reading-quote，含符号)；下划线只画在内层文字(.reading-quote-inner)下，不压符号。 */
         .reading-quote { color: inherit; }
+        /* 着色：默认给所有引号上色（单点着色、或着色+装饰同开都默认全部着色） */
         body.reading-quote-on .reading-merged .reading-quote { color: var(--accent); font-weight: 600; }
-        body.reading-uline-on .reading-merged .reading-quote-inner { text-decoration: underline dashed var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+        /* 分工态(reading-split：先着色后装饰)：短句让给装饰、不着色，只有长句着色 */
+        body.reading-split .reading-merged .reading-quote:not(.rq-wide) { color: inherit; font-weight: 400; }
+        /* 划线：默认作用于所有引号内层文字；分工态下长句的划线由后面的 strip 规则去掉 */
+        body.reading-uline-on .reading-merged .reading-quote .reading-quote-inner { text-decoration: underline dashed var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
         /* 底纹高亮：荧光笔+毛边手涂感。
            毛边直接烤进 SVG 填充矩形（--quote-band-img，feTurbulence 揉上下缘），当背景图用永不擦字；
            background-size 高 0.62em + bottom 0.3em 把色带压在字的下半截、不再漫进行间空白；
@@ -2688,7 +2692,7 @@ body {
         }
         /* 画框圈重点：毛边描边方框。SVG 颜色不能用 CSS 变量，按强调色生成后存进 --quote-box-img（切主题刷新）。
            用 background-image（不碰文字，绝不擦字），框只描边不填充，文字照常显示在框内。
-           框挂在外层 .reading-quote 上，把引号「」也一起圈进去。 */
+           框挂在外层 .reading-quote 上，把引号「」也一起圈进去。默认所有引号都画框；分工态下长句的框由 strip 规则去掉。 */
         body.reading-box-on .reading-merged .reading-quote {
             background-image: var(--quote-box-img);
             background-size: 100% 100%;
@@ -2697,8 +2701,8 @@ body {
             -webkit-box-decoration-break: clone; box-decoration-break: clone;
         }
         /* 手绘波浪下划线：毛边波浪 SVG 平铺在底部，同样 background-image 不擦字，颜色存 --quote-wave-img。
-           只有「短句」(不带 rq-wide)画波浪；长句换行后底下一长串波浪太眼花，改成直接整段着色。 */
-        body.reading-wave-on .reading-merged .reading-quote-inner {
+           默认作用于所有引号；分工态下长句的波浪由 strip 规则去掉。 */
+        body.reading-wave-on .reading-merged .reading-quote .reading-quote-inner {
             background-image: var(--quote-wave-img);
             background-position: left bottom;
             background-repeat: repeat-x;
@@ -2706,11 +2710,9 @@ body {
             padding-bottom: 8px;
             -webkit-box-decoration-break: clone; box-decoration-break: clone;
         }
-        /* 长句(外层 .rq-wide)：不画波浪，改为整段引号(含符号「」)着色加粗，等同「着色」效果 */
-        body.reading-wave-on .reading-merged .reading-quote.rq-wide { color: var(--accent); font-weight: 600; }
-        body.reading-wave-on .reading-merged .reading-quote.rq-wide .reading-quote-inner {
-            background-image: none; padding-bottom: 0;
-        }
+        /* 分工态(reading-split：先着色后装饰)：长句(rq-wide)交给着色，去掉它身上的画框/波浪/划线 */
+        body.reading-split .reading-merged .reading-quote.rq-wide { background-image: none !important; padding: 0; }
+        body.reading-split .reading-merged .reading-quote.rq-wide .reading-quote-inner { background-image: none !important; text-decoration: none !important; padding-bottom: 0; }
         .reading-merged blockquote { font-style: normal; }
         .reading-merged blockquote .reading-q { font-weight: 600; }
         .reading-merged blockquote .reading-q-name { color: var(--accent); font-weight: 600; }
@@ -14464,29 +14466,48 @@ body {
             readingApplyFontScale();
         }
 
-        // 共读：引号高亮（开关，用主题色给对话引号上色）
-        function readingApplyQuoteHl() {
-            var on = localStorage.getItem('reading_quote_hl') === '1';
-            document.body.classList.toggle('reading-quote-on', on);
-            var chip = document.getElementById('chipQuoteHl');
-            if (chip) chip.classList.toggle('active', on);
+        // 引号样式总应用：按各开关 + 「最后点谁(pick)」统一设置 body class 与 chip 高亮。
+        // 规则：画框/划线/波浪三者互斥、只渲染短句；着色可与其叠加。
+        //   只着色 → 全部句子着色；只装饰 → 仅短句装饰、长句留白；
+        //   两者都开看 pick：decor(后点装饰)=短句装饰·长句着色；hl(后点着色)=全部着色、装饰让位。
+        function readingApplyQuoteStyles() {
+            var hl = localStorage.getItem('reading_quote_hl') === '1';
+            var box = localStorage.getItem('reading_quote_box') === '1';
+            var ul = localStorage.getItem('reading_quote_ul') === '1';
+            var wave = localStorage.getItem('reading_quote_wave') === '1';
+            var anyDecor = box || ul || wave;
+            var pick = localStorage.getItem('reading_quote_pick') || 'decor';
+            var b = document.body;
+            b.classList.toggle('reading-quote-on', hl);
+            b.classList.toggle('reading-box-on', box);
+            b.classList.toggle('reading-uline-on', ul);
+            b.classList.toggle('reading-wave-on', wave);
+            b.classList.toggle('reading-split', hl && anyDecor && pick === 'decor');
+            var c;
+            c = document.getElementById('chipQuoteHl'); if (c) c.classList.toggle('active', hl);
+            c = document.getElementById('chipQuoteBox'); if (c) c.classList.toggle('active', box);
+            c = document.getElementById('chipQuoteUl'); if (c) c.classList.toggle('active', ul);
+            c = document.getElementById('chipQuoteWave'); if (c) c.classList.toggle('active', wave);
             updateStatusBarColor();
         }
+        // 共读：引号高亮（着色）
+        function readingApplyQuoteHl() { readingApplyQuoteStyles(); }
         function readingToggleQuoteHl() {
             var on = localStorage.getItem('reading_quote_hl') === '1';
             localStorage.setItem('reading_quote_hl', on ? '0' : '1');
-            readingApplyQuoteHl();
+            if (!on) localStorage.setItem('reading_quote_pick', 'hl'); // 刚打开着色：长句归着色
+            readingApplyQuoteStyles();
         }
         // 共读：引号下划线（独立开关，只给引号内文字加主题色虚线，不挂暖奶白遮罩）
-        function readingApplyQuoteUl() {
-            var on = localStorage.getItem('reading_quote_ul') === '1';
-            document.body.classList.toggle('reading-uline-on', on);
-            var chip = document.getElementById('chipQuoteUl');
-            if (chip) chip.classList.toggle('active', on);
-        }
+        function readingApplyQuoteUl() { readingApplyQuoteStyles(); }
         function readingToggleQuoteUl() {
             var on = localStorage.getItem('reading_quote_ul') === '1';
             localStorage.setItem('reading_quote_ul', on ? '0' : '1');
+            if (!on) { // 打开划线：互斥关掉画框/波浪，记装饰为最后点
+                localStorage.setItem('reading_quote_box', '0');
+                localStorage.setItem('reading_quote_wave', '0');
+                localStorage.setItem('reading_quote_pick', 'decor');
+            }
             readingApplyQuoteUl();
         }
         // 共读：引号底纹高亮（独立开关，学自酒馆美化，给整段引号铺半透明灰底）
@@ -14496,27 +14517,27 @@ body {
             document.body.classList.remove('reading-band-on');
         }
         // 共读：手画框圈重点（独立开关，毛边描边方框）
-        function readingApplyQuoteBox() {
-            var on = localStorage.getItem('reading_quote_box') === '1';
-            document.body.classList.toggle('reading-box-on', on);
-            var chip = document.getElementById('chipQuoteBox');
-            if (chip) chip.classList.toggle('active', on);
-        }
+        function readingApplyQuoteBox() { readingApplyQuoteStyles(); }
         function readingToggleQuoteBox() {
             var on = localStorage.getItem('reading_quote_box') === '1';
             localStorage.setItem('reading_quote_box', on ? '0' : '1');
+            if (!on) { // 打开画框：互斥关掉划线/波浪，记装饰为最后点
+                localStorage.setItem('reading_quote_ul', '0');
+                localStorage.setItem('reading_quote_wave', '0');
+                localStorage.setItem('reading_quote_pick', 'decor');
+            }
             readingApplyQuoteBox();
         }
         // 共读：手绘波浪下划线（独立开关，毛边波浪平铺底部）
-        function readingApplyQuoteWave() {
-            var on = localStorage.getItem('reading_quote_wave') === '1';
-            document.body.classList.toggle('reading-wave-on', on);
-            var chip = document.getElementById('chipQuoteWave');
-            if (chip) chip.classList.toggle('active', on);
-        }
+        function readingApplyQuoteWave() { readingApplyQuoteStyles(); }
         function readingToggleQuoteWave() {
             var on = localStorage.getItem('reading_quote_wave') === '1';
             localStorage.setItem('reading_quote_wave', on ? '0' : '1');
+            if (!on) { // 打开波浪：互斥关掉画框/划线，记装饰为最后点
+                localStorage.setItem('reading_quote_box', '0');
+                localStorage.setItem('reading_quote_ul', '0');
+                localStorage.setItem('reading_quote_pick', 'decor');
+            }
             readingApplyQuoteWave();
         }
         // 手画框/波浪是 SVG 图，颜色不能写 CSS 变量，这里按当前强调色生成、存进 CSS 变量，切主题/夜间时刷新
@@ -14558,10 +14579,10 @@ body {
         // 注意：传入的是已 esc 的文本（无 < > 标签），直接正则包裹安全。
         function readingHighlightQuotes(s) {
             if (!s) return s;
-            // 长句给「外层」引号加 rq-wide（≥21 字算长句）：波浪样式下，短句用手画波浪、长句直接整段着色（不画波浪）。
+            // 长句给「外层」引号加 rq-wide（≥14 字算长句）：分工态下短句用装饰、长句整段着色。
             // 标记放外层是为了让长句着色能连引号符号「」一起变色，和「着色」开关效果一致。
             function rqWrap(open, inner, close) {
-                var wide = inner.replace(/&[a-z]+;/g, ' ').length >= 21 ? ' rq-wide' : '';
+                var wide = inner.replace(/&[a-z]+;/g, ' ').length >= 14 ? ' rq-wide' : '';
                 return '<span class="reading-quote' + wide + '">' + open + '<span class="reading-quote-inner">' + inner + '</span>' + close + '</span>';
             }
             // 成对引号：「」『』 “” ，以及英文直引号 &quot;…&quot;（esc 后）
