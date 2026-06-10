@@ -14175,35 +14175,38 @@ body {
             }, 0);
         }
 
-        function chatShowSummaryModal() {
+        // restoreScroll：删除段后重建弹窗时传入之前的滚动位置，保持视野不跳回顶部；不传 = 正常开/关切换
+        function chatShowSummaryModal(restoreScroll) {
             var existing = document.querySelector('.chat-summary-modal-mask');
-            if (existing) { existing.remove(); return; }
+            if (existing) { existing.remove(); if (restoreScroll === undefined) return; }
             var mask = document.createElement('div');
             mask.className = 'chat-summary-modal-mask';
             var modal = document.createElement('div');
             modal.className = 'chat-summary-modal';
             var header = '<div class="chat-summary-modal-header"><span>对话摘要</span><button onclick="this.closest(\'.chat-summary-modal-mask\').remove()">✕</button></div>';
+            // 每段默认折叠：只露两行预览，点标题/预览展开成编辑框（再点标题收起），长对话不再难滑
+            function _segHtml(label, delCall, taAttrs, editCall, text) {
+                var escText = (text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                return '<div class="seg">'
+                    + '<div onclick="chatToggleSummarySeg(this)" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;cursor:pointer">'
+                    + '<span class="seg-label" style="margin-bottom:0">' + label + ' <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + (text || '').length + ' 字</span></span>'
+                    + '<span style="display:flex;align-items:center;gap:6px">'
+                    + '<button onclick="event.stopPropagation();' + delCall + '" style="background:none;border:none;font-size:12px;color:var(--text-muted);cursor:pointer;padding:2px 6px;border-radius:6px;transition:color 0.2s" onmouseover="this.style.color=\'#e55\'" onmouseout="this.style.color=\'var(--text-muted)\'">🗑 删除</button>'
+                    + '<span class="seg-arrow" style="font-size:10px;color:var(--text-muted)">▸</span>'
+                    + '</span></div>'
+                    + '<div class="seg-preview" onclick="chatToggleSummarySeg(this)" style="font-size:12.5px;line-height:1.6;color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer">' + escText + '</div>'
+                    + '<textarea ' + taAttrs + ' oninput="' + editCall + ';this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'" style="display:none;width:100%;min-height:120px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:var(--text);resize:none;font-family:inherit;outline:none;overflow:hidden">' + escText + '</textarea>'
+                    + '</div>';
+            }
             var body = '';
             if (chatCompressOutline) {
-                body += '<div class="seg">'
-                    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
-                    + '<span class="seg-label" style="margin-bottom:0">📜 全程大纲（已折入前 ' + (chatOutlineCovers || 0) + ' 段）</span>'
-                    + '<button onclick="chatDeleteOutline()" style="background:none;border:none;font-size:12px;color:var(--text-muted);cursor:pointer;padding:2px 6px;border-radius:6px;transition:color 0.2s" onmouseover="this.style.color=\'#e55\'" onmouseout="this.style.color=\'var(--text-muted)\'">🗑 删除</button>'
-                    + '</div>'
-                    + '<textarea data-outline="1" oninput="chatEditOutline(this);this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'" style="width:100%;min-height:120px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:var(--text);resize:none;font-family:inherit;outline:none;overflow:hidden">' + chatCompressOutline.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>'
-                    + '</div>';
+                body += _segHtml('📜 全程大纲（已折入前 ' + (chatOutlineCovers || 0) + ' 段）', 'chatDeleteOutline()', 'data-outline="1"', 'chatEditOutline(this)', chatCompressOutline);
             }
             if (!chatCompressSummaries.length && !chatCompressOutline) {
                 body = '<div class="empty">' + (chatCompressEnabled ? '压缩已开启，尚无摘要' : '压缩未开启') + '</div>';
             } else {
                 for (var i = 0; i < chatCompressSummaries.length; i++) {
-                    body += '<div class="seg" data-seg-idx="' + i + '">'
-                        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
-                        + '<span class="seg-label" style="margin-bottom:0">段 ' + (i + 1) + '</span>'
-                        + '<button onclick="chatDeleteSummaryseg(' + i + ')" style="background:none;border:none;font-size:12px;color:var(--text-muted);cursor:pointer;padding:2px 6px;border-radius:6px;transition:color 0.2s" onmouseover="this.style.color=\'#e55\'" onmouseout="this.style.color=\'var(--text-muted)\'">🗑 删除</button>'
-                        + '</div>'
-                        + '<textarea data-seg-idx="' + i + '" oninput="chatEditSummaryseg(this);this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'" style="width:100%;min-height:120px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:var(--text);resize:none;font-family:inherit;outline:none;overflow:hidden">' + chatCompressSummaries[i].replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>'
-                        + '</div>';
+                    body += _segHtml('段 ' + (i + 1), 'chatDeleteSummaryseg(' + i + ')', 'data-seg-idx="' + i + '"', 'chatEditSummaryseg(this)', chatCompressSummaries[i]);
                 }
                 body += '<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:8px">共 ' + chatCompressedCount + ' 条消息已压缩为 ' + chatCompressSummaries.length + ' 段</div>';
             }
@@ -14211,11 +14214,24 @@ body {
             mask.appendChild(modal);
             mask.addEventListener('click', function(ev) { if (ev.target === mask) mask.remove(); });
             document.body.appendChild(mask);
-            // 自动撑开每个 textarea 到内容高度
-            var tas = mask.querySelectorAll('textarea');
-            for (var j = 0; j < tas.length; j++) {
-                tas[j].style.height = 'auto';
-                tas[j].style.height = tas[j].scrollHeight + 'px';
+            // 打开默认滚到底（最新一段在底部）；删除重建时恢复到删除前的位置
+            var bodyEl = modal.querySelector('.chat-summary-modal-body');
+            if (bodyEl) bodyEl.scrollTop = (typeof restoreScroll === 'number') ? restoreScroll : bodyEl.scrollHeight;
+        }
+        // 摘要段折叠/展开：展开时把编辑框撑到内容高度；收起时把编辑过的最新内容同步回预览
+        function chatToggleSummarySeg(el) {
+            var seg = el.closest('.seg'); if (!seg) return;
+            var pv = seg.querySelector('.seg-preview');
+            var ta = seg.querySelector('textarea');
+            var ar = seg.querySelector('.seg-arrow');
+            if (!pv || !ta) return;
+            if (ta.style.display === 'none') {
+                pv.style.display = 'none'; ta.style.display = '';
+                ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px';
+                if (ar) ar.textContent = '▾';
+            } else {
+                pv.textContent = ta.value; pv.style.display = ''; ta.style.display = 'none';
+                if (ar) ar.textContent = '▸';
             }
         }
         function chatEditSummaryseg(el) {
@@ -14229,23 +14245,26 @@ body {
             chatCompressOutline = el.value;
             chatSaveCurrentConv(true);
         }
+        // 删除前记下滚动位置，重建后原位恢复（不跳回顶部）
+        function _summaryModalScroll() {
+            var b = document.querySelector('.chat-summary-modal-body');
+            return b ? b.scrollTop : 0;
+        }
         function chatDeleteOutline() {
             // 删大纲后把覆盖计数清零：之前折进去的段重新随请求发送，下次压缩会重新折一份大纲
+            var sc = _summaryModalScroll();
             chatCompressOutline = '';
             chatOutlineCovers = 0;
             chatSaveCurrentConv(true);
-            var mask = document.querySelector('.chat-summary-modal-mask');
-            if (mask) mask.remove();
-            chatShowSummaryModal();
+            chatShowSummaryModal(sc);
         }
         function chatDeleteSummaryseg(idx) {
             if (idx >= 0 && idx < chatCompressSummaries.length) {
+                var sc = _summaryModalScroll();
                 chatCompressSummaries.splice(idx, 1);
                 if (idx < (chatOutlineCovers || 0)) chatOutlineCovers--; // 删的是已折入大纲的段，计数跟着前移
                 chatSaveCurrentConv(true);
-                var mask = document.querySelector('.chat-summary-modal-mask');
-                if (mask) mask.remove();
-                chatShowSummaryModal();
+                chatShowSummaryModal(sc);
             }
         }
 
