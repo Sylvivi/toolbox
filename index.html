@@ -14474,7 +14474,10 @@ body {
             // （人物+主线+伏笔，400 字内）。发请求时带「大纲 + 未折的段」，远期记忆不再丢。
             async function _foldOutline() {
                 var keepFrom = chatCompressSummaries.length - CHAT_SUMMARY_MAX_SEGS;
-                if (keepFrom - (chatOutlineCovers || 0) < 3) return;
+                // 大纲已存在时：攒够 3 段旧摘要才折（正常节奏）
+                // 大纲为空时（首次 / 用户手动删了）：有 1 段旧摘要就立刻重建
+                var _threshold = chatCompressOutline ? 3 : 1;
+                if (keepFrom - (chatOutlineCovers || 0) < _threshold) return;
                 var toFold = chatCompressSummaries.slice(chatOutlineCovers || 0, keepFrom);
                 var prompt = (chatCompressOutline ? '【现有大纲】：\n' + chatCompressOutline + '\n\n' : '')
                     + '【新增前情摘要】：\n' + toFold.join('\n\n') + '\n\n请输出更新后的大纲全文。';
@@ -14610,9 +14613,10 @@ body {
                         showToast('📋 已生成 ' + chatCompressSummaries.length + ' 段摘要');
                         await _waitIfStreaming(); // 评论优先
                         // 表格更新与大纲折叠并行：新对话用表格，旧对话继续折大纲
-                        // 首次建表时把所有已有摘要喂进去，而不只是最新一段，确保前面的章节也入表
+                        // 任一张表为空时（首次建表 / 用户手动删了其中一张），喂全部摘要重建
                         var _tableInput = '';
-                        if (!chatMemoryTables || (!chatMemoryTables.characters.length && !chatMemoryTables.plotlines.length)) {
+                        var _tbl = chatMemoryTables || { characters: [], plotlines: [] };
+                        if (!_tbl.characters.length || !_tbl.plotlines.length) {
                             _tableInput = chatCompressSummaries.join('\n\n---\n\n');
                         } else {
                             _tableInput = chatCompressSummaries[chatCompressSummaries.length - 1] || '';
