@@ -2233,6 +2233,8 @@ body {
         .chat-summary-modal-body .seg { padding: 10px 0; border-bottom: 1px dashed var(--input-border); }
         .chat-summary-modal-body .seg:last-child { border-bottom: none; }
         .chat-summary-modal-body .seg-label { font-size: 10px; color: var(--text-muted); margin-bottom: 4px; font-weight: 600; }
+        .chat-summary-modal-body .mt-row { border-bottom: 1px solid var(--input-border); }
+        .chat-summary-modal-body .mt-row:last-child { border-bottom: none; }
         .chat-summary-modal-body .empty { color: var(--text-muted); text-align: center; padding: 24px 0; }
         .sheet-tabs { display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid var(--card-border); }
         .sheet-tab {
@@ -10496,6 +10498,7 @@ body {
         var CHAT_SUMMARY_MAX_SEGS = 5; // 发请求时最多带最近几段详细摘要；更早的折进「大纲」（两层记忆）
         var chatCompressOutline = '';  // 两层记忆的上层：超出最近窗口的旧摘要段浓缩成的全程大纲（人物+主线+伏笔）
         var chatOutlineCovers = 0;     // 大纲已覆盖 chatCompressSummaries 的前几段（下标 < covers 的已折入大纲）
+        var chatMemoryTables = null;   // 共读结构化记忆表格 { characters: [...], plotlines: [...] }，替代自由文本大纲
         var chatCompressedCount = 0;   // 已压缩的消息条数
         var chatCompressEnabled = localStorage.getItem('chat_compress') !== '0'; // 默认开启
         var chatCompressThreshold = parseInt(localStorage.getItem('chat_compress_threshold')) || 40;
@@ -10586,6 +10589,7 @@ body {
                     list[i].compressSummaries = chatCompressSummaries.length ? chatCompressSummaries : [];
                     list[i].compressOutline = chatCompressOutline || '';
                     list[i].outlineCovers = chatOutlineCovers || 0;
+                    list[i].memoryTables = chatMemoryTables || null;
                     list[i].compressedCount = chatCompressedCount || 0;
                     list[i].compressEnabled = chatCompressEnabled;
                     list[i].compressThreshold = chatCompressThreshold;
@@ -10617,6 +10621,7 @@ body {
                     compressSummaries: chatCompressSummaries.length ? chatCompressSummaries : [],
                     compressOutline: chatCompressOutline || '',
                     outlineCovers: chatOutlineCovers || 0,
+                    memoryTables: chatMemoryTables || null,
                     compressedCount: chatCompressedCount || 0,
                     compressEnabled: chatCompressEnabled,
                     compressThreshold: chatCompressThreshold,
@@ -11041,6 +11046,7 @@ body {
             chatSyncReadingChip();
             chatCompressSummaries = [];
             chatCompressOutline = ''; chatOutlineCovers = 0;
+            chatMemoryTables = null;
             chatCompressedCount = 0;
             chatAllModels = [];
             chatSelectedModel = '';
@@ -11122,6 +11128,7 @@ body {
             }
             chatCompressOutline = conv.compressOutline || '';
             chatOutlineCovers = conv.outlineCovers || 0;
+            chatMemoryTables = conv.memoryTables || null;
             chatCompressedCount = conv.compressedCount || 0;
             chatSelectedModel = conv.model || '';
             chatSelectedKeyStr = conv.keyStr || '';
@@ -12595,12 +12602,19 @@ body {
             if (chatReadingMode && _readingRetry) _spContent += '\n\n' + READING_MODE_RETRY_HINT;
             reqMsgs.push({ role: 'system', content: _spContent });
             // 插入压缩摘要（如果有）
-            if (chatCompressOutline || chatCompressSummaries.length) {
-                // 两层记忆：先发全程大纲（远期记忆），再发大纲还没折进去的近期摘要段
+            if (chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || chatMemoryTables.plotlines.length) || chatCompressOutline || chatCompressSummaries.length) {
                 var _sumParts = [];
-                if (chatCompressOutline) _sumParts.push('【更早前情的大纲】\n' + chatCompressOutline);
-                _sumParts = _sumParts.concat(chatCompressSummaries.slice(chatOutlineCovers || 0));
-                reqMsgs.push({ role: 'system', content: '以下是之前对话的摘要（当前时间：' + _timeStr.replace('当前时间：','') + '）：\n' + _sumParts.join('\n\n---\n\n') });
+                // 共读模式优先用结构化记忆表格；无表格时 fallback 到旧大纲
+                if (chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || chatMemoryTables.plotlines.length)) {
+                    var _memText = '';
+                    if (chatMemoryTables.characters.length) _memText += '【人物表】\n| 人物 | 身份 | 关系 | 当前状态 | 备注 |\n| --- | --- | --- | --- | --- |\n' + chatMemoryTables.characters.map(function(r) { return '| ' + (r['人物']||'') + ' | ' + (r['身份']||'') + ' | ' + (r['关系']||'') + ' | ' + (r['当前状态']||'') + ' | ' + (r['备注']||'') + ' |'; }).join('\n');
+                    if (chatMemoryTables.plotlines.length) _memText += (chatMemoryTables.characters.length ? '\n\n' : '') + '【主线/伏笔表】\n| 章节 | 事件 | 细节 | 已解决 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.plotlines.map(function(r) { return '| ' + (r['章节']||'') + ' | ' + (r['事件']||'') + ' | ' + (r['细节']||'') + ' | ' + (r['已解决']||'') + ' |'; }).join('\n');
+                    _sumParts.push(_memText);
+                } else if (chatCompressOutline) {
+                    _sumParts.push('【更早前情的大纲】\n' + chatCompressOutline);
+                }
+                _sumParts = _sumParts.concat(chatCompressSummaries.slice((chatMemoryTables && chatReadingMode) ? 0 : (chatOutlineCovers || 0)).slice(-CHAT_SUMMARY_MAX_SEGS));
+                if (_sumParts.length) reqMsgs.push({ role: 'system', content: '以下是之前对话的摘要（当前时间：' + _timeStr.replace('当前时间：','') + '）：\n' + _sumParts.join('\n\n---\n\n') });
             }
             var src = chatMessages;
             // 如果有压缩，从压缩点之后开始取消息
@@ -14200,16 +14214,64 @@ body {
                     + '</div>';
             }
             var body = '';
-            if (chatCompressOutline) {
+            // 结构化记忆表格（共读模式）
+            if (chatMemoryTables && (chatMemoryTables.characters.length || chatMemoryTables.plotlines.length)) {
+                function _mtRowHtml(tableName, row, idx, cols) {
+                    var esc = function(s) { return (s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+                    var preview = cols.map(function(c) { return esc(row[c]||''); }).join(' · ');
+                    var resolved = tableName === 'plotlines' && (row['已解决'] === '是' || row['已解决'] === 'true');
+                    return '<div class="mt-row" data-mt="' + tableName + '" data-mt-idx="' + idx + '" style="' + (resolved ? 'opacity:0.45;' : '') + '">'
+                        + '<div onclick="chatToggleMtRow(this)" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:4px 0">'
+                        + '<span style="font-size:12px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (resolved ? '<s>' : '') + esc(row[cols[0]]||'—') + (resolved ? '</s>' : '') + ' <span style="color:var(--text-muted);font-size:10px">' + preview.slice((row[cols[0]]||'').length + 3) + '</span></span>'
+                        + '<span style="display:flex;align-items:center;gap:4px">'
+                        + '<button onclick="event.stopPropagation();chatDeleteMtRow(\'' + tableName + '\',' + idx + ')" style="background:none;border:none;font-size:11px;color:var(--text-muted);cursor:pointer;padding:1px 4px" onmouseover="this.style.color=\'#e55\'" onmouseout="this.style.color=\'var(--text-muted)\'">✕</button>'
+                        + '<span class="seg-arrow" style="font-size:9px;color:var(--text-muted)">▸</span>'
+                        + '</span></div>'
+                        + '<div class="mt-edit" style="display:none;padding:4px 0 8px">'
+                        + cols.map(function(c, ci) {
+                            if (tableName === 'plotlines' && c === '已解决') {
+                                return '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-sub);margin:3px 0"><input type="checkbox" ' + (resolved ? 'checked' : '') + ' onchange="chatEditMtCell(\'' + tableName + '\',' + idx + ',\'' + c + '\',this.checked?\'是\':\'否\')" style="accent-color:var(--accent)"> 已解决</label>';
+                            }
+                            return '<input data-mt-col="' + c + '" value="' + esc(row[c]||'') + '" oninput="chatEditMtCell(\'' + tableName + '\',' + idx + ',\'' + c + '\',this.value)" placeholder="' + c + '" style="width:100%;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;padding:5px 8px;font-size:12px;color:var(--text);margin:2px 0;font-family:inherit;outline:none">';
+                        }).join('')
+                        + '</div></div>';
+                }
+                // 人物表
+                if (chatMemoryTables.characters.length) {
+                    body += '<div class="seg" style="padding-bottom:6px">'
+                        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
+                        + '<span class="seg-label" style="margin:0">👤 人物表 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + chatMemoryTables.characters.length + ' 人</span></span>'
+                        + '<button onclick="chatAddMtRow(\'characters\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
+                        + '</div>';
+                    for (var ci = 0; ci < chatMemoryTables.characters.length; ci++) {
+                        body += _mtRowHtml('characters', chatMemoryTables.characters[ci], ci, _mtCharCols);
+                    }
+                    body += '</div>';
+                }
+                // 主线表
+                if (chatMemoryTables.plotlines.length) {
+                    body += '<div class="seg" style="padding-bottom:6px">'
+                        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
+                        + '<span class="seg-label" style="margin:0">📖 主线/伏笔 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + chatMemoryTables.plotlines.length + ' 条</span></span>'
+                        + '<button onclick="chatAddMtRow(\'plotlines\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
+                        + '</div>';
+                    for (var pi = 0; pi < chatMemoryTables.plotlines.length; pi++) {
+                        body += _mtRowHtml('plotlines', chatMemoryTables.plotlines[pi], pi, _mtPlotCols);
+                    }
+                    body += '</div>';
+                }
+            }
+            // 旧的自由文本大纲（兼容旧对话）
+            else if (chatCompressOutline) {
                 body += _segHtml('📜 全程大纲（已折入前 ' + (chatOutlineCovers || 0) + ' 段）', 'chatDeleteOutline()', 'data-outline="1"', 'chatEditOutline(this)', chatCompressOutline);
             }
-            if (!chatCompressSummaries.length && !chatCompressOutline) {
+            if (!chatCompressSummaries.length && !chatCompressOutline && !(chatMemoryTables && (chatMemoryTables.characters.length || chatMemoryTables.plotlines.length))) {
                 body = '<div class="empty">' + (chatCompressEnabled ? '压缩已开启，尚无摘要' : '压缩未开启') + '</div>';
             } else {
                 for (var i = 0; i < chatCompressSummaries.length; i++) {
                     body += _segHtml('段 ' + (i + 1), 'chatDeleteSummaryseg(' + i + ')', 'data-seg-idx="' + i + '"', 'chatEditSummaryseg(this)', chatCompressSummaries[i]);
                 }
-                body += '<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:8px">共 ' + chatCompressedCount + ' 条消息已压缩为 ' + chatCompressSummaries.length + ' 段</div>';
+                if (chatCompressSummaries.length) body += '<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:8px">共 ' + chatCompressedCount + ' 条消息已压缩为 ' + chatCompressSummaries.length + ' 段</div>';
             }
             modal.innerHTML = header + '<div class="chat-summary-modal-body">' + body + '</div>';
             mask.appendChild(modal);
@@ -14218,6 +14280,41 @@ body {
             // 打开默认滚到底（最新一段在底部）；删除重建时恢复到删除前的位置
             var bodyEl = modal.querySelector('.chat-summary-modal-body');
             if (bodyEl) bodyEl.scrollTop = (typeof restoreScroll === 'number') ? restoreScroll : bodyEl.scrollHeight;
+        }
+        // 记忆表格列定义（全局，供压缩函数和弹窗共用）
+        var _mtCharCols = ['人物', '身份', '关系', '当前状态', '备注'];
+        var _mtPlotCols = ['章节', '事件', '细节', '已解决'];
+        // 记忆表格交互
+        function chatToggleMtRow(el) {
+            var row = el.closest('.mt-row'); if (!row) return;
+            var edit = row.querySelector('.mt-edit');
+            var ar = row.querySelector('.seg-arrow');
+            if (!edit) return;
+            if (edit.style.display === 'none') { edit.style.display = ''; if (ar) ar.textContent = '▾'; }
+            else { edit.style.display = 'none'; if (ar) ar.textContent = '▸'; }
+        }
+        function chatEditMtCell(tableName, idx, col, val) {
+            if (!chatMemoryTables || !chatMemoryTables[tableName] || !chatMemoryTables[tableName][idx]) return;
+            chatMemoryTables[tableName][idx][col] = val;
+            chatSaveCurrentConv(true);
+        }
+        function chatDeleteMtRow(tableName, idx) {
+            if (!chatMemoryTables || !chatMemoryTables[tableName]) return;
+            var sc = _summaryModalScroll();
+            chatMemoryTables[tableName].splice(idx, 1);
+            chatSaveCurrentConv(true);
+            chatShowSummaryModal(sc);
+        }
+        function chatAddMtRow(tableName) {
+            if (!chatMemoryTables) chatMemoryTables = { characters: [], plotlines: [] };
+            var cols = tableName === 'characters' ? _mtCharCols : _mtPlotCols;
+            var row = {};
+            for (var c = 0; c < cols.length; c++) row[cols[c]] = '';
+            if (tableName === 'plotlines') row['已解决'] = '否';
+            chatMemoryTables[tableName].push(row);
+            var sc = _summaryModalScroll();
+            chatSaveCurrentConv(true);
+            chatShowSummaryModal(sc);
         }
         // 摘要段折叠/展开：展开时把编辑框撑到内容高度并露出底部「▴ 收起」条；收起时把编辑过的最新内容同步回预览
         function chatToggleSummarySeg(el) {
@@ -14233,7 +14330,7 @@ body {
                 if (ar) ar.textContent = '▾';
                 if (cl) cl.style.display = '';
             } else {
-                pv.textContent = ta.value; pv.style.display = ''; ta.style.display = 'none';
+                pv.textContent = ta.value; pv.style.display = '-webkit-box'; ta.style.display = 'none';
                 if (ar) ar.textContent = '▸';
                 if (cl) cl.style.display = 'none';
             }
@@ -14372,9 +14469,9 @@ body {
                 var prompt = (chatCompressOutline ? '【现有大纲】：\n' + chatCompressOutline + '\n\n' : '')
                     + '【新增前情摘要】：\n' + toFold.join('\n\n') + '\n\n请输出更新后的大纲全文。';
                 var sum = await chatStreamChat({
-                    baseUrl: _useBaseUrl, apiKey: _useApiKey, model: _useModel, max_tokens: 700,
+                    baseUrl: _useBaseUrl, apiKey: _useApiKey, model: _useModel, max_tokens: 1500,
                     messages: [
-                        { role: 'system', content: '你是长篇前情大纲维护助手。把现有大纲与新增摘要合并成一份更新后的大纲：主要人物（姓名、身份、关系）、主线进展、未解伏笔，按时间顺序；旧大纲里仍然重要的信息必须保留，不要丢人名。只输出大纲正文，不分小标题、不写开场白，控制在 400 字以内。' },
+                        { role: 'system', content: '你是长篇前情大纲维护助手。把现有大纲与新增摘要合并成一份更新后的大纲：主要人物（姓名、身份、关系）、主线进展、未解伏笔，按时间顺序；旧大纲里仍然重要的信息必须保留，不要丢人名。只输出大纲正文，不分小标题、不写开场白，控制在 800 字以内。' },
                         { role: 'user', content: prompt }
                     ]
                 });
@@ -14383,6 +14480,73 @@ body {
                     chatOutlineCovers = keepFrom;
                     chatSaveCurrentConv(true);
                     console.log('[大纲] 已折入前 ' + keepFrom + ' 段，大纲 ' + chatCompressOutline.length + ' 字');
+                }
+            }
+
+            // ===== 结构化记忆表格：markdown 表格 ↔ 对象数组互转 =====
+            function _renderTableMd(cols, rows) {
+                if (!rows || !rows.length) return '| ' + cols.join(' | ') + ' |\n| ' + cols.map(function() { return '---'; }).join(' | ') + ' |';
+                var lines = ['| ' + cols.join(' | ') + ' |', '| ' + cols.map(function() { return '---'; }).join(' | ') + ' |'];
+                for (var r = 0; r < rows.length; r++) {
+                    var cells = cols.map(function(c) { return String(rows[r][c] == null ? '' : rows[r][c]).replace(/\|/g, '｜').replace(/\n/g, ' '); });
+                    lines.push('| ' + cells.join(' | ') + ' |');
+                }
+                return lines.join('\n');
+            }
+            function _parseTableMd(md, cols) {
+                var rows = [];
+                var lines = md.split('\n').filter(function(l) { return l.indexOf('|') >= 0 && l.indexOf('---') < 0; });
+                for (var i = 0; i < lines.length; i++) {
+                    var cells = lines[i].split('|').map(function(s) { return s.trim(); }).filter(function(s) { return s !== ''; });
+                    if (cells.length < 2) continue;
+                    // 跳过表头行（与 cols 完全匹配）
+                    var isHeader = true;
+                    for (var h = 0; h < cols.length; h++) { if (cells[h] !== cols[h]) { isHeader = false; break; } }
+                    if (isHeader) continue;
+                    var obj = {};
+                    for (var c = 0; c < cols.length; c++) obj[cols[c]] = (cells[c] || '').replace(/｜/g, '|');
+                    rows.push(obj);
+                }
+                return rows;
+            }
+            var _charCols = _mtCharCols;
+            var _plotCols = _mtPlotCols;
+
+            // 结构化记忆表格更新：把最新摘要段喂给模型，增量更新人物表+主线表
+            async function _updateMemoryTables(newSummaryText) {
+                if (!newSummaryText) return;
+                var tables = chatMemoryTables || { characters: [], plotlines: [] };
+                var charMd = _renderTableMd(_charCols, tables.characters);
+                var plotMd = _renderTableMd(_plotCols, tables.plotlines);
+                var prompt = '【当前人物表】\n' + charMd + '\n\n【当前主线表】\n' + plotMd + '\n\n【新章节摘要】\n' + newSummaryText;
+                try {
+                    var result = await chatStreamChat({
+                        baseUrl: _useBaseUrl, apiKey: _useApiKey, model: _useModel, max_tokens: 2000,
+                        messages: [
+                            { role: 'system', content: '你是小说记忆表格维护助手。根据新章节摘要，更新下面两张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 主线表新事件加行，旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 输出完整的两张 markdown 表格，先人物表再主线表，之间用空行分隔\n- 不要输出任何其他内容' },
+                            { role: 'user', content: prompt }
+                        ]
+                    });
+                    if (!result || chatCurrentConvId !== convId) return;
+                    // 解析两张表：按「主线表」或第二个表头分割
+                    var parts = result.split(/\n{2,}/);
+                    var charPart = '', plotPart = '';
+                    var foundPlot = false;
+                    for (var p = 0; p < parts.length; p++) {
+                        if (parts[p].indexOf('事件') >= 0 || parts[p].indexOf('主线') >= 0 || parts[p].indexOf('已解决') >= 0) foundPlot = true;
+                        if (foundPlot) plotPart += parts[p] + '\n'; else charPart += parts[p] + '\n';
+                    }
+                    var newChars = _parseTableMd(charPart, _charCols);
+                    var newPlots = _parseTableMd(plotPart, _plotCols);
+                    if (newChars.length || newPlots.length) {
+                        chatMemoryTables = { characters: newChars.length ? newChars : tables.characters, plotlines: newPlots.length ? newPlots : tables.plotlines };
+                        chatSaveCurrentConv(true);
+                        console.log('[记忆表格] 人物 ' + chatMemoryTables.characters.length + ' 行，主线 ' + chatMemoryTables.plotlines.length + ' 行');
+                    } else {
+                        console.warn('[记忆表格] 解析失败，保留旧表格');
+                    }
+                } catch(e) {
+                    console.warn('[记忆表格] 更新失败:', e.message);
                 }
             }
 
@@ -14432,7 +14596,9 @@ body {
                     }
                     if (chatCurrentConvId === convId) {
                         showToast('📋 已生成 ' + chatCompressSummaries.length + ' 段摘要');
-                        await _foldOutline();
+                        // 表格更新与大纲折叠并行：新对话用表格，旧对话继续折大纲
+                        var _latestSeg = chatCompressSummaries[chatCompressSummaries.length - 1] || '';
+                        await Promise.all([_foldOutline(), _updateMemoryTables(_latestSeg)]);
                     }
                 } else {
                     var summary = await _doSummarize(toCompress, 600, false);
@@ -16494,7 +16660,13 @@ body {
                 // 带上前文已读章节的摘要，否则双击提问时 AI 看不到被压缩掉的前情（剧情/人物/伏笔）
                 var _askMsgs = [{ role: 'system', content: sysPrompt }];
                 var _summaryLines = [];
-                if (chatCompressOutline || (chatCompressSummaries && chatCompressSummaries.length)) {
+                if (chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || chatMemoryTables.plotlines.length)) {
+                    var _mtText = '';
+                    if (chatMemoryTables.characters.length) _mtText += '【人物表】\n| 人物 | 身份 | 关系 | 当前状态 | 备注 |\n| --- | --- | --- | --- | --- |\n' + chatMemoryTables.characters.map(function(r) { return '| ' + (r['人物']||'') + ' | ' + (r['身份']||'') + ' | ' + (r['关系']||'') + ' | ' + (r['当前状态']||'') + ' | ' + (r['备注']||'') + ' |'; }).join('\n');
+                    if (chatMemoryTables.plotlines.length) _mtText += '\n\n【主线/伏笔表】\n| 章节 | 事件 | 细节 | 已解决 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.plotlines.map(function(r) { return '| ' + (r['章节']||'') + ' | ' + (r['事件']||'') + ' | ' + (r['细节']||'') + ' | ' + (r['已解决']||'') + ' |'; }).join('\n');
+                    _summaryLines.push(_mtText);
+                    _summaryLines = _summaryLines.concat(chatCompressSummaries.slice(-CHAT_SUMMARY_MAX_SEGS));
+                } else if (chatCompressOutline || (chatCompressSummaries && chatCompressSummaries.length)) {
                     _summaryLines = chatCompressSummaries.slice(chatOutlineCovers || 0);
                     if (chatCompressOutline) _summaryLines.unshift('【更早前情的大纲】\n' + chatCompressOutline);
                 } else if (chatReaderMode && readerBookId != null && msg.readerChapter != null) {
