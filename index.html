@@ -14368,6 +14368,15 @@ body {
         }
 
         /* ===== 上下文压缩 ===== */
+        // 共用工具：如果用户正在等评论/提问回答，暂停后台任务让路
+        function _waitIfStreaming() {
+            if (!chatStreaming && !readingCommenting) return Promise.resolve();
+            return new Promise(function(resolve) {
+                var check = setInterval(function() {
+                    if (!chatStreaming && !readingCommenting) { clearInterval(check); resolve(); }
+                }, 500);
+            });
+        }
         async function chatCompressContext() {
             if (chatCompressing || chatStreaming) return;
             // 触发方式按模式区分：
@@ -14431,15 +14440,7 @@ body {
             var toCompress = chatMessages.slice(chatCompressedCount || 0, compressEnd);
             var convId = chatCurrentConvId;
 
-            // 如果用户正在等评论/提问回答（chatStreaming 或 readingCommenting），暂停后台任务让路
-            function _waitIfStreaming() {
-                if (!chatStreaming && !readingCommenting) return Promise.resolve();
-                return new Promise(function(resolve) {
-                    var check = setInterval(function() {
-                        if (!chatStreaming && !readingCommenting) { clearInterval(check); resolve(); }
-                    }, 500);
-                });
-            }
+            // _waitIfStreaming 已提到外层，共读压缩和阅读预取都能用
 
             // 单次摘要调用：把一组消息总结成一段。返回 trim 后的摘要文本或 null。
             async function _doSummarize(msgs, truncCap, isReading, prevSummaryText) {
