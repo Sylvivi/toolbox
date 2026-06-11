@@ -14582,6 +14582,7 @@ body {
                     // 各段独立总结，但把已生成的前文摘要喂进去防止重复。
                     var CHAPTER_MIN_LEN = 200;
                     var idx = 0;
+                    var _anyNewSeg = false;  // 本轮是否真的生成了新摘要；全失败就别空跑表格更新
                     while (idx < toCompress.length) {
                         var first = toCompress[idx];
                         var firstIsChapter = first.role === 'user' && typeof first.content === 'string' && first.content.length >= CHAPTER_MIN_LEN;
@@ -14616,11 +14617,17 @@ body {
                             // 不会被标记为「需推送」，导致自动生成的摘要永远同步不到其它设备。
                             chatSaveCurrentConv(true);
                             chatUpdateCtxIndicator();
+                            _anyNewSeg = true;
                             console.log('[压缩] 段 ' + chatCompressSummaries.length + '，本段 ' + batch.length + ' 条' + (firstIsChapter ? '（章）' : '（章间讨论）') + '，摘要 ' + seg.length + ' 字');
+                            idx = j;
+                        } else {
+                            // 本章摘要失败（多为网络故障或模型回空）：就此打住，不推进 compressedCount。
+                            // 失败的这一章连同后面内容都留作未压缩，下一轮共读会重新纳入、自动补上。
+                            // 绝不能继续往后压——否则 compressedCount 会越过这一章导致它被永久跳过。
+                            break;
                         }
-                        idx = j;
                     }
-                    if (chatCurrentConvId === convId) {
+                    if (chatCurrentConvId === convId && _anyNewSeg) {
                         showToast('📋 已生成 ' + chatCompressSummaries.length + ' 段摘要');
                         await _waitIfStreaming(); // 评论优先
                         // 表格更新与大纲折叠并行：新对话用表格，旧对话继续折大纲
