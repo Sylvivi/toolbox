@@ -15255,6 +15255,23 @@ body {
             all[fileKey].outline = { sum: sum, ts: Date.now(), upTo: upTo };
             readerSummariesSaveAll(all);
         }
+        // 阅读模式记忆表格：存在 reader_summaries[fileKey].memTables 下，结构同共读模式
+        // { characters: [...], plotlines: [...], ts: Date.now(), upTo: 已覆盖到第几章 }
+        function readerMemTablesGet(fileKey) {
+            var cell = readerSummariesAll()[fileKey];
+            var mt = cell && cell.memTables;
+            return (mt && (mt.characters && mt.characters.length || mt.plotlines && mt.plotlines.length)) ? mt : null;
+        }
+        function readerMemTablesSet(fileKey, tables, upTo) {
+            var all = readerSummariesAll();
+            if (!all[fileKey]) all[fileKey] = {};
+            all[fileKey].memTables = { characters: tables.characters || [], plotlines: tables.plotlines || [], ts: Date.now(), upTo: upTo };
+            readerSummariesSaveAll(all);
+        }
+        function readerMemTablesDelete(fileKey) {
+            var all = readerSummariesAll();
+            if (all[fileKey]) { all[fileKey].memTables = { characters: [], plotlines: [], ts: Date.now(), upTo: -1 }; readerSummariesSaveAll(all); }
+        }
         // 「是否自动总结前情」总开关（默认关）：一个全局开关，决定阅读时要不要在后台总结，避免到书架随便翻翻也烧 API。
         // 存 reader_summary_on（'1'/'0'），参数保留只为兼容旧调用，实际忽略。
         function readerSummaryEnabled() {
@@ -15296,8 +15313,51 @@ body {
                 + '<span style="position:absolute;top:3px;left:' + (enabled ? '23px' : '3px') + ';width:20px;height:20px;border-radius:50%;background:#fff;transition:left 0.2s"></span></button>'
                 + '</div>';
             var body = toggle;
+            // 记忆表格（优先显示）
+            var _rmt = readerMemTablesGet(fileKey);
+            if (_rmt) {
+                var esc = function(s) { return (s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+                function _rmtRowHtml(tableName, row, idx, cols) {
+                    var preview = cols.map(function(c) { return esc(row[c]||''); }).join(' · ');
+                    var resolved = tableName === 'plotlines' && (row['已解决'] === '是' || row['已解决'] === 'true');
+                    return '<div class="mt-row" data-rmt="' + tableName + '" data-rmt-idx="' + idx + '" style="' + (resolved ? 'opacity:0.45;' : '') + '">'
+                        + '<div onclick="readerToggleMtRow(this)" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:4px 0">'
+                        + '<span style="font-size:12px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (resolved ? '<s>' : '') + esc(row[cols[0]]||'—') + (resolved ? '</s>' : '') + ' <span style="color:var(--text-muted);font-size:10px">' + preview.slice((row[cols[0]]||'').length + 3) + '</span></span>'
+                        + '<span style="display:flex;align-items:center;gap:4px">'
+                        + '<button onclick="event.stopPropagation();readerDeleteMtRow(\'' + tableName + '\',' + idx + ')" style="background:none;border:none;font-size:11px;color:var(--text-muted);cursor:pointer;padding:1px 4px" onmouseover="this.style.color=\'#e55\'" onmouseout="this.style.color=\'var(--text-muted)\'">✕</button>'
+                        + '<span class="seg-arrow" style="font-size:9px;color:var(--text-muted)">▸</span>'
+                        + '</span></div>'
+                        + '<div class="mt-edit" style="display:none;padding:4px 0 8px">'
+                        + cols.map(function(c) {
+                            if (tableName === 'plotlines' && c === '已解决') {
+                                return '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-sub);margin:3px 0"><input type="checkbox" ' + (resolved ? 'checked' : '') + ' onchange="readerEditMtCell(\'' + tableName + '\',' + idx + ',\'' + c + '\',this.checked?\'是\':\'否\')" style="accent-color:var(--accent)"> 已解决</label>';
+                            }
+                            return '<input value="' + esc(row[c]||'') + '" oninput="readerEditMtCell(\'' + tableName + '\',' + idx + ',\'' + c + '\',this.value)" placeholder="' + c + '" style="width:100%;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;padding:5px 8px;font-size:12px;color:var(--text);margin:2px 0;font-family:inherit;outline:none">';
+                        }).join('')
+                        + '</div></div>';
+                }
+                // 人物表
+                body += '<div class="seg" style="padding-bottom:6px">'
+                    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
+                    + '<span class="seg-label" style="margin:0">👤 人物表 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + _rmt.characters.length + ' 人</span></span>'
+                    + '<button onclick="readerAddMtRow(\'characters\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
+                    + '</div>';
+                for (var rci = 0; rci < _rmt.characters.length; rci++) body += _rmtRowHtml('characters', _rmt.characters[rci], rci, _mtCharCols);
+                if (!_rmt.characters.length) body += '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">暂无数据，开启自动总结后自动填充</div>';
+                body += '</div>';
+                // 主线表
+                body += '<div class="seg" style="padding-bottom:6px">'
+                    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
+                    + '<span class="seg-label" style="margin:0">📖 主线/伏笔 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + _rmt.plotlines.length + ' 条</span></span>'
+                    + '<button onclick="readerAddMtRow(\'plotlines\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
+                    + '</div>';
+                for (var rpi = 0; rpi < _rmt.plotlines.length; rpi++) body += _rmtRowHtml('plotlines', _rmt.plotlines[rpi], rpi, _mtPlotCols);
+                if (!_rmt.plotlines.length) body += '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">暂无数据，开启自动总结后自动填充</div>';
+                body += '</div>';
+            }
+            // 旧大纲（兼容：有表格时不显示，只有老书没表格才显示）
             var _ol = readerOutlineGet(fileKey);
-            if (_ol) {
+            if (_ol && !_rmt) {
                 body += '<div class="seg">'
                     + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
                     + '<span class="seg-label" style="margin-bottom:0">📜 全书大纲（至第 ' + (_ol.upTo + 1) + ' 章）</span>'
@@ -15306,7 +15366,7 @@ body {
                     + '<textarea data-rsum-outline="1" oninput="readerEditOutline(this);this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'" style="width:100%;min-height:90px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:var(--text);resize:none;font-family:inherit;outline:none;overflow:hidden">' + _ol.sum.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>'
                     + '</div>';
             }
-            if (!chaps.length && !_ol) {
+            if (!chaps.length && !_ol && !_rmt) {
                 body += enabled
                     ? '<div class="empty">还没有摘要。<br>继续往下读，后台会悄悄把前面章节总结好存这里；提问时也会自动补上。</div>'
                     : '<div class="empty">自动总结已关闭。<br>打开上面的开关，读这本书时就会在后台把前面章节总结好，供提问时给 AI 当前情。</div>';
@@ -15361,6 +15421,48 @@ body {
             var fileKey = readerBookKey(readerBookId);
             // 墓碑删除（sum 空 + 新时间戳）能同步到其它设备；upTo 归 -1，之后会从头重新折一份
             readerOutlineSet(fileKey, '', -1);
+            if (activeSyncProvider === 'cf') syncPushData();
+            var mask = document.querySelector('.chat-summary-modal-mask');
+            if (mask) mask.remove();
+            readerShowSummaryModal();
+        }
+        // 阅读模式记忆表格交互
+        function readerToggleMtRow(el) {
+            var row = el.closest('.mt-row'); if (!row) return;
+            var edit = row.querySelector('.mt-edit');
+            var ar = row.querySelector('.seg-arrow');
+            if (!edit) return;
+            if (edit.style.display === 'none') { edit.style.display = ''; if (ar) ar.textContent = '▾'; }
+            else { edit.style.display = 'none'; if (ar) ar.textContent = '▸'; }
+        }
+        function readerEditMtCell(tableName, idx, col, val) {
+            var fileKey = readerBookKey(readerBookId);
+            var mt = readerMemTablesGet(fileKey);
+            if (!mt || !mt[tableName] || !mt[tableName][idx]) return;
+            mt[tableName][idx][col] = val;
+            readerMemTablesSet(fileKey, mt, mt.upTo || -1);
+            if (activeSyncProvider === 'cf') syncPushData();
+        }
+        function readerDeleteMtRow(tableName, idx) {
+            var fileKey = readerBookKey(readerBookId);
+            var mt = readerMemTablesGet(fileKey);
+            if (!mt || !mt[tableName]) return;
+            mt[tableName].splice(idx, 1);
+            readerMemTablesSet(fileKey, mt, mt.upTo || -1);
+            if (activeSyncProvider === 'cf') syncPushData();
+            var mask = document.querySelector('.chat-summary-modal-mask');
+            if (mask) mask.remove();
+            readerShowSummaryModal();
+        }
+        function readerAddMtRow(tableName) {
+            var fileKey = readerBookKey(readerBookId);
+            var mt = readerMemTablesGet(fileKey) || { characters: [], plotlines: [] };
+            var cols = tableName === 'characters' ? _mtCharCols : _mtPlotCols;
+            var row = {};
+            for (var c = 0; c < cols.length; c++) row[cols[c]] = '';
+            if (tableName === 'plotlines') row['已解决'] = '否';
+            mt[tableName].push(row);
+            readerMemTablesSet(fileKey, mt, mt.upTo || -1);
             if (activeSyncProvider === 'cf') syncPushData();
             var mask = document.querySelector('.chat-summary-modal-mask');
             if (mask) mask.remove();
@@ -15441,10 +15543,20 @@ body {
                         if (w) wrote = true;
                     }
                 }
-                // 顺手维护全书大纲：滑出「5 章窗口」的旧章摘要攒满 3 章就折进大纲（远期记忆不丢）
+                // 远期记忆：有表格就更新表格，没有就折大纲（兼容旧数据）
                 if (chatCurrentConvId === convAtStart && chatReaderMode) {
-                    var ow = await readerUpdateOutline(fileKey, curChap, mc);
-                    if (ow) wrote = true;
+                    var _mt = readerMemTablesGet(fileKey);
+                    if (_mt || !readerOutlineGet(fileKey)) {
+                        // 有表格 或 大纲也没有（全新）→ 走表格
+                        var tw = await readerUpdateMemoryTables(fileKey, curChap, mc);
+                        if (tw) wrote = true;
+                    } else {
+                        // 有大纲没表格 → 继续折大纲（老书兼容），同时首次建表
+                        var ow = await readerUpdateOutline(fileKey, curChap, mc);
+                        if (ow) wrote = true;
+                        var tw2 = await readerUpdateMemoryTables(fileKey, curChap, mc);
+                        if (tw2) wrote = true;
+                    }
                 }
             } finally { _readerPrefetchRunning = false; }
             if (wrote && activeSyncProvider === 'cf') syncPushData();
@@ -15469,9 +15581,9 @@ body {
                 var prompt = (o ? '【现有大纲】：\n' + o.sum + '\n\n' : '')
                     + '【新增章节摘要】：\n' + lines.join('\n') + '\n\n请输出更新后的大纲全文。';
                 var sum = await chatStreamChat({
-                    baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 700,
+                    baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 1500,
                     messages: [
-                        { role: 'system', content: '你是小说全书大纲维护助手。把现有大纲与新增章节摘要合并成一份更新后的大纲：主要人物（姓名、身份、关系）、主线剧情进展、未解伏笔，按时间顺序；旧大纲里仍然重要的信息必须保留，不要丢人名。只输出大纲正文，不分小标题、不写开场白，控制在 400 字以内。' },
+                        { role: 'system', content: '你是小说全书大纲维护助手。把现有大纲与新增章节摘要合并成一份更新后的大纲：主要人物（姓名、身份、关系）、主线剧情进展、未解伏笔，按时间顺序；旧大纲里仍然重要的信息必须保留，不要丢人名。只输出大纲正文，不分小标题、不写开场白，控制在 800 字以内。' },
                         { role: 'user', content: prompt }
                     ]
                 });
@@ -15482,6 +15594,97 @@ body {
                 }
             } catch (e) {} finally { _readerOutlineRunning = false; }
             return false;
+        }
+        // 阅读模式记忆表格更新：把新章节摘要喂给模型，增量更新人物表+主线表（替代大纲）
+        var _readerMemTablesRunning = false;
+        async function readerUpdateMemoryTables(fileKey, curChap, mc) {
+            if (_readerMemTablesRunning) return false;
+            var mt = readerMemTablesGet(fileKey);
+            var tables = mt || { characters: [], plotlines: [] };
+            var upTo = mt ? (mt.upTo || -1) : -1;
+            // 收集 upTo 之后到 curChap 的摘要
+            var newSums = [];
+            for (var i = upTo + 1; i <= curChap; i++) {
+                var s = readerSummaryGet(fileKey, i);
+                if (s) newSums.push('第 ' + (i + 1) + ' 章：' + s);
+            }
+            if (!newSums.length) return false;
+            // 首次建表（空表）时拉更多章节摘要，确保覆盖全面
+            if (!tables.characters.length && !tables.plotlines.length) {
+                newSums = [];
+                for (var j = 0; j <= curChap; j++) {
+                    var ss = readerSummaryGet(fileKey, j);
+                    if (ss) newSums.push('第 ' + (j + 1) + ' 章：' + ss);
+                }
+            }
+            if (!newSums.length) return false;
+            _readerMemTablesRunning = true;
+            try {
+                var charMd = _readerRenderTableMd(_mtCharCols, tables.characters);
+                var plotMd = _readerRenderTableMd(_mtPlotCols, tables.plotlines);
+                var prompt = '【当前人物表】\n' + charMd + '\n\n【当前主线表】\n' + plotMd + '\n\n【新章节摘要】\n' + newSums.join('\n');
+                var result = await chatStreamChat({
+                    baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 4000,
+                    messages: [
+                        { role: 'system', content: '你是小说记忆表格维护助手。根据新章节摘要，更新下面两张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 主线表新事件加行，旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 已解决的伏笔如不再重要可删除，避免表格无限膨胀\n- 输出完整的两张 markdown 表格，先人物表再主线表，之间用空行分隔\n- 不要输出任何其他内容' },
+                        { role: 'user', content: prompt }
+                    ]
+                });
+                if (!result) return false;
+                // 解析（同共读模式逻辑）
+                var _lines = result.split('\n');
+                var charPart = '', plotPart = '';
+                var _splitAt = -1;
+                for (var _li = 0; _li < _lines.length; _li++) {
+                    if (_lines[_li].indexOf('|') >= 0 && _lines[_li].indexOf('事件') >= 0 && _lines[_li].indexOf('已解决') >= 0) {
+                        _splitAt = _li; break;
+                    }
+                }
+                if (_splitAt > 0) {
+                    if (_splitAt > 0 && _lines[_splitAt - 1].indexOf('|') < 0) _splitAt--;
+                    charPart = _lines.slice(0, _splitAt).join('\n');
+                    plotPart = _lines.slice(_splitAt).join('\n');
+                } else {
+                    charPart = result;
+                }
+                var newChars = _readerParseTableMd(charPart, _mtCharCols);
+                var newPlots = _readerParseTableMd(plotPart, _mtPlotCols);
+                if (newChars.length || newPlots.length) {
+                    readerMemTablesSet(fileKey, {
+                        characters: newChars.length ? newChars : tables.characters,
+                        plotlines: newPlots.length ? newPlots : tables.plotlines
+                    }, curChap);
+                    console.log('[阅读记忆表格] 人物 ' + (newChars.length || tables.characters.length) + ' 行，主线 ' + (newPlots.length || tables.plotlines.length) + ' 行');
+                    return true;
+                }
+            } catch (e) { console.warn('[阅读记忆表格] 更新失败:', e.message); }
+            finally { _readerMemTablesRunning = false; }
+            return false;
+        }
+        // 复用共读模式的表格列定义，但解析/渲染函数独立（避免与 chatCompressContext 内部作用域耦合）
+        function _readerRenderTableMd(cols, rows) {
+            if (!rows || !rows.length) return '| ' + cols.join(' | ') + ' |\n| ' + cols.map(function() { return '---'; }).join(' | ') + ' |';
+            var lines = ['| ' + cols.join(' | ') + ' |', '| ' + cols.map(function() { return '---'; }).join(' | ') + ' |'];
+            for (var r = 0; r < rows.length; r++) {
+                var cells = cols.map(function(c) { return String(rows[r][c] == null ? '' : rows[r][c]).replace(/\|/g, '｜').replace(/\n/g, ' '); });
+                lines.push('| ' + cells.join(' | ') + ' |');
+            }
+            return lines.join('\n');
+        }
+        function _readerParseTableMd(md, cols) {
+            var rows = [];
+            var lines = md.split('\n').filter(function(l) { return l.indexOf('|') >= 0 && l.indexOf('---') < 0; });
+            for (var i = 0; i < lines.length; i++) {
+                var cells = lines[i].split('|').map(function(s) { return s.trim(); }).filter(function(s) { return s !== ''; });
+                if (cells.length < 2) continue;
+                var isHeader = true;
+                for (var h = 0; h < cols.length; h++) { if (cells[h] !== cols[h]) { isHeader = false; break; } }
+                if (isHeader) continue;
+                var obj = {};
+                for (var c = 0; c < cols.length; c++) obj[cols[c]] = (cells[c] || '').replace(/｜/g, '|');
+                rows.push(obj);
+            }
+            return rows;
         }
         // 后台预生成的轻量触发：进章/续章后延后一点再跑，别和正文渲染抢资源。
         function readerSchedulePrefetch(curChap) {
@@ -15515,7 +15718,16 @@ body {
                 }
             }
             var out = [];
-            if (_useOutline) out.push('【全书前情大纲（至第 ' + (_o.upTo + 1) + ' 章）】\n' + _o.sum);
+            // 优先用记忆表格（结构化），无表格时 fallback 到旧大纲
+            var _mt = readerMemTablesGet(fileKey);
+            if (_mt && (_mt.characters.length || _mt.plotlines.length) && (!_mt.upTo || _mt.upTo < curChap)) {
+                var _memText = '';
+                if (_mt.characters.length) _memText += '【人物表】\n' + _readerRenderTableMd(_mtCharCols, _mt.characters);
+                if (_mt.plotlines.length) _memText += (_mt.characters.length ? '\n\n' : '') + '【主线/伏笔表】\n' + _readerRenderTableMd(_mtPlotCols, _mt.plotlines);
+                out.push(_memText);
+            } else if (_useOutline) {
+                out.push('【全书前情大纲（至第 ' + (_o.upTo + 1) + ' 章）】\n' + _o.sum);
+            }
             for (var m = start; m < curChap; m++) {
                 var s = readerSummaryGet(fileKey, m);
                 if (s) out.push('第 ' + (m + 1) + ' 章：' + s);
