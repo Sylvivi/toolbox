@@ -14610,8 +14610,14 @@ body {
                         showToast('📋 已生成 ' + chatCompressSummaries.length + ' 段摘要');
                         await _waitIfStreaming(); // 评论优先
                         // 表格更新与大纲折叠并行：新对话用表格，旧对话继续折大纲
-                        var _latestSeg = chatCompressSummaries[chatCompressSummaries.length - 1] || '';
-                        await Promise.all([_foldOutline(), _updateMemoryTables(_latestSeg)]);
+                        // 首次建表时把所有已有摘要喂进去，而不只是最新一段，确保前面的章节也入表
+                        var _tableInput = '';
+                        if (!chatMemoryTables || (!chatMemoryTables.characters.length && !chatMemoryTables.plotlines.length)) {
+                            _tableInput = chatCompressSummaries.join('\n\n---\n\n');
+                        } else {
+                            _tableInput = chatCompressSummaries[chatCompressSummaries.length - 1] || '';
+                        }
+                        await Promise.all([_foldOutline(), _updateMemoryTables(_tableInput)]);
                     }
                 } else {
                     var summary = await _doSummarize(toCompress, 600, false);
