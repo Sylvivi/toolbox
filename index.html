@@ -12892,8 +12892,8 @@ body {
             }
             document.getElementById('chatSendBtn').disabled = !chatSelectedModel;
             chatSaveCurrentConv();
-            // 后台上下文压缩
-            if (chatCompressEnabled && !chatCompressing) chatCompressContext();
+            // 后台上下文压缩——延迟启动，避免压缩 API 请求抢占下一章评论的浏览器连接队列
+            if (chatCompressEnabled && !chatCompressing) setTimeout(chatCompressContext, 2000);
             // 首轮对话完成后自动生成AI标题
             if (fullContent && chatMessages.length === 2) {
                 var list = chatGetHistory();
@@ -14433,6 +14433,16 @@ body {
             var toCompress = chatMessages.slice(chatCompressedCount || 0, compressEnd);
             var convId = chatCurrentConvId;
 
+            // 如果用户正在等评论（chatStreaming=true），暂停压缩让路，等评论完成后再继续
+            function _waitIfStreaming() {
+                if (!chatStreaming) return Promise.resolve();
+                return new Promise(function(resolve) {
+                    var check = setInterval(function() {
+                        if (!chatStreaming) { clearInterval(check); resolve(); }
+                    }, 500);
+                });
+            }
+
             // 单次摘要调用：把一组消息总结成一段。返回 trim 后的摘要文本或 null。
             async function _doSummarize(msgs, truncCap, isReading, prevSummaryText) {
                 var prompt = '';
@@ -14576,6 +14586,8 @@ body {
                             }
                         }
                         if (!batch.length) { idx = j + 1; continue; }
+                        await _waitIfStreaming(); // 评论优先：如果用户正在等评论，暂停让路
+                        if (chatCurrentConvId !== convId) break;
                         // 把已生成的前文摘要喂给本段，避免各段独立生成导致重复
                         var _prevSums = chatCompressSummaries.slice(-6);
                         var _prevText = _prevSums.length ? _prevSums.join('\n\n---\n\n') : '';
@@ -14596,6 +14608,7 @@ body {
                     }
                     if (chatCurrentConvId === convId) {
                         showToast('📋 已生成 ' + chatCompressSummaries.length + ' 段摘要');
+                        await _waitIfStreaming(); // 评论优先
                         // 表格更新与大纲折叠并行：新对话用表格，旧对话继续折大纲
                         var _latestSeg = chatCompressSummaries[chatCompressSummaries.length - 1] || '';
                         await Promise.all([_foldOutline(), _updateMemoryTables(_latestSeg)]);
@@ -14610,6 +14623,7 @@ body {
                         chatUpdateCtxIndicator();
                         console.log('[压缩] 段 ' + chatCompressSummaries.length + '，已压缩 ' + compressEnd + ' 条消息，摘要 ' + summary.length + ' 字');
                         showToast('📋 已生成摘要（第' + chatCompressSummaries.length + '段，' + summary.length + '字）');
+                        await _waitIfStreaming();
                         await _foldOutline();
                     }
                 }
