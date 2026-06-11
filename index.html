@@ -4732,6 +4732,11 @@ body {
                                 <span style="font-size:11px;color:var(--text-muted)">摘要模型</span>
                                 <select id="compressModelSelect" onchange="chatSaveCompressModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">跟随当前模型</option></select>
                             </div>
+                            <div style="margin-top:8px">
+                                <span style="font-size:11px;color:var(--text-muted)">记忆模型</span>
+                                <select id="memoryModelSelect" onchange="chatSaveMemoryModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">跟随摘要模型</option></select>
+                                <div style="font-size:10px;color:var(--text-muted);margin-top:3px">人物表/伏笔表单独用，可选个便宜的模型省钱</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -12415,6 +12420,7 @@ body {
             updateRangeFill(document.getElementById('compressKeepInput'));
             chatSyncCompressThresholdUI();
             chatRenderCompressModelSelect();
+            chatRenderMemoryModelSelect();
             syncChatMaskToggleStyle();
             readingApplyQuoteHl();
             readingApplyQuoteUl();
@@ -14892,8 +14898,10 @@ body {
                 var plotMd = _renderTableMd(_plotCols, tables.plotlines);
                 var prompt = '【当前人物表】\n' + charMd + '\n\n【当前主线表】\n' + plotMd + '\n\n【新章节摘要】\n' + newSummaryText;
                 try {
+                    // 记忆模型优先；没单独配则退回摘要/当前模型
+                    var _memMc = chatResolveMemoryModel() || { model: _useModel, baseUrl: _useBaseUrl, apiKey: _useApiKey };
                     var result = await chatStreamChat({
-                        baseUrl: _useBaseUrl, apiKey: _useApiKey, model: _useModel, max_tokens: 50000, purpose: '记忆表格',
+                        baseUrl: _memMc.baseUrl, apiKey: _memMc.apiKey, model: _memMc.model, max_tokens: 50000, purpose: '记忆表格',
                         messages: [
                             { role: 'system', content: '你是小说记忆表格维护助手。根据新章节摘要，更新下面两张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 主线表新事件加行，旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 已解决的伏笔如不再重要可删除，避免表格无限膨胀\n- 输出完整的两张 markdown 表格，先人物表再主线表，之间用空行分隔\n- 不要输出任何其他内容' },
                             { role: 'user', content: prompt }
@@ -16003,8 +16011,9 @@ body {
                 var charMd = _readerRenderTableMd(_mtCharCols, tables.characters);
                 var plotMd = _readerRenderTableMd(_mtPlotCols, tables.plotlines);
                 var prompt = '【当前人物表】\n' + charMd + '\n\n【当前主线表】\n' + plotMd + '\n\n【新章节摘要】\n' + newSums.join('\n');
+                var _memMc = chatResolveMemoryModel() || mc;
                 var result = await chatStreamChat({
-                    baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 50000, purpose: '阅读记忆表格',
+                    baseUrl: _memMc.baseUrl, apiKey: _memMc.apiKey, model: _memMc.model, max_tokens: 50000, purpose: '阅读记忆表格',
                     messages: [
                         { role: 'system', content: '你是小说记忆表格维护助手。根据新章节摘要，更新下面两张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 主线表新事件加行，旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 已解决的伏笔如不再重要可删除，避免表格无限膨胀\n- 输出完整的两张 markdown 表格，先人物表再主线表，之间用空行分隔\n- 不要输出任何其他内容' },
                         { role: 'user', content: prompt }
@@ -18214,11 +18223,53 @@ body {
             }
             localStorage.removeItem('chat_compress_model');
         }
+        // 记忆表格（人物表/主线伏笔表）专用模型——可单独选个便宜的，留空则跟随摘要模型
+        function chatGetMemoryModel() {
+            try { return JSON.parse(localStorage.getItem('chat_memory_model') || 'null'); } catch(e) { return null; }
+        }
+        function chatSaveMemoryModel(val) {
+            if (!val) { localStorage.removeItem('chat_memory_model'); return; }
+            for (var i = 0; i < chatFavModels.length; i++) {
+                var f = chatFavModels[i];
+                if (f.model + '||' + (f.url || '') === val) {
+                    localStorage.setItem('chat_memory_model', JSON.stringify({ model: f.model, url: f.url, providerId: f.providerId, providerName: f.providerName }));
+                    return;
+                }
+            }
+            localStorage.removeItem('chat_memory_model');
+        }
+        // 解析记忆模型为 {model,baseUrl,apiKey}；没配则返回 null（由调用方退回默认模型）
+        function chatResolveMemoryModel() {
+            var cfg = chatGetMemoryModel();
+            if (!cfg || !cfg.model) return null;
+            var item = null;
+            if (cfg.url) {
+                var allK = getKeyData();
+                for (var i = 0; i < allK.length; i++) { if (allK[i].url === cfg.url) { item = allK[i]; break; } }
+            }
+            if (!item && cfg.providerId) item = getKeyItemById(cfg.providerId);
+            if (!item) { var ps = document.getElementById('chatProviderSelect'); if (ps) item = getKeyItemById(ps.value); }
+            if (!item) return null;
+            return { model: cfg.model, baseUrl: getBaseUrl(item.url), apiKey: getActiveKey(item) };
+        }
         function chatRenderCompressModelSelect() {
             var sel = document.getElementById('compressModelSelect');
             if (!sel) return;
             var saved = chatGetCompressModel();
             var html = '<option value="">跟随当前模型</option>';
+            for (var i = 0; i < chatFavModels.length; i++) {
+                var f = chatFavModels[i];
+                var val = f.model + '||' + (f.url || '');
+                var selected = saved && saved.model === f.model && saved.url === f.url ? ' selected' : '';
+                html += '<option value="' + val.replace(/"/g, '&quot;') + '"' + selected + '>' + (f.providerName || '未知') + ' / ' + f.model + '</option>';
+            }
+            sel.innerHTML = html;
+        }
+        function chatRenderMemoryModelSelect() {
+            var sel = document.getElementById('memoryModelSelect');
+            if (!sel) return;
+            var saved = chatGetMemoryModel();
+            var html = '<option value="">跟随摘要模型</option>';
             for (var i = 0; i < chatFavModels.length; i++) {
                 var f = chatFavModels[i];
                 var val = f.model + '||' + (f.url || '');
