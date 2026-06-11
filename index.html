@@ -10514,7 +10514,7 @@ body {
         var READING_RENDER_CHUNK = 8;    // 上滑到顶时，每次补渲染的条数
         var _chatLoadingEarlier = false; // 补渲染进行中的防重入标记
         var _readingModeOrigText = '';  // 流式渲染用：当前原文
-        var READING_MODE_INSTRUCTION = '【共读模式格式要求】当用户发送带有 [P1] [P2] 等段落编号的小说原文时，你只需要输出你的评论，不要重复原文。每条评论格式为：[P段落号] 评论内容。例如：\n[P3] 这段描写太细腻了\n[P7] 这里有个伏笔\n\n最重要的一条：每一轮你只评论【用户本次最新发来的这一条带 [P] 编号的章节原文】。之前已经读过、已经评过的章节，不要再补评论、不要再引用它们的段落编号。段落编号 [P1] [P2]… 每一章都是从头重新计数的，所以你输出的 [Px] 必须严格对应本章原文里的那一段，绝不能拿来指代上一章的内容。\n\n严格格式：每条评论开头只写一个 [Px] 标记，不要写成 [P25] [P26] 或 [P25-26] 这种合并格式。如果要同时评论多段，请分开写：\n[P25] 评论内容\n[P26] 评论内容\n\n重要：请模拟顺序阅读的视角写评论，评论某段时只基于该段及其之前的内容，不要引用或暗示后文还没出现的信息。你可以运用对作品已读部分（当前文本之前的剧情）的了解来丰富评论，但绝不剧透当前阅读位置之后的情节发展。像一个读过前文、但还没翻到下一页的读友一样。\n\n评论密度自己把握，有感觉的地方就评，没感觉的不要硬评。不需要每段都评。评论结束后可以简短聊两句整体感受。\n如果用户没发原文而是在聊天讨论，就正常回复，不用加 [P] 标记。';
+        var READING_MODE_INSTRUCTION = '【共读模式格式要求】当用户发送带有 [P1] [P2] 等段落编号的小说原文时，你只需要输出你的评论，不要重复原文。每条评论格式为：[P段落号] 评论内容。例如：\n[P3] 这段描写太细腻了\n[P7] 这里有个伏笔\n\n最重要的一条：每一轮你只评论【用户本次最新发来的这一条带 [P] 编号的章节原文】。之前已经读过、已经评过的章节，不要再补评论、不要再引用它们的段落编号。段落编号 [P1] [P2]… 每一章都是从头重新计数的，所以你输出的 [Px] 必须严格对应本章原文里的那一段，绝不能拿来指代上一章的内容。\n\n严格格式：每条评论开头只写一个 [Px] 标记，不要写成 [P25] [P26] 或 [P25-26] 这种合并格式。如果要同时评论多段，请分开写：\n[P25] 评论内容\n[P26] 评论内容\n\n重要：请模拟顺序阅读的视角写评论，评论某段时只基于该段及其之前的内容，不要引用或暗示后文还没出现的信息。你可以运用对作品已读部分（当前文本之前的剧情）的了解来丰富评论，但绝不剧透当前阅读位置之后的情节发展。像一个读过前文、但还没翻到下一页的读友一样。\n\n评论密度自己把握，有感觉的地方就评，没感觉的不要硬评。不需要每段都评。评论结束后可以简短聊两句整体感受。\n\n【评论质量要求】避免空洞的文学鉴赏套话——"描写细腻""伏笔巧妙""刻画入木三分""跃然纸上"这类评论等于什么都没说。好的评论应该是：指出你注意到的具体细节、说出这个细节为什么吸引你、大胆猜测作者的意图或后续走向、把当前情节和前文做关联、对角色的选择表达你自己的立场（赞同/不解/觉得蠢）。总之，像一个有主见的读友在聊天，而不是在写读书报告。\n如果用户没发原文而是在聊天讨论，就正常回复，不用加 [P] 标记。';
         // 共读模式：模型没按 [Px] 格式输出时，自动重试一次用的强化纠正提示
         var READING_MODE_RETRY_HINT = '【格式纠正·重要】你上一次的回复没有使用 [P段号] 标记，写成了一整篇笼统的读后感，导致评论无法对应到正文段落——这是错误的。这一次请务必重新输出，并严格遵守以下格式：\n· 每条评论都要单独成行、以方括号段号开头，例如：\n[P3] 这段描写真细腻\n[P7] 这里埋了个伏笔\n· 绝对不要写成连贯的整篇总评；\n· 不要把段号混进句子里（写成「P16 里…」是错的，必须是行首的 [P16]）；\n· 挑几个你有感觉的段落，分别给出以 [P段号] 开头的评论。';
         // 共读模式默认人设（系统提示词框为空时静默兜底使用，不写入对话）
@@ -14431,12 +14431,12 @@ body {
             var toCompress = chatMessages.slice(chatCompressedCount || 0, compressEnd);
             var convId = chatCurrentConvId;
 
-            // 如果用户正在等评论（chatStreaming=true），暂停压缩让路，等评论完成后再继续
+            // 如果用户正在等评论/提问回答（chatStreaming 或 readingCommenting），暂停后台任务让路
             function _waitIfStreaming() {
-                if (!chatStreaming) return Promise.resolve();
+                if (!chatStreaming && !readingCommenting) return Promise.resolve();
                 return new Promise(function(resolve) {
                     var check = setInterval(function() {
-                        if (!chatStreaming) { clearInterval(check); resolve(); }
+                        if (!chatStreaming && !readingCommenting) { clearInterval(check); resolve(); }
                     }, 500);
                 });
             }
@@ -15538,6 +15538,7 @@ body {
             try {
                 for (var i = start; i <= curChap; i++) { // 含当前章：读完翻页后它就已经备好
                     if (chatCurrentConvId !== convAtStart || !chatReaderMode) break; // 中途切走就停
+                    await _waitIfStreaming(); // 提问优先：用户在等回答时暂停后台摘要
                     if (b.chapters[i] && (b.chapters[i].body || '').trim() && !readerSummaryGet(fileKey, i)) {
                         var w = await readerSummarizeChapterOnce(b, fileKey, i, mc);
                         if (w) wrote = true;
@@ -15545,6 +15546,7 @@ body {
                 }
                 // 远期记忆：有表格就更新表格，没有就折大纲（兼容旧数据）
                 if (chatCurrentConvId === convAtStart && chatReaderMode) {
+                    await _waitIfStreaming(); // 提问优先
                     var _mt = readerMemTablesGet(fileKey);
                     if (_mt || !readerOutlineGet(fileKey)) {
                         // 有表格 或 大纲也没有（全新）→ 走表格
@@ -15554,6 +15556,7 @@ body {
                         // 有大纲没表格 → 继续折大纲（老书兼容），同时首次建表
                         var ow = await readerUpdateOutline(fileKey, curChap, mc);
                         if (ow) wrote = true;
+                        await _waitIfStreaming(); // 提问优先
                         var tw2 = await readerUpdateMemoryTables(fileKey, curChap, mc);
                         if (tw2) wrote = true;
                     }
