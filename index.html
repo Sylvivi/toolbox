@@ -4463,6 +4463,7 @@ body {
                         <button onclick="clawdMenuAct('summary')">📋 摘要</button>
                         <button onclick="clawdMenuAct('shelf')">📚 目录</button>
                         <button onclick="clawdMenuAct('nextchap')">⏭️ 下一章</button>
+                        <button onclick="clawdMenuAct('usage')">💰 用量</button>
                         <button onclick="clawdMenuAct('model')">🦀 clawd</button>
                     </div>
                     <div class="reading-collapse-hint" id="readingCollapseHint" onclick="readingExpandInput()"><span class="reading-hint-motto" id="readingHintMotto"></span><span class="reading-progress-inline" id="readingProgressInline"></span></div>
@@ -10652,12 +10653,165 @@ body {
             return '新对话';
         }
 
+        /* ===== API 调用记账（用量 / 计费） =====
+         * 全站调用汇集在 chatStreamChat（后台小任务）和 chatDoRequest（主力流式）两处，
+         * 各装一个探针记下：时间、用途环节、模型、输入/输出 token、是否估算。
+         * token 优先用中转站返回的真实 usage，取不到则本地估算。花费在展示时按全局单价算。
+         * 全部只存本机 localStorage，不进云同步。 */
+        var API_LOG_CAP = 500;           // 明细最多留多少条（每条约 80 字节）
+        // 估算 token：复用 chatUpdateTokenHint 的公式（中文约 1.5/字，其它约 0.4/字符）
+        function estTokens(str) {
+            str = str || '';
+            var cjk = str.replace(/[^一-鿿㐀-䶿　-〿＀-￯]/g, '').length;
+            return Math.ceil(cjk * 1.5 + (str.length - cjk) * 0.4);
+        }
+        function apiLogLoad() { try { var a = JSON.parse(localStorage.getItem('toolbox_api_log') || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+        function apiLogSave(a) { try { localStorage.setItem('toolbox_api_log', JSON.stringify(a)); } catch (e) {} }
+        function apiAggLoad() {
+            try { var o = JSON.parse(localStorage.getItem('toolbox_api_agg') || 'null'); if (o && typeof o === 'object') return o; } catch (e) {}
+            return { calls: 0, inTok: 0, outTok: 0, byPurpose: {}, byModel: {}, since: Date.now() };
+        }
+        function apiAggSave(o) { try { localStorage.setItem('toolbox_api_agg', JSON.stringify(o)); } catch (e) {} }
+        function apiPriceLoad() {
+            try { var p = JSON.parse(localStorage.getItem('toolbox_api_price') || 'null'); if (p && typeof p === 'object') return { in: +p.in || 0, out: +p.out || 0 }; } catch (e) {}
+            return { in: 0, out: 0 };
+        }
+        function apiPriceSave(p) { try { localStorage.setItem('toolbox_api_price', JSON.stringify({ in: +p.in || 0, out: +p.out || 0 })); } catch (e) {} }
+        // 记一笔调用：写明细（超 API_LOG_CAP 截断）+ 累加聚合；面板开着就重渲
+        function apiLogRecord(purpose, model, inTok, outTok, est) {
+            inTok = Math.max(0, Math.round(inTok || 0));
+            outTok = Math.max(0, Math.round(outTok || 0));
+            if (!inTok && !outTok) return; // 空调用（中止且无内容）不记
+            purpose = purpose || '其它';
+            model = model || '未知';
+            var log = apiLogLoad();
+            log.push({ ts: Date.now(), purpose: purpose, model: model, inTok: inTok, outTok: outTok, est: !!est });
+            if (log.length > API_LOG_CAP) log = log.slice(log.length - API_LOG_CAP);
+            apiLogSave(log);
+            var agg = apiAggLoad();
+            agg.calls++; agg.inTok += inTok; agg.outTok += outTok;
+            if (!agg.byPurpose[purpose]) agg.byPurpose[purpose] = { calls: 0, inTok: 0, outTok: 0 };
+            agg.byPurpose[purpose].calls++; agg.byPurpose[purpose].inTok += inTok; agg.byPurpose[purpose].outTok += outTok;
+            if (!agg.byModel[model]) agg.byModel[model] = { calls: 0, inTok: 0, outTok: 0 };
+            agg.byModel[model].calls++; agg.byModel[model].inTok += inTok; agg.byModel[model].outTok += outTok;
+            apiAggSave(agg);
+            if (document.querySelector('.api-log-modal-mask')) apiLogRenderBody();
+        }
+        // 从流式 chunk 里抽 usage（兼容末尾空 choices 的统计块）；返回 {inTok,outTok} 或 null
+        function apiUsageFromChunk(chunk) {
+            var u = chunk && chunk.usage;
+            if (u && (u.prompt_tokens != null || u.completion_tokens != null)) {
+                return { inTok: u.prompt_tokens || 0, outTok: u.completion_tokens || 0 };
+            }
+            return null;
+        }
+        /* ===== 用量 / 计费面板 ===== */
+        function _apiCost(inTok, outTok, price) { return (inTok || 0) / 1e6 * (price.in || 0) + (outTok || 0) / 1e6 * (price.out || 0); }
+        function _apiMoney(n) { n = +n || 0; return n >= 1 ? n.toFixed(2) : n.toFixed(4); }
+        function _apiNum(n) { return (n || 0).toLocaleString(); }
+        function _apiTime(ts) { var d = new Date(ts), p = function (x) { return (x < 10 ? '0' : '') + x; }; return p(d.getMonth() + 1) + '/' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
+        function _apiEsc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
+        function apiSetPrice() {
+            var pin = document.getElementById('apiPriceIn'), pout = document.getElementById('apiPriceOut');
+            apiPriceSave({ in: pin ? pin.value : 0, out: pout ? pout.value : 0 });
+            apiLogRenderBody();
+        }
+        function apiClearLog() {
+            if (!confirm('清空所有用量记录？（价格设置会保留）')) return;
+            try { localStorage.removeItem('toolbox_api_log'); localStorage.removeItem('toolbox_api_agg'); } catch (e) {}
+            apiLogRenderBody();
+        }
+        function apiLogShowPanel() {
+            var existing = document.querySelector('.api-log-modal-mask');
+            if (existing) { existing.remove(); return; }
+            var mask = document.createElement('div');
+            mask.className = 'chat-summary-modal-mask api-log-modal-mask';
+            var modal = document.createElement('div');
+            modal.className = 'chat-summary-modal';
+            modal.innerHTML = '<div class="chat-summary-modal-header"><span>用量 / 计费</span><button onclick="this.closest(\'.api-log-modal-mask\').remove()">✕</button></div><div class="chat-summary-modal-body" id="apiLogBody"></div>';
+            mask.appendChild(modal);
+            mask.addEventListener('click', function (ev) { if (ev.target === mask) mask.remove(); });
+            document.body.appendChild(mask);
+            apiLogRenderBody();
+        }
+        function apiLogRenderBody() {
+            var bodyEl = document.getElementById('apiLogBody');
+            if (!bodyEl) return;
+            var price = apiPriceLoad();
+            var log = apiLogLoad();
+            var agg = apiAggLoad();
+            var noPrice = !price.in && !price.out;
+            // 今日合计（从明细里按当天 0 点起算）
+            var dayStart = new Date(); dayStart.setHours(0, 0, 0, 0); dayStart = dayStart.getTime();
+            var tIn = 0, tOut = 0, tCalls = 0;
+            for (var i = 0; i < log.length; i++) { if (log[i].ts >= dayStart) { tIn += log[i].inTok; tOut += log[i].outTok; tCalls++; } }
+            var todayCost = _apiCost(tIn, tOut, price), allCost = _apiCost(agg.inTok, agg.outTok, price);
+            var html = '';
+            // —— 价格编辑 ——
+            html += '<div style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px;padding:10px 12px;margin-bottom:10px">'
+                + '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">价格（每百万 token）</div>'
+                + '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
+                + '<label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px">输入 <input id="apiPriceIn" type="number" inputmode="decimal" min="0" step="0.01" value="' + (price.in || '') + '" onchange="apiSetPrice()" style="width:84px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:7px;padding:5px 8px;font-size:12px;color:var(--text);outline:none"></label>'
+                + '<label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px">输出 <input id="apiPriceOut" type="number" inputmode="decimal" min="0" step="0.01" value="' + (price.out || '') + '" onchange="apiSetPrice()" style="width:84px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:7px;padding:5px 8px;font-size:12px;color:var(--text);outline:none"></label>'
+                + '</div>'
+                + (noPrice ? '<div style="font-size:11px;color:var(--text-muted);margin-top:6px">填入价格后自动计费；单位跟你中转站的计价一致即可。</div>' : '')
+                + '</div>';
+            // —— 合计 ——
+            html += '<div style="display:flex;gap:8px;margin-bottom:10px">'
+                + '<div style="flex:1;background:var(--accent-light);border-radius:10px;padding:9px 10px;text-align:center">'
+                + '<div style="font-size:11px;color:var(--text-muted)">今日</div>'
+                + '<div style="font-size:16px;font-weight:700;color:var(--accent)">' + (noPrice ? '—' : '￥' + _apiMoney(todayCost)) + '</div>'
+                + '<div style="font-size:10px;color:var(--text-muted)">' + tCalls + ' 次 · ↑' + _apiNum(tIn) + ' ↓' + _apiNum(tOut) + '</div></div>'
+                + '<div style="flex:1;background:var(--accent-light);border-radius:10px;padding:9px 10px;text-align:center">'
+                + '<div style="font-size:11px;color:var(--text-muted)">累计</div>'
+                + '<div style="font-size:16px;font-weight:700;color:var(--accent)">' + (noPrice ? '—' : '￥' + _apiMoney(allCost)) + '</div>'
+                + '<div style="font-size:10px;color:var(--text-muted)">' + (agg.calls || 0) + ' 次 · ↑' + _apiNum(agg.inTok) + ' ↓' + _apiNum(agg.outTok) + '</div></div>'
+                + '</div>';
+            // —— 按环节 / 按模型 小计 ——
+            function breakdown(title, map) {
+                var keys = Object.keys(map || {});
+                if (!keys.length) return '';
+                keys.sort(function (a, b) { return _apiCost(map[b].inTok, map[b].outTok, price) - _apiCost(map[a].inTok, map[a].outTok, price) || (map[b].calls - map[a].calls); });
+                var s = '<div class="seg-label" style="margin:10px 0 4px">' + title + '</div>';
+                for (var k = 0; k < keys.length; k++) {
+                    var v = map[keys[k]], c = _apiCost(v.inTok, v.outTok, price);
+                    s += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:3px 0;border-bottom:1px solid var(--card-border)">'
+                        + '<span style="color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _apiEsc(keys[k]) + ' <span style="color:var(--text-muted);font-size:10px">' + v.calls + '次</span></span>'
+                        + '<span style="color:var(--accent);flex-shrink:0;margin-left:8px">' + (noPrice ? _apiNum(v.inTok + v.outTok) + ' tok' : '￥' + _apiMoney(c)) + '</span></div>';
+                }
+                return s;
+            }
+            html += breakdown('按环节', agg.byPurpose);
+            html += breakdown('按模型', agg.byModel);
+            // —— 明细（最近 100 条，倒序）——
+            html += '<div class="seg-label" style="margin:12px 0 4px">明细（最近 ' + Math.min(log.length, 100) + ' 条）</div>';
+            if (!log.length) {
+                html += '<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:10px 0">还没有调用记录。读书、提问、翻译时会自动记下来。</div>';
+            } else {
+                var shown = log.slice(Math.max(0, log.length - 100)).reverse();
+                for (var j = 0; j < shown.length; j++) {
+                    var r = shown[j], rc = _apiCost(r.inTok, r.outTok, price);
+                    html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;padding:5px 0;border-bottom:1px solid var(--card-border)">'
+                        + '<div style="min-width:0;flex:1">'
+                        + '<span style="color:var(--text);font-weight:600">' + _apiEsc(r.purpose) + '</span>'
+                        + '<span style="color:var(--text-muted);font-size:10px"> · ' + _apiTime(r.ts) + '</span>'
+                        + '<div style="color:var(--text-muted);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _apiEsc(r.model) + ' · ↑' + _apiNum(r.inTok) + ' ↓' + _apiNum(r.outTok) + (r.est ? ' · 约' : '') + '</div>'
+                        + '</div>'
+                        + '<span style="color:var(--accent);flex-shrink:0">' + (noPrice ? '' : '￥' + _apiMoney(rc)) + '</span>'
+                        + '</div>';
+                }
+            }
+            // —— 清空 ——
+            html += '<div style="text-align:center;padding-top:12px"><button onclick="apiClearLog()" style="background:none;border:1px solid var(--card-border);color:var(--text-muted);font-size:12px;padding:6px 16px;border-radius:8px;cursor:pointer">清空记录</button></div>';
+            bodyEl.innerHTML = html;
+        }
+
         /* ===== 统一流式请求 =====
          * 阅读/翻译/标题/压缩等辅助调用统一走流式（stream:true），逐块拼接 delta.content 后返回完整文本。
          * 很多中转站只支持流式、会拒绝 stream:false，故全部改用此函数兼容。
          * onDelta(已拼接文本) 可选，用于实时显示；不传则等拼完一次性返回。 */
         async function chatStreamChat(opts) {
-            var body = { model: opts.model, messages: opts.messages, stream: true };
+            var body = { model: opts.model, messages: opts.messages, stream: true, stream_options: { include_usage: true } };
             if (opts.max_tokens) body.max_tokens = opts.max_tokens;
             var resp = await fetch(opts.baseUrl + '/chat/completions', {
                 method: 'POST',
@@ -10674,6 +10828,7 @@ body {
             var decoder = new TextDecoder();
             var buffer = '';
             var full = '';
+            var _usage = null;
             while (true) {
                 var result = await reader.read();
                 if (result.done) break;
@@ -10692,9 +10847,20 @@ body {
                             full += delta.content;
                             if (opts.onDelta) opts.onDelta(full);
                         }
+                        var u = apiUsageFromChunk(chunk);
+                        if (u) _usage = u;
                     } catch (e) { /* 跳过不完整 / 非 JSON 的行 */ }
                 }
             }
+            // 记账：有真实 usage 用真实值，否则按 messages / 回复文本估算
+            try {
+                if (_usage) {
+                    apiLogRecord(opts.purpose, opts.model, _usage.inTok, _usage.outTok, false);
+                } else {
+                    var _inStr = (opts.messages || []).map(function (m) { return typeof m.content === 'string' ? m.content : ''; }).join('\n');
+                    apiLogRecord(opts.purpose, opts.model, estTokens(_inStr), estTokens(full), true);
+                }
+            } catch (e) { /* 记账失败不影响主流程 */ }
             return full;
         }
 
@@ -10731,6 +10897,7 @@ body {
             try {
                 var title = (await chatStreamChat({
                     baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel,
+                    purpose: '对话标题',
                     messages: [
                         { role: 'system', content: '根据以下对话内容生成一个简短的中文标题。要求：1.不超过15个字 2.纯文本，不要任何markdown格式、符号、引号、标点 3.直接输出标题文字' },
                         { role: 'user', content: summary }
@@ -12716,7 +12883,8 @@ body {
                     body: JSON.stringify({
                         model: chatSelectedModel,
                         messages: reqMsgs,
-                        stream: true
+                        stream: true,
+                        stream_options: { include_usage: true }
                     }),
                     signal: chatAbortCtrl.signal
                 });
@@ -12730,6 +12898,7 @@ body {
                 var reader = resp.body.getReader();
                 var decoder = new TextDecoder();
                 var buffer = '';
+                var _docUsage = null;   // 主力请求的真实 token 统计（中转站返回则有）
 
                 while (true) {
                     var result = await reader.read();
@@ -12745,6 +12914,8 @@ body {
                         if (payload === '[DONE]') continue;
                         try {
                             var chunk = JSON.parse(payload);
+                            var _du = apiUsageFromChunk(chunk);
+                            if (_du) _docUsage = _du;
                             var delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
                             if (!delta) continue;
                             // 思维链字段（覆盖各家中转站变体）
@@ -12809,6 +12980,17 @@ body {
                     else fullContent += _contentBuf;
                     _contentBuf = '';
                 }
+
+                // 记账：判用途环节 → 有真实 usage 用真实值，否则按 messages / 回复(含思维)估算
+                try {
+                    var _docPurpose = (chatReadingMode && _userSentChapter) ? '共读点评' : (chatTranslateMode ? '翻译' : '对话');
+                    if (_docUsage) {
+                        apiLogRecord(_docPurpose, chatSelectedModel, _docUsage.inTok, _docUsage.outTok, false);
+                    } else {
+                        var _docInStr = (reqMsgs || []).map(function (m) { return typeof m.content === 'string' ? m.content : ''; }).join('\n');
+                        apiLogRecord(_docPurpose, chatSelectedModel, estTokens(_docInStr), estTokens(fullContent + thinkContent), true);
+                    }
+                } catch (e) { /* 记账失败不影响主流程 */ }
 
                 // 共读模式：用户发了正文章节，但模型没按 [P段号] 格式输出（写成了整篇读后感）→ 自动用强化提示重试一次
                 if (chatReadingMode && fullContent && _userSentChapter && !readingModeHasMarkers(fullContent) && !_readingRetry) {
@@ -13835,6 +14017,7 @@ body {
             if (what === 'back') { chatBackToList(); return; }
             if (what === 'shelf') { rbOpenShelf(); return; }
             if (what === 'nextchap') { clawdNextChapter(); return; }
+            if (what === 'usage') { apiLogShowPanel(); return; }
             if (what === 'model') { chatOpenModelSheet(); return; }
             if (what === 'summary') { if (chatReaderMode) readerShowSummaryModal(); else chatShowSummaryModal(); return; }
             // 阅读/翻译模式下，书签/搜索/导航不再依赖横栏——直接浮出来，横栏始终不露面
@@ -14460,6 +14643,7 @@ body {
                     : '\n请用简洁的语言总结以上对话要点，保留关键信息（数据、决策、代码片段名、具体数值等），去除寒暄和重复。直接输出摘要，不要加前缀。';
                 var summary = await chatStreamChat({
                     baseUrl: _useBaseUrl, apiKey: _useApiKey, model: _useModel,
+                    purpose: isReading ? '共读摘要' : '对话摘要',
                     messages: [
                         { role: 'system', content: isReading ? '你是小说共读摘要助手。把当前章节浓缩成一段连贯、客观的剧情摘要：人物姓名、关键情节与伏笔不可省略；读者讨论只一句话带过。只输出纯摘要正文，不分小标题、不加粗、不写开场白或客套话。' : '你是对话摘要助手。简洁准确地总结内容，保留关键信息。控制在 300 字以内。' },
                         { role: 'user', content: prompt }
@@ -14481,7 +14665,7 @@ body {
                 var prompt = (chatCompressOutline ? '【现有大纲】：\n' + chatCompressOutline + '\n\n' : '')
                     + '【新增前情摘要】：\n' + toFold.join('\n\n') + '\n\n请输出更新后的大纲全文。';
                 var sum = await chatStreamChat({
-                    baseUrl: _useBaseUrl, apiKey: _useApiKey, model: _useModel, max_tokens: 1500,
+                    baseUrl: _useBaseUrl, apiKey: _useApiKey, model: _useModel, max_tokens: 1500, purpose: '共读大纲',
                     messages: [
                         { role: 'system', content: '你是长篇前情大纲维护助手。把现有大纲与新增摘要合并成一份更新后的大纲：主要人物（姓名、身份、关系）、主线进展、未解伏笔，按时间顺序；旧大纲里仍然重要的信息必须保留，不要丢人名。只输出大纲正文，不分小标题、不写开场白，控制在 800 字以内。' },
                         { role: 'user', content: prompt }
@@ -14533,7 +14717,7 @@ body {
                 var prompt = '【当前人物表】\n' + charMd + '\n\n【当前主线表】\n' + plotMd + '\n\n【新章节摘要】\n' + newSummaryText;
                 try {
                     var result = await chatStreamChat({
-                        baseUrl: _useBaseUrl, apiKey: _useApiKey, model: _useModel, max_tokens: 4000,
+                        baseUrl: _useBaseUrl, apiKey: _useApiKey, model: _useModel, max_tokens: 4000, purpose: '记忆表格',
                         messages: [
                             { role: 'system', content: '你是小说记忆表格维护助手。根据新章节摘要，更新下面两张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 主线表新事件加行，旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 已解决的伏笔如不再重要可删除，避免表格无限膨胀\n- 输出完整的两张 markdown 表格，先人物表再主线表，之间用空行分隔\n- 不要输出任何其他内容' },
                             { role: 'user', content: prompt }
@@ -15518,7 +15702,7 @@ body {
             if (body.length > 16000) body = body.slice(0, 16000) + '…';
             var p = chatStreamChat({
                 baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model,
-                max_tokens: 400,
+                max_tokens: 400, purpose: '阅读摘要',
                 messages: [
                     { role: 'system', content: '你是小说前情摘要助手。把给到的章节正文浓缩成一段连贯客观的剧情摘要：登场人物姓名、关键情节进展、重要设定与伏笔不可省略。只输出纯摘要正文，不分小标题、不加粗、不写开场白，控制在 150 字以内。' },
                     { role: 'user', content: '请概括这一章：\n\n' + body }
@@ -15601,7 +15785,7 @@ body {
                 var prompt = (o ? '【现有大纲】：\n' + o.sum + '\n\n' : '')
                     + '【新增章节摘要】：\n' + lines.join('\n') + '\n\n请输出更新后的大纲全文。';
                 var sum = await chatStreamChat({
-                    baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 1500,
+                    baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 1500, purpose: '阅读大纲',
                     messages: [
                         { role: 'system', content: '你是小说全书大纲维护助手。把现有大纲与新增章节摘要合并成一份更新后的大纲：主要人物（姓名、身份、关系）、主线剧情进展、未解伏笔，按时间顺序；旧大纲里仍然重要的信息必须保留，不要丢人名。只输出大纲正文，不分小标题、不写开场白，控制在 800 字以内。' },
                         { role: 'user', content: prompt }
@@ -15644,7 +15828,7 @@ body {
                 var plotMd = _readerRenderTableMd(_mtPlotCols, tables.plotlines);
                 var prompt = '【当前人物表】\n' + charMd + '\n\n【当前主线表】\n' + plotMd + '\n\n【新章节摘要】\n' + newSums.join('\n');
                 var result = await chatStreamChat({
-                    baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 4000,
+                    baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 4000, purpose: '阅读记忆表格',
                     messages: [
                         { role: 'system', content: '你是小说记忆表格维护助手。根据新章节摘要，更新下面两张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 主线表新事件加行，旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 已解决的伏笔如不再重要可删除，避免表格无限膨胀\n- 输出完整的两张 markdown 表格，先人物表再主线表，之间用空行分隔\n- 不要输出任何其他内容' },
                         { role: 'user', content: prompt }
@@ -16842,6 +17026,7 @@ body {
                 if (!_spOne) _spOne = READING_MODE_DEFAULT_PERSONA;
                 var content = (await chatStreamChat({
                     baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel,
+                    purpose: '共读点评',
                     messages: [
                         { role: 'system', content: _spOne + '\n\n' + READING_MODE_INSTRUCTION },
                         { role: 'user', content: userMsg }
@@ -16951,6 +17136,7 @@ body {
                 _askMsgs.push({ role: 'user', content: userMsg });
                 var answer = (await chatStreamChat({
                     baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel,
+                    purpose: '共读提问',
                     messages: _askMsgs,
                     signal: readingAbortCtl.signal
                 })).trim();
@@ -17144,6 +17330,7 @@ body {
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
                 var answer = (await chatStreamChat({
                     baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel,
+                    purpose: '翻译',
                     messages: [
                         { role: 'system', content: TRANSLATE_MODE_INSTRUCTION },
                         { role: 'user', content: segment }
@@ -17265,6 +17452,7 @@ body {
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
                 var answer = (await chatStreamChat({
                     baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel,
+                    purpose: '翻译追问',
                     messages: [
                         { role: 'system', content: sysPrompt },
                         { role: 'user', content: userMsg }
