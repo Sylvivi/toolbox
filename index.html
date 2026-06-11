@@ -10677,7 +10677,7 @@ body {
         function apiLogSave(a) { try { localStorage.setItem('toolbox_api_log', JSON.stringify(a)); } catch (e) {} }
         function apiAggLoad() {
             try { var o = JSON.parse(localStorage.getItem('toolbox_api_agg') || 'null'); if (o && typeof o === 'object') return o; } catch (e) {}
-            return { calls: 0, inTok: 0, outTok: 0, byPurpose: {}, byModel: {}, since: Date.now() };
+            return { calls: 0, inTok: 0, outTok: 0, byPurpose: {}, byModel: {}, byPurposeModel: {}, since: Date.now() };
         }
         function apiAggSave(o) { try { localStorage.setItem('toolbox_api_agg', JSON.stringify(o)); } catch (e) {} }
         function apiPriceLoad() {
@@ -10702,6 +10702,10 @@ body {
             agg.byPurpose[purpose].calls++; agg.byPurpose[purpose].inTok += inTok; agg.byPurpose[purpose].outTok += outTok;
             if (!agg.byModel[model]) agg.byModel[model] = { calls: 0, inTok: 0, outTok: 0 };
             agg.byModel[model].calls++; agg.byModel[model].inTok += inTok; agg.byModel[model].outTok += outTok;
+            // purpose+model 组合用于按环节计费（每个环节可能用了不同价位的模型）
+            var pmKey = purpose + '|' + model;
+            if (!agg.byPurposeModel[pmKey]) agg.byPurposeModel[pmKey] = { calls: 0, inTok: 0, outTok: 0 };
+            agg.byPurposeModel[pmKey].calls++; agg.byPurposeModel[pmKey].inTok += inTok; agg.byPurposeModel[pmKey].outTok += outTok;
             apiAggSave(agg);
             if (document.querySelector('.api-log-modal-mask')) apiLogRenderBody();
         }
@@ -10715,6 +10719,34 @@ body {
         }
         /* ===== 用量 / 计费面板 ===== */
         function _apiCost(inTok, outTok, price) { return (inTok || 0) / 1e6 * (price.in || 0) + (outTok || 0) / 1e6 * (price.out || 0); }
+        // 找收藏模型配的单价：按量 {mode:'token',in,out}（每百万 token）或 按次 {mode:'call',per}（元/次）；没配返回 null
+        function _apiModelPrice(model) {
+            for (var i = 0; i < chatFavModels.length; i++) {
+                var f = chatFavModels[i];
+                if (f.model === model && f.price && f.price.mode) return f.price;
+            }
+            return null;
+        }
+        // 一组调用的花费：优先用模型自己的单价（按量/按次），没配就退回全局默认价（按量）
+        function _apiCostOf(model, inTok, outTok, calls, gp) {
+            var p = _apiModelPrice(model);
+            if (p) {
+                if (p.mode === 'call') return (+p.per || 0) * (calls || 0);
+                return (inTok || 0) / 1e6 * (+p.in || 0) + (outTok || 0) / 1e6 * (+p.out || 0);
+            }
+            return (inTok || 0) / 1e6 * (gp.in || 0) + (outTok || 0) / 1e6 * (gp.out || 0);
+        }
+        // 是否存在任何价格（全局默认价 或 某个收藏模型配了价）；都没有时面板显示 token 数而非金额
+        function _apiHasAnyPrice(gp) {
+            if (gp.in || gp.out) return true;
+            for (var i = 0; i < chatFavModels.length; i++) {
+                var f = chatFavModels[i];
+                if (f.price && f.price.mode) {
+                    if (f.price.mode === 'call' ? (+f.price.per) : (+f.price.in || +f.price.out)) return true;
+                }
+            }
+            return false;
+        }
         function _apiMoney(n) { n = +n || 0; return n >= 1 ? n.toFixed(2) : n.toFixed(4); }
         function _apiNum(n) { return (n || 0).toLocaleString(); }
         function _apiTime(ts) { var d = new Date(ts), p = function (x) { return (x < 10 ? '0' : '') + x; }; return p(d.getMonth() + 1) + '/' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
@@ -10745,54 +10777,102 @@ body {
         function apiLogRenderBody() {
             var bodyEl = document.getElementById('apiLogBody');
             if (!bodyEl) return;
-            var price = apiPriceLoad();
+            var gp = apiPriceLoad();
             var log = apiLogLoad();
-            var _pruned = apiLogPrune(log);          // 打开面板时也清一遍过期记录
+            var _pruned = apiLogPrune(log);
             if (_pruned.length !== log.length) { log = _pruned; apiLogSave(log); }
             var agg = apiAggLoad();
-            var noPrice = !price.in && !price.out;
-            // 今日合计（从明细里按当天 0 点起算）
+            var noPrice = !gp.in && !gp.out;
+            var hasAnyPrice = _apiHasAnyPrice(gp);
+            // 今日合计（按明细重新算，以便用模型各自单价；明细里已有 byPurposeModel，可直接复用）
             var dayStart = new Date(); dayStart.setHours(0, 0, 0, 0); dayStart = dayStart.getTime();
-            var tIn = 0, tOut = 0, tCalls = 0;
-            for (var i = 0; i < log.length; i++) { if (log[i].ts >= dayStart) { tIn += log[i].inTok; tOut += log[i].outTok; tCalls++; } }
-            var todayCost = _apiCost(tIn, tOut, price), allCost = _apiCost(agg.inTok, agg.outTok, price);
+            var tCalls = 0, todayCost = 0;
+            for (var i = 0; i < log.length; i++) {
+                if (log[i].ts >= dayStart) {
+                    tCalls++;
+                    var mp = _apiModelPrice(log[i].model);
+                    if (mp && mp.mode === 'call') { todayCost += +mp.per || 0; }
+                    else {
+                        var pi = mp ? +mp.in : +gp.in || 0, po = mp ? +mp.out : +gp.out || 0;
+                        todayCost += (log[i].inTok || 0) / 1e6 * pi + (log[i].outTok || 0) / 1e6 * po;
+                    }
+                }
+            }
+            var allCost = _apiCost(agg.inTok, agg.outTok, gp);
+            // 全局默认的 byPurpose 合计只能降级用 gp，故也加一个按模型累计的精确 total
+            var modelTotalCost = 0;
+            var modelKeys = Object.keys(agg.byModel || {});
+            for (var mk = 0; mk < modelKeys.length; mk++) {
+                var mv = agg.byModel[modelKeys[mk]];
+                modelTotalCost += _apiCostOf(modelKeys[mk], mv.inTok, mv.outTok, mv.calls, gp);
+            }
             var html = '';
-            // —— 价格编辑 ——
+            // —— 价格编辑：说明按量 / 按次 两套模式 ——
             html += '<div style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px;padding:10px 12px;margin-bottom:10px">'
-                + '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">价格（每百万 token）</div>'
+                + '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">默认价（每百万 token）</div>'
                 + '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
-                + '<label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px">输入 <input id="apiPriceIn" type="number" inputmode="decimal" min="0" step="0.01" value="' + (price.in || '') + '" onchange="apiSetPrice()" style="width:84px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:7px;padding:5px 8px;font-size:12px;color:var(--text);outline:none"></label>'
-                + '<label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px">输出 <input id="apiPriceOut" type="number" inputmode="decimal" min="0" step="0.01" value="' + (price.out || '') + '" onchange="apiSetPrice()" style="width:84px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:7px;padding:5px 8px;font-size:12px;color:var(--text);outline:none"></label>'
+                + '<label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px">输入 <input id="apiPriceIn" type="number" inputmode="decimal" min="0" step="0.01" value="' + (gp.in || '') + '" onchange="apiSetPrice()" style="width:84px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:7px;padding:5px 8px;font-size:12px;color:var(--text);outline:none"></label>'
+                + '<label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px">输出 <input id="apiPriceOut" type="number" inputmode="decimal" min="0" step="0.01" value="' + (gp.out || '') + '" onchange="apiSetPrice()" style="width:84px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:7px;padding:5px 8px;font-size:12px;color:var(--text);outline:none"></label>'
                 + '</div>'
-                + (noPrice ? '<div style="font-size:11px;color:var(--text-muted);margin-top:6px">填入价格后自动计费；单位跟你中转站的计价一致即可。</div>' : '')
+                + '<div style="font-size:11px;color:var(--text-muted);margin-top:6px">收藏模型可在「✨ 收藏」里单独设置价格（按量或按次），优先于本默认值。</div>'
                 + '</div>';
-            // —— 合计 ——
+            // —— 合计：累计用精确模型累计，今日用明细逐条算（明细里有 byPurposeModel）——
             html += '<div style="display:flex;gap:8px;margin-bottom:10px">'
                 + '<div style="flex:1;background:var(--accent-light);border-radius:10px;padding:9px 10px;text-align:center">'
                 + '<div style="font-size:11px;color:var(--text-muted)">今日</div>'
-                + '<div style="font-size:16px;font-weight:700;color:var(--accent)">' + (noPrice ? '—' : '￥' + _apiMoney(todayCost)) + '</div>'
-                + '<div style="font-size:10px;color:var(--text-muted)">' + tCalls + ' 次 · ↑' + _apiNum(tIn) + ' ↓' + _apiNum(tOut) + '</div></div>'
+                + '<div style="font-size:16px;font-weight:700;color:var(--accent)">' + (hasAnyPrice ? '￥' + _apiMoney(todayCost) : '—') + '</div>'
+                + '<div style="font-size:10px;color:var(--text-muted)">' + tCalls + ' 次</div></div>'
                 + '<div style="flex:1;background:var(--accent-light);border-radius:10px;padding:9px 10px;text-align:center">'
                 + '<div style="font-size:11px;color:var(--text-muted)">累计</div>'
-                + '<div style="font-size:16px;font-weight:700;color:var(--accent)">' + (noPrice ? '—' : '￥' + _apiMoney(allCost)) + '</div>'
-                + '<div style="font-size:10px;color:var(--text-muted)">' + (agg.calls || 0) + ' 次 · ↑' + _apiNum(agg.inTok) + ' ↓' + _apiNum(agg.outTok) + '</div></div>'
+                + '<div style="font-size:16px;font-weight:700;color:var(--accent)">' + (hasAnyPrice ? '￥' + _apiMoney(modelTotalCost) : '—') + '</div>'
+                + '<div style="font-size:10px;color:var(--text-muted)">' + (agg.calls || 0) + ' 次</div></div>'
                 + '</div>';
-            // —— 按环节 / 按模型 小计 ——
-            function breakdown(title, map) {
+            // —— 按模型小计（精确）——
+            function breakdownModel(title, map) {
                 var keys = Object.keys(map || {});
                 if (!keys.length) return '';
-                keys.sort(function (a, b) { return _apiCost(map[b].inTok, map[b].outTok, price) - _apiCost(map[a].inTok, map[a].outTok, price) || (map[b].calls - map[a].calls); });
+                keys.sort(function (a, b) {
+                    var ca = _apiCostOf(a, map[a].inTok, map[a].outTok, map[a].calls, gp);
+                    var cb = _apiCostOf(b, map[b].inTok, map[b].outTok, map[b].calls, gp);
+                    return cb - ca || (map[b].calls - map[a].calls);
+                });
                 var s = '<div class="seg-label" style="margin:10px 0 4px">' + title + '</div>';
                 for (var k = 0; k < keys.length; k++) {
-                    var v = map[keys[k]], c = _apiCost(v.inTok, v.outTok, price);
+                    var v = map[keys[k]];
+                    var mp = _apiModelPrice(keys[k]);
+                    var label = mp ? (mp.mode === 'call' ? '按次' : '按量') : '默认';
+                    var c = _apiCostOf(keys[k], v.inTok, v.outTok, v.calls, gp);
                     s += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:3px 0;border-bottom:1px solid var(--card-border)">'
-                        + '<span style="color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _apiEsc(keys[k]) + ' <span style="color:var(--text-muted);font-size:10px">' + v.calls + '次</span></span>'
-                        + '<span style="color:var(--accent);flex-shrink:0;margin-left:8px">' + (noPrice ? _apiNum(v.inTok + v.outTok) + ' tok' : '￥' + _apiMoney(c)) + '</span></div>';
+                        + '<span style="color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _apiEsc(keys[k]) + ' <span style="color:var(--text-muted);font-size:10px">[' + label + '] ' + v.calls + '次</span></span>'
+                        + '<span style="color:var(--accent);flex-shrink:0;margin-left:8px">' + (hasAnyPrice ? '￥' + _apiMoney(c) : _apiNum(v.inTok + v.outTok) + ' tok') + '</span></div>';
                 }
                 return s;
             }
-            html += breakdown('按环节', agg.byPurpose);
-            html += breakdown('按模型', agg.byModel);
+            // —— 按环节小计：用 byPurposeModel 组合键精确计费（显示时隐藏模型名）——
+            function breakdownPurpose(title, map) {
+                var keys = Object.keys(map || {});
+                if (!keys.length) return '';
+                keys.sort(function (a, b) {
+                    var ca = _apiCostOf(a.split('|')[1] || '', map[a].inTok, map[a].outTok, map[a].calls, gp);
+                    var cb = _apiCostOf(b.split('|')[1] || '', map[b].inTok, map[b].outTok, map[b].calls, gp);
+                    return cb - ca || (map[b].calls - map[a].calls);
+                });
+                var s = '<div class="seg-label" style="margin:10px 0 4px">' + title + '</div>';
+                for (var k = 0; k < keys.length; k++) {
+                    var v = map[keys[k]];
+                    var parts = keys[k].split('|');
+                    var purposeName = parts[0], modelName = parts[1] || '';
+                    var c = _apiCostOf(modelName, v.inTok, v.outTok, v.calls, gp);
+                    var tag = _apiModelPrice(modelName);
+                    var tagLabel = tag ? (tag.mode === 'call' ? '按次' : '按量') : '默认';
+                    s += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:3px 0;border-bottom:1px solid var(--card-border)">'
+                        + '<span style="color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _apiEsc(purposeName) + ' <span style="color:var(--text-muted);font-size:10px">[' + tagLabel + '] ' + v.calls + '次</span></span>'
+                        + '<span style="color:var(--accent);flex-shrink:0;margin-left:8px">' + (hasAnyPrice ? '￥' + _apiMoney(c) : _apiNum(v.inTok + v.outTok) + ' tok') + '</span></div>';
+                }
+                return s;
+            }
+            html += breakdownPurpose('按环节', agg.byPurposeModel || {});
+            html += breakdownModel('按模型', agg.byModel);
             // —— 明细（最近 100 条，倒序）——
             html += '<div class="seg-label" style="margin:12px 0 4px">明细（最近 ' + Math.min(log.length, 100) + ' 条）</div>';
             if (!log.length) {
@@ -10800,14 +10880,23 @@ body {
             } else {
                 var shown = log.slice(Math.max(0, log.length - 100)).reverse();
                 for (var j = 0; j < shown.length; j++) {
-                    var r = shown[j], rc = _apiCost(r.inTok, r.outTok, price);
+                    var r = shown[j];
+                    var mp2 = _apiModelPrice(r.model);
+                    var rc = 0;
+                    var isCall = mp2 && mp2.mode === 'call';
+                    if (isCall) { rc = +mp2.per || 0; }
+                    else {
+                        var pi2 = mp2 ? +mp2.in : +gp.in || 0, po2 = mp2 ? +mp2.out : +gp.out || 0;
+                        rc = (r.inTok || 0) / 1e6 * pi2 + (r.outTok || 0) / 1e6 * po2;
+                    }
+                    var detailLabel = isCall ? '按次' : (mp2 ? '按量' : '默认');
                     html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;padding:5px 0;border-bottom:1px solid var(--card-border)">'
                         + '<div style="min-width:0;flex:1">'
                         + '<span style="color:var(--text);font-weight:600">' + _apiEsc(r.purpose) + '</span>'
                         + '<span style="color:var(--text-muted);font-size:10px"> · ' + _apiTime(r.ts) + '</span>'
-                        + '<div style="color:var(--text-muted);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _apiEsc(r.model) + ' · ↑' + _apiNum(r.inTok) + ' ↓' + _apiNum(r.outTok) + (r.est ? ' · 约' : '') + '</div>'
+                        + '<div style="color:var(--text-muted);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">[' + detailLabel + '] ' + _apiEsc(r.model) + ' · ↑' + _apiNum(r.inTok) + ' ↓' + _apiNum(r.outTok) + (r.est ? ' · 约' : '') + '</div>'
                         + '</div>'
-                        + '<span style="color:var(--accent);flex-shrink:0">' + (noPrice ? '' : '￥' + _apiMoney(rc)) + '</span>'
+                        + '<span style="color:var(--accent);flex-shrink:0">' + (hasAnyPrice ? '￥' + _apiMoney(rc) : '') + '</span>'
                         + '</div>';
                 }
             }
@@ -12136,6 +12225,14 @@ body {
                             noteSpan.textContent = '📝 ' + fav.note;
                             nameWrap.appendChild(noteSpan);
                         }
+                        // 价格标签
+                        if (fav.price && fav.price.mode) {
+                            var priceSpan = document.createElement('span');
+                            priceSpan.style.cssText = 'font-size:11px;color:var(--gold);margin-left:5px;';
+                            priceSpan.textContent = fav.price.mode === 'call' ? '💳 ' + fav.price.per + '/次' : '💰';
+                            priceSpan.title = fav.price.mode === 'call' ? '按次计费' : '按量计费';
+                            nameWrap.appendChild(priceSpan);
+                        }
                         row.appendChild(nameWrap);
                         // 备注编辑铅笔
                         var edit = document.createElement('span');
@@ -12155,20 +12252,84 @@ body {
                 }
             }
         }
-        // 给收藏的模型加/改备注（如「好用」「贵」「写作首选」）。留空即删除备注。
+        // 改备注 & 价格弹窗
         function chatSetFavNote(url, model) {
             var target = null;
             for (var i = 0; i < chatFavModels.length; i++) {
                 if (chatFavModels[i].url === url && chatFavModels[i].model === model) { target = chatFavModels[i]; break; }
             }
             if (!target) return;
-            var v = prompt('给「' + model + '」加备注（例：好用 / 贵 / 写作首选）。留空清除备注：', target.note || '');
-            if (v === null) return; // 用户取消
-            v = v.trim();
-            if (v) target.note = v; else delete target.note;
-            localStorage.setItem('chat_fav_models', JSON.stringify(chatFavModels));
-            chatRenderFavSection();
-            chatUpdateFavHeader();
+            var existing = document.querySelector('.fav-note-modal-mask');
+            if (existing) existing.remove();
+            var p = target.price || {};
+            var curMode = p.mode || 'token';
+            var mask = document.createElement('div');
+            mask.className = 'chat-summary-modal-mask fav-note-modal-mask';
+            var modal = document.createElement('div');
+            modal.className = 'chat-summary-modal';
+            modal.innerHTML = '<div class="chat-summary-modal-header"><span>✨ ' + _esc(model) + '</span><button onclick="this.closest(\'.fav-note-modal-mask\').remove()">✕</button></div>'
+                + '<div class="chat-summary-modal-body" id="favNoteBody"></div>';
+            mask.appendChild(modal);
+            mask.addEventListener('click', function (ev) { if (ev.target === mask) mask.remove(); });
+            document.body.appendChild(mask);
+            var bodyEl = document.getElementById('favNoteBody');
+            function _esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+            function render() {
+                var p2 = target.price || {};
+                var m = p2.mode || 'token';
+                var html = '';
+                html += '<div style="margin-bottom:14px">'
+                    + '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">备注</div>'
+                    + '<input id="fnNote" type="text" value="' + _esc(target.note || '') + '" placeholder="如：好用 / 写作首选 / 贵" style="width:100%;padding:8px 10px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box">'
+                    + '</div>';
+                html += '<div style="margin-bottom:14px">'
+                    + '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">价格</div>';
+                html += '<div style="display:flex;gap:6px;margin-bottom:8px">';
+                html += '<button id="fnModeToken" onclick="favNoteSetMode(\'token\')" style="flex:1;padding:7px 0;border:1px solid var(--card-border);border-radius:8px;font-size:12px;cursor:pointer;background:' + (m === 'token' ? 'var(--accent-light)' : 'transparent') + ';color:' + (m === 'token' ? 'var(--accent)' : 'var(--text-muted)') + ';font-weight:' + (m === 'token' ? '600' : '400') + '">按量（元/百万 token）</button>';
+                html += '<button id="fnModeCall" onclick="favNoteSetMode(\'call\')" style="flex:1;padding:7px 0;border:1px solid var(--card-border);border-radius:8px;font-size:12px;cursor:pointer;background:' + (m === 'call' ? 'var(--accent-light)' : 'transparent') + ';color:' + (m === 'call' ? 'var(--accent)' : 'var(--text-muted)') + ';font-weight:' + (m === 'call' ? '600' : '400') + '">按次（元/次）</button>';
+                html += '</div>';
+                if (m === 'token') {
+                    html += '<div style="display:flex;gap:8px">'
+                        + '<input id="fnIn" type="number" inputmode="decimal" min="0" step="0.01" placeholder="输入单价" value="' + (p2.in || '') + '" style="flex:1;padding:8px 10px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none">'
+                        + '<input id="fnOut" type="number" inputmode="decimal" min="0" step="0.01" placeholder="输出单价" value="' + (p2.out || '') + '" style="flex:1;padding:8px 10px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none">'
+                        + '</div>';
+                } else {
+                    html += '<input id="fnPer" type="number" inputmode="decimal" min="0" step="0.001" placeholder="每次调用价格（元）" value="' + (p2.per || '') + '" style="width:100%;padding:8px 10px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box">';
+                }
+                html += '<div style="font-size:11px;color:var(--text-muted);margin-top:5px">不填价格则使用「默认价」；设置了价格后优先于默认值。</div>';
+                html += '</div>';
+                html += '<div style="text-align:center;margin-top:4px">'
+                    + '<button onclick="favNoteSave()" style="padding:9px 32px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">保存</button>'
+                    + '</div>';
+                bodyEl.innerHTML = html;
+            }
+            window.favNoteSetMode = function (mode) {
+                if (!target.price) target.price = {};
+                target.price.mode = mode;
+                render();
+            };
+            window.favNoteSave = function () {
+                var noteVal = document.getElementById('fnNote').value.trim();
+                if (noteVal) target.note = noteVal; else delete target.note;
+                var m = (target.price && target.price.mode) ? target.price.mode : 'token';
+                var inp = document.getElementById('fnIn'), outp = document.getElementById('fnOut'), perk = document.getElementById('fnPer');
+                if (m === 'token') {
+                    var hasIn = inp && inp.value.trim();
+                    var hasOut = outp && outp.value.trim();
+                    if (hasIn || hasOut) {
+                        target.price = { mode: 'token', in: hasIn ? +inp.value : 0, out: hasOut ? +outp.value : 0 };
+                    } else { delete target.price; }
+                } else {
+                    var pk = perk && perk.value.trim();
+                    if (pk) target.price = { mode: 'call', per: +pk };
+                    else delete target.price;
+                }
+                localStorage.setItem('chat_fav_models', JSON.stringify(chatFavModels));
+                mask.remove();
+                chatRenderFavSection();
+                chatUpdateFavHeader();
+            };
+            render();
         }
 
         /* ----- 设置弹窗 ----- */
@@ -15152,10 +15313,10 @@ body {
         // 注意：传入的是已 esc 的文本（无 < > 标签），直接正则包裹安全。
         function readingHighlightQuotes(s) {
             if (!s) return s;
-            // 长句给「外层」引号加 rq-wide（≥18 字算长句）：分工态下短句用装饰、长句整段着色。
+            // 长句给「外层」引号加 rq-wide（≥16 字算长句）：分工态下短句用装饰、长句整段着色。
             // 标记放外层是为了让长句着色能连引号符号「」一起变色，和「着色」开关效果一致。
             function rqWrap(open, inner, close) {
-                var wide = inner.replace(/&[a-z]+;/g, ' ').length >= 18 ? ' rq-wide' : '';
+                var wide = inner.replace(/&[a-z]+;/g, ' ').length >= 16 ? ' rq-wide' : '';
                 return '<span class="reading-quote' + wide + '">' + open + '<span class="reading-quote-inner">' + inner + '</span>' + close + '</span>';
             }
             // 成对引号：「」『』 “” ，以及英文直引号 &quot;…&quot;（esc 后）
