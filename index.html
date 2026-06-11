@@ -10658,7 +10658,15 @@ body {
          * 各装一个探针记下：时间、用途环节、模型、输入/输出 token、是否估算。
          * token 优先用中转站返回的真实 usage，取不到则本地估算。花费在展示时按全局单价算。
          * 全部只存本机 localStorage，不进云同步。 */
-        var API_LOG_CAP = 500;           // 明细最多留多少条（每条约 80 字节）
+        var API_LOG_CAP = 1000;          // 明细硬上限（兜底，防异常暴涨）
+        var API_LOG_DAYS = 3;            // 明细只保留近几天，更早的自动删（累计聚合不受影响，照常累加）
+        // 明细清理：丢掉超过 API_LOG_DAYS 天的记录，再套硬上限
+        function apiLogPrune(arr) {
+            var cutoff = Date.now() - API_LOG_DAYS * 86400000;
+            var out = arr.filter(function (r) { return r && r.ts >= cutoff; });
+            if (out.length > API_LOG_CAP) out = out.slice(out.length - API_LOG_CAP);
+            return out;
+        }
         // 估算 token：复用 chatUpdateTokenHint 的公式（中文约 1.5/字，其它约 0.4/字符）
         function estTokens(str) {
             str = str || '';
@@ -10686,7 +10694,7 @@ body {
             model = model || '未知';
             var log = apiLogLoad();
             log.push({ ts: Date.now(), purpose: purpose, model: model, inTok: inTok, outTok: outTok, est: !!est });
-            if (log.length > API_LOG_CAP) log = log.slice(log.length - API_LOG_CAP);
+            log = apiLogPrune(log);
             apiLogSave(log);
             var agg = apiAggLoad();
             agg.calls++; agg.inTok += inTok; agg.outTok += outTok;
@@ -10739,6 +10747,8 @@ body {
             if (!bodyEl) return;
             var price = apiPriceLoad();
             var log = apiLogLoad();
+            var _pruned = apiLogPrune(log);          // 打开面板时也清一遍过期记录
+            if (_pruned.length !== log.length) { log = _pruned; apiLogSave(log); }
             var agg = apiAggLoad();
             var noPrice = !price.in && !price.out;
             // 今日合计（从明细里按当天 0 点起算）
