@@ -14236,30 +14236,28 @@ body {
                         }).join('')
                         + '</div></div>';
                 }
-                // 人物表
-                if (chatMemoryTables.characters.length) {
-                    body += '<div class="seg" style="padding-bottom:6px">'
-                        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
-                        + '<span class="seg-label" style="margin:0">👤 人物表 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + chatMemoryTables.characters.length + ' 人</span></span>'
-                        + '<button onclick="chatAddMtRow(\'characters\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
-                        + '</div>';
-                    for (var ci = 0; ci < chatMemoryTables.characters.length; ci++) {
-                        body += _mtRowHtml('characters', chatMemoryTables.characters[ci], ci, _mtCharCols);
-                    }
-                    body += '</div>';
+                // 人物表（即使为空也显示标题和添加按钮，方便手动加回）
+                body += '<div class="seg" style="padding-bottom:6px">'
+                    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
+                    + '<span class="seg-label" style="margin:0">👤 人物表 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + chatMemoryTables.characters.length + ' 人</span></span>'
+                    + '<button onclick="chatAddMtRow(\'characters\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
+                    + '</div>';
+                for (var ci = 0; ci < chatMemoryTables.characters.length; ci++) {
+                    body += _mtRowHtml('characters', chatMemoryTables.characters[ci], ci, _mtCharCols);
                 }
+                if (!chatMemoryTables.characters.length) body += '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">暂无数据，下次生成摘要时自动填充</div>';
+                body += '</div>';
                 // 主线表
-                if (chatMemoryTables.plotlines.length) {
-                    body += '<div class="seg" style="padding-bottom:6px">'
-                        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
-                        + '<span class="seg-label" style="margin:0">📖 主线/伏笔 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + chatMemoryTables.plotlines.length + ' 条</span></span>'
-                        + '<button onclick="chatAddMtRow(\'plotlines\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
-                        + '</div>';
-                    for (var pi = 0; pi < chatMemoryTables.plotlines.length; pi++) {
-                        body += _mtRowHtml('plotlines', chatMemoryTables.plotlines[pi], pi, _mtPlotCols);
-                    }
-                    body += '</div>';
+                body += '<div class="seg" style="padding-bottom:6px">'
+                    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
+                    + '<span class="seg-label" style="margin:0">📖 主线/伏笔 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + chatMemoryTables.plotlines.length + ' 条</span></span>'
+                    + '<button onclick="chatAddMtRow(\'plotlines\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
+                    + '</div>';
+                for (var pi = 0; pi < chatMemoryTables.plotlines.length; pi++) {
+                    body += _mtRowHtml('plotlines', chatMemoryTables.plotlines[pi], pi, _mtPlotCols);
                 }
+                if (!chatMemoryTables.plotlines.length) body += '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">暂无数据，下次生成摘要时自动填充</div>';
+                body += '</div>';
             }
             // 旧的自由文本大纲（兼容旧对话）
             else if (chatCompressOutline) {
@@ -14534,20 +14532,32 @@ body {
                 var prompt = '【当前人物表】\n' + charMd + '\n\n【当前主线表】\n' + plotMd + '\n\n【新章节摘要】\n' + newSummaryText;
                 try {
                     var result = await chatStreamChat({
-                        baseUrl: _useBaseUrl, apiKey: _useApiKey, model: _useModel, max_tokens: 2000,
+                        baseUrl: _useBaseUrl, apiKey: _useApiKey, model: _useModel, max_tokens: 4000,
                         messages: [
-                            { role: 'system', content: '你是小说记忆表格维护助手。根据新章节摘要，更新下面两张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 主线表新事件加行，旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 输出完整的两张 markdown 表格，先人物表再主线表，之间用空行分隔\n- 不要输出任何其他内容' },
+                            { role: 'system', content: '你是小说记忆表格维护助手。根据新章节摘要，更新下面两张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 主线表新事件加行，旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 已解决的伏笔如不再重要可删除，避免表格无限膨胀\n- 输出完整的两张 markdown 表格，先人物表再主线表，之间用空行分隔\n- 不要输出任何其他内容' },
                             { role: 'user', content: prompt }
                         ]
                     });
                     if (!result || chatCurrentConvId !== convId) return;
-                    // 解析两张表：按「主线表」或第二个表头分割
-                    var parts = result.split(/\n{2,}/);
+                    // 解析两张表：找到包含主线表表头行（同时含「事件」和「已解决」两列）的位置分割
+                    var _lines = result.split('\n');
                     var charPart = '', plotPart = '';
-                    var foundPlot = false;
-                    for (var p = 0; p < parts.length; p++) {
-                        if (parts[p].indexOf('事件') >= 0 || parts[p].indexOf('主线') >= 0 || parts[p].indexOf('已解决') >= 0) foundPlot = true;
-                        if (foundPlot) plotPart += parts[p] + '\n'; else charPart += parts[p] + '\n';
+                    var _splitAt = -1;
+                    for (var _li = 0; _li < _lines.length; _li++) {
+                        var _line = _lines[_li];
+                        // 表头行：同时包含「事件」和「已解决」才认定为主线表头（避免单个关键词误判）
+                        if (_line.indexOf('|') >= 0 && _line.indexOf('事件') >= 0 && _line.indexOf('已解决') >= 0) {
+                            _splitAt = _li; break;
+                        }
+                    }
+                    if (_splitAt > 0) {
+                        // 往上看一行：如果是标题行（如"【主线表】"），也归入 plotPart
+                        if (_splitAt > 0 && _lines[_splitAt - 1].indexOf('|') < 0) _splitAt--;
+                        charPart = _lines.slice(0, _splitAt).join('\n');
+                        plotPart = _lines.slice(_splitAt).join('\n');
+                    } else {
+                        // 找不到明确分界：整段都尝试按人物表解析
+                        charPart = result;
                     }
                     var newChars = _parseTableMd(charPart, _charCols);
                     var newPlots = _parseTableMd(plotPart, _plotCols);
@@ -14621,7 +14631,9 @@ body {
                         } else {
                             _tableInput = chatCompressSummaries[chatCompressSummaries.length - 1] || '';
                         }
-                        await Promise.all([_foldOutline(), _updateMemoryTables(_tableInput)]);
+                        // 有表格时不再折大纲（表格已替代大纲的功能，省一次 API 调用）
+                        var _hasTable = chatMemoryTables && (chatMemoryTables.characters.length || chatMemoryTables.plotlines.length);
+                        await Promise.all([_hasTable ? Promise.resolve() : _foldOutline(), _updateMemoryTables(_tableInput)]);
                     }
                 } else {
                     var summary = await _doSummarize(toCompress, 600, false);
