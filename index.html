@@ -2236,6 +2236,8 @@ body {
         .chat-summary-modal-body .mt-row { border-bottom: 1px solid var(--input-border); }
         .chat-summary-modal-body .mt-row:last-child { border-bottom: none; }
         .chat-summary-modal-body .empty { color: var(--text-muted); text-align: center; padding: 24px 0; }
+        .fav-note-modal { background: var(--modal-bg); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--card-border); border-radius: 14px; width: calc(100% - 32px); max-width: 360px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); display: flex; flex-direction: column; overflow: hidden; }
+        .fav-note-modal .chat-summary-modal-body { padding: 14px 16px; }
         .sheet-tabs { display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid var(--card-border); }
         .sheet-tab {
             flex: 1; padding: 8px 0; text-align: center; font-size: 13px; font-weight: 600;
@@ -12266,7 +12268,7 @@ body {
             var mask = document.createElement('div');
             mask.className = 'chat-summary-modal-mask fav-note-modal-mask';
             var modal = document.createElement('div');
-            modal.className = 'chat-summary-modal';
+            modal.className = 'fav-note-modal';
             modal.innerHTML = '<div class="chat-summary-modal-header"><span>✨ ' + _esc(model) + '</span><button onclick="this.closest(\'.fav-note-modal-mask\').remove()">✕</button></div>'
                 + '<div class="chat-summary-modal-body" id="favNoteBody"></div>';
             mask.appendChild(modal);
@@ -12290,8 +12292,8 @@ body {
                 html += '</div>';
                 if (m === 'token') {
                     html += '<div style="display:flex;gap:8px">'
-                        + '<input id="fnIn" type="number" inputmode="decimal" min="0" step="0.01" placeholder="输入单价" value="' + (p2.in || '') + '" style="flex:1;padding:8px 10px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none">'
-                        + '<input id="fnOut" type="number" inputmode="decimal" min="0" step="0.01" placeholder="输出单价" value="' + (p2.out || '') + '" style="flex:1;padding:8px 10px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none">'
+                        + '<input id="fnIn" type="number" inputmode="decimal" min="0" step="0.01" placeholder="输入单价" value="' + (p2.in || '') + '" style="flex:1;min-width:0;box-sizing:border-box;padding:8px 10px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none">'
+                        + '<input id="fnOut" type="number" inputmode="decimal" min="0" step="0.01" placeholder="输出单价" value="' + (p2.out || '') + '" style="flex:1;min-width:0;box-sizing:border-box;padding:8px 10px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none">'
                         + '</div>';
                 } else {
                     html += '<input id="fnPer" type="number" inputmode="decimal" min="0" step="0.001" placeholder="每次调用价格（元）" value="' + (p2.per || '') + '" style="width:100%;padding:8px 10px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box">';
@@ -14888,7 +14890,7 @@ body {
                 var prompt = '【当前人物表】\n' + charMd + '\n\n【当前主线表】\n' + plotMd + '\n\n【新章节摘要】\n' + newSummaryText;
                 try {
                     var result = await chatStreamChat({
-                        baseUrl: _useBaseUrl, apiKey: _useApiKey, model: _useModel, max_tokens: 4000, purpose: '记忆表格',
+                        baseUrl: _useBaseUrl, apiKey: _useApiKey, model: _useModel, max_tokens: 20000, purpose: '记忆表格',
                         messages: [
                             { role: 'system', content: '你是小说记忆表格维护助手。根据新章节摘要，更新下面两张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 主线表新事件加行，旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 已解决的伏笔如不再重要可删除，避免表格无限膨胀\n- 输出完整的两张 markdown 表格，先人物表再主线表，之间用空行分隔\n- 不要输出任何其他内容' },
                             { role: 'user', content: prompt }
@@ -15999,7 +16001,7 @@ body {
                 var plotMd = _readerRenderTableMd(_mtPlotCols, tables.plotlines);
                 var prompt = '【当前人物表】\n' + charMd + '\n\n【当前主线表】\n' + plotMd + '\n\n【新章节摘要】\n' + newSums.join('\n');
                 var result = await chatStreamChat({
-                    baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 4000, purpose: '阅读记忆表格',
+                    baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 20000, purpose: '阅读记忆表格',
                     messages: [
                         { role: 'system', content: '你是小说记忆表格维护助手。根据新章节摘要，更新下面两张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 主线表新事件加行，旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 已解决的伏笔如不再重要可删除，避免表格无限膨胀\n- 输出完整的两张 markdown 表格，先人物表再主线表，之间用空行分隔\n- 不要输出任何其他内容' },
                         { role: 'user', content: prompt }
