@@ -12971,13 +12971,14 @@ body {
             if (chatReadingMode && _readingRetry) _spContent += '\n\n' + READING_MODE_RETRY_HINT;
             reqMsgs.push({ role: 'system', content: _spContent });
             // 插入压缩摘要（如果有）
-            if (chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || chatMemoryTables.plotlines.length) || chatCompressOutline || chatCompressSummaries.length) {
+            if (chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || chatMemoryTables.plotlines.length) || chatCompressOutline || chatCompressSummaries.length) {
                 var _sumParts = [];
                 // 共读模式优先用结构化记忆表格；无表格时 fallback 到旧大纲
-                if (chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || chatMemoryTables.plotlines.length)) {
+                if (chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || chatMemoryTables.plotlines.length)) {
                     var _memText = '';
                     if (chatMemoryTables.characters.length) _memText += '【人物表】\n| 人物 | 身份 | 关系 | 当前状态 | 备注 |\n| --- | --- | --- | --- | --- |\n' + chatMemoryTables.characters.map(function(r) { return '| ' + (r['人物']||'') + ' | ' + (r['身份']||'') + ' | ' + (r['关系']||'') + ' | ' + (r['当前状态']||'') + ' | ' + (r['备注']||'') + ' |'; }).join('\n');
-                    if (chatMemoryTables.plotlines.length) _memText += (chatMemoryTables.characters.length ? '\n\n' : '') + '【主线/伏笔表】\n| 章节 | 事件 | 细节 | 已解决 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.plotlines.map(function(r) { return '| ' + (r['章节']||'') + ' | ' + (r['事件']||'') + ' | ' + (r['细节']||'') + ' | ' + (r['已解决']||'') + ' |'; }).join('\n');
+                    if (chatMemoryTables.places && chatMemoryTables.places.length) _memText += (_memText ? '\n\n' : '') + '【地点表】\n| 地点 | 规模/特征 | 关联 | 简介 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.places.map(function(r) { return '| ' + (r['地点']||'') + ' | ' + (r['规模/特征']||'') + ' | ' + (r['关联']||'') + ' | ' + (r['简介']||'') + ' |'; }).join('\n');
+                    if (chatMemoryTables.plotlines.length) _memText += (_memText ? '\n\n' : '') + '【主线/伏笔表】\n| 章节 | 事件 | 细节 | 已解决 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.plotlines.map(function(r) { return '| ' + (r['章节']||'') + ' | ' + (r['事件']||'') + ' | ' + (r['细节']||'') + ' | ' + (r['已解决']||'') + ' |'; }).join('\n');
                     _sumParts.push(_memText);
                 } else if (chatCompressOutline) {
                     _sumParts.push('【更早前情的大纲】\n' + chatCompressOutline);
@@ -14621,7 +14622,7 @@ body {
             }
             var body = '';
             // 结构化记忆表格（共读模式）
-            if (chatMemoryTables && (chatMemoryTables.characters.length || chatMemoryTables.plotlines.length)) {
+            if (chatMemoryTables && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || chatMemoryTables.plotlines.length)) {
                 function _mtRowHtml(tableName, row, idx, cols) {
                     var esc = function(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
                     var preview = cols.map(function(c) { return esc(row[c]||''); }).join(' · ');
@@ -14653,6 +14654,18 @@ body {
                 }
                 if (!chatMemoryTables.characters.length) body += '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">暂无数据，下次生成摘要时自动填充</div>';
                 body += '</div>';
+                // 地点表
+                var _places = chatMemoryTables.places || [];
+                body += '<div class="seg" style="padding-bottom:6px">'
+                    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
+                    + '<span class="seg-label" style="margin:0">📍 地点表 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + _places.length + ' 处</span></span>'
+                    + '<button onclick="chatAddMtRow(\'places\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
+                    + '</div>';
+                for (var li = 0; li < _places.length; li++) {
+                    body += _mtRowHtml('places', _places[li], li, _mtPlaceCols);
+                }
+                if (!_places.length) body += '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">暂无数据，下次生成摘要时自动填充</div>';
+                body += '</div>';
                 // 主线表
                 body += '<div class="seg" style="padding-bottom:6px">'
                     + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
@@ -14669,7 +14682,7 @@ body {
             else if (chatCompressOutline) {
                 body += _segHtml('📜 全程大纲（已折入前 ' + (chatOutlineCovers || 0) + ' 段）', 'chatDeleteOutline()', 'data-outline="1"', 'chatEditOutline(this)', chatCompressOutline);
             }
-            if (!chatCompressSummaries.length && !chatCompressOutline && !(chatMemoryTables && (chatMemoryTables.characters.length || chatMemoryTables.plotlines.length))) {
+            if (!chatCompressSummaries.length && !chatCompressOutline && !(chatMemoryTables && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || chatMemoryTables.plotlines.length))) {
                 body = '<div class="empty">' + (chatCompressEnabled ? '压缩已开启，尚无摘要' : '压缩未开启') + '</div>';
             } else {
                 for (var i = 0; i < chatCompressSummaries.length; i++) {
@@ -14688,6 +14701,7 @@ body {
         // 记忆表格列定义（全局，供压缩函数和弹窗共用）
         var _mtCharCols = ['人物', '身份', '关系', '当前状态', '备注'];
         var _mtPlotCols = ['章节', '事件', '细节', '已解决'];
+        var _mtPlaceCols = ['地点', '规模/特征', '关联', '简介'];
         // 记忆表格交互
         function chatToggleMtRow(el) {
             var row = el.closest('.mt-row'); if (!row) return;
@@ -14710,8 +14724,9 @@ body {
             chatShowSummaryModal(sc);
         }
         function chatAddMtRow(tableName) {
-            if (!chatMemoryTables) chatMemoryTables = { characters: [], plotlines: [] };
-            var cols = tableName === 'characters' ? _mtCharCols : _mtPlotCols;
+            if (!chatMemoryTables) chatMemoryTables = { characters: [], places: [], plotlines: [] };
+            if (!chatMemoryTables.places) chatMemoryTables.places = [];
+            var cols = tableName === 'characters' ? _mtCharCols : (tableName === 'places' ? _mtPlaceCols : _mtPlotCols);
             var row = {};
             for (var c = 0; c < cols.length; c++) row[cols[c]] = '';
             if (tableName === 'plotlines') row['已解决'] = '否';
@@ -14929,53 +14944,66 @@ body {
                 return rows;
             }
             var _charCols = _mtCharCols;
+            var _placeCols = _mtPlaceCols;
             var _plotCols = _mtPlotCols;
 
-            // 结构化记忆表格更新：把最新摘要段喂给模型，增量更新人物表+主线表
+            // 把模型输出按三张表的表头行切成三段（人物/地点/主线），顺序无关
+            function _splitThreeTables(result) {
+                var lines = result.split('\n');
+                function hdr(test) {
+                    for (var i = 0; i < lines.length; i++) { if (lines[i].indexOf('|') >= 0 && test(lines[i])) return i; }
+                    return -1;
+                }
+                var marks = [
+                    { type: 'characters', idx: hdr(function(l){ return l.indexOf('人物') >= 0 && l.indexOf('身份') >= 0; }) },
+                    { type: 'places', idx: hdr(function(l){ return l.indexOf('地点') >= 0; }) },
+                    { type: 'plotlines', idx: hdr(function(l){ return l.indexOf('事件') >= 0 && l.indexOf('已解决') >= 0; }) }
+                ].filter(function(m){ return m.idx >= 0; }).sort(function(a, b){ return a.idx - b.idx; });
+                var out = { characters: '', places: '', plotlines: '' };
+                if (!marks.length) { out.characters = result; return out; }
+                for (var k = 0; k < marks.length; k++) {
+                    var start = marks[k].idx;
+                    // 往上并入紧邻的非表格标题行（如"【地点表】"）
+                    if (start > 0 && lines[start - 1].indexOf('|') < 0 && lines[start - 1].trim() !== '') start--;
+                    var end = k + 1 < marks.length ? marks[k + 1].idx : lines.length;
+                    out[marks[k].type] = lines.slice(start, end).join('\n');
+                }
+                return out;
+            }
+
+            // 结构化记忆表格更新：把最新摘要段喂给模型，增量更新人物表+地点表+主线表
             async function _updateMemoryTables(newSummaryText) {
                 if (!newSummaryText) return;
-                var tables = chatMemoryTables || { characters: [], plotlines: [] };
+                var tables = chatMemoryTables || { characters: [], places: [], plotlines: [] };
+                if (!tables.places) tables.places = [];
                 var charMd = _renderTableMd(_charCols, tables.characters);
+                var placeMd = _renderTableMd(_placeCols, tables.places);
                 var plotMd = _renderTableMd(_plotCols, tables.plotlines);
-                var prompt = '【当前人物表】\n' + charMd + '\n\n【当前主线表】\n' + plotMd + '\n\n【新章节摘要】\n' + newSummaryText;
+                var prompt = '【当前人物表】\n' + charMd + '\n\n【当前地点表】\n' + placeMd + '\n\n【当前主线表】\n' + plotMd + '\n\n【新章节摘要】\n' + newSummaryText;
                 try {
                     // 记忆模型优先；没单独配则退回摘要/当前模型
                     var _memMc = chatResolveMemoryModel() || { model: _useModel, baseUrl: _useBaseUrl, apiKey: _useApiKey };
                     var result = await chatStreamChatBigOutput({
                         baseUrl: _memMc.baseUrl, apiKey: _memMc.apiKey, model: _memMc.model, max_tokens: 50000, purpose: '记忆表格',
                         messages: [
-                            { role: 'system', content: '你是小说记忆表格维护助手。根据新章节摘要，更新下面两张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 主线表只记真正的伏笔（埋下但尚未揭晓的线索）和重大主线转折，普通过场、日常对话、次要细节一律不入表\n- 按事件去重：不要把同一件事拆成多条流水账；但不同的重大伏笔或转折，即使章节相同也各自成行，不要强行合并\n- 旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 已解决的伏笔如不再重要可删除，避免表格无限膨胀\n- 输出完整的两张 markdown 表格，先人物表再主线表，之间用空行分隔\n- 不要输出任何其他内容' },
+                            { role: 'system', content: '你是小说记忆表格维护助手。根据新章节摘要，更新下面三张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 地点表列：地点、规模/特征、关联、简介\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 地点表只记故事的主要舞台，标准要严：①主角及重要人物长期居住/所属的地方（家、庄园、宅邸、据点等）②反复出现、承载多段重要情节的关键场所③大的城市或地区。只在某一处出现一次的过场地点、建筑内部的具体房间、只被顺口提及的地名，一律不入表，宁缺毋滥\n- 地点表「规模/特征」用通俗方式帮读者建立地理印象：城镇写人口多少/繁华程度，庄园宅邸写占地大小/气派程度，山川河流写地形，确实无从判断就留空\n- 地点表「关联」写它属于谁或关联的人物/势力；「简介」一句话点明它是什么、发生过什么关键事件\n- 主线表只记真正的伏笔（埋下但尚未揭晓的线索）和重大主线转折，普通过场、日常对话、次要细节一律不入表\n- 按事件去重：不要把同一件事拆成多条流水账；但不同的重大伏笔或转折，即使章节相同也各自成行，不要强行合并\n- 旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 已解决的伏笔如不再重要可删除，避免表格无限膨胀\n- 输出完整的三张 markdown 表格，依次为人物表、地点表、主线表，之间用空行分隔\n- 不要输出任何其他内容' },
                             { role: 'user', content: prompt }
                         ]
                     });
                     if (!result || chatCurrentConvId !== convId) return;
-                    // 解析两张表：找到包含主线表表头行（同时含「事件」和「已解决」两列）的位置分割
-                    var _lines = result.split('\n');
-                    var charPart = '', plotPart = '';
-                    var _splitAt = -1;
-                    for (var _li = 0; _li < _lines.length; _li++) {
-                        var _line = _lines[_li];
-                        // 表头行：同时包含「事件」和「已解决」才认定为主线表头（避免单个关键词误判）
-                        if (_line.indexOf('|') >= 0 && _line.indexOf('事件') >= 0 && _line.indexOf('已解决') >= 0) {
-                            _splitAt = _li; break;
-                        }
-                    }
-                    if (_splitAt > 0) {
-                        // 往上看一行：如果是标题行（如"【主线表】"），也归入 plotPart
-                        if (_splitAt > 0 && _lines[_splitAt - 1].indexOf('|') < 0) _splitAt--;
-                        charPart = _lines.slice(0, _splitAt).join('\n');
-                        plotPart = _lines.slice(_splitAt).join('\n');
-                    } else {
-                        // 找不到明确分界：整段都尝试按人物表解析
-                        charPart = result;
-                    }
-                    var newChars = _parseTableMd(charPart, _charCols);
-                    var newPlots = _parseTableMd(plotPart, _plotCols);
-                    if (newChars.length || newPlots.length) {
-                        chatMemoryTables = { characters: newChars.length ? newChars : tables.characters, plotlines: newPlots.length ? newPlots : tables.plotlines };
+                    var _parts = _splitThreeTables(result);
+                    var newChars = _parseTableMd(_parts.characters, _charCols);
+                    var newPlaces = _parseTableMd(_parts.places, _placeCols);
+                    var newPlots = _parseTableMd(_parts.plotlines, _plotCols);
+                    if (newChars.length || newPlaces.length || newPlots.length) {
+                        chatMemoryTables = {
+                            characters: newChars.length ? newChars : tables.characters,
+                            places: newPlaces.length ? newPlaces : tables.places,
+                            plotlines: newPlots.length ? newPlots : tables.plotlines
+                        };
                         chatSaveCurrentConv(true);
-                        console.log('[记忆表格] 人物 ' + chatMemoryTables.characters.length + ' 行，主线 ' + chatMemoryTables.plotlines.length + ' 行');
-                        showToast('🧠 记忆表格已更新（人物 ' + chatMemoryTables.characters.length + ' · 主线 ' + chatMemoryTables.plotlines.length + '）');
+                        console.log('[记忆表格] 人物 ' + chatMemoryTables.characters.length + ' 行，地点 ' + chatMemoryTables.places.length + ' 行，主线 ' + chatMemoryTables.plotlines.length + ' 行');
+                        showToast('🧠 记忆表格已更新（人物 ' + chatMemoryTables.characters.length + ' · 地点 ' + chatMemoryTables.places.length + ' · 主线 ' + chatMemoryTables.plotlines.length + '）');
                     } else {
                         console.warn('[记忆表格] 解析失败，保留旧表格');
                     }
@@ -15678,17 +15706,18 @@ body {
         function readerMemTablesGet(fileKey) {
             var cell = readerSummariesAll()[fileKey];
             var mt = cell && cell.memTables;
-            return (mt && (mt.characters && mt.characters.length || mt.plotlines && mt.plotlines.length)) ? mt : null;
+            if (mt && !mt.places) mt.places = [];
+            return (mt && (mt.characters && mt.characters.length || mt.places && mt.places.length || mt.plotlines && mt.plotlines.length)) ? mt : null;
         }
         function readerMemTablesSet(fileKey, tables, upTo) {
             var all = readerSummariesAll();
             if (!all[fileKey]) all[fileKey] = {};
-            all[fileKey].memTables = { characters: tables.characters || [], plotlines: tables.plotlines || [], ts: Date.now(), upTo: upTo };
+            all[fileKey].memTables = { characters: tables.characters || [], places: tables.places || [], plotlines: tables.plotlines || [], ts: Date.now(), upTo: upTo };
             readerSummariesSaveAll(all);
         }
         function readerMemTablesDelete(fileKey) {
             var all = readerSummariesAll();
-            if (all[fileKey]) { all[fileKey].memTables = { characters: [], plotlines: [], ts: Date.now(), upTo: -1 }; readerSummariesSaveAll(all); }
+            if (all[fileKey]) { all[fileKey].memTables = { characters: [], places: [], plotlines: [], ts: Date.now(), upTo: -1 }; readerSummariesSaveAll(all); }
         }
         // 「是否自动总结前情」总开关（默认关）：一个全局开关，决定阅读时要不要在后台总结，避免到书架随便翻翻也烧 API。
         // 存 reader_summary_on（'1'/'0'），参数保留只为兼容旧调用，实际忽略。
@@ -15763,6 +15792,16 @@ body {
                     + '</div>';
                 for (var rci = 0; rci < _rmt.characters.length; rci++) body += _rmtRowHtml('characters', _rmt.characters[rci], rci, _mtCharCols);
                 if (!_rmt.characters.length) body += '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">暂无数据，开启自动总结后自动填充</div>';
+                body += '</div>';
+                // 地点表
+                var _rplaces = _rmt.places || [];
+                body += '<div class="seg" style="padding-bottom:6px">'
+                    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
+                    + '<span class="seg-label" style="margin:0">📍 地点表 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + _rplaces.length + ' 处</span></span>'
+                    + '<button onclick="readerAddMtRow(\'places\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
+                    + '</div>';
+                for (var rli = 0; rli < _rplaces.length; rli++) body += _rmtRowHtml('places', _rplaces[rli], rli, _mtPlaceCols);
+                if (!_rplaces.length) body += '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">暂无数据，开启自动总结后自动填充</div>';
                 body += '</div>';
                 // 主线表
                 body += '<div class="seg" style="padding-bottom:6px">'
@@ -15883,8 +15922,9 @@ body {
         }
         function readerAddMtRow(tableName) {
             var fileKey = readerBookKey(readerBookId);
-            var mt = readerMemTablesGet(fileKey) || { characters: [], plotlines: [] };
-            var cols = tableName === 'characters' ? _mtCharCols : _mtPlotCols;
+            var mt = readerMemTablesGet(fileKey) || { characters: [], places: [], plotlines: [] };
+            if (!mt.places) mt.places = [];
+            var cols = tableName === 'characters' ? _mtCharCols : (tableName === 'places' ? _mtPlaceCols : _mtPlotCols);
             var row = {};
             for (var c = 0; c < cols.length; c++) row[cols[c]] = '';
             if (tableName === 'plotlines') row['已解决'] = '否';
@@ -16030,7 +16070,8 @@ body {
         async function readerUpdateMemoryTables(fileKey, curChap, mc) {
             if (_readerMemTablesRunning) return false;
             var mt = readerMemTablesGet(fileKey);
-            var tables = mt || { characters: [], plotlines: [] };
+            var tables = mt || { characters: [], places: [], plotlines: [] };
+            if (!tables.places) tables.places = [];
             var upTo = mt ? (mt.upTo || -1) : -1;
             // 收集 upTo 之后到 curChap 的摘要
             var newSums = [];
@@ -16040,7 +16081,7 @@ body {
             }
             if (!newSums.length) return false;
             // 首次建表（空表）时拉更多章节摘要，确保覆盖全面
-            if (!tables.characters.length && !tables.plotlines.length) {
+            if (!tables.characters.length && !tables.plotlines.length && !tables.places.length) {
                 newSums = [];
                 for (var j = 0; j <= curChap; j++) {
                     var ss = readerSummaryGet(fileKey, j);
@@ -16051,42 +16092,30 @@ body {
             _readerMemTablesRunning = true;
             try {
                 var charMd = _readerRenderTableMd(_mtCharCols, tables.characters);
+                var placeMd = _readerRenderTableMd(_mtPlaceCols, tables.places);
                 var plotMd = _readerRenderTableMd(_mtPlotCols, tables.plotlines);
-                var prompt = '【当前人物表】\n' + charMd + '\n\n【当前主线表】\n' + plotMd + '\n\n【新章节摘要】\n' + newSums.join('\n');
+                var prompt = '【当前人物表】\n' + charMd + '\n\n【当前地点表】\n' + placeMd + '\n\n【当前主线表】\n' + plotMd + '\n\n【新章节摘要】\n' + newSums.join('\n');
                 var _memMc = chatResolveMemoryModel() || mc;
                 var result = await chatStreamChatBigOutput({
                     baseUrl: _memMc.baseUrl, apiKey: _memMc.apiKey, model: _memMc.model, max_tokens: 50000, purpose: '阅读记忆表格',
                     messages: [
-                        { role: 'system', content: '你是小说记忆表格维护助手。根据新章节摘要，更新下面两张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 主线表只记真正的伏笔（埋下但尚未揭晓的线索）和重大主线转折，普通过场、日常对话、次要细节一律不入表\n- 按事件去重：不要把同一件事拆成多条流水账；但不同的重大伏笔或转折，即使章节相同也各自成行，不要强行合并\n- 旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 已解决的伏笔如不再重要可删除，避免表格无限膨胀\n- 输出完整的两张 markdown 表格，先人物表再主线表，之间用空行分隔\n- 不要输出任何其他内容' },
+                        { role: 'system', content: '你是小说记忆表格维护助手。根据新章节摘要，更新下面三张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 地点表列：地点、规模/特征、关联、简介\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 地点表只记故事的主要舞台，标准要严：①主角及重要人物长期居住/所属的地方（家、庄园、宅邸、据点等）②反复出现、承载多段重要情节的关键场所③大的城市或地区。只在某一处出现一次的过场地点、建筑内部的具体房间、只被顺口提及的地名，一律不入表，宁缺毋滥\n- 地点表「规模/特征」用通俗方式帮读者建立地理印象：城镇写人口多少/繁华程度，庄园宅邸写占地大小/气派程度，山川河流写地形，确实无从判断就留空\n- 地点表「关联」写它属于谁或关联的人物/势力；「简介」一句话点明它是什么、发生过什么关键事件\n- 主线表只记真正的伏笔（埋下但尚未揭晓的线索）和重大主线转折，普通过场、日常对话、次要细节一律不入表\n- 按事件去重：不要把同一件事拆成多条流水账；但不同的重大伏笔或转折，即使章节相同也各自成行，不要强行合并\n- 旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 已解决的伏笔如不再重要可删除，避免表格无限膨胀\n- 输出完整的三张 markdown 表格，依次为人物表、地点表、主线表，之间用空行分隔\n- 不要输出任何其他内容' },
                         { role: 'user', content: prompt }
                     ]
                 });
                 if (!result) return false;
-                // 解析（同共读模式逻辑）
-                var _lines = result.split('\n');
-                var charPart = '', plotPart = '';
-                var _splitAt = -1;
-                for (var _li = 0; _li < _lines.length; _li++) {
-                    if (_lines[_li].indexOf('|') >= 0 && _lines[_li].indexOf('事件') >= 0 && _lines[_li].indexOf('已解决') >= 0) {
-                        _splitAt = _li; break;
-                    }
-                }
-                if (_splitAt > 0) {
-                    if (_splitAt > 0 && _lines[_splitAt - 1].indexOf('|') < 0) _splitAt--;
-                    charPart = _lines.slice(0, _splitAt).join('\n');
-                    plotPart = _lines.slice(_splitAt).join('\n');
-                } else {
-                    charPart = result;
-                }
-                var newChars = _readerParseTableMd(charPart, _mtCharCols);
-                var newPlots = _readerParseTableMd(plotPart, _mtPlotCols);
-                if (newChars.length || newPlots.length) {
+                var _parts = _readerSplitThreeTables(result);
+                var newChars = _readerParseTableMd(_parts.characters, _mtCharCols);
+                var newPlaces = _readerParseTableMd(_parts.places, _mtPlaceCols);
+                var newPlots = _readerParseTableMd(_parts.plotlines, _mtPlotCols);
+                if (newChars.length || newPlaces.length || newPlots.length) {
                     readerMemTablesSet(fileKey, {
                         characters: newChars.length ? newChars : tables.characters,
+                        places: newPlaces.length ? newPlaces : tables.places,
                         plotlines: newPlots.length ? newPlots : tables.plotlines
                     }, curChap);
-                    console.log('[阅读记忆表格] 人物 ' + (newChars.length || tables.characters.length) + ' 行，主线 ' + (newPlots.length || tables.plotlines.length) + ' 行');
-                    showToast('🧠 记忆表格已更新（人物 ' + (newChars.length || tables.characters.length) + ' · 主线 ' + (newPlots.length || tables.plotlines.length) + '）');
+                    console.log('[阅读记忆表格] 人物 ' + (newChars.length || tables.characters.length) + ' 行，地点 ' + (newPlaces.length || tables.places.length) + ' 行，主线 ' + (newPlots.length || tables.plotlines.length) + ' 行');
+                    showToast('🧠 记忆表格已更新（人物 ' + (newChars.length || tables.characters.length) + ' · 地点 ' + (newPlaces.length || tables.places.length) + ' · 主线 ' + (newPlots.length || tables.plotlines.length) + '）');
                     return true;
                 }
             } catch (e) { console.warn('[阅读记忆表格] 更新失败:', e.message); }
@@ -16102,6 +16131,28 @@ body {
                 lines.push('| ' + cells.join(' | ') + ' |');
             }
             return lines.join('\n');
+        }
+        // 把模型输出按三张表的表头行切成三段（人物/地点/主线），顺序无关
+        function _readerSplitThreeTables(result) {
+            var lines = result.split('\n');
+            function hdr(test) {
+                for (var i = 0; i < lines.length; i++) { if (lines[i].indexOf('|') >= 0 && test(lines[i])) return i; }
+                return -1;
+            }
+            var marks = [
+                { type: 'characters', idx: hdr(function(l){ return l.indexOf('人物') >= 0 && l.indexOf('身份') >= 0; }) },
+                { type: 'places', idx: hdr(function(l){ return l.indexOf('地点') >= 0; }) },
+                { type: 'plotlines', idx: hdr(function(l){ return l.indexOf('事件') >= 0 && l.indexOf('已解决') >= 0; }) }
+            ].filter(function(m){ return m.idx >= 0; }).sort(function(a, b){ return a.idx - b.idx; });
+            var out = { characters: '', places: '', plotlines: '' };
+            if (!marks.length) { out.characters = result; return out; }
+            for (var k = 0; k < marks.length; k++) {
+                var start = marks[k].idx;
+                if (start > 0 && lines[start - 1].indexOf('|') < 0 && lines[start - 1].trim() !== '') start--;
+                var end = k + 1 < marks.length ? marks[k + 1].idx : lines.length;
+                out[marks[k].type] = lines.slice(start, end).join('\n');
+            }
+            return out;
         }
         function _readerParseTableMd(md, cols) {
             var rows = [];
@@ -16152,10 +16203,11 @@ body {
             var out = [];
             // 优先用记忆表格（结构化），无表格时 fallback 到旧大纲
             var _mt = readerMemTablesGet(fileKey);
-            if (_mt && (_mt.characters.length || _mt.plotlines.length) && (!_mt.upTo || _mt.upTo < curChap)) {
+            if (_mt && (_mt.characters.length || (_mt.places && _mt.places.length) || _mt.plotlines.length) && (!_mt.upTo || _mt.upTo < curChap)) {
                 var _memText = '';
                 if (_mt.characters.length) _memText += '【人物表】\n' + _readerRenderTableMd(_mtCharCols, _mt.characters);
-                if (_mt.plotlines.length) _memText += (_mt.characters.length ? '\n\n' : '') + '【主线/伏笔表】\n' + _readerRenderTableMd(_mtPlotCols, _mt.plotlines);
+                if (_mt.places && _mt.places.length) _memText += (_memText ? '\n\n' : '') + '【地点表】\n' + _readerRenderTableMd(_mtPlaceCols, _mt.places);
+                if (_mt.plotlines.length) _memText += (_memText ? '\n\n' : '') + '【主线/伏笔表】\n' + _readerRenderTableMd(_mtPlotCols, _mt.plotlines);
                 out.push(_memText);
             } else if (_useOutline) {
                 out.push('【全书前情大纲（至第 ' + (_o.upTo + 1) + ' 章）】\n' + _o.sum);
@@ -17342,10 +17394,11 @@ body {
                 // 带上前文已读章节的摘要，否则双击提问时 AI 看不到被压缩掉的前情（剧情/人物/伏笔）
                 var _askMsgs = [{ role: 'system', content: sysPrompt }];
                 var _summaryLines = [];
-                if (chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || chatMemoryTables.plotlines.length)) {
+                if (chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || chatMemoryTables.plotlines.length)) {
                     var _mtText = '';
                     if (chatMemoryTables.characters.length) _mtText += '【人物表】\n| 人物 | 身份 | 关系 | 当前状态 | 备注 |\n| --- | --- | --- | --- | --- |\n' + chatMemoryTables.characters.map(function(r) { return '| ' + (r['人物']||'') + ' | ' + (r['身份']||'') + ' | ' + (r['关系']||'') + ' | ' + (r['当前状态']||'') + ' | ' + (r['备注']||'') + ' |'; }).join('\n');
-                    if (chatMemoryTables.plotlines.length) _mtText += '\n\n【主线/伏笔表】\n| 章节 | 事件 | 细节 | 已解决 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.plotlines.map(function(r) { return '| ' + (r['章节']||'') + ' | ' + (r['事件']||'') + ' | ' + (r['细节']||'') + ' | ' + (r['已解决']||'') + ' |'; }).join('\n');
+                    if (chatMemoryTables.places && chatMemoryTables.places.length) _mtText += (_mtText ? '\n\n' : '') + '【地点表】\n| 地点 | 规模/特征 | 关联 | 简介 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.places.map(function(r) { return '| ' + (r['地点']||'') + ' | ' + (r['规模/特征']||'') + ' | ' + (r['关联']||'') + ' | ' + (r['简介']||'') + ' |'; }).join('\n');
+                    if (chatMemoryTables.plotlines.length) _mtText += (_mtText ? '\n\n' : '') + '【主线/伏笔表】\n| 章节 | 事件 | 细节 | 已解决 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.plotlines.map(function(r) { return '| ' + (r['章节']||'') + ' | ' + (r['事件']||'') + ' | ' + (r['细节']||'') + ' | ' + (r['已解决']||'') + ' |'; }).join('\n');
                     _summaryLines.push(_mtText);
                     _summaryLines = _summaryLines.concat(chatCompressSummaries.slice(-CHAT_SUMMARY_MAX_SEGS));
                 } else if (chatCompressOutline || (chatCompressSummaries && chatCompressSummaries.length)) {
