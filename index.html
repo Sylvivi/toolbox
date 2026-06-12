@@ -10978,6 +10978,17 @@ body {
             } catch (e) { /* 记账失败不影响主流程 */ }
             return full;
         }
+        // 大输出调用（记忆表格等）：max_tokens 设很高防截断，但便宜/小模型可能因超出自身上限直接报错。
+        // 先按高上限发；若报错（多为 max_tokens 超限），自动降到 16000 重试一次（多数模型都接受）。
+        async function chatStreamChatBigOutput(opts) {
+            try {
+                return await chatStreamChat(opts);
+            } catch (e) {
+                var lower = Object.assign({}, opts, { max_tokens: 16000 });
+                console.warn('[大输出] max_tokens=' + opts.max_tokens + ' 调用失败，降到 16000 重试：' + (e && e.message));
+                return await chatStreamChat(lower);
+            }
+        }
 
         /* ===== AI 生成对话标题 ===== */
         var chatTitleGenerating = false;
@@ -14909,7 +14920,7 @@ body {
                 try {
                     // 记忆模型优先；没单独配则退回摘要/当前模型
                     var _memMc = chatResolveMemoryModel() || { model: _useModel, baseUrl: _useBaseUrl, apiKey: _useApiKey };
-                    var result = await chatStreamChat({
+                    var result = await chatStreamChatBigOutput({
                         baseUrl: _memMc.baseUrl, apiKey: _memMc.apiKey, model: _memMc.model, max_tokens: 50000, purpose: '记忆表格',
                         messages: [
                             { role: 'system', content: '你是小说记忆表格维护助手。根据新章节摘要，更新下面两张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 主线表新事件加行，旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 已解决的伏笔如不再重要可删除，避免表格无限膨胀\n- 输出完整的两张 markdown 表格，先人物表再主线表，之间用空行分隔\n- 不要输出任何其他内容' },
@@ -16021,7 +16032,7 @@ body {
                 var plotMd = _readerRenderTableMd(_mtPlotCols, tables.plotlines);
                 var prompt = '【当前人物表】\n' + charMd + '\n\n【当前主线表】\n' + plotMd + '\n\n【新章节摘要】\n' + newSums.join('\n');
                 var _memMc = chatResolveMemoryModel() || mc;
-                var result = await chatStreamChat({
+                var result = await chatStreamChatBigOutput({
                     baseUrl: _memMc.baseUrl, apiKey: _memMc.apiKey, model: _memMc.model, max_tokens: 50000, purpose: '阅读记忆表格',
                     messages: [
                         { role: 'system', content: '你是小说记忆表格维护助手。根据新章节摘要，更新下面两张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 主线表新事件加行，旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 已解决的伏笔如不再重要可删除，避免表格无限膨胀\n- 输出完整的两张 markdown 表格，先人物表再主线表，之间用空行分隔\n- 不要输出任何其他内容' },
