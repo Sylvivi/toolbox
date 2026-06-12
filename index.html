@@ -14328,8 +14328,29 @@ body {
                 panel.appendChild(item);
             }
         }
+        // 把渲染窗口往上扩展，确保 targetIdx（及其前若干段）进入 DOM——供跳转/搜索定位到靠前内容用。
+        // 窗口化渲染下，靠前章节默认不在 DOM 里，不先补渲染就会定位失败（querySelector 返回 null）。
+        function chatRenderUpTo(targetIdx) {
+            var container = document.getElementById('chatMessages');
+            if (!container || chatRenderStartIdx <= 0) return;
+            var newStart = Math.max(0, Math.min(targetIdx, chatRenderStartIdx) - READING_RENDER_BUFFER);
+            if (newStart >= chatRenderStartIdx) return;
+            var oldStart = chatRenderStartIdx;
+            var lastAiIdx = -1;
+            for (var k = chatMessages.length - 1; k >= 0; k--) { if (chatMessages[k].role === 'assistant') { lastAiIdx = k; break; } }
+            var oldSentinel = document.getElementById('chatEarlierSentinel');
+            if (oldSentinel) oldSentinel.remove();
+            var frag = document.createDocumentFragment();
+            var seed = newStart > 0 ? ((chatMessages[newStart - 1] && chatMessages[newStart - 1].ts) || 0) : 0;
+            chatAppendMsgRange(frag, newStart, oldStart, seed, lastAiIdx, true);
+            container.insertBefore(frag, container.firstChild);
+            chatRenderStartIdx = newStart;
+            if (newStart > 0) container.insertBefore(chatMakeEarlierSentinel(), container.firstChild);
+        }
         function chatNavJump(idx) {
             var container = document.getElementById('chatMessages');
+            // 靠前的消息可能因窗口化渲染还没进 DOM，先补渲染到目标位置再定位
+            if (idx < chatRenderStartIdx) chatRenderUpTo(idx);
             var target = container.querySelector('.chat-msg[data-idx="' + idx + '"]');
             if (!target) return;
             target.scrollIntoView({ behavior: 'smooth', block: 'start' });
