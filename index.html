@@ -5602,7 +5602,10 @@ body {
         (function() {
             var touchStartX = 0, touchStartY = 0, touchStartTime = 0;
             document.addEventListener('touchstart', function(e) {
-                if (e.target.closest('.modal-overlay, .collection-sub-drag, .code-search-bar, .chat-settings-modal, .chat-settings-bg, .chat-model-sheet')) return;
+                // 任何弹窗 / 对话页打开时（body 带 modal-open）都不做整页左右滑切换，
+                // 否则在共读的设置/摘要/用量/记忆表格等弹窗里左右滑会穿透切到背景的密钥/收藏/日历页。
+                if (document.body.classList.contains('modal-open')) return;
+                if (e.target.closest('.modal-overlay, .collection-sub-drag, .code-search-bar, .chat-settings-modal, .chat-settings-bg, .chat-model-sheet, .chat-summary-modal-mask, .api-log-modal-mask, .fav-note-modal-mask')) return;
                 var t = e.touches[0];
                 touchStartX = t.clientX;
                 touchStartY = t.clientY;
