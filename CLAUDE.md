@@ -6,7 +6,6 @@
 - **自定义域名（已绑定，免梯子）**：工具站 `https://tool.masterofmydomain.top`（CF DNS CNAME → sylvivi.github.io，橙色已代理）；云同步 Worker `https://sync.masterofmydomain.top`（CF Workers 自定义域，原 `toolbox-api.wanwanviavia.workers.dev`）。SSL/TLS 模式必须「完全(Full)」否则重定向死循环。域名 `masterofmydomain.top`（阿里云注册，NS 已搬到 Cloudflare）。
 - **PWA 安装注意**：装 PWA 到桌面要**挂梯子**（WebAPK 需要 Google 服务器签发，国内被墙）；不挂梯子会退化成「带 Google 标识的快捷方式」，状态栏颜色被冻死、跟不上主题。装完之后日常使用不需要梯子。
 - **更新机制**：network-first 的 service worker，会自动更新；推送后过一两分钟刷新页面即可生效。
-- **版本号小字**：设置（clawd 面板「设置」tab）底部显示 `工具箱 · <时间戳>`，来源是 JS 常量 `APP_VERSION`（搜 `var APP_VERSION`）。用于让用户刷新后确认是否已是最新版。**每次部署/改动后顺手把 `APP_VERSION` 改成当前时间**，否则用户看到的版本时间不会变。
 - **部署排障（2026-06-11 修）**：曾出现「push 了线上半天不更新、手动部署才生效」。根因是 GitHub Pages 用 **legacy Jekyll 构建**、且**反复构建失败**（`Page build failed`）。已加根目录 **`.nojekyll`** 让 Pages 跳过 Jekyll、原样发布，部署更快更稳。排查命令：`gh api repos/Sylvivi/toolbox/pages/builds`（看 status 有无 errored）。注意：`sylvivi.github.io/toolbox` 会 **301 重定向到自定义域** `tool.masterofmydomain.top`，curl 验证线上要么加 `-L`、要么直接打自定义域。SW 是 network-first，不是更新卡顿的原因。
 - **PWA 排障经验**：装 PWA 到桌面要**挂梯子**（WebAPK 需 Google 服务器签发，国内被墙）；不挂梯子会退化成「带 Google 标识的快捷方式」，状态栏颜色被冻死、跟不上主题。装完之后日常用不需要梯子。遇到「状态栏不变色 / 图标变样」先往这个方向查。
 - **主要用途**：用户主要用「共读模式」读长篇小说（如天龙八部），其次有翻译模式、普通对话模式。
