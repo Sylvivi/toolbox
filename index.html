@@ -14566,10 +14566,10 @@ body {
                 if (chatCompressOutline) {
                     html += '<div class="seg"><div class="seg-label">📜 全程大纲</div>' + chatCompressOutline.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>') + '</div>';
                 }
-                for (var i = 0; i < chatCompressSummaries.length; i++) {
+                for (var i = chatCompressSummaries.length - 1; i >= 0; i--) {
                     html += '<div class="seg"><div class="seg-label">段 ' + (i + 1) + '</div>' + chatCompressSummaries[i].replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>') + '</div>';
                 }
-                html += '<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:6px">共 ' + chatCompressedCount + ' 条消息已压缩为 ' + chatCompressSummaries.length + ' 段</div>';
+                html += '<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:6px">共 ' + chatCompressedCount + ' 条消息已压缩为 ' + chatCompressSummaries.length + ' 段（最新在上）</div>';
                 popup.innerHTML = html;
             }
             popup.classList.add('show');
@@ -14690,10 +14690,11 @@ body {
             if (!chatCompressSummaries.length && !chatCompressOutline && !(chatMemoryTables && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length))) {
                 body = '<div class="empty">' + (chatCompressEnabled ? '压缩已开启，尚无摘要' : '压缩未开启') + '</div>';
             } else {
-                for (var i = 0; i < chatCompressSummaries.length; i++) {
+                // 倒序显示：最新生成的段在最上面，方便查看（发送给 AI 时仍按正序，不受影响）
+                for (var i = chatCompressSummaries.length - 1; i >= 0; i--) {
                     body += _segHtml('段 ' + (i + 1), 'chatDeleteSummaryseg(' + i + ')', 'data-seg-idx="' + i + '"', 'chatEditSummaryseg(this)', chatCompressSummaries[i]);
                 }
-                if (chatCompressSummaries.length) body += '<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:8px">共 ' + chatCompressedCount + ' 条消息已压缩为 ' + chatCompressSummaries.length + ' 段</div>';
+                if (chatCompressSummaries.length) body += '<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:8px">共 ' + chatCompressedCount + ' 条消息已压缩为 ' + chatCompressSummaries.length + ' 段（最新在上）</div>';
             }
             modal.innerHTML = header + '<div class="chat-summary-modal-body">' + body + '</div>';
             mask.appendChild(modal);
@@ -15895,7 +15896,8 @@ body {
                     : '<div class="empty">自动总结已关闭。<br>打开上面的开关，读这本书时就会在后台把前面章节总结好，供提问时给 AI 当前情。</div>';
             } else {
                 // 章节摘要：默认折叠，只露两行预览，点标题/预览展开成编辑框（复用共读的 chatToggleSummarySeg）
-                for (var i = 0; i < chaps.length; i++) {
+                // 倒序显示：最新章节在最上面，方便查看（提问时仍按章节正序发给 AI，不受影响）
+                for (var i = chaps.length - 1; i >= 0; i--) {
                     var ch = chaps[i];
                     var sum = (cell[ch] && cell[ch].sum) || '';
                     var escSum = sum.replace(/</g, '&lt;').replace(/>/g, '&gt;');
