@@ -10683,8 +10683,17 @@ body {
         function apiLogLoad() { try { var a = JSON.parse(localStorage.getItem('toolbox_api_log') || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
         function apiLogSave(a) { try { localStorage.setItem('toolbox_api_log', JSON.stringify(a)); } catch (e) {} }
         function apiAggLoad() {
-            try { var o = JSON.parse(localStorage.getItem('toolbox_api_agg') || 'null'); if (o && typeof o === 'object') return o; } catch (e) {}
-            return { calls: 0, inTok: 0, outTok: 0, byPurpose: {}, byModel: {}, byPurposeModel: {}, since: Date.now() };
+            var o = null;
+            try { o = JSON.parse(localStorage.getItem('toolbox_api_agg') || 'null'); } catch (e) {}
+            if (!o || typeof o !== 'object') o = { calls: 0, inTok: 0, outTok: 0, since: Date.now() };
+            // 补全可能缺失的字段（升级后旧数据没有 byPurposeModel，否则 apiLogRecord 写它会抛错、累计就此冻结）
+            if (!o.byPurpose) o.byPurpose = {};
+            if (!o.byModel) o.byModel = {};
+            if (!o.byPurposeModel) o.byPurposeModel = {};
+            if (typeof o.calls !== 'number') o.calls = 0;
+            if (typeof o.inTok !== 'number') o.inTok = 0;
+            if (typeof o.outTok !== 'number') o.outTok = 0;
+            return o;
         }
         function apiAggSave(o) { try { localStorage.setItem('toolbox_api_agg', JSON.stringify(o)); } catch (e) {} }
         function apiPriceLoad() {
