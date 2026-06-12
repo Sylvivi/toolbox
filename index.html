@@ -14625,7 +14625,10 @@ body {
                             if (tableName === 'plotlines' && c === '已解决') {
                                 return '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-sub);margin:3px 0"><input type="checkbox" ' + (resolved ? 'checked' : '') + ' onchange="chatEditMtCell(\'' + tableName + '\',' + idx + ',\'' + c + '\',this.checked?\'是\':\'否\')" style="accent-color:var(--accent)"> 已解决</label>';
                             }
-                            return '<input data-mt-col="' + c + '" value="' + esc(row[c]||'') + '" oninput="chatEditMtCell(\'' + tableName + '\',' + idx + ',\'' + c + '\',this.value)" placeholder="' + c + '" style="width:100%;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;padding:5px 8px;font-size:12px;color:var(--text);margin:2px 0;font-family:inherit;outline:none">';
+                            return '<div style="margin:3px 0">'
+                                + '<div style="font-size:10px;color:var(--text-muted);margin-bottom:1px">' + c + '</div>'
+                                + '<textarea data-mt-col="' + c + '" rows="1" oninput="chatEditMtCell(\'' + tableName + '\',' + idx + ',\'' + c + '\',this.value);this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'" style="width:100%;box-sizing:border-box;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;padding:5px 8px;font-size:12px;color:var(--text);font-family:inherit;outline:none;resize:none;overflow:hidden;line-height:1.5;white-space:pre-wrap;word-break:break-word">' + esc(row[c]||'') + '</textarea>'
+                                + '</div>';
                         }).join('')
                         + '</div></div>';
                 }
@@ -14707,7 +14710,12 @@ body {
             var edit = row.querySelector('.mt-edit');
             var ar = row.querySelector('.seg-arrow');
             if (!edit) return;
-            if (edit.style.display === 'none') { edit.style.display = ''; if (ar) ar.textContent = '▾'; }
+            if (edit.style.display === 'none') {
+                edit.style.display = ''; if (ar) ar.textContent = '▾';
+                // 展开时把每个 textarea 撑到内容高度，长字段竖向铺开、不用左右滑
+                var tas = edit.querySelectorAll('textarea');
+                for (var i = 0; i < tas.length; i++) { tas[i].style.height = 'auto'; tas[i].style.height = tas[i].scrollHeight + 'px'; }
+            }
             else { edit.style.display = 'none'; if (ar) ar.textContent = '▸'; }
         }
         function chatEditMtCell(tableName, idx, col, val) {
@@ -15787,7 +15795,10 @@ body {
                             if (tableName === 'plotlines' && c === '已解决') {
                                 return '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-sub);margin:3px 0"><input type="checkbox" ' + (resolved ? 'checked' : '') + ' onchange="readerEditMtCell(\'' + tableName + '\',' + idx + ',\'' + c + '\',this.checked?\'是\':\'否\')" style="accent-color:var(--accent)"> 已解决</label>';
                             }
-                            return '<input value="' + esc(row[c]||'') + '" oninput="readerEditMtCell(\'' + tableName + '\',' + idx + ',\'' + c + '\',this.value)" placeholder="' + c + '" style="width:100%;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;padding:5px 8px;font-size:12px;color:var(--text);margin:2px 0;font-family:inherit;outline:none">';
+                            return '<div style="margin:3px 0">'
+                                + '<div style="font-size:10px;color:var(--text-muted);margin-bottom:1px">' + c + '</div>'
+                                + '<textarea rows="1" oninput="readerEditMtCell(\'' + tableName + '\',' + idx + ',\'' + c + '\',this.value);this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'" style="width:100%;box-sizing:border-box;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;padding:5px 8px;font-size:12px;color:var(--text);font-family:inherit;outline:none;resize:none;overflow:hidden;line-height:1.5;white-space:pre-wrap;word-break:break-word">' + esc(row[c]||'') + '</textarea>'
+                                + '</div>';
                         }).join('')
                         + '</div></div>';
                 }
@@ -15915,7 +15926,11 @@ body {
             var edit = row.querySelector('.mt-edit');
             var ar = row.querySelector('.seg-arrow');
             if (!edit) return;
-            if (edit.style.display === 'none') { edit.style.display = ''; if (ar) ar.textContent = '▾'; }
+            if (edit.style.display === 'none') {
+                edit.style.display = ''; if (ar) ar.textContent = '▾';
+                var tas = edit.querySelectorAll('textarea');
+                for (var i = 0; i < tas.length; i++) { tas[i].style.height = 'auto'; tas[i].style.height = tas[i].scrollHeight + 'px'; }
+            }
             else { edit.style.display = 'none'; if (ar) ar.textContent = '▸'; }
         }
         function readerEditMtCell(tableName, idx, col, val) {
