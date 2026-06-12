@@ -14613,21 +14613,25 @@ body {
                     var esc = function(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
                     var preview = cols.map(function(c) { return esc(row[c]||''); }).join(' · ');
                     var resolved = tableName === 'plotlines' && (row['已解决'] === '是' || row['已解决'] === 'true');
+                    var dot = row._chg === 'new' ? '<span title="本次新增" style="display:inline-block;flex-shrink:0;width:6px;height:6px;border-radius:50%;background:#3a9d5d;margin-right:6px"></span>'
+                            : row._chg === 'upd' ? '<span title="内容有更新" style="display:inline-block;flex-shrink:0;width:6px;height:6px;border-radius:50%;background:#e0a23a;margin-right:6px"></span>' : '';
                     return '<div class="mt-row" data-mt="' + tableName + '" data-mt-idx="' + idx + '" style="' + (resolved ? 'opacity:0.45;' : '') + '">'
                         + '<div onclick="chatToggleMtRow(this)" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:4px 0">'
-                        + '<span style="font-size:12px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (resolved ? '<s>' : '') + esc(row[cols[0]]||'—') + (resolved ? '</s>' : '') + ' <span style="color:var(--text-muted);font-size:10px">' + preview.slice((row[cols[0]]||'').length + 3) + '</span></span>'
+                        + '<span style="font-size:12px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center">' + dot + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (resolved ? '<s>' : '') + esc(row[cols[0]]||'—') + (resolved ? '</s>' : '') + ' <span style="color:var(--text-muted);font-size:10px">' + preview.slice((row[cols[0]]||'').length + 3) + '</span></span></span>'
                         + '<span style="display:flex;align-items:center;gap:4px">'
                         + '<button onclick="event.stopPropagation();chatDeleteMtRow(\'' + tableName + '\',' + idx + ')" style="background:none;border:none;font-size:11px;color:var(--text-muted);cursor:pointer;padding:1px 4px" onmouseover="this.style.color=\'#e55\'" onmouseout="this.style.color=\'var(--text-muted)\'">✕</button>'
                         + '<span class="seg-arrow" style="font-size:9px;color:var(--text-muted)">▸</span>'
                         + '</span></div>'
                         + '<div class="mt-edit" style="display:none;padding:4px 0 8px">'
                         + cols.map(function(c, ci) {
+                            var prevLine = (row._prev && row._prev[c] != null) ? '<div style="font-size:10px;color:var(--text-muted);margin-top:2px">原：' + (esc(row._prev[c]) || '（空）') + '</div>' : '';
                             if (tableName === 'plotlines' && c === '已解决') {
-                                return '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-sub);margin:3px 0"><input type="checkbox" ' + (resolved ? 'checked' : '') + ' onchange="chatEditMtCell(\'' + tableName + '\',' + idx + ',\'' + c + '\',this.checked?\'是\':\'否\')" style="accent-color:var(--accent)"> 已解决</label>';
+                                return '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-sub);margin:3px 0"><input type="checkbox" ' + (resolved ? 'checked' : '') + ' onchange="chatEditMtCell(\'' + tableName + '\',' + idx + ',\'' + c + '\',this.checked?\'是\':\'否\')" style="accent-color:var(--accent)"> 已解决</label>' + prevLine;
                             }
                             return '<div style="margin:3px 0">'
                                 + '<div style="font-size:10px;color:var(--text-muted);margin-bottom:1px">' + c + '</div>'
                                 + '<textarea data-mt-col="' + c + '" rows="1" oninput="chatEditMtCell(\'' + tableName + '\',' + idx + ',\'' + c + '\',this.value);this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'" style="width:100%;box-sizing:border-box;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;padding:5px 8px;font-size:12px;color:var(--text);font-family:inherit;outline:none;resize:none;overflow:hidden;line-height:1.5;white-space:pre-wrap;word-break:break-word">' + esc(row[c]||'') + '</textarea>'
+                                + prevLine
                                 + '</div>';
                         }).join('')
                         + '</div></div>';
@@ -14704,6 +14708,28 @@ body {
         var _mtPlotCols = ['章节', '事件', '细节', '已解决'];
         var _mtPlaceCols = ['地点', '规模/特征', '关联', '简介'];
         var _mtTimeCols = ['时间', '事件'];   // 大事年表：只记有明确时间标记/重大跨度的关键节点，全表限量
+        // 给新表打「本次变更」标记：对比旧表，新增行 _chg='new'；已有行字段有变 _chg='upd' 并把旧值存进 _prev。
+        // 按首要标识列匹配（人物名/地点名/时间+事件/伏笔事件）。_chg/_prev 是附加字段，渲染表格 markdown 时会被忽略，不会发给模型。
+        function _mtRowKey(tableName, r) {
+            if (tableName === 'characters') return r['人物'] || '';
+            if (tableName === 'places') return r['地点'] || '';
+            if (tableName === 'timeline') return (r['时间'] || '') + '⁞' + (r['事件'] || '');
+            return r['事件'] || '';   // plotlines 按伏笔/事件描述匹配（章节会重复）
+        }
+        function _mtDiffMark(tableName, newRows, oldRows, cols) {
+            if (!newRows || !newRows.length) return newRows;
+            var oldMap = {};
+            for (var i = 0; i < (oldRows || []).length; i++) { var k = _mtRowKey(tableName, oldRows[i]); if (k) oldMap[k] = oldRows[i]; }
+            for (var j = 0; j < newRows.length; j++) {
+                var nr = newRows[j]; delete nr._chg; delete nr._prev;
+                var o = oldMap[_mtRowKey(tableName, nr)];
+                if (!o) { nr._chg = 'new'; continue; }
+                var prev = {}, changed = false;
+                for (var c = 0; c < cols.length; c++) { var col = cols[c]; if ((nr[col] || '') !== (o[col] || '')) { prev[col] = o[col] || ''; changed = true; } }
+                if (changed) { nr._chg = 'upd'; nr._prev = prev; }
+            }
+            return newRows;
+        }
         // 记忆表格交互
         function chatToggleMtRow(el) {
             var row = el.closest('.mt-row'); if (!row) return;
@@ -14720,7 +14746,9 @@ body {
         }
         function chatEditMtCell(tableName, idx, col, val) {
             if (!chatMemoryTables || !chatMemoryTables[tableName] || !chatMemoryTables[tableName][idx]) return;
-            chatMemoryTables[tableName][idx][col] = val;
+            var r = chatMemoryTables[tableName][idx];
+            r[col] = val;
+            delete r._chg; delete r._prev;   // 手动改过就清掉「本次变更」标记
             chatSaveCurrentConv(true);
         }
         function chatDeleteMtRow(tableName, idx) {
@@ -15009,6 +15037,11 @@ body {
                     var newTime = _parseTableMd(_parts.timeline, _timeCols);
                     var newPlots = _parseTableMd(_parts.plotlines, _plotCols);
                     if (newChars.length || newPlaces.length || newTime.length || newPlots.length) {
+                        // 替换前先对比旧表，给行打「新增 / 内容更新」标记
+                        _mtDiffMark('characters', newChars, tables.characters, _charCols);
+                        _mtDiffMark('places', newPlaces, tables.places, _placeCols);
+                        _mtDiffMark('timeline', newTime, tables.timeline, _timeCols);
+                        _mtDiffMark('plotlines', newPlots, tables.plotlines, _plotCols);
                         chatMemoryTables = {
                             characters: newChars.length ? newChars : tables.characters,
                             places: newPlaces.length ? newPlaces : tables.places,
@@ -15783,21 +15816,25 @@ body {
                 function _rmtRowHtml(tableName, row, idx, cols) {
                     var preview = cols.map(function(c) { return esc(row[c]||''); }).join(' · ');
                     var resolved = tableName === 'plotlines' && (row['已解决'] === '是' || row['已解决'] === 'true');
+                    var dot = row._chg === 'new' ? '<span title="本次新增" style="display:inline-block;flex-shrink:0;width:6px;height:6px;border-radius:50%;background:#3a9d5d;margin-right:6px"></span>'
+                            : row._chg === 'upd' ? '<span title="内容有更新" style="display:inline-block;flex-shrink:0;width:6px;height:6px;border-radius:50%;background:#e0a23a;margin-right:6px"></span>' : '';
                     return '<div class="mt-row" data-rmt="' + tableName + '" data-rmt-idx="' + idx + '" style="' + (resolved ? 'opacity:0.45;' : '') + '">'
                         + '<div onclick="readerToggleMtRow(this)" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:4px 0">'
-                        + '<span style="font-size:12px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (resolved ? '<s>' : '') + esc(row[cols[0]]||'—') + (resolved ? '</s>' : '') + ' <span style="color:var(--text-muted);font-size:10px">' + preview.slice((row[cols[0]]||'').length + 3) + '</span></span>'
+                        + '<span style="font-size:12px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center">' + dot + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (resolved ? '<s>' : '') + esc(row[cols[0]]||'—') + (resolved ? '</s>' : '') + ' <span style="color:var(--text-muted);font-size:10px">' + preview.slice((row[cols[0]]||'').length + 3) + '</span></span></span>'
                         + '<span style="display:flex;align-items:center;gap:4px">'
                         + '<button onclick="event.stopPropagation();readerDeleteMtRow(\'' + tableName + '\',' + idx + ')" style="background:none;border:none;font-size:11px;color:var(--text-muted);cursor:pointer;padding:1px 4px" onmouseover="this.style.color=\'#e55\'" onmouseout="this.style.color=\'var(--text-muted)\'">✕</button>'
                         + '<span class="seg-arrow" style="font-size:9px;color:var(--text-muted)">▸</span>'
                         + '</span></div>'
                         + '<div class="mt-edit" style="display:none;padding:4px 0 8px">'
                         + cols.map(function(c) {
+                            var prevLine = (row._prev && row._prev[c] != null) ? '<div style="font-size:10px;color:var(--text-muted);margin-top:2px">原：' + (esc(row._prev[c]) || '（空）') + '</div>' : '';
                             if (tableName === 'plotlines' && c === '已解决') {
-                                return '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-sub);margin:3px 0"><input type="checkbox" ' + (resolved ? 'checked' : '') + ' onchange="readerEditMtCell(\'' + tableName + '\',' + idx + ',\'' + c + '\',this.checked?\'是\':\'否\')" style="accent-color:var(--accent)"> 已解决</label>';
+                                return '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-sub);margin:3px 0"><input type="checkbox" ' + (resolved ? 'checked' : '') + ' onchange="readerEditMtCell(\'' + tableName + '\',' + idx + ',\'' + c + '\',this.checked?\'是\':\'否\')" style="accent-color:var(--accent)"> 已解决</label>' + prevLine;
                             }
                             return '<div style="margin:3px 0">'
                                 + '<div style="font-size:10px;color:var(--text-muted);margin-bottom:1px">' + c + '</div>'
                                 + '<textarea rows="1" oninput="readerEditMtCell(\'' + tableName + '\',' + idx + ',\'' + c + '\',this.value);this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'" style="width:100%;box-sizing:border-box;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;padding:5px 8px;font-size:12px;color:var(--text);font-family:inherit;outline:none;resize:none;overflow:hidden;line-height:1.5;white-space:pre-wrap;word-break:break-word">' + esc(row[c]||'') + '</textarea>'
+                                + prevLine
                                 + '</div>';
                         }).join('')
                         + '</div></div>';
@@ -15937,7 +15974,9 @@ body {
             var fileKey = readerBookKey(readerBookId);
             var mt = readerMemTablesGet(fileKey);
             if (!mt || !mt[tableName] || !mt[tableName][idx]) return;
-            mt[tableName][idx][col] = val;
+            var r = mt[tableName][idx];
+            r[col] = val;
+            delete r._chg; delete r._prev;   // 手动改过就清掉「本次变更」标记
             readerMemTablesSet(fileKey, mt, mt.upTo || -1);
             if (activeSyncProvider === 'cf') syncPushData();
         }
@@ -16145,6 +16184,10 @@ body {
                 var newTime = _readerParseTableMd(_parts.timeline, _mtTimeCols);
                 var newPlots = _readerParseTableMd(_parts.plotlines, _mtPlotCols);
                 if (newChars.length || newPlaces.length || newTime.length || newPlots.length) {
+                    _mtDiffMark('characters', newChars, tables.characters, _mtCharCols);
+                    _mtDiffMark('places', newPlaces, tables.places, _mtPlaceCols);
+                    _mtDiffMark('timeline', newTime, tables.timeline, _mtTimeCols);
+                    _mtDiffMark('plotlines', newPlots, tables.plotlines, _mtPlotCols);
                     readerMemTablesSet(fileKey, {
                         characters: newChars.length ? newChars : tables.characters,
                         places: newPlaces.length ? newPlaces : tables.places,
