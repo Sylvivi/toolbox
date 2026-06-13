@@ -18150,8 +18150,10 @@ body {
             var local = {}; readingLocalFontsLoad().forEach(function (f) { local[f.name] = true; });
             READING_FONT_SLOTS.forEach(function (s) {
                 var name = localStorage.getItem(s.key) || '';
-                if (name && !online[name] && !local[name]) { name = ''; localStorage.removeItem(s.key); } // 选的字体已删 → 回退默认
                 if (!name) { document.documentElement.style.removeProperty(s.varName); return; }
+                // 找不到字体「先不应用、也绝不删选择」：本地字体要等 IndexedDB 读完才在册，开机这一刻可能还没就绪；
+                // 删除应交给「× 删除字体」(readingDeleteFontAny) 处理，这里乱删会把刷新前选好的本地字体冲成默认。
+                if (!online[name] && !local[name]) { document.documentElement.style.removeProperty(s.varName); return; }
                 if (online[name]) readingEnsureOnlineFontLink(name);
                 // font-family 值里不能放 inherit（会让整条声明失效），只放字体名 + 通用兜底 serif
                 document.documentElement.style.setProperty(s.varName, '"' + name + '", serif');
