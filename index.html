@@ -2682,6 +2682,8 @@ body {
         .reading-quote { color: inherit; }
         /* 着色：默认给所有引号上色 */
         body.reading-quote-on .reading-merged .reading-quote { color: var(--accent); font-weight: 600; }
+        /* 人名高亮：正文里命中的人名用当前强调色（跟随主题）。span 渲染时一直在，靠这条 class 控制亮不亮，开关即时不用重排 */
+        body.reading-names-on .reading-merged .reading-name { color: var(--accent); font-weight: 600; }
         /* 长短分工(reading-ls-on)：着色只落长句(rq-wide)，短句不着色、让给装饰 */
         body.reading-ls-on .reading-merged .reading-quote:not(.rq-wide) { color: inherit; font-weight: 400; }
         /* 划线：默认作用于所有引号内层文字；长短分工下长句的划线由后面的 strip 规则去掉 */
@@ -4431,6 +4433,7 @@ body {
                         <button class="chat-topmenu-item" id="chatBookmarkBtn" onclick="chatHideTopMenu();chatToggleBookmarkPanel()" style="">🔖 读痕</button>
                         <button class="chat-topmenu-item" id="chatBookshelfBtn" onclick="chatHideTopMenu();rbOpenShelf()">📚 书架</button>
                         <button class="chat-topmenu-item" id="chatNavBtn" onclick="chatHideTopMenu();chatToggleNavPanel()">🧭 目录</button>
+                        <button class="chat-topmenu-item" id="chatNamesBtn" onclick="chatHideTopMenu();readingOpenNamesEditor()">🧑 人名</button>
                     </div>
                 </div>
                 <div class="reading-panel-mask" id="readingPanelMask" onclick="readingCloseFloatPanels()"></div>
@@ -6943,6 +6946,7 @@ body {
                         <button class="pagebtn-pos-opt" id="chipQuoteUl" onclick="readingToggleQuoteUl()" style="">划线</button>
                         <button class="pagebtn-pos-opt active" id="chipQuoteHl" onclick="readingToggleQuoteHl()" style="">着色</button>
                         <button class="pagebtn-pos-opt active" id="chipQuoteLs" onclick="readingToggleQuoteLs()" title="开：着色给长句、画框/波浪/划线给短句；关：所选样式所有引号一视同仁" style="">长短</button>
+                        <button class="pagebtn-pos-opt" id="chipNames" onclick="readingToggleNames()" title="把本书的人名用强调色高亮；点开可手填或让 AI 自动识别（⋮ 菜单也能改）">人名</button>
                     </div>
                 </div>
                 <div id="readingFontRow" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
@@ -10706,6 +10710,7 @@ body {
             readingApplyQuoteBox();
             readingApplyQuoteWave();
             readingApplyWarmMask();
+            readingApplyNames();
             readingApplyFont();
         });
 
@@ -14771,6 +14776,7 @@ body {
             readingApplyQuoteBox();
             readingApplyQuoteWave();
             readingApplyWarmMask();
+            readingApplyNames();
             chatSyncReadingToggleVis();
             var curSkin = localStorage.getItem('clawd_skin') || 'random';
             var btns = document.querySelectorAll('.clawd-skin-opt');
@@ -14812,6 +14818,7 @@ body {
             var bx = document.getElementById('chipQuoteBox');
             var wv = document.getElementById('chipQuoteWave');
             var ls = document.getElementById('chipQuoteLs');
+            var nm = document.getElementById('chipNames');
             if (m) m.style.display = isDark ? 'none' : '';
             if (wm) wm.style.display = isDark ? 'none' : ''; // 暖白跟遮罩同进退，夜间无意义
             if (hl) hl.style.display = isChat ? 'none' : '';
@@ -14819,6 +14826,7 @@ body {
             if (bx) bx.style.display = isChat ? 'none' : '';
             if (wv) wv.style.display = isChat ? 'none' : '';
             if (ls) ls.style.display = isChat ? 'none' : '';
+            if (nm) nm.style.display = isChat ? 'none' : ''; // 人名高亮：对话模式没有正文，隐藏（夜间仍可用）
             // 对话模式下整行（含「样式」标签）都没意义，直接隐藏整行，避免留个空标签
             var styleRow = document.getElementById('readingStyleRow');
             if (styleRow) styleRow.style.display = isChat ? 'none' : 'flex';
@@ -17785,7 +17793,7 @@ body {
             }
             updateStatusBarColor();
         }
-        // 点「暖白」chip：按 关→暖白→米白→月白→关 循环
+        // 点「暖白」chip：按 关→暖白→月白→关 循环
         function readingToggleWarmMask() {
             var cur = readingGetMaskTint();
             var next = MASK_TINTS[(MASK_TINTS.indexOf(cur) + 1) % MASK_TINTS.length];
@@ -17794,6 +17802,168 @@ body {
             // 开白底时如果遮罩还没开，自动把遮罩也打开（省得用户多点一下）
             if (next !== 'off' && localStorage.getItem('chat_mask') !== '1') toggleChatMask(true);
             readingApplyWarmMask();
+        }
+
+        /* ===== 人名高亮（共读/阅读）：按本书存一份名单，命中正文里的人名用当前强调色 =====
+           名单按「书」存：优先用书架里这本书的 id，没绑书就退回当前对话 id，互不串味。 */
+        function readingNamesKey() { return (typeof rbGetConvBook === 'function' && rbGetConvBook()) || chatCurrentConvId || ''; }
+        function readingGetNames() {
+            var key = readingNamesKey(); if (!key) return [];
+            try { var a = JSON.parse(localStorage.getItem('reading_names_' + key) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+        }
+        function readingSetNames(arr) {
+            var key = readingNamesKey(); if (!key) return;
+            var seen = {}, out = [];
+            (arr || []).forEach(function (n) { n = (n || '').trim(); if (n && !seen[n]) { seen[n] = 1; out.push(n); } });
+            out.sort(function (a, b) { return b.length - a.length; }); // 长名优先匹配，避免短名先吃掉长名的一截
+            try { localStorage.setItem('reading_names_' + key, JSON.stringify(out)); } catch (e) {}
+        }
+        function _readingEscapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+        function readingNamesRe() {
+            var names = readingGetNames();
+            if (!names.length) return null;
+            return new RegExp('(' + names.map(_readingEscapeRe).join('|') + ')', 'g');
+        }
+        // 渲染期用：在已转义+已包引号的 HTML 串里，只在标签之外的文字上包人名 span（不碰标签属性）
+        function readingWrapNames(html, re) {
+            if (!re) return html;
+            return html.replace(/(<[^>]+>)|([^<]+)/g, function (m, tag, text) {
+                if (tag) return tag;
+                re.lastIndex = 0;
+                return text.replace(re, '<span class="reading-name">$1</span>');
+            });
+        }
+        function readingApplyNames() {
+            var on = localStorage.getItem('reading_names_on') === '1';
+            document.body.classList.toggle('reading-names-on', on);
+            var chip = document.getElementById('chipNames');
+            if (chip) chip.classList.toggle('active', on);
+        }
+        function readingToggleNames() {
+            var on = localStorage.getItem('reading_names_on') === '1';
+            var next = !on;
+            localStorage.setItem('reading_names_on', next ? '1' : '0');
+            readingApplyNames();
+            // 开启时若本书还没有人名名单，直接弹编辑器（可手填或自动识别），省得用户找
+            if (next && readingGetNames().length === 0) readingOpenNamesEditor();
+        }
+        // 名单改了之后：把当前已渲染出来的正文段落原地重新高亮（不整页重排，保住阅读位置）
+        function _readingWrapNamesInEl(root, re) {
+            var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+            var nodes = [], n;
+            while ((n = walker.nextNode())) nodes.push(n);
+            nodes.forEach(function (node) {
+                var text = node.nodeValue;
+                re.lastIndex = 0;
+                if (!re.test(text)) return;
+                re.lastIndex = 0;
+                var frag = document.createDocumentFragment();
+                var last = 0, m;
+                while ((m = re.exec(text)) !== null) {
+                    if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+                    var span = document.createElement('span'); span.className = 'reading-name'; span.textContent = m[0];
+                    frag.appendChild(span);
+                    last = m.index + m[0].length;
+                    if (m.index === re.lastIndex) re.lastIndex++;
+                }
+                if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+                node.parentNode.replaceChild(frag, node);
+            });
+        }
+        function readingRehighlightNamesInPlace() {
+            var ps = document.querySelectorAll('.reading-merged p[data-p]');
+            var re = readingNamesRe();
+            for (var i = 0; i < ps.length; i++) {
+                var p = ps[i];
+                // 先拆掉旧的人名 span，合并相邻文本节点，再按新名单重包
+                var olds = p.querySelectorAll('.reading-name');
+                for (var j = 0; j < olds.length; j++) { var s = olds[j]; s.parentNode.replaceChild(document.createTextNode(s.textContent), s); }
+                p.normalize();
+                if (re) _readingWrapNamesInEl(p, re);
+            }
+        }
+        function readingOpenNamesEditor() {
+            if (!readingNamesKey()) { showToast('⚠️ 先进入一本书再设置人名'); return; }
+            var existing = document.querySelector('.reading-names-modal-mask');
+            if (existing) existing.remove();
+            var names = readingGetNames();
+            var mask = document.createElement('div');
+            mask.className = 'chat-summary-modal-mask reading-names-modal-mask';
+            var modal = document.createElement('div');
+            modal.className = 'chat-summary-modal';
+            modal.style.cssText = 'height:auto;max-height:calc(100vh - 120px)';
+            modal.innerHTML =
+                '<div class="chat-summary-modal-header"><span>🧑 人名高亮（本书）</span><button onclick="this.closest(\'.reading-names-modal-mask\').remove()">✕</button></div>' +
+                '<div class="chat-summary-modal-body">' +
+                    '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;line-height:1.6">一行一个人名（逗号、顿号也行）。高亮统一用当前强调色、跟随主题，不用挑颜色。</div>' +
+                    '<textarea id="readingNamesInput" spellcheck="false" style="width:100%;box-sizing:border-box;min-height:150px;resize:vertical;padding:10px;border-radius:10px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:14px;line-height:1.8" placeholder="叶子农&#10;林雪红&#10;罗家明">' + rbEsc(names.join('\n')) + '</textarea>' +
+                    '<div style="display:flex;gap:8px;margin-top:12px">' +
+                        '<button id="readingNamesAutoBtn" onclick="readingAutoDetectNames()" style="flex:1;padding:9px;border-radius:10px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;cursor:pointer">✨ 自动识别</button>' +
+                        '<button onclick="readingSaveNamesFromEditor()" style="flex:1;padding:9px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer">保存</button>' +
+                    '</div>' +
+                '</div>';
+            mask.appendChild(modal);
+            mask.addEventListener('click', function (ev) { if (ev.target === mask) mask.remove(); });
+            document.body.appendChild(mask);
+        }
+        function readingSaveNamesFromEditor() {
+            var ta = document.getElementById('readingNamesInput'); if (!ta) return;
+            readingSetNames(ta.value.split(/[\n,，、]+/));
+            var has = readingGetNames().length;
+            if (has) localStorage.setItem('reading_names_on', '1'); // 存了名字默认开高亮
+            readingApplyNames();
+            _readingMergeCache.text = null; // 名单变了，让下次渲染按新名单重包
+            readingRehighlightNamesInPlace(); // 已显示的段落即时更新，不跳位置
+            var mask = document.querySelector('.reading-names-modal-mask'); if (mask) mask.remove();
+            showToast(has ? ('✅ 已保存 ' + has + ' 个人名') : '已清空人名');
+        }
+        // AI 自动识别本书人名：采样正文 → 让模型列出人名 → 合并进编辑框（用户核对后再保存）
+        async function readingAutoDetectNames() {
+            var btn = document.getElementById('readingNamesAutoBtn');
+            var sel = document.getElementById('chatProviderSelect');
+            var item = sel ? getKeyItemById(sel.value) : null;
+            if (!item) { showToast('⚠️ 未选择中转站'); return; }
+            var baseUrl = getBaseUrl(item.url);
+            var apiKey = chatSelectedKeyStr || getActiveKey(item);
+            if (!chatSelectedModel) { showToast('⚠️ 未选择模型'); return; }
+            var sample = '';
+            for (var i = 0; i < chatMessages.length && sample.length < 4000; i++) {
+                var msg = chatMessages[i];
+                if (msg.role !== 'user') continue;
+                var txt = Array.isArray(msg.content)
+                    ? msg.content.filter(function (c) { return c.type === 'text'; }).map(function (c) { return c.text; }).join(' ')
+                    : (msg.content || '');
+                txt = readingModeStripParaNums(txt);
+                sample += txt + '\n';
+            }
+            sample = sample.slice(0, 4000);
+            if (!sample.trim()) { showToast('⚠️ 没有可识别的正文'); return; }
+            if (btn) { btn.disabled = true; btn.textContent = '识别中…'; }
+            try {
+                var out = await chatStreamChat({
+                    baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel,
+                    purpose: '人名识别',
+                    messages: [
+                        { role: 'system', content: '从下面的小说正文里找出出现的人物姓名（人名、角色名）。只输出人名本身，用中文逗号分隔；不要解释、不要编号、不要地名机构名。同一个人只列一次，用最常见的称呼。' },
+                        { role: 'user', content: sample }
+                    ],
+                    max_tokens: 300
+                });
+                var got = (out || '').split(/[,，、\n]+/)
+                    .map(function (s) { return s.replace(/[#*`>\-\d.．、:：]/g, '').trim(); })
+                    .filter(function (s) { return s.length >= 1 && s.length <= 12; });
+                var ta = document.getElementById('readingNamesInput');
+                if (ta) {
+                    var cur = ta.value.split(/[\n,，、]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+                    var seen = {}, merged = [];
+                    cur.concat(got).forEach(function (n) { if (n && !seen[n]) { seen[n] = 1; merged.push(n); } });
+                    ta.value = merged.join('\n');
+                }
+                showToast('✨ 识别到 ' + got.length + ' 个，核对后点保存');
+            } catch (e) {
+                showToast('❌ 识别失败：' + (e.message || ''));
+            }
+            if (btn) { btn.disabled = false; btn.textContent = '✨ 自动识别'; }
         }
         // 把段落里的引号对话包进 <span class="reading-quote">，供高亮上色。
         // 注意：传入的是已 esc 的文本（无 < > 标签），直接正则包裹安全。
@@ -20534,11 +20704,13 @@ body {
         }
 
         // 原文段落 HTML 缓存：AI 边写点评时整章正文不变，避免每 0.1 秒把整章重新转义+高亮一遍（输出完全一致，只是少做重复活）
-        var _readingMergeCache = { text: null, ps: null };
+        var _readingMergeCache = { text: null, ps: null, namesSig: null };
         function readingModeRenderMerged(originalText, aiText) {
             // 原文段落的 <p> 串只跟原文有关，与 AI 文本无关 → 同一章流式期间只算一次
+            // 人名名单也算进缓存签名：名单改了要重包（名单一直挂 span，亮不亮由 CSS class 管，所以开关切换不必重排）
+            var _namesSig = readingGetNames().join('|');
             var pHtml;
-            if (_readingMergeCache.text === originalText && _readingMergeCache.ps) {
+            if (_readingMergeCache.text === originalText && _readingMergeCache.ps && _readingMergeCache.namesSig === _namesSig) {
                 pHtml = _readingMergeCache.ps;
             } else {
                 var lines = originalText.split('\n');
@@ -20547,11 +20719,14 @@ body {
                     var line = lines[i].trim();
                     if (line.length > 0) paras.push(line);
                 }
+                var _nre = readingNamesRe();
                 pHtml = [];
                 for (var p = 0; p < paras.length; p++) {
-                    pHtml.push('<p data-p="' + (p + 1) + '" style="white-space:pre-wrap;word-break:break-word;margin:0.5em 0">' + readingHighlightQuotes(esc(paras[p])) + '</p>');
+                    var _ph = readingHighlightQuotes(esc(paras[p]));
+                    if (_nre) _ph = readingWrapNames(_ph, _nre);
+                    pHtml.push('<p data-p="' + (p + 1) + '" style="white-space:pre-wrap;word-break:break-word;margin:0.5em 0">' + _ph + '</p>');
                 }
-                _readingMergeCache = { text: originalText, ps: pHtml };
+                _readingMergeCache = { text: originalText, ps: pHtml, namesSig: _namesSig };
             }
             var comments = readingModeParseComments(aiText);
             var commentMap = {};
