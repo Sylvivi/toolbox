@@ -184,18 +184,19 @@ html:has(.theme-rose-night) { background-color: #0c0c0e; }
         .theme-tealblue-night select, .theme-tealblue-night select option { background-color: #17171a; color: #ededf2; }
 
 
-        /* 紫粉·夜 —— 炭黑底 + 明亮长春花紫强调（原色稍加深一档） */
+        /* 紫粉·夜 —— 炭黑底 + 长春花紫强调
+           ★ 原 #9aa4f0 发灰发糊，提纯成更鲜更亮的长春花紫 #b29bff（加深=提饱和、变亮=提明度同时做），靠拢蓝金那种亮亮的会发光感 */
         .theme-purplepink-night {
             --bg: linear-gradient(135deg, #0c0c0e 0%, #111115 50%, #0c0c0e 100%);
             --text: #ededf2; --text-sub: #a6a6ae; --text-light: #83838c; --text-muted: #63636c;
-            --accent: #9aa4f0; --accent-mid: #8690e8; --accent-light: rgba(154,164,240,0.16); --accent-chip: rgba(154,164,240,0.5);
+            --accent: #b29bff; --accent-mid: #9b82f0; --accent-light: rgba(178,155,255,0.16); --accent-chip: rgba(178,155,255,0.5);
             --card-bg: rgba(255,255,255,0.06); --card-border: rgba(255,255,255,0.1); --card-inner: rgba(255,255,255,0.05);
             --input-bg: rgba(255,255,255,0.07); --input-border: rgba(255,255,255,0.12);
             --modal-bg: rgba(18,18,21,0.86); --overlay-bg: rgba(0,0,0,0.55);
             --nav-bg: rgba(12,12,14,0.88); --nav-border: rgba(255,255,255,0.08);
-            --code-bg: rgba(215,215,255,0.06); --code-text: #c8c8f0;
-            --red: #fb7185; --red-bg: rgba(239,68,68,0.12); --blue: #9aa4f0; --blue-bg: rgba(154,164,240,0.15);
-            --gold: #9aa4f0; --dup-bg: rgba(154,164,240,0.14);
+            --code-bg: rgba(215,215,255,0.06); --code-text: #d6c8ff;
+            --red: #fb7185; --red-bg: rgba(239,68,68,0.12); --blue: #b29bff; --blue-bg: rgba(178,155,255,0.15);
+            --gold: #b29bff; --dup-bg: rgba(178,155,255,0.14);
         }
         .theme-purplepink-night select, .theme-purplepink-night select option { background-color: #17171a; color: #ededf2; }
 
@@ -1356,10 +1357,13 @@ body {
         body.chat-mask-on.cool-mask-on .modal.chat-modal {   /* 月白：清冷月白，带一点蓝灰，护眼不刺 */
             background: rgba(238,242,247,0.80);
         }
-        /* 深色永远不上遮罩 */
+        /* 深色永远不上（暖白/月白那种）遮罩 */
         body.chat-mask-on.dark .modal.chat-modal {
             background: transparent;
         }
+        /* 夜间「纯黑」遮罩：把对话/阅读弹窗底色压成纯黑（OLED 全黑观感），独立开关、仅夜间有意义 */
+        body.dark.black-mask-on .modal.chat-modal { background: #000; }
+        html:has(body.modal-open.dark.black-mask-on) { background-color: #000; }
         /* iPad 装成 App 后，阅读遮罩有时铺不到屏幕最底边，底下会露出页面主题底色（偏紫/偏冷）的一截。
            开着遮罩+白底、又正打开对话页时，把整个 html 底色也换成同样的白，露出来的也是同色。
            只在对话页打开时生效（modal-open），关掉就还原各主题底色，不影响首页。 */
@@ -2682,8 +2686,14 @@ body {
         .reading-quote { color: inherit; }
         /* 着色：默认给所有引号上色 */
         body.reading-quote-on .reading-merged .reading-quote { color: var(--accent); font-weight: 600; }
-        /* 人名高亮：正文里命中的人名用当前强调色（跟随主题）。span 渲染时一直在，靠这条 class 控制亮不亮，开关即时不用重排 */
-        body.reading-names-on .reading-merged .reading-name { color: var(--accent); font-weight: 600; }
+        /* 人名高亮：正文里命中的人名包成 .reading-name（渲染时一直在），下面三种样式可单选可叠加，靠 body class 即时切换、不用重排。
+           着色=强调色；加粗=只加粗不变色；点点=字底着重号（每字下一个小圆点，强调色）。 */
+        body.reading-names-on.rn-color .reading-merged .reading-name { color: var(--accent); font-weight: 600; }
+        body.reading-names-on.rn-bold .reading-merged .reading-name { font-weight: 700; }
+        body.reading-names-on.rn-dots .reading-merged .reading-name {
+            text-emphasis: filled dot var(--accent); -webkit-text-emphasis: filled dot var(--accent);
+            text-emphasis-position: under; -webkit-text-emphasis-position: under;
+        }
         /* 长短分工(reading-ls-on)：着色只落长句(rq-wide)，短句不着色、让给装饰 */
         body.reading-ls-on .reading-merged .reading-quote:not(.rq-wide) { color: inherit; font-weight: 400; }
         /* 划线：默认作用于所有引号内层文字；长短分工下长句的划线由后面的 strip 规则去掉 */
@@ -4433,7 +4443,6 @@ body {
                         <button class="chat-topmenu-item" id="chatBookmarkBtn" onclick="chatHideTopMenu();chatToggleBookmarkPanel()" style="">🔖 读痕</button>
                         <button class="chat-topmenu-item" id="chatBookshelfBtn" onclick="chatHideTopMenu();rbOpenShelf()">📚 书架</button>
                         <button class="chat-topmenu-item" id="chatNavBtn" onclick="chatHideTopMenu();chatToggleNavPanel()">🧭 目录</button>
-                        <button class="chat-topmenu-item" id="chatNamesBtn" onclick="chatHideTopMenu();readingOpenNamesEditor()">🧑 人名</button>
                     </div>
                 </div>
                 <div class="reading-panel-mask" id="readingPanelMask" onclick="readingCloseFloatPanels()"></div>
@@ -6935,6 +6944,7 @@ body {
                     <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
                         <button class="pagebtn-pos-opt active" id="chipNight" onclick="setNightMode(!nightMode)">夜间</button>
                         <button class="pagebtn-pos-opt" id="chipWarmMask" onclick="readingToggleWarmMask()" style="display: none;">暖白</button>
+                        <button class="pagebtn-pos-opt" id="chipBlackMask" onclick="readingToggleBlackMask()" title="夜间把弹窗底色压成纯黑（OLED 全黑观感）" style="display: none;">纯黑</button>
                         <button class="pagebtn-pos-opt" id="chipMask" onclick="toggleChatMaskChip()" style="display: none;">遮罩</button>
                     </div>
                 </div>
@@ -6946,7 +6956,15 @@ body {
                         <button class="pagebtn-pos-opt" id="chipQuoteUl" onclick="readingToggleQuoteUl()" style="">划线</button>
                         <button class="pagebtn-pos-opt active" id="chipQuoteHl" onclick="readingToggleQuoteHl()" style="">着色</button>
                         <button class="pagebtn-pos-opt active" id="chipQuoteLs" onclick="readingToggleQuoteLs()" title="开：着色给长句、画框/波浪/划线给短句；关：所选样式所有引号一视同仁" style="">长短</button>
-                        <button class="pagebtn-pos-opt" id="chipNames" onclick="readingToggleNames()" title="把本书的人名用强调色高亮；点开可手填或让 AI 自动识别（⋮ 菜单也能改）">人名</button>
+                    </div>
+                </div>
+                <div id="readingNameRow" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0">人名</span>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
+                        <button class="pagebtn-pos-opt" id="chipNameColor" onclick="readingToggleNameStyle('color')" title="人名用强调色">着色</button>
+                        <button class="pagebtn-pos-opt" id="chipNameBold" onclick="readingToggleNameStyle('bold')" title="人名只加粗、不变色">加粗</button>
+                        <button class="pagebtn-pos-opt" id="chipNameDots" onclick="readingToggleNameStyle('dots')" title="人名字底加着重号小圆点">点点</button>
+                        <button class="pagebtn-pos-opt" id="chipNameList" onclick="readingOpenNamesEditor()" title="填写/自动识别本书人名">名单…</button>
                     </div>
                 </div>
                 <div id="readingFontRow" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
@@ -7676,7 +7694,11 @@ body {
             if (themeId === 'random') themeId = localStorage.getItem('toolbox_theme_last') || 'clay';
             var overlay = document.getElementById('chatModalOverlay');
             var chatOpen = overlay && overlay.classList.contains('show');
-            // 当前选了哪种白底（暖白/米白/月白/关），状态栏跟着变成那种白
+            // 夜间纯黑遮罩：弹窗开着时状态栏也压成纯黑
+            if (chatOpen && document.body.classList.contains('dark') && document.body.classList.contains('black-mask-on')) {
+                meta.setAttribute('content', '#000'); return;
+            }
+            // 当前选了哪种白底（暖白/月白/关），状态栏跟着变成那种白
             var maskTint = (typeof readingGetMaskTint === 'function') ? readingGetMaskTint() : 'off';
             var unifiedMask = chatOpen
                 && document.body.classList.contains('chat-mask-on')
@@ -10710,6 +10732,7 @@ body {
             readingApplyQuoteBox();
             readingApplyQuoteWave();
             readingApplyWarmMask();
+            readingApplyBlackMask();
             readingApplyNames();
             readingApplyFont();
         });
@@ -14776,6 +14799,7 @@ body {
             readingApplyQuoteBox();
             readingApplyQuoteWave();
             readingApplyWarmMask();
+            readingApplyBlackMask();
             readingApplyNames();
             chatSyncReadingToggleVis();
             var curSkin = localStorage.getItem('clawd_skin') || 'random';
@@ -14818,18 +14842,20 @@ body {
             var bx = document.getElementById('chipQuoteBox');
             var wv = document.getElementById('chipQuoteWave');
             var ls = document.getElementById('chipQuoteLs');
-            var nm = document.getElementById('chipNames');
+            var bk = document.getElementById('chipBlackMask');
             if (m) m.style.display = isDark ? 'none' : '';
             if (wm) wm.style.display = isDark ? 'none' : ''; // 暖白跟遮罩同进退，夜间无意义
+            if (bk) bk.style.display = isDark ? '' : 'none'; // 纯黑反过来：只夜间显示
             if (hl) hl.style.display = isChat ? 'none' : '';
             if (ul) ul.style.display = isChat ? 'none' : '';
             if (bx) bx.style.display = isChat ? 'none' : '';
             if (wv) wv.style.display = isChat ? 'none' : '';
             if (ls) ls.style.display = isChat ? 'none' : '';
-            if (nm) nm.style.display = isChat ? 'none' : ''; // 人名高亮：对话模式没有正文，隐藏（夜间仍可用）
-            // 对话模式下整行（含「样式」标签）都没意义，直接隐藏整行，避免留个空标签
+            // 对话模式下整行（含「样式」「人名」标签）都没意义，直接隐藏整行，避免留个空标签
             var styleRow = document.getElementById('readingStyleRow');
             if (styleRow) styleRow.style.display = isChat ? 'none' : 'flex';
+            var nameRow = document.getElementById('readingNameRow');
+            if (nameRow) nameRow.style.display = isChat ? 'none' : 'flex';
         }
 
         var _clawdAllSkins = ['normal','shy','love','rainy','boba','flower','music','coffee','sunglasses','xmas','coding'];
@@ -17803,6 +17829,19 @@ body {
             if (next !== 'off' && localStorage.getItem('chat_mask') !== '1') toggleChatMask(true);
             readingApplyWarmMask();
         }
+        // 夜间「纯黑」遮罩：把弹窗底色压成纯黑，仅夜间有意义（白天该 chip 隐藏）
+        function readingApplyBlackMask() {
+            var on = localStorage.getItem('reading_black_mask') === '1';
+            document.body.classList.toggle('black-mask-on', on);
+            var chip = document.getElementById('chipBlackMask');
+            if (chip) chip.classList.toggle('active', on);
+            updateStatusBarColor();
+        }
+        function readingToggleBlackMask() {
+            var on = localStorage.getItem('reading_black_mask') === '1';
+            localStorage.setItem('reading_black_mask', on ? '0' : '1');
+            readingApplyBlackMask();
+        }
 
         /* ===== 人名高亮（共读/阅读）：按本书存一份名单，命中正文里的人名用当前强调色 =====
            名单按「书」存：优先用书架里这本书的 id，没绑书就退回当前对话 id，互不串味。 */
@@ -17833,19 +17872,31 @@ body {
                 return text.replace(re, '<span class="reading-name">$1</span>');
             });
         }
-        function readingApplyNames() {
-            var on = localStorage.getItem('reading_names_on') === '1';
-            document.body.classList.toggle('reading-names-on', on);
-            var chip = document.getElementById('chipNames');
-            if (chip) chip.classList.toggle('active', on);
+        // 人名样式三选（可叠加）：着色/加粗/点点。默认只「着色」。高亮总开关 = 三者有其一开。
+        function _rnStyleOn(k) {
+            var v = localStorage.getItem('reading_name_' + k);
+            if (v === null) return k === 'color'; // 没设过：默认开「着色」，跟之前观感一致
+            return v === '1';
         }
-        function readingToggleNames() {
-            var on = localStorage.getItem('reading_names_on') === '1';
-            var next = !on;
-            localStorage.setItem('reading_names_on', next ? '1' : '0');
+        function readingApplyNames() {
+            var c = _rnStyleOn('color'), b = _rnStyleOn('bold'), d = _rnStyleOn('dots');
+            document.body.classList.toggle('rn-color', c);
+            document.body.classList.toggle('rn-bold', b);
+            document.body.classList.toggle('rn-dots', d);
+            var on = c || b || d;
+            localStorage.setItem('reading_names_on', on ? '1' : '0');
+            document.body.classList.toggle('reading-names-on', on);
+            var map = { color: 'chipNameColor', bold: 'chipNameBold', dots: 'chipNameDots' };
+            [['color', c], ['bold', b], ['dots', d]].forEach(function (p) {
+                var el = document.getElementById(map[p[0]]); if (el) el.classList.toggle('active', p[1]);
+            });
+        }
+        function readingToggleNameStyle(k) {
+            var cur = _rnStyleOn(k);
+            localStorage.setItem('reading_name_' + k, cur ? '0' : '1');
             readingApplyNames();
-            // 开启时若本书还没有人名名单，直接弹编辑器（可手填或自动识别），省得用户找
-            if (next && readingGetNames().length === 0) readingOpenNamesEditor();
+            // 刚开启某个样式、但本书还没名单 → 弹编辑器（手填或自动识别），省得用户找
+            if (!cur && readingGetNames().length === 0) readingOpenNamesEditor();
         }
         // 名单改了之后：把当前已渲染出来的正文段落原地重新高亮（不整页重排，保住阅读位置）
         function _readingWrapNamesInEl(root, re) {
@@ -17910,7 +17961,10 @@ body {
             var ta = document.getElementById('readingNamesInput'); if (!ta) return;
             readingSetNames(ta.value.split(/[\n,，、]+/));
             var has = readingGetNames().length;
-            if (has) localStorage.setItem('reading_names_on', '1'); // 存了名字默认开高亮
+            // 存了名字但一种样式都没开 → 默认开「着色」，否则填了名字却没效果
+            if (has && !(_rnStyleOn('color') || _rnStyleOn('bold') || _rnStyleOn('dots'))) {
+                localStorage.setItem('reading_name_color', '1');
+            }
             readingApplyNames();
             _readingMergeCache.text = null; // 名单变了，让下次渲染按新名单重包
             readingRehighlightNamesInPlace(); // 已显示的段落即时更新，不跳位置
