@@ -2676,10 +2676,38 @@ body {
         .rfont-save:hover { opacity: 0.9; }
         .rfont-save:active { transform: scale(0.98); }
         .rfont-status { font-size: 11px; color: var(--text-muted); opacity: 0.85; min-height: 14px; }
+        .rfont-list { display: flex; flex-wrap: wrap; gap: 7px; }
+        .rfont-empty { font-size: 11px; color: var(--text-muted); opacity: 0.8; }
+        .rfont-chip-tag {
+            font-size: 9px; line-height: 1; padding: 2px 5px; border-radius: 6px;
+            background: var(--accent-light); color: var(--accent-mid); font-weight: 600;
+        }
+        .rfont-upload {
+            display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+            width: 100%; box-sizing: border-box; padding: 8px; font-size: 12px; font-weight: 600;
+            border: 1px dashed var(--accent-mid); border-radius: 8px;
+            background: var(--card-bg); color: var(--accent-mid); cursor: pointer;
+            transition: background 0.15s; margin-top: 2px;
+        }
+        .rfont-upload:hover { background: var(--accent-light); }
+        .rfont-slots { display: flex; flex-direction: column; gap: 7px; padding-top: 4px; border-top: 1px solid var(--card-border); }
+        .rfont-slot-row { display: flex; align-items: center; gap: 8px; }
+        .rfont-slot-label { font-size: 12px; font-weight: 600; color: var(--text-muted); flex-shrink: 0; width: 28px; }
+        .rfont-select {
+            flex: 1; min-width: 0; font-size: 12px; padding: 6px 8px;
+            border: 1px solid var(--card-border); border-radius: 8px;
+            background: var(--card-bg); color: var(--text); cursor: pointer;
+        }
+        .rfont-select:focus { outline: none; border-color: var(--accent-mid); }
 
         /* ===== 共读：点段评价 ===== */
         /* 共读正文字号（按设备调节，作用于整段正文与问答，不影响操作栏） */
         .reading-merged { font-size: var(--reading-fs, 1em); font-family: var(--reading-font, inherit); }
+        /* 分位置字体：引号 / 章节标题 / 人名 各自可选字体（未选时 inherit=跟随正文）。
+           由 readingApplyFonts 把选中的字体写进对应 CSS 变量；没选就不写、自动继承正文。 */
+        .reading-merged .reading-quote { font-family: var(--reading-font-quote, inherit); }
+        .reading-merged .reading-chap-title { font-family: var(--reading-font-title, inherit); }
+        .reading-merged .reading-name { font-family: var(--reading-font-name, inherit); }
         /* 引号高亮：变色加粗、下划线、底纹高亮三个独立开关。
            变色/底纹作用于整段引号(.reading-quote，含符号)；下划线只画在内层文字(.reading-quote-inner)下，不压符号。 */
         .reading-quote { color: inherit; }
@@ -6971,23 +6999,32 @@ body {
                 </div>
                 <div id="readingFontFamilyRow" style="margin-top:10px">
                     <div onclick="readingToggleFontPanel()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none">
-                        <span style="font-size:12px;font-weight:600;color:var(--text-muted)">正文字体</span>
+                        <span style="font-size:12px;font-weight:600;color:var(--text-muted)">字体</span>
                         <span id="readingFontArrow" style="font-size:10px;color:var(--text-muted);transition:transform 0.2s;display:inline-block">▶</span>
                     </div>
                     <div id="readingFontPanel" style="display:none;flex-direction:column;gap:10px;margin-top:8px">
-                        <div id="readingFontList" style="display:flex;flex-wrap:wrap;gap:7px"><span class="rfont-chip no-x" onclick="readingUseFont('')"><span class="rfont-chip-name">默认</span></span><span class="rfont-chip on"><span class="rfont-chip-name" onclick="readingUseFont('Noto Serif CJK')">Noto Serif CJK</span><span class="rfont-chip-x" title="删除" onclick="readingDeleteFont('Noto Serif CJK')">×</span></span><span class="rfont-chip"><span class="rfont-chip-name" onclick="readingUseFont('Huiwen-mincho')">Huiwen-mincho</span><span class="rfont-chip-x" title="删除" onclick="readingDeleteFont('Huiwen-mincho')">×</span></span></div>
+                        <div id="readingFontList" class="rfont-list"></div>
                         <div class="rfont-add">
                             <div class="rfont-add-label" onclick="readingToggleAddFont()">
                                 <span>＋ 添加字体</span>
                                 <span id="readingFontAddArrow" style="font-size:9px;transition:transform 0.2s;display:inline-block">▶</span>
                             </div>
                             <div id="readingFontAddBody" class="rfont-add-body" style="display:none;flex-direction:column;gap:7px">
-                                <input id="readingFontUrlInput" class="rfont-input" type="text" placeholder="字体 CSS 网址，如 https://.../result.css">
+                                <input id="readingFontUrlInput" class="rfont-input" type="text" placeholder="在线字体 CSS 网址，如 https://.../result.css">
                                 <input id="readingFontNameInput" class="rfont-input" type="text" placeholder="字体名称，如 Huiwen-mincho">
-                                <button class="rfont-save" onclick="readingAddFont()">保存并应用</button>
-                                <span id="readingFontStatus" class="rfont-status">当前：Noto Serif CJK</span>
+                                <button class="rfont-save" onclick="readingAddFont()">保存在线字体</button>
+                                <label class="rfont-upload">📁 上传本地字体文件（ttf/otf/woff2）
+                                    <input type="file" accept=".ttf,.otf,.woff,.woff2,.ttc,font/*" multiple style="display:none" onchange="readingUploadLocalFont(this)">
+                                </label>
                             </div>
                         </div>
+                        <div class="rfont-slots">
+                            <div class="rfont-slot-row"><span class="rfont-slot-label">正文</span><select id="readingFontSel_body" class="rfont-select" onchange="readingSetSlotFont('body', this.value)"></select></div>
+                            <div class="rfont-slot-row"><span class="rfont-slot-label">引号</span><select id="readingFontSel_quote" class="rfont-select" onchange="readingSetSlotFont('quote', this.value)"></select></div>
+                            <div class="rfont-slot-row"><span class="rfont-slot-label">标题</span><select id="readingFontSel_title" class="rfont-select" onchange="readingSetSlotFont('title', this.value)"></select></div>
+                            <div class="rfont-slot-row"><span class="rfont-slot-label">人名</span><select id="readingFontSel_person" class="rfont-select" onchange="readingSetSlotFont('person', this.value)"></select></div>
+                        </div>
+                        <span id="readingFontStatus" class="rfont-status">正文：默认</span>
                     </div>
                 </div>
             </div>
@@ -7096,7 +7133,7 @@ body {
         /* ===== IndexedDB 存储引擎 ===== */
         var _idbCache = {};
         var _idb = null;
-        var _idbKeys = ['api_manager_data', 'css_snippets_data', 'toolbox_imgbeds', 'toolbox_tombstones', 'toolbox_sort_order', 'toolbox_snapshots', 'chat_history', 'checkin_data', 'checkin_tasks', 'reading_books'];
+        var _idbKeys = ['api_manager_data', 'css_snippets_data', 'toolbox_imgbeds', 'toolbox_tombstones', 'toolbox_sort_order', 'toolbox_snapshots', 'chat_history', 'checkin_data', 'checkin_tasks', 'reading_books', 'reading_local_fonts'];
         var _idbPendingWrites = 0;
 
         function idbInit() {
@@ -10728,7 +10765,8 @@ body {
             readingApplyWarmMask();
             readingApplyBlackMask();
             readingApplyNames();
-            readingApplyFont();
+            readingRegisterLocalFonts();
+            readingApplyFonts();
         });
 
         /* =========================================================================
@@ -14795,6 +14833,8 @@ body {
             readingApplyWarmMask();
             readingApplyBlackMask();
             readingApplyNames();
+            readingRegisterLocalFonts();
+            readingApplyFonts();
             chatSyncReadingToggleVis();
             var curSkin = localStorage.getItem('clawd_skin') || 'random';
             var btns = document.querySelectorAll('.clawd-skin-opt');
@@ -18034,8 +18074,21 @@ body {
         }
 
         // 共读：正文网络字体。支持「字体库」——存多个，点一下切换。随云同步（CF manifest，按时间戳整块覆盖）。
-        var _readingFontLink = null;
-        // 读出已保存的字体库：[{name,url}, ...]
+        /* ===== 阅读字体 =====
+           两类字体源：
+             · 在线字体库 reading_fonts=[{name,url}]（localStorage，参与云同步）——靠 <link> 加载 CSS。
+             · 本地字体库 reading_local_fonts=[{name,mime,buf:ArrayBuffer}]（IndexedDB，不同步，文件大）——靠 FontFace 注册。
+           四个位置各自挑字体：正文/引号/标题/人名，分别写入 CSS 变量 --reading-font / -quote / -title / -name；没选就不写、自动继承正文。 */
+        var READING_FONT_SLOTS = [
+            { slot: 'body',   key: 'reading_font_name',   varName: '--reading-font',       label: '正文' },
+            { slot: 'quote',  key: 'reading_font_quote',  varName: '--reading-font-quote', label: '引号' },
+            { slot: 'title',  key: 'reading_font_title',  varName: '--reading-font-title', label: '标题' },
+            { slot: 'person', key: 'reading_font_person', varName: '--reading-font-name',  label: '人名' }
+        ];
+        var _readingFontLinks = {};       // name -> <link>（在线字体 CSS，按需挂载）
+        var _readingLocalFontFaces = {};  // name -> true（已注册的本地 FontFace，防重复）
+
+        // 在线字体库（参与云同步）
         function readingFontsLoad() {
             try { var a = JSON.parse(localStorage.getItem('reading_fonts') || '[]'); return Array.isArray(a) ? a : []; }
             catch (e) { return []; }
@@ -18050,33 +18103,65 @@ body {
         }
         function readingGetFontsTs() { return localStorage.getItem('reading_fonts_ts') || ''; }
         function readingFontsSave(arr) { localStorage.setItem('reading_fonts', JSON.stringify(arr)); readingFontsTouch(); }
-        // 应用「当前选中」的字体（由 reading_font_name 记录），并刷新 <link> 与 CSS 变量
-        function readingApplyFont() {
-            var name = localStorage.getItem('reading_font_name') || '';
-            var fonts = readingFontsLoad();
-            var cur = null;
-            for (var i = 0; i < fonts.length; i++) { if (fonts[i].name === name) { cur = fonts[i]; break; } }
-            var st = document.getElementById('readingFontStatus');
-            if (!cur) {
-                // 默认：移除字体
-                if (_readingFontLink) { _readingFontLink.remove(); _readingFontLink = null; }
-                document.documentElement.style.removeProperty('--reading-font');
-                if (st) st.textContent = '当前：默认字体';
-                readingRenderFontList();
-                return;
-            }
-            if (!_readingFontLink) {
-                _readingFontLink = document.createElement('link');
-                _readingFontLink.rel = 'stylesheet';
-                _readingFontLink.id = 'readingFontLink';
-                document.head.appendChild(_readingFontLink);
-            }
-            if (_readingFontLink.href !== cur.url) _readingFontLink.href = cur.url;
-            // 注意：font-family 列表里不能出现 inherit（会让整条声明失效），只放字体名 + 通用兜底
-            document.documentElement.style.setProperty('--reading-font', '"' + cur.name + '", serif');
-            if (st) st.textContent = '当前：' + cur.name;
-            readingRenderFontList();
+
+        // 本地字体库（只存本机 IndexedDB，不参与云同步）
+        function readingLocalFontsLoad() {
+            var a = (typeof idbGet === 'function') ? idbGet('reading_local_fonts') : null;
+            return Array.isArray(a) ? a : [];
         }
+        function readingLocalFontsSave(arr) { if (typeof idbSet === 'function') idbSet('reading_local_fonts', arr); }
+
+        // 合并字体清单：[{name, kind:'online'|'local'}]（喂给下拉和字体库列表）
+        function readingAllFonts() {
+            var out = [];
+            readingFontsLoad().forEach(function (f) { out.push({ name: f.name, kind: 'online' }); });
+            readingLocalFontsLoad().forEach(function (f) { out.push({ name: f.name, kind: 'local' }); });
+            return out;
+        }
+
+        // 把本地字体注册成可用 FontFace（启动后、上传后调用）
+        function readingRegisterLocalFonts() {
+            if (!window.FontFace || !document.fonts) return;
+            readingLocalFontsLoad().forEach(function (f) {
+                if (_readingLocalFontFaces[f.name] || !f.buf) return;
+                try {
+                    var face = new FontFace(f.name, f.buf);
+                    _readingLocalFontFaces[f.name] = true;
+                    face.load().then(function (loaded) { document.fonts.add(loaded); try { readingApplyFonts(); } catch (e) {} })
+                               .catch(function () { delete _readingLocalFontFaces[f.name]; });
+                } catch (e) {}
+            });
+        }
+
+        // 确保某在线字体的 CSS <link> 已挂载（多个位置可同时用不同在线字体）
+        function readingEnsureOnlineFontLink(name) {
+            if (_readingFontLinks[name]) return;
+            var fonts = readingFontsLoad(), cur = null;
+            for (var i = 0; i < fonts.length; i++) { if (fonts[i].name === name) { cur = fonts[i]; break; } }
+            if (!cur) return;
+            var link = document.createElement('link');
+            link.rel = 'stylesheet'; link.href = cur.url; link.setAttribute('data-rfont', name);
+            document.head.appendChild(link);
+            _readingFontLinks[name] = link;
+        }
+
+        // 应用四个位置的字体：读各自选中的字体 → 确保加载 → 写/清 CSS 变量
+        function readingApplyFonts() {
+            var online = {}; readingFontsLoad().forEach(function (f) { online[f.name] = true; });
+            var local = {}; readingLocalFontsLoad().forEach(function (f) { local[f.name] = true; });
+            READING_FONT_SLOTS.forEach(function (s) {
+                var name = localStorage.getItem(s.key) || '';
+                if (name && !online[name] && !local[name]) { name = ''; localStorage.removeItem(s.key); } // 选的字体已删 → 回退默认
+                if (!name) { document.documentElement.style.removeProperty(s.varName); return; }
+                if (online[name]) readingEnsureOnlineFontLink(name);
+                // font-family 值里不能放 inherit（会让整条声明失效），只放字体名 + 通用兜底 serif
+                document.documentElement.style.setProperty(s.varName, '"' + name + '", serif');
+            });
+            readingRenderFontUI();
+        }
+        // 兼容旧调用名（同步拉取等处仍在用）
+        function readingApplyFont() { readingApplyFonts(); }
+
         // 共读：字体设置块折叠开关（默认收起，省面积）
         function readingToggleFontPanel() {
             var p = document.getElementById('readingFontPanel');
@@ -18086,7 +18171,7 @@ body {
             p.style.display = open ? 'none' : 'flex';
             if (arrow) arrow.style.transform = open ? '' : 'rotate(90deg)';
         }
-        // 「＋ 添加字体」：默认收起，点击才展开两个填入框
+        // 「＋ 添加字体」：默认收起，点击才展开
         function readingToggleAddFont() {
             var body = document.getElementById('readingFontAddBody');
             var arrow = document.getElementById('readingFontAddArrow');
@@ -18095,55 +18180,109 @@ body {
             body.style.display = open ? 'none' : 'flex';
             if (arrow) arrow.style.transform = open ? '' : 'rotate(90deg)';
         }
-        // 渲染字体库：默认 + 每个已存字体（点切换，× 删除）
-        function readingRenderFontList() {
+        // 渲染字体库 chips（仅展示+删除）和四个位置下拉
+        function readingRenderFontUI() {
+            var all = readingAllFonts();
             var box = document.getElementById('readingFontList');
-            if (!box) return;
-            var fonts = readingFontsLoad();
-            var active = localStorage.getItem('reading_font_name') || '';
-            var html = '<span class="rfont-chip no-x' + (active ? '' : ' on') + '" onclick="readingUseFont(\'\')">'
-                     + '<span class="rfont-chip-name">默认</span></span>';
-            for (var i = 0; i < fonts.length; i++) {
-                var nm = fonts[i].name;
-                var safe = nm.replace(/'/g, "\\'");
-                var on = (nm === active) ? ' on' : '';
-                html += '<span class="rfont-chip' + on + '">'
-                      + '<span class="rfont-chip-name" onclick="readingUseFont(\'' + safe + '\')">' + esc(nm) + '</span>'
-                      + '<span class="rfont-chip-x" title="删除" onclick="readingDeleteFont(\'' + safe + '\')">×</span>'
-                      + '</span>';
+            if (box) {
+                if (!all.length) {
+                    box.innerHTML = '<span class="rfont-empty">还没有字体，下面可添加在线字体或上传本地字体文件</span>';
+                } else {
+                    var h = '';
+                    for (var i = 0; i < all.length; i++) {
+                        var nm = all[i].name, safe = nm.replace(/'/g, "\\'");
+                        var tag = all[i].kind === 'local' ? '<span class="rfont-chip-tag">本地</span>' : '';
+                        h += '<span class="rfont-chip no-x"><span class="rfont-chip-name">' + esc(nm) + '</span>' + tag
+                           + '<span class="rfont-chip-x" title="删除" onclick="readingDeleteFontAny(\'' + safe + '\')">×</span></span>';
+                    }
+                    box.innerHTML = h;
+                }
             }
-            box.innerHTML = html;
+            READING_FONT_SLOTS.forEach(function (s) {
+                var sel = document.getElementById('readingFontSel_' + s.slot);
+                if (!sel) return;
+                var cur = localStorage.getItem(s.key) || '';
+                var o = '<option value="">默认</option>';
+                for (var i = 0; i < all.length; i++) {
+                    var nm = all[i].name;
+                    o += '<option value="' + esc(nm) + '"' + (nm === cur ? ' selected' : '') + '>'
+                       + esc(nm) + (all[i].kind === 'local' ? '（本地）' : '') + '</option>';
+                }
+                sel.innerHTML = o;
+                sel.value = cur;
+            });
+            var st = document.getElementById('readingFontStatus');
+            if (st) st.textContent = '正文：' + (localStorage.getItem('reading_font_name') || '默认');
         }
-        // 切换到某个已存字体（空字符串=默认）
-        function readingUseFont(name) {
-            if (name) localStorage.setItem('reading_font_name', name);
-            else localStorage.removeItem('reading_font_name');
-            readingFontsTouch();
-            readingApplyFont();
+
+        // 某个位置选了字体（空=默认）
+        function readingSetSlotFont(slot, name) {
+            var s = null;
+            for (var i = 0; i < READING_FONT_SLOTS.length; i++) { if (READING_FONT_SLOTS[i].slot === slot) { s = READING_FONT_SLOTS[i]; break; } }
+            if (!s) return;
+            if (name) localStorage.setItem(s.key, name); else localStorage.removeItem(s.key);
+            if (slot === 'body') readingFontsTouch(); // 正文选择沿用旧的同步习惯
+            readingApplyFonts();
         }
-        // 从输入框「保存并应用」一个新字体（若同名则更新）
+
+        // 添加在线字体（url + name）
         function readingAddFont() {
             var url = (document.getElementById('readingFontUrlInput').value || '').trim();
             var name = (document.getElementById('readingFontNameInput').value || '').trim();
             var st = document.getElementById('readingFontStatus');
             if (!url || !name) { if (st) st.textContent = '请把「字体网址」和「字体名称」都填上'; return; }
             if (!/^https?:\/\//i.test(url)) { if (st) st.textContent = '网址要以 http:// 或 https:// 开头'; return; }
-            var fonts = readingFontsLoad();
-            var found = false;
+            var fonts = readingFontsLoad(), found = false;
             for (var i = 0; i < fonts.length; i++) { if (fonts[i].name === name) { fonts[i].url = url; found = true; break; } }
             if (!found) fonts.push({ name: name, url: url });
             readingFontsSave(fonts);
-            localStorage.setItem('reading_font_name', name);
+            if (_readingFontLinks[name]) { try { _readingFontLinks[name].remove(); } catch (e) {} delete _readingFontLinks[name]; } // 同名改了 url 要重挂
             document.getElementById('readingFontUrlInput').value = '';
             document.getElementById('readingFontNameInput').value = '';
-            readingApplyFont();
+            readingApplyFonts();
+            if (st) st.textContent = '已添加在线字体「' + name + '」，可在下面给某个位置选用';
         }
-        // 删除字体库里某项（若正在用则回退默认）
-        function readingDeleteFont(name) {
-            var fonts = readingFontsLoad().filter(function(f) { return f.name !== name; });
-            readingFontsSave(fonts);
-            if ((localStorage.getItem('reading_font_name') || '') === name) localStorage.removeItem('reading_font_name');
-            readingApplyFont();
+
+        // 上传本地字体文件（可多选 ttf/otf/woff/woff2/ttc）
+        function readingUploadLocalFont(input) {
+            var files = input && input.files ? input.files : null;
+            var st = document.getElementById('readingFontStatus');
+            if (!files || !files.length) return;
+            var arr = readingLocalFontsLoad();
+            var pending = files.length, added = [];
+            function done() {
+                readingLocalFontsSave(arr);
+                readingRegisterLocalFonts();
+                readingApplyFonts();
+                if (st && added.length) st.textContent = '已上传本地字体：' + added.join('、') + '，可在下面给某个位置选用';
+            }
+            for (var i = 0; i < files.length; i++) {
+                (function (file) {
+                    var rd = new FileReader();
+                    rd.onload = function () {
+                        var nm = file.name.replace(/\.(ttf|otf|woff2?|ttc)$/i, '').trim() || ('字体' + (arr.length + 1));
+                        var found = false;
+                        for (var k = 0; k < arr.length; k++) { if (arr[k].name === nm) { arr[k] = { name: nm, mime: file.type || '', buf: rd.result }; found = true; break; } }
+                        if (!found) arr.push({ name: nm, mime: file.type || '', buf: rd.result });
+                        delete _readingLocalFontFaces[nm]; // 替换时允许重新注册
+                        added.push(nm);
+                        if (--pending === 0) done();
+                    };
+                    rd.onerror = function () { if (--pending === 0) done(); };
+                    rd.readAsArrayBuffer(file);
+                })(files[i]);
+            }
+            input.value = ''; // 允许再次选同一文件
+        }
+
+        // 删除字体库某项（在线/本地都查）；有位置在用则回退默认
+        function readingDeleteFontAny(name) {
+            readingFontsSave(readingFontsLoad().filter(function (f) { return f.name !== name; }));
+            readingLocalFontsSave(readingLocalFontsLoad().filter(function (f) { return f.name !== name; }));
+            if (_readingFontLinks[name]) { try { _readingFontLinks[name].remove(); } catch (e) {} delete _readingFontLinks[name]; }
+            delete _readingLocalFontFaces[name];
+            READING_FONT_SLOTS.forEach(function (s) { if ((localStorage.getItem(s.key) || '') === name) localStorage.removeItem(s.key); });
+            readingApplyFonts();
         }
 
         /* =========================================================================
@@ -20754,6 +20893,9 @@ body {
 
         // 原文段落 HTML 缓存：AI 边写点评时整章正文不变，避免每 0.1 秒把整章重新转义+高亮一遍（输出完全一致，只是少做重复活）
         var _readingMergeCache = { text: null, ps: null, namesSig: null };
+        // 章节标题正则：整段以「第〔中文/数字〕章/节/回/篇/卷/话」开头，后面接可选分隔符 + ≤20 字标题，且不含句中标点（，。！？逗号句号等）。
+        // 这样「第六百一十七章 寒风岭的玫瑰」「第十回」能命中，正文里「第三章已经写完了，……」这种长句不会误命中。
+        var READING_TITLE_RE = /^\s*第[一二三四五六七八九十百千零两\d]+[章节回篇卷话](?:[\s:：·.\-—　、]+)?[^，。！？、,.!?;；\n]{0,20}\s*$/;
         function readingModeRenderMerged(originalText, aiText) {
             // 原文段落的 <p> 串只跟原文有关，与 AI 文本无关 → 同一章流式期间只算一次
             // 人名名单也算进缓存签名：名单改了要重包（名单一直挂 span，亮不亮由 CSS class 管，所以开关切换不必重排）
@@ -20773,7 +20915,9 @@ body {
                 for (var p = 0; p < paras.length; p++) {
                     var _ph = readingHighlightQuotes(esc(paras[p]));
                     if (_nre) _ph = readingWrapNames(_ph, _nre);
-                    pHtml.push('<p data-p="' + (p + 1) + '" style="white-space:pre-wrap;word-break:break-word;margin:0.5em 0">' + _ph + '</p>');
+                    // 章节标题识别：整段以「第X章/节/回…」开头且较短 → 包 class，可单独上「标题字体」
+                    var _tcls = READING_TITLE_RE.test(paras[p]) ? ' class="reading-chap-title"' : '';
+                    pHtml.push('<p data-p="' + (p + 1) + '"' + _tcls + ' style="white-space:pre-wrap;word-break:break-word;margin:0.5em 0">' + _ph + '</p>');
                 }
                 _readingMergeCache = { text: originalText, ps: pHtml, namesSig: _namesSig };
             }
