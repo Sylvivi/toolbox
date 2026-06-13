@@ -2690,9 +2690,10 @@ body {
            着色=强调色；加粗=只加粗不变色；点点=字底着重号（每字下一个小圆点，强调色）。 */
         body.reading-names-on.rn-color .reading-merged .reading-name { color: var(--accent); font-weight: 600; }
         body.reading-names-on.rn-bold .reading-merged .reading-name { font-weight: 700; }
-        body.reading-names-on.rn-dots .reading-merged .reading-name {
-            text-emphasis: filled dot var(--accent); -webkit-text-emphasis: filled dot var(--accent);
-            text-emphasis-position: under; -webkit-text-emphasis-position: under;
+        /* 底色：像马克笔涂过人名，淡强调色底。只加左右内边距、不动上下，不撑行距 */
+        body.reading-names-on.rn-back .reading-merged .reading-name {
+            background: var(--accent-light); border-radius: 4px; padding: 0 3px;
+            -webkit-box-decoration-break: clone; box-decoration-break: clone;
         }
         /* 长短分工(reading-ls-on)：着色只落长句(rq-wide)，短句不着色、让给装饰 */
         body.reading-ls-on .reading-merged .reading-quote:not(.rq-wide) { color: inherit; font-weight: 400; }
@@ -6963,7 +6964,7 @@ body {
                     <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
                         <button class="pagebtn-pos-opt" id="chipNameColor" onclick="readingToggleNameStyle('color')" title="人名用强调色">着色</button>
                         <button class="pagebtn-pos-opt" id="chipNameBold" onclick="readingToggleNameStyle('bold')" title="人名只加粗、不变色">加粗</button>
-                        <button class="pagebtn-pos-opt" id="chipNameDots" onclick="readingToggleNameStyle('dots')" title="人名字底加着重号小圆点">点点</button>
+                        <button class="pagebtn-pos-opt" id="chipNameBack" onclick="readingToggleNameStyle('back')" title="人名加淡强调色底（马克笔高亮感，不撑行距）">底色</button>
                         <button class="pagebtn-pos-opt" id="chipNameList" onclick="readingOpenNamesEditor()" title="填写/自动识别本书人名">名单…</button>
                     </div>
                 </div>
@@ -17879,15 +17880,15 @@ body {
             return v === '1';
         }
         function readingApplyNames() {
-            var c = _rnStyleOn('color'), b = _rnStyleOn('bold'), d = _rnStyleOn('dots');
+            var c = _rnStyleOn('color'), b = _rnStyleOn('bold'), k = _rnStyleOn('back');
             document.body.classList.toggle('rn-color', c);
             document.body.classList.toggle('rn-bold', b);
-            document.body.classList.toggle('rn-dots', d);
-            var on = c || b || d;
+            document.body.classList.toggle('rn-back', k);
+            var on = c || b || k;
             localStorage.setItem('reading_names_on', on ? '1' : '0');
             document.body.classList.toggle('reading-names-on', on);
-            var map = { color: 'chipNameColor', bold: 'chipNameBold', dots: 'chipNameDots' };
-            [['color', c], ['bold', b], ['dots', d]].forEach(function (p) {
+            var map = { color: 'chipNameColor', bold: 'chipNameBold', back: 'chipNameBack' };
+            [['color', c], ['bold', b], ['back', k]].forEach(function (p) {
                 var el = document.getElementById(map[p[0]]); if (el) el.classList.toggle('active', p[1]);
             });
         }
@@ -17962,7 +17963,7 @@ body {
             readingSetNames(ta.value.split(/[\n,，、]+/));
             var has = readingGetNames().length;
             // 存了名字但一种样式都没开 → 默认开「着色」，否则填了名字却没效果
-            if (has && !(_rnStyleOn('color') || _rnStyleOn('bold') || _rnStyleOn('dots'))) {
+            if (has && !(_rnStyleOn('color') || _rnStyleOn('bold') || _rnStyleOn('back'))) {
                 localStorage.setItem('reading_name_color', '1');
             }
             readingApplyNames();
