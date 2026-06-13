@@ -184,19 +184,18 @@ html:has(.theme-rose-night) { background-color: #0c0c0e; }
         .theme-tealblue-night select, .theme-tealblue-night select option { background-color: #17171a; color: #ededf2; }
 
 
-        /* 紫粉·夜 —— 炭黑底 + 长春花紫强调
-           ★ 原 #9aa4f0 发灰发糊，提纯成更鲜更亮的长春花紫 #b29bff（加深=提饱和、变亮=提明度同时做），靠拢蓝金那种亮亮的会发光感 */
+        /* 紫粉·夜 —— 炭黑底 + 长春花紫强调 */
         .theme-purplepink-night {
             --bg: linear-gradient(135deg, #0c0c0e 0%, #111115 50%, #0c0c0e 100%);
             --text: #ededf2; --text-sub: #a6a6ae; --text-light: #83838c; --text-muted: #63636c;
-            --accent: #b29bff; --accent-mid: #9b82f0; --accent-light: rgba(178,155,255,0.16); --accent-chip: rgba(178,155,255,0.5);
+            --accent: #9aa4f0; --accent-mid: #8690e8; --accent-light: rgba(154,164,240,0.16); --accent-chip: rgba(154,164,240,0.5);
             --card-bg: rgba(255,255,255,0.06); --card-border: rgba(255,255,255,0.1); --card-inner: rgba(255,255,255,0.05);
             --input-bg: rgba(255,255,255,0.07); --input-border: rgba(255,255,255,0.12);
             --modal-bg: rgba(18,18,21,0.86); --overlay-bg: rgba(0,0,0,0.55);
             --nav-bg: rgba(12,12,14,0.88); --nav-border: rgba(255,255,255,0.08);
-            --code-bg: rgba(215,215,255,0.06); --code-text: #d6c8ff;
-            --red: #fb7185; --red-bg: rgba(239,68,68,0.12); --blue: #b29bff; --blue-bg: rgba(178,155,255,0.15);
-            --gold: #b29bff; --dup-bg: rgba(178,155,255,0.14);
+            --code-bg: rgba(215,215,255,0.06); --code-text: #c8c8f0;
+            --red: #fb7185; --red-bg: rgba(239,68,68,0.12); --blue: #9aa4f0; --blue-bg: rgba(154,164,240,0.15);
+            --gold: #9aa4f0; --dup-bg: rgba(154,164,240,0.14);
         }
         .theme-purplepink-night select, .theme-purplepink-night select option { background-color: #17171a; color: #ededf2; }
 
@@ -2690,20 +2689,6 @@ body {
            着色=强调色；加粗=只加粗不变色；点点=字底着重号（每字下一个小圆点，强调色）。 */
         body.reading-names-on.rn-color .reading-merged .reading-name { color: var(--accent); font-weight: 600; }
         body.reading-names-on.rn-bold .reading-merged .reading-name { font-weight: 700; }
-        /* 波浪：复用引号那套手绘波浪 SVG（--quote-wave-img，强调色、随主题刷新），平铺在人名底部 */
-        body.reading-names-on.rn-wave .reading-merged .reading-name {
-            background-image: var(--quote-wave-img);
-            background-position: left bottom; background-repeat: repeat-x; background-size: auto 10px;
-            padding-bottom: 8px;
-            -webkit-box-decoration-break: clone; box-decoration-break: clone;
-        }
-        /* 画框：复用引号那套手绘描边方框（--quote-box-img），把人名圈起来 */
-        body.reading-names-on.rn-box .reading-merged .reading-name {
-            background-image: var(--quote-box-img);
-            background-size: 100% 100%; background-repeat: no-repeat;
-            padding: 1px 5px;
-            -webkit-box-decoration-break: clone; box-decoration-break: clone;
-        }
         /* 长短分工(reading-ls-on)：着色只落长句(rq-wide)，短句不着色、让给装饰 */
         body.reading-ls-on .reading-merged .reading-quote:not(.rq-wide) { color: inherit; font-weight: 400; }
         /* 划线：默认作用于所有引号内层文字；长短分工下长句的划线由后面的 strip 规则去掉 */
@@ -6973,8 +6958,6 @@ body {
                     <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
                         <button class="pagebtn-pos-opt" id="chipNameColor" onclick="readingToggleNameStyle('color')" title="人名用强调色">着色</button>
                         <button class="pagebtn-pos-opt" id="chipNameBold" onclick="readingToggleNameStyle('bold')" title="人名只加粗、不变色">加粗</button>
-                        <button class="pagebtn-pos-opt" id="chipNameWave" onclick="readingToggleNameStyle('wave')" title="人名底下加手绘波浪线（强调色，跟引号那套同款）">波浪</button>
-                        <button class="pagebtn-pos-opt" id="chipNameBox" onclick="readingToggleNameStyle('box')" title="人名套手绘画框（强调色，跟引号那套同款）">画框</button>
                         <button class="pagebtn-pos-opt" id="chipNameList" onclick="readingOpenNamesEditor()" title="填写/自动识别本书人名">名单…</button>
                     </div>
                 </div>
@@ -17889,9 +17872,9 @@ body {
             if (v === null) return k === 'color'; // 没设过：默认开「着色」，跟之前观感一致
             return v === '1';
         }
-        var RN_STYLES = ['color', 'bold', 'wave', 'box']; // 着色/加粗/波浪/画框，可叠加（波浪⟷画框互斥）
-        var RN_CLS = { color: 'rn-color', bold: 'rn-bold', wave: 'rn-wave', box: 'rn-box' };
-        var RN_CHIP = { color: 'chipNameColor', bold: 'chipNameBold', wave: 'chipNameWave', box: 'chipNameBox' };
+        var RN_STYLES = ['color', 'bold']; // 着色/加粗，可叠加
+        var RN_CLS = { color: 'rn-color', bold: 'rn-bold' };
+        var RN_CHIP = { color: 'chipNameColor', bold: 'chipNameBold' };
         function readingNameAnyOn() { return RN_STYLES.some(function (k) { return _rnStyleOn(k); }); }
         function readingApplyNames() {
             RN_STYLES.forEach(function (k) {
@@ -17906,9 +17889,6 @@ body {
         function readingToggleNameStyle(k) {
             var cur = _rnStyleOn(k);
             localStorage.setItem('reading_name_' + k, cur ? '0' : '1');
-            // 波浪 / 画框 都铺在人名上，叠着会冲突 → 二选一，开一个自动关另一个
-            if (!cur && k === 'wave') localStorage.setItem('reading_name_box', '0');
-            if (!cur && k === 'box') localStorage.setItem('reading_name_wave', '0');
             readingApplyNames();
             // 刚开启某个样式、但本书还没名单 → 弹编辑器（手填或自动识别），省得用户找
             if (!cur && readingGetNames().length === 0) readingOpenNamesEditor();
