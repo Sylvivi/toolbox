@@ -2706,6 +2706,8 @@ body {
         /* 分位置字体：引号 / 章节标题 / 人名 各自可选字体（未选时 inherit=跟随正文）。
            由 readingApplyFonts 把选中的字体写进对应 CSS 变量；没选就不写、自动继承正文。 */
         .reading-merged .reading-quote { font-family: var(--reading-font-quote, inherit); }
+        /* 短句字体：长短分工(reading-ls-on)开时，短句(非 rq-wide)可单独换字体；没单独选就回退「引号」字体 */
+        body.reading-ls-on .reading-merged .reading-quote:not(.rq-wide) { font-family: var(--reading-font-quote-short, var(--reading-font-quote, inherit)); }
         .reading-merged .reading-chap-title { font-family: var(--reading-font-title, inherit); }
         .reading-merged .reading-name { font-family: var(--reading-font-name, inherit); }
         /* 引号高亮：变色加粗、下划线、底纹高亮三个独立开关。
@@ -7021,6 +7023,7 @@ body {
                         <div class="rfont-slots">
                             <div class="rfont-slot-row"><span class="rfont-slot-label">正文</span><select id="readingFontSel_body" class="rfont-select" onchange="readingSetSlotFont('body', this.value)"></select></div>
                             <div class="rfont-slot-row"><span class="rfont-slot-label">引号</span><select id="readingFontSel_quote" class="rfont-select" onchange="readingSetSlotFont('quote', this.value)"></select></div>
+                            <div class="rfont-slot-row"><span class="rfont-slot-label" title="开「长短分工」时，短句单独用这个字体；不选就跟「引号」一样">短句</span><select id="readingFontSel_quoteShort" class="rfont-select" onchange="readingSetSlotFont('quoteShort', this.value)"></select></div>
                             <div class="rfont-slot-row"><span class="rfont-slot-label">标题</span><select id="readingFontSel_title" class="rfont-select" onchange="readingSetSlotFont('title', this.value)"></select></div>
                             <div class="rfont-slot-row"><span class="rfont-slot-label">人名</span><select id="readingFontSel_person" class="rfont-select" onchange="readingSetSlotFont('person', this.value)"></select></div>
                         </div>
@@ -18082,6 +18085,7 @@ body {
         var READING_FONT_SLOTS = [
             { slot: 'body',   key: 'reading_font_name',   varName: '--reading-font',       label: '正文' },
             { slot: 'quote',  key: 'reading_font_quote',  varName: '--reading-font-quote', label: '引号' },
+            { slot: 'quoteShort', key: 'reading_font_quote_short', varName: '--reading-font-quote-short', label: '短句' },
             { slot: 'title',  key: 'reading_font_title',  varName: '--reading-font-title', label: '标题' },
             { slot: 'person', key: 'reading_font_person', varName: '--reading-font-name',  label: '人名' }
         ];
