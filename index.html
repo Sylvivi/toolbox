@@ -11743,6 +11743,13 @@ body {
                 fonts: readingFontsLoad(),
                 fontsTs: readingGetFontsTs(),
                 fontName: localStorage.getItem('reading_font_name') || '',
+                fontSlots: {
+                    body: localStorage.getItem('reading_font_name') || '',
+                    quote: localStorage.getItem('reading_font_quote') || '',
+                    quoteShort: localStorage.getItem('reading_font_quote_short') || '',
+                    title: localStorage.getItem('reading_font_title') || '',
+                    person: localStorage.getItem('reading_font_person') || ''
+                },
                 readerPos: (function () { try { return JSON.parse(localStorage.getItem('reader_pos') || '{}'); } catch (e) { return {}; } })(),
                 readerQA: (function () { try { return JSON.parse(localStorage.getItem('reader_qa') || '{}'); } catch (e) { return {}; } })(),
                 readerSummaries: (function () { try { return JSON.parse(localStorage.getItem('reader_summaries') || '{}'); } catch (e) { return {}; } })(),
@@ -11976,20 +11983,8 @@ body {
                     }
                 }
 
-                // fonts: 字体库整块按时间戳后写覆盖（含当前选中的字体名）
-                if (manifest.fonts) {
-                    var cloudFontTs = manifest.fontsTs || '';
-                    var localFontTs = readingGetFontsTs();
-                    if (cloudFontTs > localFontTs) {
-                        localStorage.setItem('reading_fonts', JSON.stringify(manifest.fonts));
-                        localStorage.setItem('reading_fonts_ts', cloudFontTs);
-                        if (typeof manifest.fontName === 'string') {
-                            if (manifest.fontName) localStorage.setItem('reading_font_name', manifest.fontName);
-                            else localStorage.removeItem('reading_font_name');
-                        }
-                        try { readingApplyFont(); } catch (e) {}
-                    }
-                }
+                // fonts: 字体库 + 五个位置选择，按时间戳护栏覆盖（云端更新才覆盖，含当前选中的字体）
+                readingApplyFontSync(manifest);
 
                 // 阅读进度：逐本书按时间戳取较新的（两台设备读不同的书不会互相覆盖）
                 if (manifest.readerPos) {
@@ -12316,7 +12311,7 @@ body {
                 if (manifest.checkin) setCheckinDataSilent(manifest.checkin);
                 if (manifest.checkinTasks) { idbSet(CHECKIN_TASKS_KEY, manifest.checkinTasks); if (manifest.checkinTasksTs) idbSet(CHECKIN_TASKS_TS_KEY, manifest.checkinTasksTs); }
                 if (manifest.bookmarks) { localStorage.setItem('reading_bookmarks', JSON.stringify(manifest.bookmarks)); if (manifest.bookmarksTs) localStorage.setItem('reading_bookmarks_ts', manifest.bookmarksTs); }
-                if (manifest.fonts) { localStorage.setItem('reading_fonts', JSON.stringify(manifest.fonts)); if (manifest.fontsTs) localStorage.setItem('reading_fonts_ts', manifest.fontsTs); if (typeof manifest.fontName === 'string') { if (manifest.fontName) localStorage.setItem('reading_font_name', manifest.fontName); else localStorage.removeItem('reading_font_name'); } try { readingApplyFont(); } catch (e) {} }
+                readingApplyFontSync(manifest); // 字体库+五个位置选择，带时间戳护栏（修复开机被云端旧值冲掉的问题）
                 if (manifest.readerPos) { try { localStorage.setItem('reader_pos', JSON.stringify(manifest.readerPos)); } catch (e) {} }
                 if (manifest.readerQA) { try { localStorage.setItem('reader_qa', JSON.stringify(manifest.readerQA)); } catch (e) {} }
                 if (manifest.readerSummaries) { try { localStorage.setItem('reader_summaries', JSON.stringify(manifest.readerSummaries)); } catch (e) {} }
@@ -18166,6 +18161,29 @@ body {
         // 兼容旧调用名（同步拉取等处仍在用）
         function readingApplyFont() { readingApplyFonts(); }
 
+        // 云同步拉取时套用字体设置（字体库 + 五个位置的选择），带时间戳护栏：
+        // 只有云端比本地新才覆盖，避免开机时把刚选好的字体被云端旧值冲回默认。
+        function readingApplyFontSync(manifest) {
+            if (!manifest || !manifest.fonts) return;
+            var cloudTs = manifest.fontsTs || '';
+            var localTs = readingGetFontsTs();
+            if (cloudTs && localTs && cloudTs <= localTs) return; // 本地更新（或一样新）→ 不覆盖
+            localStorage.setItem('reading_fonts', JSON.stringify(manifest.fonts));
+            if (manifest.fontsTs) localStorage.setItem('reading_fonts_ts', manifest.fontsTs);
+            if (manifest.fontSlots && typeof manifest.fontSlots === 'object') {
+                // 新版：五个位置各自恢复
+                READING_FONT_SLOTS.forEach(function (s) {
+                    var v = manifest.fontSlots[s.slot];
+                    if (v) localStorage.setItem(s.key, v); else localStorage.removeItem(s.key);
+                });
+            } else if (typeof manifest.fontName === 'string') {
+                // 旧版云端只有正文一个字体名
+                if (manifest.fontName) localStorage.setItem('reading_font_name', manifest.fontName);
+                else localStorage.removeItem('reading_font_name');
+            }
+            try { readingApplyFonts(); } catch (e) {}
+        }
+
         // 共读：字体设置块折叠开关（默认收起，省面积）
         function readingToggleFontPanel() {
             var p = document.getElementById('readingFontPanel');
@@ -18225,7 +18243,7 @@ body {
             for (var i = 0; i < READING_FONT_SLOTS.length; i++) { if (READING_FONT_SLOTS[i].slot === slot) { s = READING_FONT_SLOTS[i]; break; } }
             if (!s) return;
             if (name) localStorage.setItem(s.key, name); else localStorage.removeItem(s.key);
-            if (slot === 'body') readingFontsTouch(); // 正文选择沿用旧的同步习惯
+            readingFontsTouch(); // 任一位置改了都更新时间戳并推云端（否则开机被云端旧值冲掉、且换设备丢失）
             readingApplyFonts();
         }
 
