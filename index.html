@@ -17999,9 +17999,14 @@ body {
             modal.innerHTML =
                 '<div class="chat-summary-modal-header"><span>🧑 人名高亮（本书）</span><button onclick="this.closest(\'.reading-names-modal-mask\').remove()">✕</button></div>' +
                 '<div class="chat-summary-modal-body">' +
-                    '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;line-height:1.6">一行一个人名（逗号、顿号也行）。高亮统一用当前强调色、跟随主题，不用挑颜色。</div>' +
+                    '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;line-height:1.6">一行一个名字（逗号、顿号也行），人名、地点都行。高亮统一用当前强调色、跟随主题，不用挑颜色。</div>' +
                     '<textarea id="readingNamesInput" spellcheck="false" style="width:100%;box-sizing:border-box;min-height:150px;resize:vertical;padding:10px;border-radius:10px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:14px;line-height:1.8" placeholder="叶子农&#10;林雪红&#10;罗家明">' + rbEsc(names.join('\n')) + '</textarea>' +
-                    '<div style="display:flex;gap:8px;margin-top:12px">' +
+                    '<div style="font-size:11px;color:var(--text-muted);margin:10px 0 6px;line-height:1.6">从摘要已生成的记忆表格里一键提取（并入下方、不覆盖你填的，核对后再保存）：</div>' +
+                    '<div style="display:flex;gap:8px">' +
+                        '<button onclick="readingNamesFromTable(\'characters\')" style="flex:1;padding:9px;border-radius:10px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;cursor:pointer">👤 从人物表</button>' +
+                        '<button onclick="readingNamesFromTable(\'places\')" style="flex:1;padding:9px;border-radius:10px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;cursor:pointer">📍 从地点表</button>' +
+                    '</div>' +
+                    '<div style="display:flex;gap:8px;margin-top:8px">' +
                         '<button id="readingNamesAutoBtn" onclick="readingAutoDetectNames()" style="flex:1;padding:9px;border-radius:10px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;cursor:pointer">✨ 自动识别</button>' +
                         '<button onclick="readingSaveNamesFromEditor()" style="flex:1;padding:9px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer">保存</button>' +
                     '</div>' +
@@ -18071,6 +18076,32 @@ body {
                 showToast('❌ 识别失败：' + (e.message || ''));
             }
             if (btn) { btn.disabled = false; btn.textContent = '✨ 自动识别'; }
+        }
+        // 取「当前正在读的这本书」的记忆表格：阅读模式用 reader 存档，共读模式用全局 chatMemoryTables。无则 null
+        function readingContextMemTables() {
+            if (typeof chatReaderMode !== 'undefined' && chatReaderMode) {
+                try { return readerMemTablesGet(readerBookKey(readerBookId)); } catch (e) { return null; }
+            }
+            return (typeof chatMemoryTables !== 'undefined') ? chatMemoryTables : null;
+        }
+        // 从记忆表格抽一列名字并入编辑框：which='characters' 抽人物表「人物」列，'places' 抽地点表「地点」列。
+        // 只并入、去重、不覆盖用户已填的；并入后等用户核对再点保存。
+        function readingNamesFromTable(which) {
+            var mt = readingContextMemTables();
+            var rows = mt && (which === 'places' ? mt.places : mt.characters);
+            var label = which === 'places' ? '地点表' : '人物表';
+            if (!rows || !rows.length) { showToast('⚠️ 还没有' + label + '，先在「摘要」里生成记忆表格'); return; }
+            var col = which === 'places' ? '地点' : '人物';
+            var got = rows.map(function (r) { return (r[col] || '').trim(); }).filter(Boolean);
+            var ta = document.getElementById('readingNamesInput');
+            if (ta) {
+                var cur = ta.value.split(/[\n,，、]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+                var seen = {}, merged = [], added = 0;
+                cur.forEach(function (n) { if (n && !seen[n]) { seen[n] = 1; merged.push(n); } });
+                got.forEach(function (n) { if (n && !seen[n]) { seen[n] = 1; merged.push(n); added++; } });
+                ta.value = merged.join('\n');
+                showToast('✅ 从' + label + '取了 ' + got.length + ' 个（新增 ' + added + '），核对后点保存');
+            }
         }
         // 把段落里的引号对话包进 <span class="reading-quote">，供高亮上色。
         // 注意：传入的是已 esc 的文本（无 < > 标签），直接正则包裹安全。
