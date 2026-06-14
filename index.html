@@ -18197,8 +18197,12 @@ body {
                 // font-family 值里不能放 inherit（会让整条声明失效），只放字体名 + 通用兜底 serif
                 document.documentElement.style.setProperty(s.varName, '"' + name + '", serif');
             });
-            // 名词若套了自定义字体，加粗会和花字打架 → 打 rn-has-font 标记让 CSS 强制不加粗（见 .reading-name 样式）
-            var personFontOn = !!document.documentElement.style.getPropertyValue('--reading-font-name');
+            // 名词若套了自定义字体，加粗会和花字打架 → 打 rn-has-font 标记让 CSS 在短句里强制不加粗（见 .reading-name 样式）。
+            // 短句里名词的实际字体优先级：人名槽 → 短句槽 → 引号槽，任一套了自定义字体都算（之前只查人名槽，套在短句槽时漏判，加粗没被收窄）。
+            var rs = document.documentElement.style;
+            var personFontOn = !!(rs.getPropertyValue('--reading-font-name')
+                || rs.getPropertyValue('--reading-font-quote-short')
+                || rs.getPropertyValue('--reading-font-quote'));
             if (document.body) document.body.classList.toggle('rn-has-font', personFontOn);
             readingRenderFontUI();
         }
