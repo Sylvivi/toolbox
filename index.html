@@ -1348,19 +1348,16 @@ body {
             background: rgba(228,240,252,0.72);
         }
         /* 「白底」开关单独控制：开了遮罩再开白底，所有主题统一换成同一种白（盖过上面各主题色）。
-           不开白底则维持上面各主题自己的主题色遮罩。点「白底」chip 循环切换：关→纯白→纸白→暖白→月白→关。
-           纸白/暖白/月白为半透明，身后主题渐变透出约 18~24%；纯白纯不透明（#fff），完全不透主题色。 */
+           不开白底则维持上面各主题自己的主题色遮罩。点「白底」chip 循环切换：关→纯白→柔白→暖白→关。
+           纯白纯不透明（#fff）完全不透主题色；柔白 90% 不透明、主题色只透出一丝；暖白半透明偏暖。 */
         body.chat-mask-on.pure-mask-on .modal.chat-modal {   /* 纯白：纯不透明白，完全不透主题色 */
             background: #fff;
         }
-        body.chat-mask-on.paper-mask-on .modal.chat-modal {  /* 纸白：护眼中性近白，不偏黄不偏蓝（纸感） */
-            background: rgba(250,250,248,0.82);
+        body.chat-mask-on.soft-mask-on .modal.chat-modal {   /* 柔白：90% 不透明白，主题色只透出一丝，比纯白柔 */
+            background: rgba(255,255,255,0.90);
         }
         body.chat-mask-on.warm-mask-on .modal.chat-modal {  /* 暖白：暖奶白，偏黄暖（蔚蓝金暖调） */
             background: rgba(255,248,240,0.76);
-        }
-        body.chat-mask-on.cool-mask-on .modal.chat-modal {   /* 月白：清冷月白，带一点蓝灰，护眼不刺 */
-            background: rgba(238,242,247,0.80);
         }
         /* 深色永远不上（暖白/月白那种）遮罩 */
         body.chat-mask-on.dark .modal.chat-modal {
@@ -1373,9 +1370,8 @@ body {
            开着遮罩+白底、又正打开对话页时，把整个 html 底色也换成同样的白，露出来的也是同色。
            只在对话页打开时生效（modal-open），关掉就还原各主题底色，不影响首页。 */
         html:has(body.modal-open.chat-mask-on.pure-mask-on:not(.dark))  { background-color: #FFFFFF; }
-        html:has(body.modal-open.chat-mask-on.paper-mask-on:not(.dark)) { background-color: #FAFAF8; }
+        html:has(body.modal-open.chat-mask-on.soft-mask-on:not(.dark))  { background-color: #FFFFFF; }
         html:has(body.modal-open.chat-mask-on.warm-mask-on:not(.dark))  { background-color: #FFF8F0; }
-        html:has(body.modal-open.chat-mask-on.cool-mask-on:not(.dark))  { background-color: #EEF2F7; }
 
 
         .modal-overlay:has(.chat-modal) { padding: 0; align-items: stretch; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; overscroll-behavior: contain; }
@@ -7718,14 +7714,13 @@ body {
             purplepink: '#0c0c0e',
             iceblue: '#0c0c0e'
         };
-        // 白底遮罩的几种白：点「白底」chip 按 off→pure→paper→warm→cool→off 循环。
+        // 白底遮罩的几种白：点「白底」chip 按 off→pure→soft→warm→off 循环。
         // cls 对应 CSS 里的 body.xxx-mask-on，color 是不透明同色（状态栏 / iPad 底边补色用）。
-        var MASK_TINTS = ['off', 'pure', 'paper', 'warm', 'cool'];
+        var MASK_TINTS = ['off', 'pure', 'soft', 'warm'];
         var MASK_TINT_INFO = {
             pure:  { cls: 'pure-mask-on',  label: '纯白', color: '#FFFFFF' },
-            paper: { cls: 'paper-mask-on', label: '纸白', color: '#FAFAF8' },
-            warm:  { cls: 'warm-mask-on',  label: '暖白', color: '#FFF8F0' },
-            cool:  { cls: 'cool-mask-on',  label: '月白', color: '#EEF2F7' }
+            soft:  { cls: 'soft-mask-on',  label: '柔白', color: '#FFFFFF' },
+            warm:  { cls: 'warm-mask-on',  label: '暖白', color: '#FFF8F0' }
         };
         // 更新 PWA 状态栏颜色：聊天弹窗打开且统一遮罩生效（遮罩开+引号高亮开+非深色）时用暖奶白，
         // 否则用各自主题色。弹窗关掉自动回到主题色。
@@ -17861,7 +17856,7 @@ body {
             }
             updateStatusBarColor();
         }
-        // 点「白底」chip：按 关→纯白→纸白→暖白→月白→关 循环
+        // 点「白底」chip：按 关→纯白→柔白→暖白→关 循环
         function readingToggleWarmMask() {
             var cur = readingGetMaskTint();
             var next = MASK_TINTS[(MASK_TINTS.indexOf(cur) + 1) % MASK_TINTS.length];
