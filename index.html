@@ -13252,26 +13252,33 @@ body {
                 }
                 return s;
             }
-            // —— 按环节小计：用 byPurposeModel 组合键精确计费（显示时隐藏模型名）——
+            // —— 按环节小计：底层用 byPurposeModel 组合键逐模型各按各价精确计费，但显示时按「环节」合并成一行
+            //   （同一环节用了多个不同模型时，token 累加、成本逐模型算好再相加，不再拆成多行同名）——
             function breakdownPurpose(title, map) {
                 var keys = Object.keys(map || {});
                 if (!keys.length) return '';
-                keys.sort(function (a, b) {
-                    var ca = _apiCostOf(a.split('|')[1] || '', map[a].inTok, map[a].outTok, map[a].calls, gp);
-                    var cb = _apiCostOf(b.split('|')[1] || '', map[b].inTok, map[b].outTok, map[b].calls, gp);
-                    return cb - ca || (map[b].calls - map[a].calls);
-                });
-                var s = '<div class="seg-label" style="margin:10px 0 4px">' + title + '</div>';
-                for (var k = 0; k < keys.length; k++) {
-                    var v = map[keys[k]];
-                    var parts = keys[k].split('|');
+                // 先把「环节|模型」组合按环节归并：token 累加，成本逐模型各按各价算后相加
+                var byP = {};
+                for (var i = 0; i < keys.length; i++) {
+                    var v = map[keys[i]];
+                    var parts = keys[i].split('|');
                     var purposeName = parts[0], modelName = parts[1] || '';
-                    var c = _apiCostOf(modelName, v.inTok, v.outTok, v.calls, gp);
-                    var tag = _apiModelPrice(modelName);
-                    var tagLabel = tag ? (tag.mode === 'call' ? '按次' : '按量') : '未设价';
+                    if (!byP[purposeName]) byP[purposeName] = { calls: 0, inTok: 0, outTok: 0, cost: 0, models: {} };
+                    var p = byP[purposeName];
+                    p.calls += v.calls; p.inTok += v.inTok; p.outTok += v.outTok;
+                    p.cost += _apiCostOf(modelName, v.inTok, v.outTok, v.calls, gp);
+                    if (modelName) p.models[modelName] = 1;
+                }
+                var pkeys = Object.keys(byP);
+                pkeys.sort(function (a, b) { return byP[b].cost - byP[a].cost || (byP[b].calls - byP[a].calls); });
+                var s = '<div class="seg-label" style="margin:10px 0 4px">' + title + '</div>';
+                for (var k = 0; k < pkeys.length; k++) {
+                    var pv = byP[pkeys[k]];
+                    var nModels = Object.keys(pv.models).length;
+                    var meta = pv.calls + '次' + (nModels > 1 ? ' · ' + nModels + '个模型' : '');
                     s += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:3px 0;border-bottom:1px solid var(--card-border)">'
-                        + '<span style="color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _apiEsc(purposeName) + ' <span style="color:var(--text-muted);font-size:10px">[' + tagLabel + '] ' + v.calls + '次</span></span>'
-                        + '<span style="color:var(--accent);flex-shrink:0;margin-left:8px">' + (hasAnyPrice ? '￥' + _apiMoney(c) : _apiNum(v.inTok + v.outTok) + ' tok') + '</span></div>';
+                        + '<span style="color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _apiEsc(pkeys[k]) + ' <span style="color:var(--text-muted);font-size:10px">' + meta + '</span></span>'
+                        + '<span style="color:var(--accent);flex-shrink:0;margin-left:8px">' + (hasAnyPrice ? '￥' + _apiMoney(pv.cost) : _apiNum(pv.inTok + pv.outTok) + ' tok') + '</span></div>';
                 }
                 return s;
             }
