@@ -17514,6 +17514,10 @@ body {
                         var seg = await _doSummarize(batch, 40000, true, _prevText);
                         if (chatCurrentConvId !== convId) break;
                         if (seg) {
+                            if (firstIsChapter) {
+                                var _chTitleM = first.content.match(/^\s*(第[一二三四五六七八九十百千零两\d]+[章节回篇卷话](?:[\s:：·.\-—　、]+[^\n]{0,20})?)/);
+                                if (_chTitleM) seg = '【' + _chTitleM[1].trim() + '】' + seg;
+                            }
                             chatCompressSummaries.push(seg);
                             // 逐段推进 compressedCount，断点续传更稳
                             chatCompressedCount = (chatCompressedCount || 0) + batch.length;
@@ -18830,6 +18834,7 @@ body {
             if (!mc || !b.chapters[idx] || !(b.chapters[idx].body || '').trim()) return Promise.resolve(false);
             var body = b.chapters[idx].body || '';
             if (body.length > 16000) body = body.slice(0, 16000) + '…';
+            var _rChTitle = (b.chapters[idx].title || '').trim();
             var p = chatStreamChat({
                 baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model,
                 max_tokens: 400, purpose: '阅读摘要',
@@ -18838,7 +18843,12 @@ body {
                     { role: 'user', content: '请概括这一章：\n\n' + body }
                 ]
             }).then(function (sum) {
-                if (sum && sum.trim()) { readerSummarySet(fileKey, idx, sum.trim()); return true; }
+                if (sum && sum.trim()) {
+                    var _s = sum.trim();
+                    if (_rChTitle) _s = '【' + _rChTitle + '】' + _s;
+                    readerSummarySet(fileKey, idx, _s);
+                    return true;
+                }
                 return false;
             }).catch(function () { return false; }).then(function (wrote) {
                 delete _readerSumPromises[key]; return wrote;
