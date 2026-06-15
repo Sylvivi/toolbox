@@ -17469,6 +17469,9 @@ body {
                         };
                         chatSaveCurrentConv(true);
                         console.log('[记忆表格] 人物 ' + chatMemoryTables.characters.length + ' 行，地点 ' + chatMemoryTables.places.length + ' 行，年表 ' + chatMemoryTables.timeline.length + ' 行，主线 ' + chatMemoryTables.plotlines.length + ' 行');
+                        // 自动把新人名/地名并入本书高亮名单，省去手动「从人物表/地点表」提取
+                        var _addedNm = readingAutoMergeNamesFromTables(chatMemoryTables, readingNamesKey());
+                        if (_addedNm) { console.log('[名单] 自动并入 ' + _addedNm + ' 个名词'); if (readingNameAnyOn()) readingRehighlightNamesInPlace(); }
                         showToast('🧠 记忆表格已更新（人物 ' + chatMemoryTables.characters.length + ' · 地点 ' + chatMemoryTables.places.length + ' · 年表 ' + chatMemoryTables.timeline.length + ' · 主线 ' + chatMemoryTables.plotlines.length + '）');
                     } else {
                         console.warn('[记忆表格] 解析失败，保留旧表格');
@@ -18101,6 +18104,26 @@ body {
                 ta.value = merged.join('\n');
                 showToast('✅ 从' + label + '取了 ' + got.length + ' 个（新增 ' + added + '），核对后点保存');
             }
+        }
+        // 摘要更新完记忆表格后，自动把表里的人名/地名并入本书高亮名单（只增不删、不覆盖手填的）。
+        // key 用调用时的 readingNamesKey()，和高亮渲染读取的是同一个 key，所以共读/阅读两种模式通用。
+        // 返回新增个数。注意：用户手动删掉的名字下次摘要可能被重新补回（只增不删的代价）。
+        function readingAutoMergeNamesFromTables(tables, key) {
+            if (!tables || !key) return 0;
+            var got = [];
+            (tables.characters || []).forEach(function (r) { var n = (r['人物'] || '').trim(); if (n) got.push(n); });
+            (tables.places || []).forEach(function (r) { var n = (r['地点'] || '').trim(); if (n) got.push(n); });
+            if (!got.length) return 0;
+            var existing;
+            try { existing = JSON.parse(localStorage.getItem('reading_names_' + key) || '[]'); } catch (e) { existing = []; }
+            if (!Array.isArray(existing)) existing = [];
+            var seen = {}, out = [], added = 0;
+            existing.forEach(function (n) { n = (n || '').trim(); if (n && !seen[n]) { seen[n] = 1; out.push(n); } });
+            got.forEach(function (n) { if (n && !seen[n]) { seen[n] = 1; out.push(n); added++; } });
+            if (!added) return 0;
+            out.sort(function (a, b) { return b.length - a.length; }); // 长名优先，避免短名先吃掉长名一截
+            try { localStorage.setItem('reading_names_' + key, JSON.stringify(out)); } catch (e) {}
+            return added;
         }
         // 把段落里的引号对话包进 <span class="reading-quote">，供高亮上色。
         // 注意：传入的是已 esc 的文本（无 < > 标签），直接正则包裹安全。
@@ -18997,6 +19020,11 @@ body {
                         plotlines: newPlots.length ? newPlots : tables.plotlines
                     }, curChap);
                     console.log('[阅读记忆表格] 人物 ' + (newChars.length || tables.characters.length) + ' 行，地点 ' + (newPlaces.length || tables.places.length) + ' 行，年表 ' + (newTime.length || tables.timeline.length) + ' 行，主线 ' + (newPlots.length || tables.plotlines.length) + ' 行');
+                    // 自动把新人名/地名并入本书高亮名单（仍在读同一本时才并、并即时重高亮）
+                    if (chatReaderMode && typeof readerBookId !== 'undefined' && readerBookKey(readerBookId) === fileKey) {
+                        var _addedNm = readingAutoMergeNamesFromTables(readerMemTablesGet(fileKey), readingNamesKey());
+                        if (_addedNm) { console.log('[名单] 自动并入 ' + _addedNm + ' 个名词'); if (readingNameAnyOn()) readingRehighlightNamesInPlace(); }
+                    }
                     showToast('🧠 记忆表格已更新（人物 ' + (newChars.length || tables.characters.length) + ' · 地点 ' + (newPlaces.length || tables.places.length) + ' · 年表 ' + (newTime.length || tables.timeline.length) + ' · 主线 ' + (newPlots.length || tables.plotlines.length) + '）');
                     return true;
                 }
