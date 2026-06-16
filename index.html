@@ -2838,6 +2838,17 @@ body {
         .translate-block .tb-body hr {
             border: none; border-top: 1px solid var(--card-border); margin: 8px 0;
         }
+        /* 进行中的翻译占位：弱化、带脉冲圆点和计时；✕ 可单独中止这一段 */
+        .translate-block.tb-pending { opacity: 0.85; }
+        .translate-block.tb-pending .tb-body { color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+        .tb-pending .tb-pending-dot {
+            width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+            display: inline-block; animation: tbPendingPulse 1s ease-in-out infinite;
+        }
+        .tb-pending .tb-pending-t { font-variant-numeric: tabular-nums; }
+        .tb-pending .tb-pending-x { margin-left: auto; cursor: pointer; padding: 0 4px; opacity: 0.7; }
+        .tb-pending .tb-pending-x:hover { opacity: 1; }
+        @keyframes tbPendingPulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
         .translate-block .tb-qa {
             margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--card-border);
         }
@@ -14111,7 +14122,7 @@ body {
                 if (_isTranslateMsg) {
                     var _torig = readingModeGetOriginalText(msgIdx);
                     _torig = readingModeStripParaNums(_torig);
-                    h += translateModeRenderMerged(_torig, text || '');
+                    h += translateModeRenderMerged(_torig, text || '', msgIdx);
                 } else if (_isReadingMsg && (text || _isReaderChap)) {
                     var _orig = readingModeGetOriginalText(msgIdx);
                     _orig = readingModeStripParaNums(_orig);
@@ -20437,7 +20448,37 @@ body {
 
         /* ===== 剧本翻译模式：区间点选 + 按需翻译 ===== */
         var translateSelMsgIdx = -1, translateSelAnchor = -1, translateSelEnd = -1, translateBusy = false;
-        var translateAbortCtl = null;  // 翻译 / 翻译追问「思考中」可中止
+        var translateAbortCtl = null;  // 翻译追问「思考中」可中止（追问仍串行）
+        // 正文翻译改成可并发：每段一条进行中记录，互不阻塞。{id,msgIdx,lo,hi,ctl,t0}
+        var translatePending = [];
+        var translatePendingSeq = 0;
+        var translatePendingTimer = null;
+        function translateStartPendingTimer() {
+            if (translatePendingTimer) return;
+            translatePendingTimer = setInterval(translateUpdatePendingTimers, 1000);
+        }
+        function translateUpdatePendingTimers() {
+            var nodes = document.querySelectorAll('.tb-pending[data-pid]');
+            for (var i = 0; i < nodes.length; i++) {
+                var id = parseInt(nodes[i].getAttribute('data-pid'));
+                var pp = null;
+                for (var j = 0; j < translatePending.length; j++) { if (translatePending[j].id === id) { pp = translatePending[j]; break; } }
+                if (!pp) continue;
+                var lbl = nodes[i].querySelector('.tb-pending-t');
+                if (lbl) lbl.textContent = chatFmtElapsed(Math.floor((Date.now() - pp.t0) / 1000));
+            }
+        }
+        function translateRemovePending(id) {
+            for (var i = 0; i < translatePending.length; i++) {
+                if (translatePending[i].id === id) { translatePending.splice(i, 1); break; }
+            }
+            if (!translatePending.length && translatePendingTimer) { clearInterval(translatePendingTimer); translatePendingTimer = null; }
+        }
+        function translateAbortPending(id) {
+            for (var i = 0; i < translatePending.length; i++) {
+                if (translatePending[i].id === id) { try { translatePending[i].ctl.abort(); } catch (e) {} break; }
+            }
+        }
 
         function translateClearSel() {
             translateSelMsgIdx = -1; translateSelAnchor = -1; translateSelEnd = -1;
@@ -20447,8 +20488,8 @@ body {
         }
 
         // 点段状态机：无选→单选；单选同段→清空；单选异段→区间；区间→重启单选；异消息→重启
+        // （翻译可并发：进行中也能继续点选别的段落，不再被锁住）
         function translateOnParaClick(pEl) {
-            if (translateBusy) return;
             var msgEl = pEl.closest('.chat-msg.ai');
             if (!msgEl || !msgEl.hasAttribute('data-idx')) return;
             var msgIdx = parseInt(msgEl.getAttribute('data-idx'));
@@ -20491,11 +20532,9 @@ body {
                 }
             }
             if (bar) {
-                // 复位「翻译」按钮——操作条是复用的固定元素，上一轮可能把它改成了「翻译中…/重试」
-                if (!translateBusy) {
-                    var rb = bar.querySelector('.ta-run');
-                    if (rb) { rb.disabled = false; rb.textContent = '翻译'; }
-                }
+                // 翻译发即走，操作条不再承载进度，始终复位成「翻译」
+                var rb = bar.querySelector('.ta-run');
+                if (rb) { rb.disabled = false; rb.textContent = '翻译'; }
                 bar.classList.add('show');
                 // 跟随选区：把按钮定位到尾段附近，并绑定滚动/缩放跟随
                 if (!window._translateBarFollowBound) {
@@ -20541,8 +20580,9 @@ body {
             bar.style.top = top + 'px';
         }
 
+        // 发起一段翻译：发即走，立刻释放选区/操作条，可马上点选下一段并发翻译。
+        // 进行中在该段下方显示「翻译中…」占位（带计时与 ✕ 可单独中止）。
         async function translateRunSelected() {
-            if (translateBusy) { if (translateAbortCtl) translateAbortCtl.abort(); return; }
             if (translateSelMsgIdx < 0 || translateSelAnchor < 0) return;
             var msgIdx = translateSelMsgIdx;
             var msg = chatMessages[msgIdx];
@@ -20555,17 +20595,18 @@ body {
             var orig = readingModeStripParaNums(readingModeGetOriginalText(msgIdx));
             var paras = translateModeSplitParas(orig);
             if (lo < 1 || hi > paras.length) { translateClearSel(); return; }
+            // 同一条消息里有区间重叠的翻译已在进行 → 不重复发
+            for (var pi = 0; pi < translatePending.length; pi++) {
+                var pp = translatePending[pi];
+                if (pp.msgIdx === msgIdx && !(hi < pp.lo || lo > pp.hi)) { translateClearSel(); return; }
+            }
             var segment = paras.slice(lo - 1, hi).join('\n');
-            translateBusy = true;
-            translateAbortCtl = new AbortController();
-            var bar = document.getElementById('translateActBar');
-            var runBtn = bar && bar.querySelector('.ta-run');
-            // 不禁用按钮：加载中点它即可中止
-            if (runBtn) { runBtn.disabled = false; runBtn.textContent = '翻译中… ✕'; }
-            var _trT0 = Date.now();
-            var _trTimer = setInterval(function() {
-                if (runBtn) runBtn.textContent = '翻译中… ' + chatFmtElapsed(Math.floor((Date.now() - _trT0) / 1000)) + ' ✕';
-            }, 1000);
+            var id = ++translatePendingSeq;
+            var ctl = new AbortController();
+            translatePending.push({ id: id, msgIdx: msgIdx, lo: lo, hi: hi, ctl: ctl, t0: Date.now() });
+            translateClearSel();            // 立刻释放选区/操作条
+            translateStartPendingTimer();
+            readingRerenderMsg(msgIdx);      // 画出「翻译中…」占位
             try {
                 var baseUrl = getBaseUrl(item.url);
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
@@ -20576,23 +20617,20 @@ body {
                         { role: 'system', content: TRANSLATE_MODE_INSTRUCTION },
                         { role: 'user', content: segment }
                     ],
-                    signal: translateAbortCtl.signal
+                    signal: ctl.signal
                 })).trim();
                 // 去掉模型可能误带的 [[TR]] 标记，避免破坏存储块
                 answer = answer.replace(/\[\[\/?TR[^\]]*\]\]/g, '').trim();
                 if (!answer) throw new Error('空回复');
+                translateRemovePending(id);
                 if (msg.content && msg.content.trim()) msg.content += '\n';
                 msg.content += '[[TR s=' + lo + ' e=' + hi + ']]\n' + answer + '\n[[/TR]]';
                 chatSaveCurrentConv(true);
-                translateClearSel();
-                readingRerenderMsg(msgIdx, hi);
+                readingRerenderMsg(msgIdx);
             } catch (e) {
-                if (runBtn) { runBtn.disabled = false; runBtn.textContent = e.name === 'AbortError' ? '翻译' : '重试'; }
+                translateRemovePending(id);
+                readingRerenderMsg(msgIdx);
                 if (e.name !== 'AbortError') alert('翻译失败：' + (e.message || e));
-            } finally {
-                clearInterval(_trTimer);
-                translateBusy = false;
-                translateAbortCtl = null;
             }
         }
 
@@ -21232,7 +21270,7 @@ body {
             return blocks;
         }
 
-        function translateModeRenderMerged(originalText, aiText) {
+        function translateModeRenderMerged(originalText, aiText, msgIdx) {
             var paragraphs = translateModeSplitParas(originalText);
             var blocks = translateModeParseBlocks(aiText);
             // 按结束段落归位（译文块插在其覆盖区间的末段之后）
@@ -21241,6 +21279,14 @@ body {
                 var ek = blocks[b].e;
                 if (!blockByEnd[ek]) blockByEnd[ek] = [];
                 blockByEnd[ek].push(blocks[b]);
+            }
+            // 进行中的翻译占位（可并发多段），同样按末段归位
+            var pendByEnd = {};
+            for (var pi = 0; pi < translatePending.length; pi++) {
+                var pp = translatePending[pi];
+                if (pp.msgIdx !== msgIdx) continue;
+                if (!pendByEnd[pp.hi]) pendByEnd[pp.hi] = [];
+                pendByEnd[pp.hi].push(pp);
             }
             var html = '<div class="reading-merged translate-merged">';
             for (var j = 0; j < paragraphs.length; j++) {
@@ -21256,6 +21302,15 @@ body {
                         }
                         html += '<div class="translate-block" data-s="' + blk.s + '" data-e="' + blk.e + '">' +
                             '<div class="tb-body">' + body + '</div></div>';
+                    }
+                }
+                if (pendByEnd[pNum]) {
+                    for (var pk = 0; pk < pendByEnd[pNum].length; pk++) {
+                        var pe = pendByEnd[pNum][pk];
+                        html += '<div class="translate-block tb-pending" data-pid="' + pe.id + '">' +
+                            '<div class="tb-body"><span class="tb-pending-dot"></span>翻译中… ' +
+                            '<span class="tb-pending-t">' + chatFmtElapsed(Math.floor((Date.now() - pe.t0) / 1000)) + '</span>' +
+                            '<span class="tb-pending-x" onclick="translateAbortPending(' + pe.id + ')">✕</span></div></div>';
                     }
                 }
             }
