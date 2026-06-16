@@ -18410,13 +18410,14 @@ body {
 
         function rbLoad() {
             var d = idbGet('reading_books'); rbBooks = (d && d.books) ? d.books : [];
-            // 一次性修复历史导入里被设成书名的章节标题（每本书只跑一次，只补「第X章」、不改章节边界）
-            var needSave = false;
+            // 一次性修复历史导入的章节标题（每本书按版本号只跑一次，不改章节边界）：
+            // v1 只补章节号；v2 起还会补副标题(回目)、并删掉正文里重复的标题行，故已跑过 v1 的也要再跑一次。
+            var TITLE_FIX_VER = 2, needSave = false;
             for (var i = 0; i < rbBooks.length; i++) {
                 var bk = rbBooks[i];
-                if (bk && bk.chapters && bk.chapters.length >= 2 && !bk._titlesFixed) {
+                if (bk && bk.chapters && bk.chapters.length >= 2 && (bk._titleFixVer || (bk._titlesFixed ? 1 : 0)) < TITLE_FIX_VER) {
                     rbFixChapterTitles(bk.chapters);
-                    bk._titlesFixed = true;
+                    bk._titleFixVer = TITLE_FIX_VER;
                     needSave = true;
                 }
             }
@@ -19508,16 +19509,15 @@ body {
                 reader.readAsText(file, 'UTF-8');
             }
         }
-        // 修正章节标题：EPUB 常把每章 <title> 设成书名（如「劝导」），导致每章标题都是书名而非「第X章」。
-        // 标题本身已是章节号样式就不动；否则在正文开头几行找「第X章」式标题，找到就拿它当标题。不动章节边界。
+        // 修正章节标题：EPUB 常把每章 <title> 设成书名（如「劝导」），导致每章标题都是书名而非「第X章」；
+        // 中文模式拆分又只取到光秃秃的「第X回」，副标题掉进正文。统一交给 rbDeriveTitleAndBody 处理，
+        // 既补全标题（章节号 + 副标题），也把正文前导的标题/副标题行删掉避免重复。不动章节边界。
         function rbFixChapterTitles(chapters) {
             if (!chapters || chapters.length < 2) return chapters;
             for (var i = 0; i < chapters.length; i++) {
                 var c = chapters[i];
-                var t = (c.title || '').trim();
-                if (READING_TITLE_RE.test(t)) continue; // 标题已经是「第X章」就别动
-                var ch = readingExtractChapterTitle(c.body || '');
-                if (ch) c.title = ch;
+                var r = rbDeriveTitleAndBody(c.title, c.body);
+                c.title = r.title; c.body = r.body;
             }
             return chapters;
         }
@@ -21038,8 +21038,21 @@ body {
         // 章节标题正则：整段以「第〔中文/数字〕章/节/回/篇/卷/话」开头，后面接可选分隔符 + ≤20 字标题，且不含句中标点（，。！？逗号句号等）。
         // 这样「第六百一十七章 寒风岭的玫瑰」「第十回」能命中，正文里「第三章已经写完了，……」这种长句不会误命中。
         var READING_TITLE_RE = /^\s*第[一二三四五六七八九十百千零两\d]+[章节回篇卷话](?:[\s:：·.\-—　、]+)?[^，。！？、,.!?;；\n]{0,20}\s*$/;
-        // 从一段章节正文里抽出章节标题（如「第六章」）：先去掉 [Px] 段号前缀，再在开头几行里找命中
-        // READING_TITLE_RE 的那一行。正文开头常有书名行（如「劝导」），所以不能只看第一行。
+        // 光秃秃的章节号（只有「第X回」、后面没带标题）
+        function _rbIsBareChapterNum(t) { return /^第[一二三四五六七八九十百千零两\d]+[章节回篇卷话]\s*$/.test((t || '').trim()); }
+        // 判断某行是不是紧跟章节号后的「副标题」（如天龙八部「弹指红颜老，刹那芳华」），而非正文首句。
+        // 标题短、不以句末标点收尾；含对偶逗号/顿号是强信号，传统回目体(回/篇/卷)的独立短标题行也算。
+        function _rbLooksLikeSubtitle(s, marker) {
+            s = (s || '').trim();
+            if (!s || s.length > 20) return false;
+            if (/[。！？!?…：:」』”）)]$/.test(s)) return false;          // 以句末标点收尾的多半是正文
+            if (/[，、]/.test(s)) return true;                            // 对偶回目，强信号
+            if (s.length <= 10 && /[回篇卷]/.test(marker || '')) return true; // 传统回目体的独立标题行
+            return false;
+        }
+        // 从一段章节正文里抽出章节标题（如「第六章」「第三十三回 弹指红颜老，刹那芳华」）：
+        // 先去掉 [Px] 段号前缀，在开头几行里找命中 READING_TITLE_RE 的行（正文开头常有书名行，故不能只看第一行）；
+        // 若命中的是光秃秃的章节号、紧随一行又像副标题，就把副标题接上。
         function readingExtractChapterTitle(content) {
             if (!content || typeof content !== 'string') return '';
             var lines = readingModeStripParaNums(content).split('\n');
@@ -21048,9 +21061,49 @@ body {
                 var ln = lines[i].trim();
                 if (!ln) continue;
                 checked++;
-                if (READING_TITLE_RE.test(ln)) return ln;
+                if (READING_TITLE_RE.test(ln)) {
+                    if (_rbIsBareChapterNum(ln)) {
+                        var mk = (ln.match(/[章节回篇卷话]/) || [])[0];
+                        for (var j = i + 1; j < lines.length; j++) {
+                            var nx = lines[j].trim();
+                            if (!nx) continue;
+                            if (_rbLooksLikeSubtitle(nx, mk)) ln = ln + ' ' + nx;
+                            break;
+                        }
+                    }
+                    return ln;
+                }
             }
             return '';
+        }
+        // 给书架章节算出「完整标题 + 去掉前导标题行的正文」。处理两类情况：
+        //   ① EPUB 把每章标题设成书名 → 真正章节号在正文里，揪出来当标题、并把书名/章节号那几行从正文删掉；
+        //   ② 中文模式拆分出的光秃秃「第X回」标题 → 把正文首行的副标题接到标题上，并从正文删掉避免重复。
+        // 删前导行是为了阅读时不出现「标题 + 正文首行」重复（readerChapterPair 会把标题再拼到正文前）。
+        function rbDeriveTitleAndBody(rawTitle, body) {
+            var t = (rawTitle || '').trim();
+            var lines = (body || '').split('\n');
+            var headIdx = -1, checked = 0;
+            for (var i = 0; i < lines.length && checked < 8; i++) {
+                if (!lines[i].trim()) continue;
+                checked++;
+                if (READING_TITLE_RE.test(lines[i].trim())) { headIdx = i; break; }
+            }
+            var title, cutTo;
+            if (headIdx >= 0) { title = lines[headIdx].trim(); cutTo = headIdx; }
+            else if (_rbIsBareChapterNum(t)) { title = t; cutTo = -1; }
+            else { return { title: t, body: body }; }  // 标题已含内容、或正文里没有章节号 → 不动
+            if (_rbIsBareChapterNum(title)) {
+                var mk = (title.match(/[章节回篇卷话]/) || [])[0];
+                for (var k = cutTo + 1; k < lines.length; k++) {
+                    var nx = lines[k].trim();
+                    if (!nx) continue;
+                    if (_rbLooksLikeSubtitle(nx, mk)) { title = title + ' ' + nx; cutTo = k; }
+                    break;
+                }
+            }
+            var newBody = (cutTo >= 0) ? lines.slice(cutTo + 1).join('\n').replace(/^\s+/, '') : body;
+            return { title: title, body: newBody };
         }
         function readingModeRenderMerged(originalText, aiText) {
             // 原文段落的 <p> 串只跟原文有关，与 AI 文本无关 → 同一章流式期间只算一次
