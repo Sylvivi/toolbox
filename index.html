@@ -18408,7 +18408,20 @@ body {
             'empty-line': '__EMPTY_LINE__'
         };
 
-        function rbLoad() { var d = idbGet('reading_books'); rbBooks = (d && d.books) ? d.books : []; }
+        function rbLoad() {
+            var d = idbGet('reading_books'); rbBooks = (d && d.books) ? d.books : [];
+            // 一次性修复历史导入里被设成书名的章节标题（每本书只跑一次，只补「第X章」、不改章节边界）
+            var needSave = false;
+            for (var i = 0; i < rbBooks.length; i++) {
+                var bk = rbBooks[i];
+                if (bk && bk.chapters && bk.chapters.length >= 2 && !bk._titlesFixed) {
+                    rbFixChapterTitles(bk.chapters);
+                    bk._titlesFixed = true;
+                    needSave = true;
+                }
+            }
+            if (needSave) rbSave();
+        }
         function rbSave() { idbSet('reading_books', { books: rbBooks }); }
         function rbGetBook(id) { for (var i = 0; i < rbBooks.length; i++) if (rbBooks[i].id === id) return rbBooks[i]; return null; }
         // 记忆：当前对话上次填入的是哪本书（按对话 ID 存）
@@ -19495,8 +19508,22 @@ body {
                 reader.readAsText(file, 'UTF-8');
             }
         }
+        // 修正章节标题：EPUB 常把每章 <title> 设成书名（如「劝导」），导致每章标题都是书名而非「第X章」。
+        // 标题本身已是章节号样式就不动；否则在正文开头几行找「第X章」式标题，找到就拿它当标题。不动章节边界。
+        function rbFixChapterTitles(chapters) {
+            if (!chapters || chapters.length < 2) return chapters;
+            for (var i = 0; i < chapters.length; i++) {
+                var c = chapters[i];
+                var t = (c.title || '').trim();
+                if (READING_TITLE_RE.test(t)) continue; // 标题已经是「第X章」就别动
+                var ch = readingExtractChapterTitle(c.body || '');
+                if (ch) c.title = ch;
+            }
+            return chapters;
+        }
         function rbAddBook(fileName, fileSize, fileType, chapters, rawText) {
             if (!chapters || !chapters.length) { chapters = [{ title: '全文', body: (rawText || '').trim() }]; }
+            rbFixChapterTitles(chapters);
             if (!rawText) rawText = chapters.map(function (c) { return c.title + '\n\n' + c.body; }).join('\n\n');
             var book = {
                 id: 'bk_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
