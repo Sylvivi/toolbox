@@ -10718,12 +10718,13 @@ body {
 
             // 列表（先标记，再分别包装 ul/ol）
             html = html.replace(/^[\-\*] (.+)$/gm, '<u-li>$1</u-li>');
-            html = html.replace(/^\d+\. (.+)$/gm, '<o-li>$1</o-li>');
+            html = html.replace(/^(\d+)\. (.+)$/gm, '<o-li data-n="$1">$2</o-li>');
             html = html.replace(/((?:<u-li>.*?<\/u-li>\n?)+)/g, function(m) {
                 return '<ul>' + m.replace(/<u-li>/g, '<li>').replace(/<\/u-li>/g, '</li>') + '</ul>';
             });
-            html = html.replace(/((?:<o-li>.*?<\/o-li>\n?)+)/g, function(m) {
-                return '<ol>' + m.replace(/<o-li>/g, '<li>').replace(/<\/o-li>/g, '</li>') + '</ol>';
+            // 有序列表：保留作者写的序号（<li value="N">）。即使各条之间夹了正文段落、被拆成多个 <ol>，编号也不会各自从 1 重来。
+            html = html.replace(/((?:<o-li[^>]*>.*?<\/o-li>\n?)+)/g, function(m) {
+                return '<ol>' + m.replace(/<o-li data-n="(\d+)">/g, '<li value="$1">').replace(/<\/o-li>/g, '</li>') + '</ol>';
             });
 
             // 表格
