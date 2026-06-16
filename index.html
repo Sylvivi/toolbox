@@ -17518,8 +17518,8 @@ body {
                         if (chatCurrentConvId !== convId) break;
                         if (seg) {
                             if (firstIsChapter) {
-                                var _chTitleM = first.content.match(/^\s*(第[一二三四五六七八九十百千零两\d]+[章节回篇卷话](?:[\s:：·.\-—　、]+[^\n]{0,20})?)/);
-                                if (_chTitleM) seg = '【' + _chTitleM[1].trim() + '】' + seg;
+                                var _chTitle = readingExtractChapterTitle(first.content);
+                                if (_chTitle) seg = '【' + _chTitle + '】' + seg;
                             }
                             chatCompressSummaries.push(seg);
                             // 逐段推进 compressedCount，断点续传更稳
@@ -21011,6 +21011,20 @@ body {
         // 章节标题正则：整段以「第〔中文/数字〕章/节/回/篇/卷/话」开头，后面接可选分隔符 + ≤20 字标题，且不含句中标点（，。！？逗号句号等）。
         // 这样「第六百一十七章 寒风岭的玫瑰」「第十回」能命中，正文里「第三章已经写完了，……」这种长句不会误命中。
         var READING_TITLE_RE = /^\s*第[一二三四五六七八九十百千零两\d]+[章节回篇卷话](?:[\s:：·.\-—　、]+)?[^，。！？、,.!?;；\n]{0,20}\s*$/;
+        // 从一段章节正文里抽出章节标题（如「第六章」）：先去掉 [Px] 段号前缀，再在开头几行里找命中
+        // READING_TITLE_RE 的那一行。正文开头常有书名行（如「劝导」），所以不能只看第一行。
+        function readingExtractChapterTitle(content) {
+            if (!content || typeof content !== 'string') return '';
+            var lines = readingModeStripParaNums(content).split('\n');
+            var checked = 0;
+            for (var i = 0; i < lines.length && checked < 8; i++) {
+                var ln = lines[i].trim();
+                if (!ln) continue;
+                checked++;
+                if (READING_TITLE_RE.test(ln)) return ln;
+            }
+            return '';
+        }
         function readingModeRenderMerged(originalText, aiText) {
             // 原文段落的 <p> 串只跟原文有关，与 AI 文本无关 → 同一章流式期间只算一次
             // 人名名单也算进缓存签名：名单改了要重包（名单一直挂 span，亮不亮由 CSS class 管，所以开关切换不必重排）
