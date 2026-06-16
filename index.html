@@ -18411,9 +18411,10 @@ body {
         function rbLoad() {
             var d = idbGet('reading_books'); rbBooks = (d && d.books) ? d.books : [];
             // 一次性修复历史导入的章节标题（每本书按版本号只跑一次，不改章节边界）：
-            // v1 只补章节号；v2 起补副标题(回目)、删正文里重复的标题行；v3 起补「副标题排在回数上面」的情况。
+            // v1 只补章节号；v2 起补副标题(回目)、删正文里重复的标题行；v3 起补「副标题排在回数上面」的情况；
+            // v4 起认得「全角空格分隔的回目对句」(如「教单于折箭　六军辟易　奋英雄怒」)、并清掉正文开头残留的重复标题行。
             // 版本号升级时已跑过旧版的书会再跑一次（逻辑幂等，重复跑不会越改越乱）。
-            var TITLE_FIX_VER = 3, needSave = false;
+            var TITLE_FIX_VER = 4, needSave = false;
             for (var i = 0; i < rbBooks.length; i++) {
                 var bk = rbBooks[i];
                 if (bk && bk.chapters && bk.chapters.length >= 2 && (bk._titleFixVer || (bk._titlesFixed ? 1 : 0)) < TITLE_FIX_VER) {
@@ -21063,10 +21064,13 @@ body {
         // 标题短、不以句末标点收尾；含对偶逗号/顿号是强信号，传统回目体(回/篇/卷)的独立短标题行也算。
         function _rbLooksLikeSubtitle(s, marker) {
             s = (s || '').trim();
-            if (!s || s.length > 20) return false;
+            if (!s || s.length > 24) return false;
             if (/[。！？!?…：:」』”）)]$/.test(s)) return false;          // 以句末标点收尾的多半是正文
-            if (/[，、]/.test(s)) return true;                            // 对偶回目，强信号
-            if (s.length <= 10 && /[回篇卷]/.test(marker || '')) return true; // 传统回目体的独立标题行
+            if (/[，、]/.test(s)) return true;                            // 对偶回目（逗号/顿号），强信号
+            if (/[回篇卷]/.test(marker || '')) {
+                if (/　| {2,}/.test(s)) return true;                  // 回目体：全角空格/连续空格分隔的对句，如「教单于折箭　六军辟易　奋英雄怒」
+                if (s.length <= 10) return true;                          // 传统回目体的独立短标题行
+            }
             return false;
         }
         // 从一段章节正文里抽出章节标题（如「第六章」「第三十三回 弹指红颜老，刹那芳华」）：
@@ -21112,16 +21116,23 @@ body {
             if (headIdx >= 0) { title = lines[headIdx].trim(); cutTo = headIdx; }
             else if (_rbIsBareChapterNum(t)) { title = t; cutTo = -1; }
             else { return { title: t, body: body }; }  // 标题已含内容、或正文里没有章节号 → 不动
-            if (_rbIsBareChapterNum(title)) {
-                var mk = (title.match(/[章节回篇卷话]/) || [])[0];
-                for (var k = cutTo + 1; k < lines.length; k++) {
-                    var nx = lines[k].trim();
-                    if (!nx) continue;
-                    if (_rbLooksLikeSubtitle(nx, mk)) { title = title + ' ' + nx; cutTo = k; }
-                    break;
-                }
+            // 一趟扫完正文开头的「标题区」：跳过空行、重复的回数/标题行、副标题行，直到第一段正文（最多 8 行，防误删整章）。
+            // 顺手记下第一条副标题；若本章标题还是光秃秃的回数，就把它接上去。
+            // 有些回目「扉页+章首」各印一遍，回数/副标题会重复一两次（甚至副标题排在回数上面），这趟一并清掉。
+            var mk = (title.match(/[章节回篇卷话]/) || [])[0];
+            var bareNum = _rbIsBareChapterNum(title);
+            var numOnly = (title.split(/\s+/)[0] || '').trim();
+            var sub = '';
+            var start = cutTo + 1, guard = 0;
+            while (start < lines.length && guard < 8) {
+                var ln = lines[start].trim();
+                if (!ln) { start++; continue; }
+                if (ln === numOnly || _rbIsBareChapterNum(ln) || READING_TITLE_RE.test(ln)) { start++; guard++; continue; } // 重复的回数/标题行
+                if (_rbLooksLikeSubtitle(ln, mk)) { if (!sub) sub = ln; start++; guard++; continue; }                       // 副标题（可能重复出现）
+                break; // 第一段正文
             }
-            var newBody = (cutTo >= 0) ? lines.slice(cutTo + 1).join('\n').replace(/^\s+/, '') : body;
+            if (sub && bareNum) title = title + ' ' + sub;
+            var newBody = (cutTo >= 0 || start > 0) ? lines.slice(start).join('\n').replace(/^\s+/, '') : body;
             return { title: title, body: newBody };
         }
         function readingModeRenderMerged(originalText, aiText) {
