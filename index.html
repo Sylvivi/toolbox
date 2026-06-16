@@ -12916,6 +12916,16 @@ body {
         var chatMemoryTables = null;   // 共读结构化记忆表格 { characters: [...], plotlines: [...] }，替代自由文本大纲
         var chatCompressedCount = 0;   // 已压缩的消息条数
         var chatCompressEnabled = localStorage.getItem('chat_compress') !== '0'; // 默认开启
+        // 一次性修复：旧版进共读/翻译模式会把对话模式的「触发」阈值写成 10 并存盘、切回对话又没复原，
+        // 导致对话模式的摘要触发卡在 10。这里把被污染的值复位成默认 40/20（只跑一次）。
+        (function () {
+            if (localStorage.getItem('chat_compress_fix_v1')) return;
+            localStorage.setItem('chat_compress_fix_v1', '1');
+            if (parseInt(localStorage.getItem('chat_compress_threshold')) === 10) {
+                localStorage.setItem('chat_compress_threshold', '40');
+                localStorage.setItem('chat_compress_keep', '20');
+            }
+        })();
         var chatCompressThreshold = parseInt(localStorage.getItem('chat_compress_threshold')) || 40;
         var chatCompressKeep = parseInt(localStorage.getItem('chat_compress_keep')) || 20;
         var chatCompressing = false;   // 正在压缩中
@@ -17630,22 +17640,10 @@ body {
             var thumb = document.getElementById('readingModeThumb');
             if (track) track.style.background = on ? 'var(--accent)' : 'var(--card-border)';
             if (thumb) thumb.style.transform = on ? 'translateX(18px)' : 'translateX(0)';
-            // 切换模式时套用该模式的上下文压缩默认阈值（共读 10 条 / 普通 40 条）
-            if (changed) {
-                var defT = on ? 10 : 40;
-                chatCompressThreshold = defT;
-                chatCompressKeep = Math.max(4, Math.floor(defT / 2));
-                localStorage.setItem('chat_compress_threshold', chatCompressThreshold);
-                localStorage.setItem('chat_compress_keep', chatCompressKeep);
-                var tIn = document.getElementById('compressThresholdInput');
-                var kIn = document.getElementById('compressKeepInput');
-                if (tIn) { tIn.value = chatCompressThreshold; updateRangeFill(tIn); }
-                if (kIn) { kIn.value = chatCompressKeep; updateRangeFill(kIn); }
-                var tLbl = document.getElementById('compressThresholdLabel');
-                var kLbl = document.getElementById('compressKeepLabel');
-                if (tLbl) tLbl.textContent = chatCompressThreshold + ' 条';
-                if (kLbl) kLbl.textContent = chatCompressKeep + ' 条';
-            }
+            // 共读/翻译模式各走各的压缩逻辑（共读按「章」、翻译固定 10 条），都不依赖也不该改写
+            // 对话模式的「触发」阈值——这里只刷新滑块的禁用态与显示标签，不动 chatCompressThreshold，
+            // 避免把对话模式的设置覆盖掉（以前进共读会写成 10 并存盘，切回对话还原不可靠，导致卡在 10）。
+            if (typeof chatSyncCompressThresholdUI === 'function') chatSyncCompressThresholdUI();
             chatSyncReadingChip();
             chatSaveCurrentConv();
             readingSyncAutoScrollUI();
@@ -17659,6 +17657,7 @@ body {
             if (on && chatReadingMode) { chatReadingMode = false; readingSyncReadingModeToggle(); }
             if (on) readingCollapseInput(); else readingExpandInput(false);
             translateSyncToggle();
+            if (typeof chatSyncCompressThresholdUI === 'function') chatSyncCompressThresholdUI();
             chatSyncReadingChip();
             chatSaveCurrentConv();
             readingSyncAutoScrollUI();
