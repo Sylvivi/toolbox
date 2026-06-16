@@ -18411,8 +18411,9 @@ body {
         function rbLoad() {
             var d = idbGet('reading_books'); rbBooks = (d && d.books) ? d.books : [];
             // 一次性修复历史导入的章节标题（每本书按版本号只跑一次，不改章节边界）：
-            // v1 只补章节号；v2 起还会补副标题(回目)、并删掉正文里重复的标题行，故已跑过 v1 的也要再跑一次。
-            var TITLE_FIX_VER = 2, needSave = false;
+            // v1 只补章节号；v2 起补副标题(回目)、删正文里重复的标题行；v3 起补「副标题排在回数上面」的情况。
+            // 版本号升级时已跑过旧版的书会再跑一次（逻辑幂等，重复跑不会越改越乱）。
+            var TITLE_FIX_VER = 3, needSave = false;
             for (var i = 0; i < rbBooks.length; i++) {
                 var bk = rbBooks[i];
                 if (bk && bk.chapters && bk.chapters.length >= 2 && (bk._titleFixVer || (bk._titlesFixed ? 1 : 0)) < TITLE_FIX_VER) {
@@ -19509,15 +19510,33 @@ body {
                 reader.readAsText(file, 'UTF-8');
             }
         }
-        // 修正章节标题：EPUB 常把每章 <title> 设成书名（如「劝导」），导致每章标题都是书名而非「第X章」；
-        // 中文模式拆分又只取到光秃秃的「第X回」，副标题掉进正文。统一交给 rbDeriveTitleAndBody 处理，
-        // 既补全标题（章节号 + 副标题），也把正文前导的标题/副标题行删掉避免重复。不动章节边界。
+        // 修正「书架目录显示的章节标题」，并清掉正文里与标题重复的那一两行（不动故事正文、不改章节边界）。
+        // 之所以要清重复行：从目录点进去读时，正文 = 标题 + 空行 + 正文 拼出来，标题留在正文里就会重复显示。
+        // 处理三类：
+        //   ① EPUB 把每章 <title> 设成书名（如「劝导」）→ 真正章节号在正文开头，揪出来当标题、并删掉书名/章节号那几行；
+        //   ② 中文模式拆分出光秃秃的「第X回」、副标题在本章正文首行 → 拼成「第X回 副标题」、并删掉那行副标题；
+        //   ③ 副标题排在回数上面（拆分按「第X回」切，副标题落到上一章正文末行）→ 跨章去上一章末行取、并从上一章删掉。
         function rbFixChapterTitles(chapters) {
             if (!chapters || chapters.length < 2) return chapters;
             for (var i = 0; i < chapters.length; i++) {
                 var c = chapters[i];
-                var r = rbDeriveTitleAndBody(c.title, c.body);
+                var r = rbDeriveTitleAndBody(c.title, c.body);  // ① ②
                 c.title = r.title; c.body = r.body;
+                // ③ 标题在前、回数在后：本章标题还是光秃秃的回数时，去上一章正文末行把副标题揪回来并删掉
+                if (i > 0 && _rbIsBareChapterNum(c.title)) {
+                    var prev = chapters[i - 1];
+                    var pl = (prev.body || '').split('\n');
+                    var li = pl.length - 1;
+                    while (li >= 0 && !pl[li].trim()) li--;
+                    if (li >= 0) {
+                        var cand = pl[li].trim();
+                        var mk = (c.title.match(/[章节回篇卷话]/) || [])[0];
+                        if (_rbLooksLikeSubtitle(cand, mk)) {
+                            c.title = c.title + ' ' + cand;
+                            prev.body = pl.slice(0, li).join('\n').replace(/\s+$/, '');
+                        }
+                    }
+                }
             }
             return chapters;
         }
