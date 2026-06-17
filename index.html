@@ -13129,24 +13129,26 @@ body {
         }
         function apiAggSave(o) { try { localStorage.setItem('toolbox_api_agg', JSON.stringify(o)); } catch (e) {} }
         // 记一笔调用：写明细（超 API_LOG_CAP 截断）+ 累加聚合；面板开着就重渲
-        function apiLogRecord(purpose, model, inTok, outTok, est) {
+        function apiLogRecord(purpose, model, inTok, outTok, est, station) {
             inTok = Math.max(0, Math.round(inTok || 0));
             outTok = Math.max(0, Math.round(outTok || 0));
             if (!inTok && !outTok) return; // 空调用（中止且无内容）不记
             purpose = purpose || '其它';
             model = model || '未知';
+            station = station || '';
+            var mkey = _mkey(model, station);
             var log = apiLogLoad();
-            log.push({ ts: Date.now(), purpose: purpose, model: model, inTok: inTok, outTok: outTok, est: !!est });
+            log.push({ ts: Date.now(), purpose: purpose, model: model, station: station, inTok: inTok, outTok: outTok, est: !!est });
             log = apiLogPrune(log);
             apiLogSave(log);
             var agg = apiAggLoad();
             agg.calls++; agg.inTok += inTok; agg.outTok += outTok;
             if (!agg.byPurpose[purpose]) agg.byPurpose[purpose] = { calls: 0, inTok: 0, outTok: 0 };
             agg.byPurpose[purpose].calls++; agg.byPurpose[purpose].inTok += inTok; agg.byPurpose[purpose].outTok += outTok;
-            if (!agg.byModel[model]) agg.byModel[model] = { calls: 0, inTok: 0, outTok: 0 };
-            agg.byModel[model].calls++; agg.byModel[model].inTok += inTok; agg.byModel[model].outTok += outTok;
-            // purpose+model 组合用于按环节计费（每个环节可能用了不同价位的模型）
-            var pmKey = purpose + '|' + model;
+            if (!agg.byModel[mkey]) agg.byModel[mkey] = { calls: 0, inTok: 0, outTok: 0 };
+            agg.byModel[mkey].calls++; agg.byModel[mkey].inTok += inTok; agg.byModel[mkey].outTok += outTok;
+            // purpose+模型键 组合用于按环节计费（同一环节可能用了不同站/不同价的模型）
+            var pmKey = purpose + '|' + mkey;
             if (!agg.byPurposeModel[pmKey]) agg.byPurposeModel[pmKey] = { calls: 0, inTok: 0, outTok: 0 };
             agg.byPurposeModel[pmKey].calls++; agg.byPurposeModel[pmKey].inTok += inTok; agg.byPurposeModel[pmKey].outTok += outTok;
             apiAggSave(agg);
@@ -13161,17 +13163,40 @@ body {
             return null;
         }
         /* ===== 用量 / 计费面板 ===== */
-        // 找收藏模型配的单价：按量 {mode:'token',in,out}（每百万 token）或 按次 {mode:'call',per}（元/次）；没配返回 null
-        function _apiModelPrice(model) {
-            for (var i = 0; i < chatFavModels.length; i++) {
-                var f = chatFavModels[i];
+        // 模型聚合键：带站点时用 modelstation，不带站点（旧数据）退回纯 model
+        function _mkey(model, station) { return station ? (model + '' + station) : model; }
+        function _mkeyParts(key) {
+            var i = (key || '').indexOf('');
+            if (i < 0) return { model: key || '', station: '' };
+            return { model: key.slice(0, i), station: key.slice(i + 1) };
+        }
+        // 站点 baseUrl → 友好名字（在中转站列表里反查，查不到就显示域名）
+        function _apiStationName(station) {
+            if (!station) return '';
+            try {
+                var data = getKeyData();
+                for (var i = 0; i < data.length; i++) { if (getBaseUrl(data[i].url || '') === station) return data[i].name || ''; }
+            } catch (e) {}
+            return station.replace(/^https?:\/\//, '').replace(/\/v1$/i, '');
+        }
+        // 找收藏模型配的单价：先精确匹配「站点+模型」，没有再退回只按模型名（兼容旧数据）；没配返回 null
+        function _apiModelPrice(model, station) {
+            var i, f;
+            if (station) {
+                for (i = 0; i < chatFavModels.length; i++) {
+                    f = chatFavModels[i];
+                    if (f.model === model && getBaseUrl(f.url || '') === station && f.price && f.price.mode) return f.price;
+                }
+            }
+            for (i = 0; i < chatFavModels.length; i++) {
+                f = chatFavModels[i];
                 if (f.model === model && f.price && f.price.mode) return f.price;
             }
             return null;
         }
         // 一组调用的花费：优先用模型自己的单价（按量/按次），没配就退回全局默认价（按量）
-        function _apiCostOf(model, inTok, outTok, calls, gp) {
-            var p = _apiModelPrice(model);
+        function _apiCostOf(model, station, inTok, outTok, calls, gp) {
+            var p = _apiModelPrice(model, station);
             if (p) {
                 if (p.mode === 'call') return (+p.per || 0) * (calls || 0);
                 return (inTok || 0) / 1e6 * (+p.in || 0) + (outTok || 0) / 1e6 * (+p.out || 0);
@@ -13196,6 +13221,46 @@ body {
         function apiClearLog() {
             if (!confirm('清空所有用量记录？（收藏里的模型价格不受影响）')) return;
             try { localStorage.removeItem('toolbox_api_log'); localStorage.removeItem('toolbox_api_agg'); } catch (e) {}
+            apiLogRenderBody();
+        }
+        // 从「按模型」里删掉某个模型：累计、按环节、明细一起减掉（不可恢复；收藏里的价格不动）
+        function apiDeleteModel(encKey) {
+            var mkey = '';
+            try { mkey = decodeURIComponent(encKey); } catch (e) { mkey = encKey; }
+            var pp = _mkeyParts(mkey);
+            var stn = pp.station ? _apiStationName(pp.station) : '';
+            var disp = pp.model + (stn ? '（' + stn + '）' : '');
+            if (!confirm('从统计里删除「' + disp + '」？\n它的明细、按环节统计和累计数字都会一起减掉，不可恢复。\n（收藏里的价格设置不受影响）')) return;
+            var agg = apiAggLoad();
+            var mv = agg.byModel && agg.byModel[mkey];
+            if (mv) {
+                agg.calls = Math.max(0, (agg.calls || 0) - (mv.calls || 0));
+                agg.inTok = Math.max(0, (agg.inTok || 0) - (mv.inTok || 0));
+                agg.outTok = Math.max(0, (agg.outTok || 0) - (mv.outTok || 0));
+                delete agg.byModel[mkey];
+            }
+            // 同步扣掉「按环节」里属于这个模型键的组合
+            if (agg.byPurposeModel) {
+                Object.keys(agg.byPurposeModel).forEach(function (k) {
+                    var bi = k.indexOf('|');
+                    if (bi < 0) return;
+                    var purposeName = k.slice(0, bi), pm = k.slice(bi + 1);
+                    if (pm !== mkey) return;
+                    var cv = agg.byPurposeModel[k];
+                    var bp = agg.byPurpose && agg.byPurpose[purposeName];
+                    if (bp) {
+                        bp.calls = Math.max(0, (bp.calls || 0) - (cv.calls || 0));
+                        bp.inTok = Math.max(0, (bp.inTok || 0) - (cv.inTok || 0));
+                        bp.outTok = Math.max(0, (bp.outTok || 0) - (cv.outTok || 0));
+                        if (!bp.calls && !bp.inTok && !bp.outTok) delete agg.byPurpose[purposeName];
+                    }
+                    delete agg.byPurposeModel[k];
+                });
+            }
+            apiAggSave(agg);
+            // 明细里同模型同站的记录也清掉
+            var log = apiLogLoad().filter(function (r) { return !(r.model === pp.model && (r.station || '') === pp.station); });
+            apiLogSave(log);
             apiLogRenderBody();
         }
         function apiLogShowPanel() {
@@ -13226,7 +13291,7 @@ body {
             for (var i = 0; i < log.length; i++) {
                 if (log[i].ts >= dayStart) {
                     tCalls++;
-                    var mp = _apiModelPrice(log[i].model);
+                    var mp = _apiModelPrice(log[i].model, log[i].station || '');
                     if (mp && mp.mode === 'call') { todayCost += +mp.per || 0; }
                     else {
                         var pi = mp ? +mp.in : +gp.in || 0, po = mp ? +mp.out : +gp.out || 0;
@@ -13239,7 +13304,8 @@ body {
             var modelKeys = Object.keys(agg.byModel || {});
             for (var mk = 0; mk < modelKeys.length; mk++) {
                 var mv = agg.byModel[modelKeys[mk]];
-                modelTotalCost += _apiCostOf(modelKeys[mk], mv.inTok, mv.outTok, mv.calls, gp);
+                var _mp0 = _mkeyParts(modelKeys[mk]);
+                modelTotalCost += _apiCostOf(_mp0.model, _mp0.station, mv.inTok, mv.outTok, mv.calls, gp);
             }
             var html = '';
             // —— 价格说明：单价在「✨ 收藏」里按模型单独设置（按量 / 按次）——
@@ -13262,19 +13328,24 @@ body {
                 var keys = Object.keys(map || {});
                 if (!keys.length) return '';
                 keys.sort(function (a, b) {
-                    var ca = _apiCostOf(a, map[a].inTok, map[a].outTok, map[a].calls, gp);
-                    var cb = _apiCostOf(b, map[b].inTok, map[b].outTok, map[b].calls, gp);
+                    var pa = _mkeyParts(a), pb = _mkeyParts(b);
+                    var ca = _apiCostOf(pa.model, pa.station, map[a].inTok, map[a].outTok, map[a].calls, gp);
+                    var cb = _apiCostOf(pb.model, pb.station, map[b].inTok, map[b].outTok, map[b].calls, gp);
                     return cb - ca || (map[b].calls - map[a].calls);
                 });
                 var s = '<div class="seg-label" style="margin:10px 0 4px">' + title + '</div>';
                 for (var k = 0; k < keys.length; k++) {
                     var v = map[keys[k]];
-                    var mp = _apiModelPrice(keys[k]);
+                    var pp = _mkeyParts(keys[k]);
+                    var mp = _apiModelPrice(pp.model, pp.station);
                     var label = mp ? (mp.mode === 'call' ? '按次' : '按量') : '未设价';
-                    var c = _apiCostOf(keys[k], v.inTok, v.outTok, v.calls, gp);
+                    var c = _apiCostOf(pp.model, pp.station, v.inTok, v.outTok, v.calls, gp);
+                    var stn = pp.station ? _apiStationName(pp.station) : '';
+                    var nameHtml = _apiEsc(pp.model) + (stn ? ' <span style="color:var(--accent-mid);font-size:10px">@' + _apiEsc(stn) + '</span>' : '');
                     s += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:3px 0;border-bottom:1px solid var(--card-border)">'
-                        + '<span style="color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _apiEsc(keys[k]) + ' <span style="color:var(--text-muted);font-size:10px">[' + label + '] ' + v.calls + '次</span></span>'
-                        + '<span style="color:var(--accent);flex-shrink:0;margin-left:8px">' + (hasAnyPrice ? '￥' + _apiMoney(c) : _apiNum(v.inTok + v.outTok) + ' tok') + '</span></div>';
+                        + '<span style="color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + nameHtml + ' <span style="color:var(--text-muted);font-size:10px">[' + label + '] ' + v.calls + '次</span></span>'
+                        + '<span style="color:var(--accent);flex-shrink:0;margin-left:8px">' + (hasAnyPrice ? '￥' + _apiMoney(c) : _apiNum(v.inTok + v.outTok) + ' tok') + '</span>'
+                        + '<span onclick="apiDeleteModel(\'' + encodeURIComponent(keys[k]) + '\')" title="从统计里删掉这个模型" style="flex-shrink:0;margin-left:8px;cursor:pointer;color:var(--text-muted);font-size:13px;opacity:0.55;line-height:1">✕</span></div>';
                 }
                 return s;
             }
@@ -13287,13 +13358,15 @@ body {
                 var byP = {};
                 for (var i = 0; i < keys.length; i++) {
                     var v = map[keys[i]];
-                    var parts = keys[i].split('|');
-                    var purposeName = parts[0], modelName = parts[1] || '';
+                    var _bi = keys[i].indexOf('|');
+                    var purposeName = _bi < 0 ? keys[i] : keys[i].slice(0, _bi);
+                    var mkeyName = _bi < 0 ? '' : keys[i].slice(_bi + 1);
+                    var _ppp = _mkeyParts(mkeyName);
                     if (!byP[purposeName]) byP[purposeName] = { calls: 0, inTok: 0, outTok: 0, cost: 0, models: {} };
                     var p = byP[purposeName];
                     p.calls += v.calls; p.inTok += v.inTok; p.outTok += v.outTok;
-                    p.cost += _apiCostOf(modelName, v.inTok, v.outTok, v.calls, gp);
-                    if (modelName) p.models[modelName] = 1;
+                    p.cost += _apiCostOf(_ppp.model, _ppp.station, v.inTok, v.outTok, v.calls, gp);
+                    if (mkeyName) p.models[mkeyName] = 1;
                 }
                 var pkeys = Object.keys(byP);
                 pkeys.sort(function (a, b) { return byP[b].cost - byP[a].cost || (byP[b].calls - byP[a].calls); });
@@ -13318,7 +13391,7 @@ body {
                 var shown = log.slice(Math.max(0, log.length - 100)).reverse();
                 for (var j = 0; j < shown.length; j++) {
                     var r = shown[j];
-                    var mp2 = _apiModelPrice(r.model);
+                    var mp2 = _apiModelPrice(r.model, r.station || '');
                     var rc = 0;
                     var isCall = mp2 && mp2.mode === 'call';
                     if (isCall) { rc = +mp2.per || 0; }
@@ -13331,7 +13404,7 @@ body {
                         + '<div style="min-width:0;flex:1">'
                         + '<span style="color:var(--text);font-weight:600">' + _apiEsc(r.purpose) + '</span>'
                         + '<span style="color:var(--text-muted);font-size:10px"> · ' + _apiTime(r.ts) + '</span>'
-                        + '<div style="color:var(--text-muted);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">[' + detailLabel + '] ' + _apiEsc(r.model) + ' · ↑' + _apiNum(r.inTok) + ' ↓' + _apiNum(r.outTok) + (r.est ? ' · 约' : '') + '</div>'
+                        + '<div style="color:var(--text-muted);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">[' + detailLabel + '] ' + _apiEsc(r.model) + (r.station ? ' @' + _apiEsc(_apiStationName(r.station)) : '') + ' · ↑' + _apiNum(r.inTok) + ' ↓' + _apiNum(r.outTok) + (r.est ? ' · 约' : '') + '</div>'
                         + '</div>'
                         + '<span style="color:var(--accent);flex-shrink:0">' + (hasAnyPrice ? '￥' + _apiMoney(rc) : '') + '</span>'
                         + '</div>';
@@ -13391,10 +13464,10 @@ body {
             // 记账：有真实 usage 用真实值，否则按 messages / 回复文本估算
             try {
                 if (_usage) {
-                    apiLogRecord(opts.purpose, opts.model, _usage.inTok, _usage.outTok, false);
+                    apiLogRecord(opts.purpose, opts.model, _usage.inTok, _usage.outTok, false, opts.baseUrl || '');
                 } else {
                     var _inStr = (opts.messages || []).map(function (m) { return typeof m.content === 'string' ? m.content : ''; }).join('\n');
-                    apiLogRecord(opts.purpose, opts.model, estTokens(_inStr), estTokens(full), true);
+                    apiLogRecord(opts.purpose, opts.model, estTokens(_inStr), estTokens(full), true, opts.baseUrl || '');
                 }
             } catch (e) { /* 记账失败不影响主流程 */ }
             return full;
@@ -14595,7 +14668,10 @@ body {
             var txt = '⭐ 收藏模型 (' + chatFavModels.length + ')';
             if (cur) {
                 var curFav = null;
-                for (var i = 0; i < chatFavModels.length; i++) { if (chatFavModels[i].model === cur) { curFav = chatFavModels[i]; break; } }
+                var _curProv = (document.getElementById('chatProviderSelect') || {}).value || '';
+                // 先精确匹配「当前站点 + 模型」，没有再退回只按模型名
+                for (var i = 0; i < chatFavModels.length; i++) { if (chatFavModels[i].model === cur && chatFavModels[i].providerId === _curProv) { curFav = chatFavModels[i]; break; } }
+                if (!curFav) { for (var i = 0; i < chatFavModels.length; i++) { if (chatFavModels[i].model === cur) { curFav = chatFavModels[i]; break; } } }
                 if (curFav) {
                     var prov = curFav.providerName || '';
                     txt += ' · 当前: ' + (prov ? prov + ' / ' : '') + cur;
@@ -14653,7 +14729,7 @@ body {
                 container.appendChild(gLabel);
                 for (var mi = 0; mi < groups[gn].length; mi++) {
                     (function(fav) {
-                        var isActive = fav.model === chatSelectedModel;
+                        var isActive = fav.model === chatSelectedModel && fav.providerId === ((document.getElementById('chatProviderSelect') || {}).value || '');
                         var row = document.createElement('div');
                         row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:9px 4px;border-bottom:1px solid var(--card-border);cursor:pointer;transition:background 0.15s;border-radius:8px;';
                         if (isActive) row.style.background = 'var(--accent-light)';
@@ -15618,10 +15694,10 @@ body {
                 try {
                     var _docPurpose = (chatReadingMode && _userSentChapter) ? '共读点评' : (chatTranslateMode ? '翻译' : '对话');
                     if (_docUsage) {
-                        apiLogRecord(_docPurpose, chatSelectedModel, _docUsage.inTok, _docUsage.outTok, false);
+                        apiLogRecord(_docPurpose, chatSelectedModel, _docUsage.inTok, _docUsage.outTok, false, baseUrl || '');
                     } else {
                         var _docInStr = (reqMsgs || []).map(function (m) { return typeof m.content === 'string' ? m.content : ''; }).join('\n');
-                        apiLogRecord(_docPurpose, chatSelectedModel, estTokens(_docInStr), estTokens(fullContent + thinkContent), true);
+                        apiLogRecord(_docPurpose, chatSelectedModel, estTokens(_docInStr), estTokens(fullContent + thinkContent), true, baseUrl || '');
                     }
                 } catch (e) { /* 记账失败不影响主流程 */ }
 
