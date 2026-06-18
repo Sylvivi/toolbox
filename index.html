@@ -1374,18 +1374,14 @@ body {
             background: transparent;
         }
         /* 夜间暗色遮罩：把对话/阅读弹窗底色压成不同质感的暗底，独立开关、仅夜间有意义。
-           点「暗底」chip 循环：关→纯黑→柔黑→暖黑→夜岩→关。对应白天那套白底，给夜读几种观感挑。 */
-        body.dark.nightmask-black .modal.chat-modal { background: #000; }                  /* 纯黑：OLED 全黑、纯不透明（要的就是死黑，不留透明） */
+           点「暗底」chip 循环：关→柔黑→夜岩→关。对应白天那套白底，给夜读两种观感挑。 */
         body.dark.nightmask-soft  .modal.chat-modal { background: rgba(18,18,21,0.78); }   /* 柔黑：半透明近黑，透出底层斜向渐变，通透不闷 */
-        body.dark.nightmask-warm  .modal.chat-modal { background: rgba(21,17,12,0.74); }   /* 暖黑：半透明暖墨褐，偏暖又通透（对应暖白） */
         /* 夜岩：半透明暗底 + 一层极淡的水泥噪点纹理（水泥白的暗版，离线可用的内嵌 SVG 噪点，6% 浓度透出颗粒感） */
         body.dark.nightmask-stone .modal.chat-modal {
             background-color: rgba(22,22,24,0.80);
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
         }
-        html:has(body.modal-open.dark.nightmask-black) { background-color: #000; }
         html:has(body.modal-open.dark.nightmask-soft)  { background-color: #121215; }
-        html:has(body.modal-open.dark.nightmask-warm)  { background-color: #15110c; }
         html:has(body.modal-open.dark.nightmask-stone) { background-color: #161618; }
         /* iPad 装成 App 后，阅读遮罩有时铺不到屏幕最底边，底下会露出页面主题底色（偏紫/偏冷）的一截。
            开着遮罩+白底、又正打开对话页时，把整个 html 底色也换成同样的白，露出来的也是同色。
@@ -7051,7 +7047,7 @@ body {
                     <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
                         <button class="pagebtn-pos-opt active" id="chipNight" onclick="setNightMode(!nightMode)">夜间</button>
                         <button class="pagebtn-pos-opt" id="chipWarmMask" onclick="readingToggleWarmMask()" style="display: none;">白底</button>
-                        <button class="pagebtn-pos-opt" id="chipBlackMask" onclick="readingToggleBlackMask()" title="夜间把弹窗底色压成暗底，循环切换 纯黑/柔黑/暖黑/夜岩" style="display: none;">暗底</button>
+                        <button class="pagebtn-pos-opt" id="chipBlackMask" onclick="readingToggleBlackMask()" title="夜间把弹窗底色压成暗底，循环切换 柔黑/夜岩" style="display: none;">暗底</button>
                         <button class="pagebtn-pos-opt" id="chipMask" onclick="toggleChatMaskChip()" style="display: none;">遮罩</button>
                     </div>
                 </div>
@@ -7813,12 +7809,10 @@ body {
             warm:  { cls: 'warm-mask-on',  label: '暖白', color: '#FFF8F0' },
             concrete: { cls: 'concrete-mask-on', label: '水泥白', color: '#f1efe9' }
         };
-        // 夜间暗色遮罩（仅夜间有意义）：对应白天那套白底，给夜读几种暗底质感挑。chip 关着显示「暗底」。
-        var NIGHT_TINTS = ['off', 'black', 'soft', 'warm', 'stone'];
+        // 夜间暗色遮罩（仅夜间有意义）：对应白天那套白底，给夜读两种暗底质感挑。chip 关着显示「暗底」。
+        var NIGHT_TINTS = ['off', 'soft', 'stone'];
         var NIGHT_TINT_INFO = {
-            black: { cls: 'nightmask-black', label: '纯黑', color: '#000000' },
             soft:  { cls: 'nightmask-soft',  label: '柔黑', color: '#121215' },
-            warm:  { cls: 'nightmask-warm',  label: '暖黑', color: '#15110c' },
             stone: { cls: 'nightmask-stone', label: '夜岩', color: '#161618' }
         };
         // 更新 PWA 状态栏颜色：聊天弹窗打开且统一遮罩生效（遮罩开+引号高亮开+非深色）时用暖奶白，
@@ -18111,10 +18105,10 @@ body {
             readingApplyWarmMask();
         }
         // 夜间暗色遮罩：把弹窗底色压成某种暗底（纯黑/柔黑/暖黑/夜岩），仅夜间有意义（白天该 chip 隐藏）。
-        // 读出当前选的暗底；带一段历史迁移：老的「纯黑开/关」单键 → 新的「暗底种类」，开过的人默认落在 black。
+        // 读出当前选的暗底；带一段历史迁移：老的「纯黑开/关」单键 → 新的「暗底种类」，开过的人默认落在 soft（纯黑已下线）。
         function readingGetNightMask() {
             if (localStorage.getItem('reading_night_mask') === null) {
-                localStorage.setItem('reading_night_mask', localStorage.getItem('reading_black_mask') === '1' ? 'black' : 'off');
+                localStorage.setItem('reading_night_mask', localStorage.getItem('reading_black_mask') === '1' ? 'soft' : 'off');
             }
             var t = localStorage.getItem('reading_night_mask');
             return NIGHT_TINT_INFO[t] ? t : 'off';
@@ -18132,7 +18126,7 @@ body {
             }
             updateStatusBarColor();
         }
-        // 点「暗底」chip：按 关→纯黑→柔黑→暖黑→夜岩→关 循环
+        // 点「暗底」chip：按 关→柔黑→夜岩→关 循环
         function readingToggleBlackMask() {
             var cur = readingGetNightMask();
             var next = NIGHT_TINTS[(NIGHT_TINTS.indexOf(cur) + 1) % NIGHT_TINTS.length];
