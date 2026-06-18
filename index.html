@@ -2747,19 +2747,39 @@ body {
            划线颜色用 currentColor —— 跟着人名当前字色走：没开「着色」时就是正文色（低调），开了「着色」就跟着强调色，不再永远是醒目的主题色。 */
         body.reading-names-on.rn-dash .reading-merged .reading-name { text-decoration: underline dashed currentColor; text-decoration-thickness: 1px; text-underline-offset: 3px; }
         body.reading-names-on.rn-bold.rn-has-font .reading-merged .reading-quote:not(.rq-wide) .reading-name { font-weight: 400; }
-        /* 柔光：命中的人名/地名背后铺一层淡淡的强调色光晕 + 一圈外发光，像引号「柔光」的小号版，可与着色/加粗/划线叠加。
-           日间淡淡的；夜间用更亮的浓度 + 文字光晕，让名词在暗底上发光（呼应夜间强调色发光的调性）。 */
-        body.reading-names-on.rn-glow .reading-merged .reading-name {
+        /* 名词柔光：「柔光」chip 单击循环 关→光晕→光带→关，两款风格可挑，可与着色/加粗/划线叠加。
+           ① 光晕(rn-glow-halo)：背后一团圆角光晕 + 一圈外发光（夜间再加文字光晕，名词在暗底上发光）。
+           ② 光带(rn-glow-band)：搬自样式行的引号「柔光」——左右淡出的强调色色带 + 一圈内发光，像马克笔轻扫。 */
+        body.reading-names-on.rn-glow-halo .reading-merged .reading-name {
             background: color-mix(in srgb, var(--accent), transparent 88%);
             box-shadow: 0 0 7px color-mix(in srgb, var(--accent), transparent 72%);
             border-radius: 4px;
             padding: 0 3px;
             -webkit-box-decoration-break: clone; box-decoration-break: clone;
         }
-        body.dark.reading-names-on.rn-glow .reading-merged .reading-name {
+        body.dark.reading-names-on.rn-glow-halo .reading-merged .reading-name {
             background: color-mix(in srgb, var(--accent), transparent 80%);
             box-shadow: 0 0 9px color-mix(in srgb, var(--accent), transparent 58%);
             text-shadow: 0 0 6px color-mix(in srgb, var(--accent), transparent 55%);
+        }
+        body.reading-names-on.rn-glow-band .reading-merged .reading-name {
+            background-image: linear-gradient(to right,
+                transparent 0%,
+                color-mix(in srgb, var(--accent), transparent 95%) 20%,
+                color-mix(in srgb, var(--accent), transparent 95%) 80%,
+                transparent 100%);
+            background-repeat: no-repeat;
+            box-shadow: inset 0 0 10px color-mix(in srgb, var(--accent), transparent 84%);
+            padding: 0 5px;
+            -webkit-box-decoration-break: clone; box-decoration-break: clone;
+        }
+        body.dark.reading-names-on.rn-glow-band .reading-merged .reading-name {
+            background-image: linear-gradient(to right,
+                transparent 0%,
+                color-mix(in srgb, var(--accent), transparent 82%) 20%,
+                color-mix(in srgb, var(--accent), transparent 82%) 80%,
+                transparent 100%);
+            box-shadow: inset 0 0 10px color-mix(in srgb, var(--accent), transparent 72%);
         }
         /* 长短分工(reading-ls-on)：着色只落长句(rq-wide)，短句不着色、让给装饰 */
         body.reading-ls-on .reading-merged .reading-quote:not(.rq-wide) { color: inherit; font-weight: 400; }
@@ -7068,7 +7088,7 @@ body {
                         <button class="pagebtn-pos-opt" id="chipNameColor" onclick="readingToggleNameStyle('color')" title="名词用强调色">着色</button>
                         <button class="pagebtn-pos-opt" id="chipNameBold" onclick="readingToggleNameStyle('bold')" title="名词只加粗、不变色">加粗</button>
                         <button class="pagebtn-pos-opt" id="chipNameDash" onclick="readingToggleNameStyle('dash')" title="名词加虚线下划线（同引号「划线」款）">划线</button>
-                        <button class="pagebtn-pos-opt" id="chipNameGlow" onclick="readingToggleNameStyle('glow')" title="名词加柔光光晕（同引号「柔光」款，夜间会发光）">柔光</button>
+                        <button class="pagebtn-pos-opt" id="chipNameGlow" onclick="readingToggleNameGlow()" title="名词柔光，单击循环换款：关→光晕→光带→关（夜间会发光）">柔光</button>
                         <button class="pagebtn-pos-opt" id="chipNameList" onclick="readingOpenNamesEditor()" title="填写/自动识别本书名词">名单…</button>
                     </div>
                 </div>
@@ -18192,16 +18212,39 @@ body {
             if (v === null) return k === 'color'; // 没设过：默认开「着色」，跟之前观感一致
             return v === '1';
         }
-        var RN_STYLES = ['color', 'bold', 'dash', 'glow']; // 着色/加粗/划线/柔光，可叠加
-        var RN_CLS = { color: 'rn-color', bold: 'rn-bold', dash: 'rn-dash', glow: 'rn-glow' };
-        var RN_CHIP = { color: 'chipNameColor', bold: 'chipNameBold', dash: 'chipNameDash', glow: 'chipNameGlow' };
-        function readingNameAnyOn() { return RN_STYLES.some(function (k) { return _rnStyleOn(k); }); }
+        var RN_STYLES = ['color', 'bold', 'dash']; // 着色/加粗/划线，可叠加（柔光另算，见下方循环档）
+        var RN_CLS = { color: 'rn-color', bold: 'rn-bold', dash: 'rn-dash' };
+        var RN_CHIP = { color: 'chipNameColor', bold: 'chipNameBold', dash: 'chipNameDash' };
+        // 名词「柔光」是循环档（不叠加）：关→光晕→光带→关。光晕=背后一团光+外发光；光带=引号柔光那种左右淡出色带。
+        var NAME_GLOWS = ['off', 'halo', 'band'];
+        var NAME_GLOW_INFO = {
+            halo: { cls: 'rn-glow-halo', label: '光晕' },
+            band: { cls: 'rn-glow-band', label: '光带' }
+        };
+        function readingGetNameGlow() {
+            // 迁移：老的「柔光开/关」单键(reading_name_glow) → 新的种类键，开过的人默认落在 halo（就是原来那款光晕）
+            if (localStorage.getItem('reading_name_glow_kind') === null) {
+                localStorage.setItem('reading_name_glow_kind', localStorage.getItem('reading_name_glow') === '1' ? 'halo' : 'off');
+            }
+            var t = localStorage.getItem('reading_name_glow_kind');
+            return NAME_GLOW_INFO[t] ? t : 'off';
+        }
+        function readingNameAnyOn() { return RN_STYLES.some(function (k) { return _rnStyleOn(k); }) || readingGetNameGlow() !== 'off'; }
         function readingApplyNames() {
             RN_STYLES.forEach(function (k) {
                 var on = _rnStyleOn(k);
                 document.body.classList.toggle(RN_CLS[k], on);
                 var el = document.getElementById(RN_CHIP[k]); if (el) el.classList.toggle('active', on);
             });
+            // 柔光循环档：先清两款光类，再挂当前那款；chip 文字跟着显示「光晕/光带」，关掉回「柔光」
+            var glow = readingGetNameGlow();
+            Object.keys(NAME_GLOW_INFO).forEach(function (k) { document.body.classList.remove(NAME_GLOW_INFO[k].cls); });
+            if (glow !== 'off') document.body.classList.add(NAME_GLOW_INFO[glow].cls);
+            var gchip = document.getElementById('chipNameGlow');
+            if (gchip) {
+                gchip.classList.toggle('active', glow !== 'off');
+                gchip.textContent = glow === 'off' ? '柔光' : NAME_GLOW_INFO[glow].label;
+            }
             var anyOn = readingNameAnyOn();
             localStorage.setItem('reading_names_on', anyOn ? '1' : '0');
             document.body.classList.toggle('reading-names-on', anyOn);
@@ -18212,6 +18255,15 @@ body {
             readingApplyNames();
             // 刚开启某个样式、但本书还没名单 → 弹编辑器（手填或自动识别），省得用户找
             if (!cur && readingGetNames().length === 0) readingOpenNamesEditor();
+        }
+        // 点「柔光」chip：按 关→光晕→光带→关 循环
+        function readingToggleNameGlow() {
+            var cur = readingGetNameGlow();
+            var next = NAME_GLOWS[(NAME_GLOWS.indexOf(cur) + 1) % NAME_GLOWS.length];
+            localStorage.setItem('reading_name_glow_kind', next);
+            localStorage.setItem('reading_name_glow', next === 'off' ? '0' : '1'); // 兼容旧键
+            readingApplyNames();
+            if (next !== 'off' && readingGetNames().length === 0) readingOpenNamesEditor();
         }
         // 名单改了之后：把当前已渲染出来的正文段落原地重新高亮（不整页重排，保住阅读位置）
         function _readingWrapNamesInEl(root, re) {
