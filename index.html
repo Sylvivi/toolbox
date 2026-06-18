@@ -2751,6 +2751,20 @@ body {
            划线颜色用 currentColor —— 跟着人名当前字色走：没开「着色」时就是正文色（低调），开了「着色」就跟着强调色，不再永远是醒目的主题色。 */
         body.reading-names-on.rn-dash .reading-merged .reading-name { text-decoration: underline dashed currentColor; text-decoration-thickness: 1px; text-underline-offset: 3px; }
         body.reading-names-on.rn-bold.rn-has-font .reading-merged .reading-quote:not(.rq-wide) .reading-name { font-weight: 400; }
+        /* 柔光：命中的人名/地名背后铺一层淡淡的强调色光晕 + 一圈外发光，像引号「柔光」的小号版，可与着色/加粗/划线叠加。
+           日间淡淡的；夜间用更亮的浓度 + 文字光晕，让名词在暗底上发光（呼应夜间强调色发光的调性）。 */
+        body.reading-names-on.rn-glow .reading-merged .reading-name {
+            background: color-mix(in srgb, var(--accent), transparent 88%);
+            box-shadow: 0 0 7px color-mix(in srgb, var(--accent), transparent 72%);
+            border-radius: 4px;
+            padding: 0 3px;
+            -webkit-box-decoration-break: clone; box-decoration-break: clone;
+        }
+        body.dark.reading-names-on.rn-glow .reading-merged .reading-name {
+            background: color-mix(in srgb, var(--accent), transparent 80%);
+            box-shadow: 0 0 9px color-mix(in srgb, var(--accent), transparent 58%);
+            text-shadow: 0 0 6px color-mix(in srgb, var(--accent), transparent 55%);
+        }
         /* 长短分工(reading-ls-on)：着色只落长句(rq-wide)，短句不着色、让给装饰 */
         body.reading-ls-on .reading-merged .reading-quote:not(.rq-wide) { color: inherit; font-weight: 400; }
         /* 划线：默认作用于所有引号内层文字；长短分工下长句的划线由后面的 strip 规则去掉 */
@@ -7058,6 +7072,7 @@ body {
                         <button class="pagebtn-pos-opt" id="chipNameColor" onclick="readingToggleNameStyle('color')" title="名词用强调色">着色</button>
                         <button class="pagebtn-pos-opt" id="chipNameBold" onclick="readingToggleNameStyle('bold')" title="名词只加粗、不变色">加粗</button>
                         <button class="pagebtn-pos-opt" id="chipNameDash" onclick="readingToggleNameStyle('dash')" title="名词加虚线下划线（同引号「划线」款）">划线</button>
+                        <button class="pagebtn-pos-opt" id="chipNameGlow" onclick="readingToggleNameStyle('glow')" title="名词加柔光光晕（同引号「柔光」款，夜间会发光）">柔光</button>
                         <button class="pagebtn-pos-opt" id="chipNameList" onclick="readingOpenNamesEditor()" title="填写/自动识别本书名词">名单…</button>
                     </div>
                 </div>
@@ -18183,9 +18198,9 @@ body {
             if (v === null) return k === 'color'; // 没设过：默认开「着色」，跟之前观感一致
             return v === '1';
         }
-        var RN_STYLES = ['color', 'bold', 'dash']; // 着色/加粗/划线，可叠加
-        var RN_CLS = { color: 'rn-color', bold: 'rn-bold', dash: 'rn-dash' };
-        var RN_CHIP = { color: 'chipNameColor', bold: 'chipNameBold', dash: 'chipNameDash' };
+        var RN_STYLES = ['color', 'bold', 'dash', 'glow']; // 着色/加粗/划线/柔光，可叠加
+        var RN_CLS = { color: 'rn-color', bold: 'rn-bold', dash: 'rn-dash', glow: 'rn-glow' };
+        var RN_CHIP = { color: 'chipNameColor', bold: 'chipNameBold', dash: 'chipNameDash', glow: 'chipNameGlow' };
         function readingNameAnyOn() { return RN_STYLES.some(function (k) { return _rnStyleOn(k); }); }
         function readingApplyNames() {
             RN_STYLES.forEach(function (k) {
