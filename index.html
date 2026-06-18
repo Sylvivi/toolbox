@@ -19442,6 +19442,7 @@ body {
             chatSkipNextAutoBottom = true;
             // 开章后压回章首的过程中，静默滚动监听的「自动补章」，避免被连锁补章带到前面的章节去
             _readerAutoLoadSuppressUntil = Date.now() + 500;
+            _readerLastTop = 0; // 开章把滚动位置基准也归零，使随后压回章首的 0→0 不被当成「向上滑」而误补上一章
             chatRenderAllMessages(false);
             var container = document.getElementById('chatMessages');
             if (container) {
@@ -19477,6 +19478,9 @@ body {
         // 从目录开章后的一小段静默窗口：这期间 readerOpenChapter 会反复把 scrollTop 压回 0（停在章首），
         // 若不静默，滚动监听会因「scrollTop<600」误判为「用户上滑到顶」而自动补上一章，连锁往前补，最后停到前面好几章去（目录跳转落到别的章的根因）。
         var _readerAutoLoadSuppressUntil = 0;
+        // 记录上次滚动位置，用来判断用户是不是「真的在往上滑」：只有向上滑且接近顶部才补上一章。
+        // 这样开章压回章首（scrollTop 一步跳到 0）和短章页面 scrollTop 长期为 0 都不会被误判成上滑，避免连锁补到前面几章去。
+        var _readerLastTop = 0;
         // 翻到底自动续下一章（无 AI）：把下一章两条消息增量接到 #chatMessages 末尾，不动当前滚动
         var _readerAppending = false;
         function readerAppendNextChapter() {
@@ -20252,10 +20256,14 @@ body {
                 if (_autoLoadOk && chatReaderMode && el.scrollTop + el.clientHeight >= el.scrollHeight - 400) {
                     readerAppendNextChapter();
                 }
-                // 阅读模式：上滑接近顶部，自动补上一章
-                if (_autoLoadOk && chatReaderMode && !_readerPrepending && el.scrollTop < 600) {
+                // 阅读模式：用户「真的在往上滑」且接近顶部，才补上一章。
+                // 不再用「scrollTop<600 就补」——短章页面整页凑不满 600px 时 scrollTop 长期偏小，
+                // 那种写法会在开章后连锁补上一章、把目录跳转落到前面两章去（每本书稳定差两章的根因）。
+                var _goingUp = el.scrollTop < _readerLastTop - 2; // 比上次更靠上（留 2px 抖动容差）才算向上滑
+                if (_autoLoadOk && chatReaderMode && !_readerPrepending && _goingUp && el.scrollTop < 600) {
                     readerPrependPrevChapter();
                 }
+                _readerLastTop = el.scrollTop; // 放在补章之后更新：补章会把 scrollTop 顶高，下一次不会被误判成向下
                 if (saveTimer) clearTimeout(saveTimer);
                 saveTimer = setTimeout(readingSaveScrollPos, 150);
             }, { passive: true });
