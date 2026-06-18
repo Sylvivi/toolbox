@@ -18082,10 +18082,32 @@ body {
         }
 
         /* ===== 人名高亮（共读/阅读）：按本书存一份名单，命中正文里的人名用当前强调色 =====
-           名单按「书」存：优先用书架里这本书的 id，没绑书就退回当前对话 id，互不串味。 */
-        function readingNamesKey() { return (typeof rbGetConvBook === 'function' && rbGetConvBook()) || chatCurrentConvId || ''; }
+           名单按「书」存：优先用书架里这本书的 id，没绑书就退回当前对话 id，互不串味。
+           同一本书阅读模式与共读模式名单互通：两边都把 key 解析到同一个「书 id」——
+           阅读会话不写 rbGetConvBook 那套映射，所以阅读模式优先取 readerBookId，否则退回共读的绑书，再退回对话 id。 */
+        function readingNamesKey() {
+            if (typeof chatReaderMode !== 'undefined' && chatReaderMode && typeof readerBookId !== 'undefined' && readerBookId) return readerBookId;
+            return (typeof rbGetConvBook === 'function' && rbGetConvBook()) || chatCurrentConvId || '';
+        }
         function readingGetNames() {
             var key = readingNamesKey(); if (!key) return [];
+            // 一次性兼容：早期阅读模式名单存在「reader_<书id>」会话 key 下，跟共读的「书id」key 分了家。
+            // 现在两模式统一用书 id，把旧的孤立名单并进来一次（搬完删旧 key，避免重复迁移）。
+            if (typeof chatReaderMode !== 'undefined' && chatReaderMode && typeof readerBookId !== 'undefined' && readerBookId && key === readerBookId) {
+                var oldKey = 'reading_names_reader_' + readerBookId;
+                try {
+                    var oldRaw = localStorage.getItem(oldKey);
+                    if (oldRaw) {
+                        var oldArr = JSON.parse(oldRaw);
+                        if (Array.isArray(oldArr) && oldArr.length) {
+                            var cur = JSON.parse(localStorage.getItem('reading_names_' + key) || '[]');
+                            if (!Array.isArray(cur)) cur = [];
+                            readingSetNames(cur.concat(oldArr)); // 合并去重由 readingSetNames 负责
+                        }
+                        localStorage.removeItem(oldKey);
+                    }
+                } catch (e) {}
+            }
             try { var a = JSON.parse(localStorage.getItem('reading_names_' + key) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
         }
         function readingSetNames(arr) {
