@@ -1363,6 +1363,12 @@ body {
         body.chat-mask-on.warm-mask-on .modal.chat-modal {  /* 暖白：暖奶白，偏黄暖（蔚蓝金暖调） */
             background: rgba(255,248,240,0.76);
         }
+        /* 水泥白：浅暖灰白底 + 一层极淡的水泥噪点纹理（学自酒馆「止叹迹」的 concrete-wall 质感）。
+           纹理用内嵌 SVG feTurbulence 噪点（离线可用，不依赖外部图片），160px 无缝平铺、5% 浓度只透出一点颗粒感。 */
+        body.chat-mask-on.concrete-mask-on .modal.chat-modal {
+            background-color: #f1efe9;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23c)' opacity='0.05'/%3E%3C/svg%3E");
+        }
         /* 深色永远不上（暖白/月白那种）遮罩 */
         body.chat-mask-on.dark .modal.chat-modal {
             background: transparent;
@@ -1376,6 +1382,7 @@ body {
         html:has(body.modal-open.chat-mask-on.pure-mask-on:not(.dark))  { background-color: #FFFFFF; }
         html:has(body.modal-open.chat-mask-on.soft-mask-on:not(.dark))  { background-color: #FFFFFF; }
         html:has(body.modal-open.chat-mask-on.warm-mask-on:not(.dark))  { background-color: #FFF8F0; }
+        html:has(body.modal-open.chat-mask-on.concrete-mask-on:not(.dark))  { background-color: #f1efe9; }
 
 
         .modal-overlay:has(.chat-modal) { padding: 0; align-items: stretch; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; overscroll-behavior: contain; }
@@ -7771,13 +7778,14 @@ body {
             purplepink: '#0c0c0e',
             iceblue: '#0c0c0e'
         };
-        // 白底遮罩的几种白：点「白底」chip 按 off→pure→soft→warm→off 循环。
+        // 白底遮罩的几种白：点「白底」chip 按 off→pure→soft→warm→concrete→off 循环。
         // cls 对应 CSS 里的 body.xxx-mask-on，color 是不透明同色（状态栏 / iPad 底边补色用）。
-        var MASK_TINTS = ['off', 'pure', 'soft', 'warm'];
+        var MASK_TINTS = ['off', 'pure', 'soft', 'warm', 'concrete'];
         var MASK_TINT_INFO = {
             pure:  { cls: 'pure-mask-on',  label: '纯白', color: '#FFFFFF' },
             soft:  { cls: 'soft-mask-on',  label: '柔白', color: '#FFFFFF' },
-            warm:  { cls: 'warm-mask-on',  label: '暖白', color: '#FFF8F0' }
+            warm:  { cls: 'warm-mask-on',  label: '暖白', color: '#FFF8F0' },
+            concrete: { cls: 'concrete-mask-on', label: '水泥白', color: '#f1efe9' }
         };
         // 更新 PWA 状态栏颜色：聊天弹窗打开且统一遮罩生效（遮罩开+引号高亮开+非深色）时用暖奶白，
         // 否则用各自主题色。弹窗关掉自动回到主题色。
@@ -18057,7 +18065,7 @@ body {
             }
             updateStatusBarColor();
         }
-        // 点「白底」chip：按 关→纯白→柔白→暖白→关 循环
+        // 点「白底」chip：按 关→纯白→柔白→暖白→水泥白→关 循环
         function readingToggleWarmMask() {
             var cur = readingGetMaskTint();
             var next = MASK_TINTS[(MASK_TINTS.indexOf(cur) + 1) % MASK_TINTS.length];
