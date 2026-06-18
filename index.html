@@ -17638,7 +17638,8 @@ body {
                         if (chatCurrentConvId !== convId) break;
                         if (seg) {
                             if (firstIsChapter) {
-                                var _chTitle = readingResolveChapterTitle(batch) || readingExtractChapterTitle(first.content);
+                                var _chFull = readingResolveChapterTitle(batch) || readingExtractChapterTitle(first.content);
+                                var _chTitle = _rbChapterOrdinal(_chFull) || _chFull;  // 只取序号；实在抽不出再用全名兜底
                                 if (_chTitle) seg = '【' + _chTitle + '】' + seg;
                             }
                             chatCompressSummaries.push(seg);
@@ -21255,6 +21256,19 @@ body {
             if (ci == null) return '';
             var b = rbGetBook(readerBookId);
             if (b && b.chapters && b.chapters[ci]) return (b.chapters[ci].title || '').trim();
+            return '';
+        }
+        // 从完整章名里只抽「序号」部分（如「三 宝刀百炼生玄光」→「三」、「第三回 …」→「第三回」、「Chapter 5: …」→「Chapter 5」）。
+        // 抽不出就返回 ''（调用方退回用全名）。主线表「章节」列只想要序号、不想要长长的章名。
+        function _rbChapterOrdinal(title) {
+            title = (title || '').trim();
+            if (!title) return '';
+            var m = title.match(/^第[一二三四五六七八九十百千零两\d]+[章节回篇卷话]/);   // 第三回 / 第617章
+            if (m) return m[0];
+            m = title.match(/^([一二三四五六七八九十百千零两]+|\d+)(?=[\s　:：·.\-、]|$)/);  // 行首数字 + 分隔（确认是序号不是词）
+            if (m) return m[1];
+            m = title.match(/^[Cc]hapter\s*\d+/);                                          // Chapter 5
+            if (m) return m[0];
             return '';
         }
         function readingExtractChapterTitle(content) {
