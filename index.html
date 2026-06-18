@@ -13125,7 +13125,26 @@ body {
             if (typeof o.calls !== 'number') o.calls = 0;
             if (typeof o.inTok !== 'number') o.inTok = 0;
             if (typeof o.outTok !== 'number') o.outTok = 0;
+            // 历史迁移：早期版本把站点塞进聚合键(model+分隔符+站点)，现已停用站点维度 → 并回纯模型名，避免同模型拆两行
+            o.byModel = _aggCollapseStation(o.byModel, false);
+            o.byPurposeModel = _aggCollapseStation(o.byPurposeModel, true);
             return o;
+        }
+        // 把带站点的旧聚合键并回纯模型名（byModel 键为 model；byPurposeModel 键为 purpose|model）。幂等。
+        function _aggCollapseStation(map, isPurpose) {
+            if (!map) return map;
+            var SEP = String.fromCharCode(1), out = {}, changed = false;
+            Object.keys(map).forEach(function (k) {
+                var nk = k;
+                if (isPurpose) {
+                    var bi = k.indexOf('|');
+                    if (bi >= 0) { var pn = k.slice(0, bi), mk = k.slice(bi + 1); var si = mk.indexOf(SEP); if (si >= 0) mk = mk.slice(0, si); nk = pn + '|' + mk; }
+                } else { var si2 = k.indexOf(SEP); if (si2 >= 0) nk = k.slice(0, si2); }
+                if (nk !== k) changed = true;
+                if (!out[nk]) out[nk] = { calls: 0, inTok: 0, outTok: 0 };
+                out[nk].calls += map[k].calls || 0; out[nk].inTok += map[k].inTok || 0; out[nk].outTok += map[k].outTok || 0;
+            });
+            return changed ? out : map;
         }
         function apiAggSave(o) { try { localStorage.setItem('toolbox_api_agg', JSON.stringify(o)); } catch (e) {} }
         // 记一笔调用：写明细（超 API_LOG_CAP 截断）+ 累加聚合；面板开着就重渲
@@ -13135,10 +13154,9 @@ body {
             if (!inTok && !outTok) return; // 空调用（中止且无内容）不记
             purpose = purpose || '其它';
             model = model || '未知';
-            station = station || '';
-            var mkey = _mkey(model, station);
+            var mkey = _mkey(model);  // station 参数保留兼容旧调用，但按模型名聚合，不再带站点
             var log = apiLogLoad();
-            log.push({ ts: Date.now(), purpose: purpose, model: model, station: station, inTok: inTok, outTok: outTok, est: !!est });
+            log.push({ ts: Date.now(), purpose: purpose, model: model, inTok: inTok, outTok: outTok, est: !!est });
             log = apiLogPrune(log);
             apiLogSave(log);
             var agg = apiAggLoad();
@@ -13259,7 +13277,7 @@ body {
             }
             apiAggSave(agg);
             // 明细里同模型同站的记录也清掉
-            var log = apiLogLoad().filter(function (r) { return !(r.model === pp.model && (r.station || '') === pp.station); });
+            var log = apiLogLoad().filter(function (r) { return r.model !== pp.model; });
             apiLogSave(log);
             apiLogRenderBody();
         }
@@ -13404,7 +13422,7 @@ body {
                         + '<div style="min-width:0;flex:1">'
                         + '<span style="color:var(--text);font-weight:600">' + _apiEsc(r.purpose) + '</span>'
                         + '<span style="color:var(--text-muted);font-size:10px"> · ' + _apiTime(r.ts) + '</span>'
-                        + '<div style="color:var(--text-muted);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">[' + detailLabel + '] ' + _apiEsc(r.model) + (r.station ? ' @' + _apiEsc(_apiStationName(r.station)) : '') + ' · ↑' + _apiNum(r.inTok) + ' ↓' + _apiNum(r.outTok) + (r.est ? ' · 约' : '') + '</div>'
+                        + '<div style="color:var(--text-muted);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">[' + detailLabel + '] ' + _apiEsc(r.model) + ' · ↑' + _apiNum(r.inTok) + ' ↓' + _apiNum(r.outTok) + (r.est ? ' · 约' : '') + '</div>'
                         + '</div>'
                         + '<span style="color:var(--accent);flex-shrink:0">' + (hasAnyPrice ? '￥' + _apiMoney(rc) : '') + '</span>'
                         + '</div>';
@@ -19602,6 +19620,38 @@ body {
                 reader.readAsText(file, 'UTF-8');
             }
         }
+        // 合并「相邻同标题」的章节，并清掉正文开头与标题完全相同的重复行。
+        // 成因：有些 EPUB 把一章拆成「标题小页 + 标题小页 + 正文页」几个文件，导致目录同一章冒出两三条（多为很短的小块）。
+        // 返回 { chapters: 合并后的新数组, indexMap: 旧下标→新下标, changed }。indexMap 供迁移老书时把章节号挪到合并后的位置。
+        function _rbNormTitle(s) { return (s || '').replace(/\s+/g, '').trim(); }
+        function rbDedupChapters(chapters) {
+            if (!chapters || chapters.length < 2) return { chapters: chapters || [], indexMap: null, changed: false };
+            var out = [], map = {}, changed = false;
+            for (var i = 0; i < chapters.length; i++) {
+                var c = chapters[i], last = out.length ? out[out.length - 1] : null, nt = _rbNormTitle(c.title);
+                if (last && nt !== '' && _rbNormTitle(last.title) === nt) {
+                    last.body = (last.body || '').replace(/\s+$/, '') + '\n\n' + (c.body || '').replace(/^\s+/, '');
+                    if ((c.title || '').length > (last.title || '').length) last.title = c.title; // 留更完整的标题（常含副标题）
+                    map[i] = out.length - 1; changed = true;
+                } else {
+                    out.push({ title: c.title, body: c.body }); map[i] = out.length - 1;
+                }
+            }
+            // 清掉每章正文开头与标题完全相同的重复行（阅读时标题会另行拼到正文前，留着会重复显示）
+            for (var j = 0; j < out.length; j++) {
+                var ch = out[j], t = _rbNormTitle(ch.title);
+                if (!t) continue;
+                var lines = (ch.body || '').split('\n'), s = 0, guard = 0;
+                while (s < lines.length && guard < 12) {
+                    var ln = lines[s].trim();
+                    if (ln === '') { s++; continue; }
+                    if (_rbNormTitle(ln) === t) { s++; guard++; changed = true; continue; }
+                    break;
+                }
+                if (s > 0) ch.body = lines.slice(s).join('\n').replace(/^\s+/, '');
+            }
+            return { chapters: out, indexMap: map, changed: changed };
+        }
         // 修正「书架目录显示的章节标题」，并清掉正文里与标题重复的那一两行（不动故事正文、不改章节边界）。
         // 之所以要清重复行：从目录点进去读时，正文 = 标题 + 空行 + 正文 拼出来，标题留在正文里就会重复显示。
         // 处理三类：
@@ -19634,6 +19684,7 @@ body {
         }
         function rbAddBook(fileName, fileSize, fileType, chapters, rawText) {
             if (!chapters || !chapters.length) { chapters = [{ title: '全文', body: (rawText || '').trim() }]; }
+            chapters = rbDedupChapters(chapters).chapters;  // 先并掉「同一章拆成多条」的重复，再修标题
             rbFixChapterTitles(chapters);
             if (!rawText) rawText = chapters.map(function (c) { return c.title + '\n\n' + c.body; }).join('\n\n');
             var book = {
@@ -19658,6 +19709,7 @@ body {
             var preset = document.getElementById('rbPresetSelect').value;
             b.preset = preset;
             b.chapters = (preset === 'auto') ? rbAutoSplit(b.rawText) : rbSplitByPattern(b.rawText, RB_PRESETS[preset]);
+            b.chapters = rbDedupChapters(b.chapters).chapters;  // 并掉同章多条的重复
             if (!b.chapters.length) b.chapters = [{ title: '全文', body: b.rawText.trim() }];
             b.lastChapter = null;
             rbSave(); rbRenderChapters();
