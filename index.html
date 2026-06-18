@@ -19440,6 +19440,8 @@ body {
             var resume = (prog.chapter === idx && prog.p != null);
             // 关键：渲染完不要自动滚到底
             chatSkipNextAutoBottom = true;
+            // 开章后压回章首的过程中，静默滚动监听的「自动补章」，避免被连锁补章带到前面的章节去
+            _readerAutoLoadSuppressUntil = Date.now() + 500;
             chatRenderAllMessages(false);
             var container = document.getElementById('chatMessages');
             if (container) {
@@ -19472,6 +19474,9 @@ body {
             readerSchedulePrefetch(idx); // 边读边后台备好前文摘要，提问时基本不用等
         }
 
+        // 从目录开章后的一小段静默窗口：这期间 readerOpenChapter 会反复把 scrollTop 压回 0（停在章首），
+        // 若不静默，滚动监听会因「scrollTop<600」误判为「用户上滑到顶」而自动补上一章，连锁往前补，最后停到前面好几章去（目录跳转落到别的章的根因）。
+        var _readerAutoLoadSuppressUntil = 0;
         // 翻到底自动续下一章（无 AI）：把下一章两条消息增量接到 #chatMessages 末尾，不动当前滚动
         var _readerAppending = false;
         function readerAppendNextChapter() {
@@ -20241,12 +20246,14 @@ body {
                 if ((chatReadingMode || chatTranslateMode) && chatRenderStartIdx > 0 && !_chatLoadingEarlier && el.scrollTop < 600) {
                     chatLoadEarlier();
                 }
+                // 开章静默窗口内不自动补章（防止压回章首时被误判为上滑到顶、连锁补到别的章）
+                var _autoLoadOk = Date.now() > _readerAutoLoadSuppressUntil;
                 // 阅读模式：翻到接近底部，自动续下一章
-                if (chatReaderMode && el.scrollTop + el.clientHeight >= el.scrollHeight - 400) {
+                if (_autoLoadOk && chatReaderMode && el.scrollTop + el.clientHeight >= el.scrollHeight - 400) {
                     readerAppendNextChapter();
                 }
                 // 阅读模式：上滑接近顶部，自动补上一章
-                if (chatReaderMode && !_readerPrepending && el.scrollTop < 600) {
+                if (_autoLoadOk && chatReaderMode && !_readerPrepending && el.scrollTop < 600) {
                     readerPrependPrevChapter();
                 }
                 if (saveTimer) clearTimeout(saveTimer);
