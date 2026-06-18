@@ -2754,31 +2754,31 @@ body {
         body.dark.reading-band-on .reading-merged .reading-quote-inner {
             background-image: var(--quote-band-img-dark);
         }
-        /* 柔光色带：学自酒馆「止叹迹」美化——引号内文字背后铺一条左右淡出的强调色渐变 + 一圈内发光，像马克笔轻扫。
-           平滑无毛边（区别于已下线的「底纹」毛边款）。挂在内层文字(.reading-quote-inner)上，box-decoration-break:clone 保证换行每行各自带。 */
-        body.reading-glow-on .reading-merged .reading-quote-inner {
+        /* 柔光色带：学自酒馆「止叹迹」美化——整段引号(含「」)背后铺一条左右淡出的强调色渐变 + 一圈内发光，像马克笔轻扫。
+           平滑无毛边（区别于已下线的「底纹」毛边款）。挂在外层 .reading-quote 上把符号也圈进去，box-decoration-break:clone 保证换行每行各自带。 */
+        body.reading-glow-on .reading-merged .reading-quote {
             background-image: linear-gradient(to right,
                 transparent 0%,
-                color-mix(in srgb, var(--accent), transparent 90%) 18%,
-                color-mix(in srgb, var(--accent), transparent 90%) 82%,
+                color-mix(in srgb, var(--accent), transparent 90%) 12%,
+                color-mix(in srgb, var(--accent), transparent 90%) 88%,
                 transparent 100%);
             background-repeat: no-repeat;
             box-shadow: inset 0 0 10px color-mix(in srgb, var(--accent), transparent 84%);
-            padding: 0 4px;
+            padding: 0 5px;
             -webkit-box-decoration-break: clone;
             box-decoration-break: clone;
         }
         /* 夜间强调色亮、底色深，色带浓一点才显 */
-        body.dark.reading-glow-on .reading-merged .reading-quote-inner {
+        body.dark.reading-glow-on .reading-merged .reading-quote {
             background-image: linear-gradient(to right,
                 transparent 0%,
-                color-mix(in srgb, var(--accent), transparent 82%) 18%,
-                color-mix(in srgb, var(--accent), transparent 82%) 82%,
+                color-mix(in srgb, var(--accent), transparent 82%) 12%,
+                color-mix(in srgb, var(--accent), transparent 82%) 88%,
                 transparent 100%);
             box-shadow: inset 0 0 10px color-mix(in srgb, var(--accent), transparent 72%);
         }
-        /* 长短分工：长句(rq-wide)只着色，柔光带让给短句（背景已被 2778 那条 strip 清掉，这里再把内发光清掉） */
-        body.reading-ls-on.reading-glow-on .reading-merged .reading-quote.rq-wide .reading-quote-inner { box-shadow: none; }
+        /* 长短分工：长句(rq-wide)只着色，柔光带让给短句（背景已被 2778 那条 strip 清掉，这里再把内发光/内边距清掉） */
+        body.reading-ls-on.reading-glow-on .reading-merged .reading-quote.rq-wide { box-shadow: none; padding: 0; }
         /* 画框圈重点：毛边描边方框。SVG 颜色不能用 CSS 变量，按强调色生成后存进 --quote-box-img（切主题刷新）。
            用 background-image（不碰文字，绝不擦字），框只描边不填充，文字照常显示在框内。
            框挂在外层 .reading-quote 上，把引号「」也一起圈进去。默认所有引号都画框；长短分工下长句的框由 strip 规则去掉。 */
@@ -13154,26 +13154,7 @@ body {
             if (typeof o.calls !== 'number') o.calls = 0;
             if (typeof o.inTok !== 'number') o.inTok = 0;
             if (typeof o.outTok !== 'number') o.outTok = 0;
-            // 历史迁移：早期版本把站点塞进聚合键(model+分隔符+站点)，现已停用站点维度 → 并回纯模型名，避免同模型拆两行
-            o.byModel = _aggCollapseStation(o.byModel, false);
-            o.byPurposeModel = _aggCollapseStation(o.byPurposeModel, true);
             return o;
-        }
-        // 把带站点的旧聚合键并回纯模型名（byModel 键为 model；byPurposeModel 键为 purpose|model）。幂等。
-        function _aggCollapseStation(map, isPurpose) {
-            if (!map) return map;
-            var SEP = String.fromCharCode(1), out = {}, changed = false;
-            Object.keys(map).forEach(function (k) {
-                var nk = k;
-                if (isPurpose) {
-                    var bi = k.indexOf('|');
-                    if (bi >= 0) { var pn = k.slice(0, bi), mk = k.slice(bi + 1); var si = mk.indexOf(SEP); if (si >= 0) mk = mk.slice(0, si); nk = pn + '|' + mk; }
-                } else { var si2 = k.indexOf(SEP); if (si2 >= 0) nk = k.slice(0, si2); }
-                if (nk !== k) changed = true;
-                if (!out[nk]) out[nk] = { calls: 0, inTok: 0, outTok: 0 };
-                out[nk].calls += map[k].calls || 0; out[nk].inTok += map[k].inTok || 0; out[nk].outTok += map[k].outTok || 0;
-            });
-            return changed ? out : map;
         }
         function apiAggSave(o) { try { localStorage.setItem('toolbox_api_agg', JSON.stringify(o)); } catch (e) {} }
         // 记一笔调用：写明细（超 API_LOG_CAP 截断）+ 累加聚合；面板开着就重渲
@@ -13183,9 +13164,10 @@ body {
             if (!inTok && !outTok) return; // 空调用（中止且无内容）不记
             purpose = purpose || '其它';
             model = model || '未知';
-            var mkey = _mkey(model);  // station 参数保留兼容旧调用，但按模型名聚合，不再带站点
+            station = station || '';
+            var mkey = _mkey(model, station);  // 按「模型+站点」聚合，让不同站的同名模型各按各价、不互相串价
             var log = apiLogLoad();
-            log.push({ ts: Date.now(), purpose: purpose, model: model, inTok: inTok, outTok: outTok, est: !!est });
+            log.push({ ts: Date.now(), purpose: purpose, model: model, station: station, inTok: inTok, outTok: outTok, est: !!est });
             log = apiLogPrune(log);
             apiLogSave(log);
             var agg = apiAggLoad();
@@ -13271,42 +13253,50 @@ body {
             apiLogRenderBody();
         }
         // 从「按模型」里删掉某个模型：累计、按环节、明细一起减掉（不可恢复；收藏里的价格不动）
-        function apiDeleteModel(encKey) {
-            var mkey = '';
-            try { mkey = decodeURIComponent(encKey); } catch (e) { mkey = encKey; }
-            var pp = _mkeyParts(mkey);
-            var stn = pp.station ? _apiStationName(pp.station) : '';
-            var disp = pp.model + (stn ? '（' + stn + '）' : '');
+        function apiDeleteModel(encKeys) {
+            var raw = '';
+            try { raw = decodeURIComponent(encKeys); } catch (e) { raw = encKeys; }
+            var keyList;
+            try { keyList = JSON.parse(raw); if (!Array.isArray(keyList)) keyList = [raw]; } catch (e) { keyList = [raw]; }
+            if (!keyList.length) return;
+            var pp0 = _mkeyParts(keyList[0]);
+            var stn0 = pp0.station ? _apiStationName(pp0.station) : '';
+            var disp = pp0.model + (keyList.length <= 1 && stn0 ? '（' + stn0 + '）' : '');
             if (!confirm('从统计里删除「' + disp + '」？\n它的明细、按环节统计和累计数字都会一起减掉，不可恢复。\n（收藏里的价格设置不受影响）')) return;
             var agg = apiAggLoad();
-            var mv = agg.byModel && agg.byModel[mkey];
-            if (mv) {
-                agg.calls = Math.max(0, (agg.calls || 0) - (mv.calls || 0));
-                agg.inTok = Math.max(0, (agg.inTok || 0) - (mv.inTok || 0));
-                agg.outTok = Math.max(0, (agg.outTok || 0) - (mv.outTok || 0));
-                delete agg.byModel[mkey];
-            }
-            // 同步扣掉「按环节」里属于这个模型键的组合
-            if (agg.byPurposeModel) {
-                Object.keys(agg.byPurposeModel).forEach(function (k) {
-                    var bi = k.indexOf('|');
-                    if (bi < 0) return;
-                    var purposeName = k.slice(0, bi), pm = k.slice(bi + 1);
-                    if (pm !== mkey) return;
-                    var cv = agg.byPurposeModel[k];
-                    var bp = agg.byPurpose && agg.byPurpose[purposeName];
-                    if (bp) {
-                        bp.calls = Math.max(0, (bp.calls || 0) - (cv.calls || 0));
-                        bp.inTok = Math.max(0, (bp.inTok || 0) - (cv.inTok || 0));
-                        bp.outTok = Math.max(0, (bp.outTok || 0) - (cv.outTok || 0));
-                        if (!bp.calls && !bp.inTok && !bp.outTok) delete agg.byPurpose[purposeName];
-                    }
-                    delete agg.byPurposeModel[k];
-                });
-            }
+            var delPairs = {}; // 明细清理用：model\n station
+            keyList.forEach(function (mkey) {
+                var pp = _mkeyParts(mkey);
+                delPairs[(pp.model || '') + '\n' + (pp.station || '')] = 1;
+                var mv = agg.byModel && agg.byModel[mkey];
+                if (mv) {
+                    agg.calls = Math.max(0, (agg.calls || 0) - (mv.calls || 0));
+                    agg.inTok = Math.max(0, (agg.inTok || 0) - (mv.inTok || 0));
+                    agg.outTok = Math.max(0, (agg.outTok || 0) - (mv.outTok || 0));
+                    delete agg.byModel[mkey];
+                }
+                // 同步扣掉「按环节」里属于这个模型键的组合
+                if (agg.byPurposeModel) {
+                    Object.keys(agg.byPurposeModel).forEach(function (k) {
+                        var bi = k.indexOf('|');
+                        if (bi < 0) return;
+                        var purposeName = k.slice(0, bi), pm = k.slice(bi + 1);
+                        if (pm !== mkey) return;
+                        var cv = agg.byPurposeModel[k];
+                        var bp = agg.byPurpose && agg.byPurpose[purposeName];
+                        if (bp) {
+                            bp.calls = Math.max(0, (bp.calls || 0) - (cv.calls || 0));
+                            bp.inTok = Math.max(0, (bp.inTok || 0) - (cv.inTok || 0));
+                            bp.outTok = Math.max(0, (bp.outTok || 0) - (cv.outTok || 0));
+                            if (!bp.calls && !bp.inTok && !bp.outTok) delete agg.byPurpose[purposeName];
+                        }
+                        delete agg.byPurposeModel[k];
+                    });
+                }
+            });
             apiAggSave(agg);
             // 明细里同模型同站的记录也清掉
-            var log = apiLogLoad().filter(function (r) { return r.model !== pp.model; });
+            var log = apiLogLoad().filter(function (r) { return !delPairs[(r.model || '') + '\n' + (r.station || '')]; });
             apiLogSave(log);
             apiLogRenderBody();
         }
@@ -13374,25 +13364,46 @@ body {
             function breakdownModel(title, map) {
                 var keys = Object.keys(map || {});
                 if (!keys.length) return '';
-                keys.sort(function (a, b) {
-                    var pa = _mkeyParts(a), pb = _mkeyParts(b);
-                    var ca = _apiCostOf(pa.model, pa.station, map[a].inTok, map[a].outTok, map[a].calls, gp);
-                    var cb = _apiCostOf(pb.model, pb.station, map[b].inTok, map[b].outTok, map[b].calls, gp);
-                    return cb - ca || (map[b].calls - map[a].calls);
+                // 按模型名分组，组内按站点分桶。只有「同名真的来自 2+ 个不同站」时才拆站分行，
+                // 否则合并成一行——既不被同名串价（成本始终逐桶各按各价算），又不会把同一个模型拆成两三行。
+                var groups = {};
+                keys.forEach(function (k) {
+                    var pp = _mkeyParts(k);
+                    var g = groups[pp.model] || (groups[pp.model] = { model: pp.model, buckets: [] });
+                    g.buckets.push({ station: pp.station, v: map[k], key: k });
                 });
+                var rows = [];
+                Object.keys(groups).forEach(function (nm) {
+                    var g = groups[nm], st = {};
+                    g.buckets.forEach(function (b) { if (b.station) st[b.station] = 1; });
+                    if (Object.keys(st).length >= 2) {
+                        // 真·同名多站：各站分行，让你看清各站各自的价、互不绑定
+                        g.buckets.forEach(function (b) {
+                            rows.push({ model: g.model, station: b.station, stn: b.station ? _apiStationName(b.station) : '',
+                                calls: b.v.calls, inTok: b.v.inTok, outTok: b.v.outTok,
+                                cost: _apiCostOf(g.model, b.station, b.v.inTok, b.v.outTok, b.v.calls, gp), keys: [b.key] });
+                        });
+                    } else {
+                        // 单站 / 旧数据：合并一行（成本仍逐桶各按各价相加）
+                        var calls = 0, inT = 0, outT = 0, cost = 0, kk = [];
+                        g.buckets.forEach(function (b) {
+                            calls += b.v.calls; inT += b.v.inTok; outT += b.v.outTok;
+                            cost += _apiCostOf(g.model, b.station, b.v.inTok, b.v.outTok, b.v.calls, gp); kk.push(b.key);
+                        });
+                        rows.push({ model: g.model, station: '', stn: '', calls: calls, inTok: inT, outTok: outT, cost: cost, keys: kk });
+                    }
+                });
+                rows.sort(function (a, b) { return b.cost - a.cost || (b.calls - a.calls); });
                 var s = '<div class="seg-label" style="margin:10px 0 4px">' + title + '</div>';
-                for (var k = 0; k < keys.length; k++) {
-                    var v = map[keys[k]];
-                    var pp = _mkeyParts(keys[k]);
-                    var mp = _apiModelPrice(pp.model, pp.station);
+                for (var k = 0; k < rows.length; k++) {
+                    var r = rows[k];
+                    var mp = _apiModelPrice(r.model, r.station);
                     var label = mp ? (mp.mode === 'call' ? '按次' : '按量') : '未设价';
-                    var c = _apiCostOf(pp.model, pp.station, v.inTok, v.outTok, v.calls, gp);
-                    var stn = pp.station ? _apiStationName(pp.station) : '';
-                    var nameHtml = _apiEsc(pp.model) + (stn ? ' <span style="color:var(--accent-mid);font-size:10px">@' + _apiEsc(stn) + '</span>' : '');
+                    var nameHtml = _apiEsc(r.model) + (r.stn ? ' <span style="color:var(--accent-mid);font-size:10px">@' + _apiEsc(r.stn) + '</span>' : '');
                     s += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:3px 0;border-bottom:1px solid var(--card-border)">'
-                        + '<span style="color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + nameHtml + ' <span style="color:var(--text-muted);font-size:10px">[' + label + '] ' + v.calls + '次</span></span>'
-                        + '<span style="color:var(--accent);flex-shrink:0;margin-left:8px">' + (hasAnyPrice ? '￥' + _apiMoney(c) : _apiNum(v.inTok + v.outTok) + ' tok') + '</span>'
-                        + '<span onclick="apiDeleteModel(\'' + encodeURIComponent(keys[k]) + '\')" title="从统计里删掉这个模型" style="flex-shrink:0;margin-left:8px;cursor:pointer;color:var(--text-muted);font-size:13px;opacity:0.55;line-height:1">✕</span></div>';
+                        + '<span style="color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + nameHtml + ' <span style="color:var(--text-muted);font-size:10px">[' + label + '] ' + r.calls + '次</span></span>'
+                        + '<span style="color:var(--accent);flex-shrink:0;margin-left:8px">' + (hasAnyPrice ? '￥' + _apiMoney(r.cost) : _apiNum(r.inTok + r.outTok) + ' tok') + '</span>'
+                        + '<span onclick="apiDeleteModel(\'' + encodeURIComponent(JSON.stringify(r.keys)) + '\')" title="从统计里删掉这个模型" style="flex-shrink:0;margin-left:8px;cursor:pointer;color:var(--text-muted);font-size:13px;opacity:0.55;line-height:1">✕</span></div>';
                 }
                 return s;
             }
@@ -17667,7 +17678,7 @@ body {
                         if (chatCurrentConvId !== convId) break;
                         if (seg) {
                             if (firstIsChapter) {
-                                var _chFull = readingResolveChapterTitle(batch) || readingExtractChapterTitle(first.content);
+                                var _chFull = readingResolveChapterTitle(batch) || readingExtractChapterTitle(first.content) || _readingFirstLineTitle(first.content);
                                 var _chTitle = _rbChapterOrdinal(_chFull) || _chFull;  // 只取序号；实在抽不出再用全名兜底
                                 if (_chTitle) seg = '【' + _chTitle + '】' + seg;
                             }
@@ -21302,6 +21313,19 @@ body {
             if (ci == null) return '';
             var b = rbGetBook(readerBookId);
             if (b && b.chapters && b.chapters[ci]) return (b.chapters[ci].title || '').trim();
+            return '';
+        }
+        // 兜底：取章节正文「第一行非空」当章名（共读填入/阅读器的章节正文开头就是标题行）。
+        // 只在 ≤40 字、不像整段正文时采纳；否则返回 ''，避免把长正文首句当标题。
+        function _readingFirstLineTitle(content) {
+            if (!content || typeof content !== 'string') return '';
+            var lines = readingModeStripParaNums(content).split('\n');
+            for (var i = 0; i < lines.length && i < 4; i++) {
+                var ln = lines[i].trim();
+                if (!ln) continue;
+                if (ln.length <= 40 && !/[。！？!?…]$/.test(ln)) return ln;
+                return '';
+            }
             return '';
         }
         // 从完整章名里只抽「序号」部分（如「三 宝刀百炼生玄光」→「三」、「第三回 …」→「第三回」、「Chapter 5: …」→「Chapter 5」）。
