@@ -2752,6 +2752,31 @@ body {
         body.dark.reading-band-on .reading-merged .reading-quote-inner {
             background-image: var(--quote-band-img-dark);
         }
+        /* 柔光色带：学自酒馆「止叹迹」美化——引号内文字背后铺一条左右淡出的强调色渐变 + 一圈内发光，像马克笔轻扫。
+           平滑无毛边（区别于已下线的「底纹」毛边款）。挂在内层文字(.reading-quote-inner)上，box-decoration-break:clone 保证换行每行各自带。 */
+        body.reading-glow-on .reading-merged .reading-quote-inner {
+            background-image: linear-gradient(to right,
+                transparent 0%,
+                color-mix(in srgb, var(--accent), transparent 90%) 18%,
+                color-mix(in srgb, var(--accent), transparent 90%) 82%,
+                transparent 100%);
+            background-repeat: no-repeat;
+            box-shadow: inset 0 0 10px color-mix(in srgb, var(--accent), transparent 84%);
+            padding: 0 4px;
+            -webkit-box-decoration-break: clone;
+            box-decoration-break: clone;
+        }
+        /* 夜间强调色亮、底色深，色带浓一点才显 */
+        body.dark.reading-glow-on .reading-merged .reading-quote-inner {
+            background-image: linear-gradient(to right,
+                transparent 0%,
+                color-mix(in srgb, var(--accent), transparent 82%) 18%,
+                color-mix(in srgb, var(--accent), transparent 82%) 82%,
+                transparent 100%);
+            box-shadow: inset 0 0 10px color-mix(in srgb, var(--accent), transparent 72%);
+        }
+        /* 长短分工：长句(rq-wide)只着色，柔光带让给短句（背景已被 2778 那条 strip 清掉，这里再把内发光清掉） */
+        body.reading-ls-on.reading-glow-on .reading-merged .reading-quote.rq-wide .reading-quote-inner { box-shadow: none; }
         /* 画框圈重点：毛边描边方框。SVG 颜色不能用 CSS 变量，按强调色生成后存进 --quote-box-img（切主题刷新）。
            用 background-image（不碰文字，绝不擦字），框只描边不填充，文字照常显示在框内。
            框挂在外层 .reading-quote 上，把引号「」也一起圈进去。默认所有引号都画框；长短分工下长句的框由 strip 规则去掉。 */
@@ -7000,6 +7025,7 @@ body {
                     <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
                         <button class="pagebtn-pos-opt" id="chipQuoteBox" onclick="readingToggleQuoteBox()" style="">画框</button>
                         <button class="pagebtn-pos-opt active" id="chipQuoteWave" onclick="readingToggleQuoteWave()" style="">波浪</button>
+                        <button class="pagebtn-pos-opt" id="chipQuoteGlow" onclick="readingToggleQuoteGlow()" title="引号内文字背后铺一条柔和的强调色光带" style="">柔光</button>
                         <button class="pagebtn-pos-opt" id="chipQuoteUl" onclick="readingToggleQuoteUl()" style="">划线</button>
                         <button class="pagebtn-pos-opt active" id="chipQuoteHl" onclick="readingToggleQuoteHl()" style="">着色</button>
                         <button class="pagebtn-pos-opt active" id="chipQuoteLs" onclick="readingToggleQuoteLs()" title="开：着色给长句、画框/波浪/划线给短句；关：所选样式所有引号一视同仁" style="">长短</button>
@@ -17857,6 +17883,7 @@ body {
             var box = localStorage.getItem('reading_quote_box') === '1';
             var ul = localStorage.getItem('reading_quote_ul') === '1';
             var wave = localStorage.getItem('reading_quote_wave') === '1';
+            var glow = localStorage.getItem('reading_quote_glow') === '1';
             // 「长短」是显式开关：开=着色归长句、画框/波浪/划线归短句；关=所选样式一视同仁。
             // 旧版靠隐形的点击顺序(pick)凑分工，这里一次性迁移成显式开关，之后只认 reading_quote_split。
             var splitRaw = localStorage.getItem('reading_quote_split');
@@ -17870,13 +17897,14 @@ body {
             }
             // 不变量：长短「关」时，划线绝不与波浪/画框落在同一句上（长短关=所有引号一视同仁，三者互斥）。
             // 加载/迁移出来的异常状态在这里兜底：若同时开着，丢掉划线、保留波浪/画框。
-            if (!split && ul && (box || wave)) { ul = false; localStorage.setItem('reading_quote_ul', '0'); }
-            var primaryDecor = box || wave; // 铺在句底、占住短句的装饰
+            if (!split && ul && (box || wave || glow)) { ul = false; localStorage.setItem('reading_quote_ul', '0'); }
+            var primaryDecor = box || wave || glow; // 铺在句底、占住短句的装饰
             var b = document.body;
             b.classList.toggle('reading-quote-on', hl);
             b.classList.toggle('reading-box-on', box);
             b.classList.toggle('reading-uline-on', ul);
             b.classList.toggle('reading-wave-on', wave);
+            b.classList.toggle('reading-glow-on', glow);
             b.classList.toggle('reading-ls-on', split);
             b.classList.toggle('reading-ls-pd', split && primaryDecor); // 长短分工且短句被波浪/画框占住→划线让给长句
             var c;
@@ -17884,6 +17912,7 @@ body {
             c = document.getElementById('chipQuoteBox'); if (c) c.classList.toggle('active', box);
             c = document.getElementById('chipQuoteUl'); if (c) c.classList.toggle('active', ul);
             c = document.getElementById('chipQuoteWave'); if (c) c.classList.toggle('active', wave);
+            c = document.getElementById('chipQuoteGlow'); if (c) c.classList.toggle('active', glow);
             c = document.getElementById('chipQuoteLs'); if (c) c.classList.toggle('active', split);
             updateStatusBarColor();
         }
@@ -17924,7 +17953,8 @@ body {
             var on = localStorage.getItem('reading_quote_box') === '1';
             localStorage.setItem('reading_quote_box', on ? '0' : '1');
             if (!on) {
-                localStorage.setItem('reading_quote_wave', '0'); // 画框/波浪都铺句底，二选一
+                localStorage.setItem('reading_quote_wave', '0'); // 画框/波浪/柔光都铺句底，三选一
+                localStorage.setItem('reading_quote_glow', '0');
                 if (localStorage.getItem('reading_quote_split') !== '1') localStorage.setItem('reading_quote_ul', '0'); // 长短关：跟划线也互斥
             }
             readingApplyQuoteBox();
@@ -17935,10 +17965,23 @@ body {
             var on = localStorage.getItem('reading_quote_wave') === '1';
             localStorage.setItem('reading_quote_wave', on ? '0' : '1');
             if (!on) {
-                localStorage.setItem('reading_quote_box', '0'); // 画框/波浪都铺句底，二选一
+                localStorage.setItem('reading_quote_box', '0'); // 画框/波浪/柔光都铺句底，三选一
+                localStorage.setItem('reading_quote_glow', '0');
                 if (localStorage.getItem('reading_quote_split') !== '1') localStorage.setItem('reading_quote_ul', '0'); // 长短关：跟划线也互斥
             }
             readingApplyQuoteWave();
+        }
+        // 共读：柔光色带（独立开关，引号内文字背后铺一条淡出的强调色光带，学自酒馆「止叹迹」美化）
+        function readingApplyQuoteGlow() { readingApplyQuoteStyles(); }
+        function readingToggleQuoteGlow() {
+            var on = localStorage.getItem('reading_quote_glow') === '1';
+            localStorage.setItem('reading_quote_glow', on ? '0' : '1');
+            if (!on) {
+                localStorage.setItem('reading_quote_box', '0'); // 画框/波浪/柔光都铺句底，三选一
+                localStorage.setItem('reading_quote_wave', '0');
+                if (localStorage.getItem('reading_quote_split') !== '1') localStorage.setItem('reading_quote_ul', '0'); // 长短关：跟划线也互斥
+            }
+            readingApplyQuoteGlow();
         }
         // 手画框/波浪是 SVG 图，颜色不能写 CSS 变量，这里按当前强调色生成、存进 CSS 变量，切主题/夜间时刷新
         function readingRefreshQuoteSvgs() {
