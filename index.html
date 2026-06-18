@@ -2729,6 +2729,8 @@ body {
            加粗会和花字打架不好看 → 仅此情形强制不加粗，让字体自己说话；其余位置照常加粗。 */
         body.reading-names-on.rn-color .reading-merged .reading-name { color: var(--accent); }
         body.reading-names-on.rn-bold .reading-merged .reading-name { font-weight: 700; }
+        /* 划线：复用引号「划线」那条虚线下划线写法（同款 underline dashed），让人名走划线、对话走着色，两不打架不花 */
+        body.reading-names-on.rn-dash .reading-merged .reading-name { text-decoration: underline dashed var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
         body.reading-names-on.rn-bold.rn-has-font .reading-merged .reading-quote:not(.rq-wide) .reading-name { font-weight: 400; }
         /* 长短分工(reading-ls-on)：着色只落长句(rq-wide)，短句不着色、让给装饰 */
         body.reading-ls-on .reading-merged .reading-quote:not(.rq-wide) { color: inherit; font-weight: 400; }
@@ -7036,6 +7038,7 @@ body {
                     <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
                         <button class="pagebtn-pos-opt" id="chipNameColor" onclick="readingToggleNameStyle('color')" title="名词用强调色">着色</button>
                         <button class="pagebtn-pos-opt" id="chipNameBold" onclick="readingToggleNameStyle('bold')" title="名词只加粗、不变色">加粗</button>
+                        <button class="pagebtn-pos-opt" id="chipNameDash" onclick="readingToggleNameStyle('dash')" title="名词加虚线下划线（同引号「划线」款）">划线</button>
                         <button class="pagebtn-pos-opt" id="chipNameList" onclick="readingOpenNamesEditor()" title="填写/自动识别本书名词">名单…</button>
                     </div>
                 </div>
@@ -18079,15 +18082,15 @@ body {
                 return text.replace(re, '<span class="reading-name">$1</span>');
             });
         }
-        // 人名样式三选（可叠加）：着色/加粗/点点。默认只「着色」。高亮总开关 = 三者有其一开。
+        // 人名样式三选（可叠加）：着色/加粗/划线。默认只「着色」。高亮总开关 = 三者有其一开。
         function _rnStyleOn(k) {
             var v = localStorage.getItem('reading_name_' + k);
             if (v === null) return k === 'color'; // 没设过：默认开「着色」，跟之前观感一致
             return v === '1';
         }
-        var RN_STYLES = ['color', 'bold']; // 着色/加粗，可叠加
-        var RN_CLS = { color: 'rn-color', bold: 'rn-bold' };
-        var RN_CHIP = { color: 'chipNameColor', bold: 'chipNameBold' };
+        var RN_STYLES = ['color', 'bold', 'dash']; // 着色/加粗/划线，可叠加
+        var RN_CLS = { color: 'rn-color', bold: 'rn-bold', dash: 'rn-dash' };
+        var RN_CHIP = { color: 'chipNameColor', bold: 'chipNameBold', dash: 'chipNameDash' };
         function readingNameAnyOn() { return RN_STYLES.some(function (k) { return _rnStyleOn(k); }); }
         function readingApplyNames() {
             RN_STYLES.forEach(function (k) {
