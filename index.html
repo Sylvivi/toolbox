@@ -18624,7 +18624,9 @@ body {
             if (chatReaderMode) {
                 rbPickForReader = true;
             }
-            var remembered = rbGetConvBook();
+            // 阅读模式优先用 readerBookId（阅读会话记的是这个，不是共读那套 conv→book 映射）：
+            // 已经在某本书的阅读界面点「目录」，就直接进这本书的章节列表，而不是退回书架选书。
+            var remembered = (chatReaderMode && readerBookId) ? readerBookId : rbGetConvBook();
             if (remembered && rbGetBook(remembered)) {
                 // 本对话之前填过这本书，直接打开它的目录
                 rbOpenBook(remembered);
