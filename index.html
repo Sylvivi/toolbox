@@ -19008,7 +19008,7 @@ body {
         }
         // 手动「补齐/重建记忆表格」：无视水位线，扫所有已有摘要的章重折（只用现有摘要、不新生成，省钱）
         var _readerRebuilding = false;
-        async function readerRebuildMemTables() {
+        async function readerRebuildMemTables(btn) {
             if (_readerRebuilding || _readerMemTablesRunning) { showToast('正在更新中，请稍候…'); return; }
             if (readerBookId == null) return;
             var fileKey = readerBookKey(readerBookId);
@@ -19017,10 +19017,20 @@ body {
             var mc = chatResolveCompressModel();
             if (!mc) { showToast('请先选择模型'); return; }
             _readerRebuilding = true;
-            showToast('🔄 正在重建记忆表格…');
+            showToast('正在重建记忆表格…');
+            // 按钮变成实时跳秒的「重建中 Xs…」并禁用，让用户看得见它在转、转了多久
+            var _t0 = Date.now(), _timer = null;
+            if (btn) {
+                btn.disabled = true;
+                btn.style.opacity = '0.7';
+                btn.style.cursor = 'wait';
+                var _tick = function () { btn.textContent = '重建中 ' + Math.floor((Date.now() - _t0) / 1000) + 's…'; };
+                _tick();
+                _timer = setInterval(_tick, 1000);
+            }
             var ok = false;
             try { ok = await readerUpdateMemoryTables(fileKey, maxChap, mc, true); }
-            finally { _readerRebuilding = false; }
+            finally { _readerRebuilding = false; if (_timer) clearInterval(_timer); }
             if (!ok && !readerMemTblErrGet(fileKey)) showToast('没有新增内容（已是最新）');
             if (activeSyncProvider === 'cf') syncPushData();
             // 重开弹窗刷新状态行/表格（保持滚动位置）
@@ -19089,7 +19099,7 @@ body {
                     : '<span style="color:var(--text-muted)">🧠 记忆表格 · ' + _covered + _when + '</span>';
                 body += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;margin-bottom:10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px">'
                     + '<div style="min-width:0;font-size:11.5px;line-height:1.5;overflow:hidden;text-overflow:ellipsis">' + _statusLine + '</div>'
-                    + '<button onclick="readerRebuildMemTables()" style="flex-shrink:0;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer">🔄 补齐/重建</button>'
+                    + '<button onclick="readerRebuildMemTables(this)" style="flex-shrink:0;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap">补齐/重建</button>'
                     + '</div>';
             }
             // 记忆表格（优先显示）
