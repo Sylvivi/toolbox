@@ -18990,6 +18990,51 @@ body {
             var all = readerSummariesAll();
             if (all[fileKey]) { all[fileKey].memTables = { characters: [], places: [], timeline: [], plotlines: [], ts: Date.now(), upTo: -1 }; readerSummariesSaveAll(all); }
         }
+        // 记忆表格「上次更新是否失败」标记（按书存 localStorage，成功时清掉，给面板显示「失败·点此重试」用）
+        function readerMemTblErrAll() { try { return JSON.parse(localStorage.getItem('reader_memtbl_err') || '{}'); } catch (e) { return {}; } }
+        function readerMemTblErrGet(fileKey) { return readerMemTblErrAll()[fileKey] || null; }
+        function readerMemTblErrSet(fileKey, msg) {
+            var all = readerMemTblErrAll();
+            if (msg) all[fileKey] = { msg: String(msg).slice(0, 80), ts: Date.now() };
+            else delete all[fileKey];
+            try { localStorage.setItem('reader_memtbl_err', JSON.stringify(all)); } catch (e) {}
+        }
+        // 当前这本书里「有摘要的最大章下标」（重建时折到这里为止）
+        function readerMaxSummaryChap(fileKey) {
+            var cell = readerSummariesAll()[fileKey] || {};
+            var mx = -1;
+            Object.keys(cell).forEach(function (k) { var n = parseInt(k, 10); if (!isNaN(n) && cell[k] && cell[k].sum && n > mx) mx = n; });
+            return mx;
+        }
+        // 手动「补齐/重建记忆表格」：无视水位线，扫所有已有摘要的章重折（只用现有摘要、不新生成，省钱）
+        var _readerRebuilding = false;
+        async function readerRebuildMemTables() {
+            if (_readerRebuilding || _readerMemTablesRunning) { showToast('正在更新中，请稍候…'); return; }
+            if (readerBookId == null) return;
+            var fileKey = readerBookKey(readerBookId);
+            var maxChap = readerMaxSummaryChap(fileKey);
+            if (maxChap < 0) { showToast('还没有任何章节摘要可用'); return; }
+            var mc = chatResolveCompressModel();
+            if (!mc) { showToast('请先选择模型'); return; }
+            _readerRebuilding = true;
+            showToast('🔄 正在重建记忆表格…');
+            var ok = false;
+            try { ok = await readerUpdateMemoryTables(fileKey, maxChap, mc, true); }
+            finally { _readerRebuilding = false; }
+            if (!ok && !readerMemTblErrGet(fileKey)) showToast('没有新增内容（已是最新）');
+            if (activeSyncProvider === 'cf') syncPushData();
+            // 重开弹窗刷新状态行/表格（保持滚动位置）
+            if (document.querySelector('.chat-summary-modal-mask')) readerShowSummaryModal(_summaryModalScroll());
+        }
+        // 相对时间小字：刚刚 / X 分钟前 / X 小时前 / X 天前
+        function readerRelTime(ts) {
+            if (!ts) return '';
+            var d = Date.now() - ts;
+            if (d < 60000) return '刚刚';
+            if (d < 3600000) return Math.floor(d / 60000) + ' 分钟前';
+            if (d < 86400000) return Math.floor(d / 3600000) + ' 小时前';
+            return Math.floor(d / 86400000) + ' 天前';
+        }
         // 「是否自动总结前情」总开关（默认关）：一个全局开关，决定阅读时要不要在后台总结，避免到书架随便翻翻也烧 API。
         // 存 reader_summary_on（'1'/'0'），参数保留只为兼容旧调用，实际忽略。
         function readerSummaryEnabled() {
@@ -19033,6 +19078,20 @@ body {
                 + '<span style="position:absolute;top:3px;left:' + (enabled ? '23px' : '3px') + ';width:20px;height:20px;border-radius:50%;background:#fff;transition:left 0.2s"></span></button>'
                 + '</div>';
             var body = toggle;
+            // 记忆表格状态行 + 手动「补齐/重建」按钮（有摘要可用时才显示，让用户看得见它活没活、卡没卡）
+            if (chaps.length) {
+                var _rawMt = (readerSummariesAll()[fileKey] || {}).memTables;
+                var _covered = (_rawMt && _rawMt.upTo >= 0) ? ('已覆盖至第 ' + readerChapterNo(_bSum, _rawMt.upTo) + ' 章') : '尚未生成';
+                var _when = (_rawMt && _rawMt.ts) ? (' · ' + readerRelTime(_rawMt.ts)) : '';
+                var _err = readerMemTblErrGet(fileKey);
+                var _statusLine = _err
+                    ? '<span style="color:#e5484d">⚠ 上次更新失败：' + (_err.msg || '未知错误').replace(/</g, '&lt;') + ' · 点右侧重试</span>'
+                    : '<span style="color:var(--text-muted)">🧠 记忆表格 · ' + _covered + _when + '</span>';
+                body += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;margin-bottom:10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px">'
+                    + '<div style="min-width:0;font-size:11.5px;line-height:1.5;overflow:hidden;text-overflow:ellipsis">' + _statusLine + '</div>'
+                    + '<button onclick="readerRebuildMemTables()" style="flex-shrink:0;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer">🔄 补齐/重建</button>'
+                    + '</div>';
+            }
             // 记忆表格（优先显示）
             var _rmt = readerMemTablesGet(fileKey);
             if (_rmt) {
@@ -19371,7 +19430,9 @@ body {
         }
         // 阅读模式记忆表格更新：把新章节摘要喂给模型，增量更新人物表+主线表（替代大纲）
         var _readerMemTablesRunning = false;
-        async function readerUpdateMemoryTables(fileKey, curChap, mc) {
+        // rebuild=true：无视水位线 upTo，扫描 0..curChap 里所有「已有摘要」的章重折一遍（与现有表合并、手改的不丢），
+        // 用来补齐「先读后面又跳前面」「中途才开开关」留下的前段窟窿。
+        async function readerUpdateMemoryTables(fileKey, curChap, mc, rebuild) {
             if (_readerMemTablesRunning) return false;
             var mt = readerMemTablesGet(fileKey);
             var tables = mt || { characters: [], places: [], timeline: [], plotlines: [] };
@@ -19379,20 +19440,13 @@ body {
             if (!tables.timeline) tables.timeline = [];
             var upTo = mt ? (mt.upTo || -1) : -1;
             var _bMt = readerBookByKey(fileKey);
-            // 收集 upTo 之后到 curChap 的摘要
+            // 重建 或 首次建表（空表）→ 从第 0 章起扫所有已有摘要；否则只收水位线之后的新章
+            var emptyTables = !tables.characters.length && !tables.plotlines.length && !tables.places.length && !tables.timeline.length;
+            var from = (rebuild || emptyTables) ? 0 : (upTo + 1);
             var newSums = [];
-            for (var i = upTo + 1; i <= curChap; i++) {
+            for (var i = from; i <= curChap; i++) {
                 var s = readerSummaryGet(fileKey, i);
                 if (s) newSums.push('第 ' + readerChapterNo(_bMt, i) + ' 章：' + s);
-            }
-            if (!newSums.length) return false;
-            // 首次建表（空表）时拉更多章节摘要，确保覆盖全面
-            if (!tables.characters.length && !tables.plotlines.length && !tables.places.length && !tables.timeline.length) {
-                newSums = [];
-                for (var j = 0; j <= curChap; j++) {
-                    var ss = readerSummaryGet(fileKey, j);
-                    if (ss) newSums.push('第 ' + readerChapterNo(_bMt, j) + ' 章：' + ss);
-                }
             }
             if (!newSums.length) return false;
             _readerMemTablesRunning = true;
@@ -19427,6 +19481,7 @@ body {
                         timeline: newTime.length ? newTime : tables.timeline,
                         plotlines: newPlots.length ? newPlots : tables.plotlines
                     }, curChap);
+                    readerMemTblErrSet(fileKey, null); // 成功 → 清掉失败标记
                     console.log('[阅读记忆表格] 人物 ' + (newChars.length || tables.characters.length) + ' 行，地点 ' + (newPlaces.length || tables.places.length) + ' 行，年表 ' + (newTime.length || tables.timeline.length) + ' 行，主线 ' + (newPlots.length || tables.plotlines.length) + ' 行');
                     // 自动把新人名/地名并入本书高亮名单（仍在读同一本时才并、并即时重高亮）
                     if (chatReaderMode && typeof readerBookId !== 'undefined' && readerBookKey(readerBookId) === fileKey) {
@@ -19436,7 +19491,7 @@ body {
                     showToast('🧠 记忆表格已更新（人物 ' + (newChars.length || tables.characters.length) + ' · 地点 ' + (newPlaces.length || tables.places.length) + ' · 年表 ' + (newTime.length || tables.timeline.length) + ' · 主线 ' + (newPlots.length || tables.plotlines.length) + '）');
                     return true;
                 }
-            } catch (e) { console.warn('[阅读记忆表格] 更新失败:', e.message); }
+            } catch (e) { console.warn('[阅读记忆表格] 更新失败:', e.message); readerMemTblErrSet(fileKey, e.message || '未知错误'); }
             finally { _readerMemTablesRunning = false; }
             return false;
         }
