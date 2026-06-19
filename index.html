@@ -2903,6 +2903,12 @@ body {
         .reading-actbar button.rp-del.armed { background: #e5484d; color: #fff; border-color: #e5484d; }
         .reading-actbar.rp-actions { justify-content: flex-end; }
         .reading-actbar button:disabled { opacity: 0.6; cursor: default; }
+        .reading-actbar label.rp-ctx {
+            display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto;
+            color: var(--text-muted); font-size: 11px; cursor: pointer;
+            user-select: none; white-space: nowrap;
+        }
+        .reading-actbar label.rp-ctx input { margin: 0; cursor: pointer; accent-color: var(--accent); }
         /* 书签：已标记段落 */
         .reading-merged p[data-p].rp-marked {
             border-left: 3px solid var(--accent); padding-left: 8px; margin-left: -11px;
@@ -3009,6 +3015,12 @@ body {
         .reading-actbar button.rp-del.armed { background: #e5484d; color: #fff; border-color: #e5484d; }
         .reading-actbar.rp-actions { justify-content: flex-end; }
         .reading-actbar button:disabled { opacity: 0.6; cursor: default; }
+        .reading-actbar label.rp-ctx {
+            display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto;
+            color: var(--text-muted); font-size: 11px; cursor: pointer;
+            user-select: none; white-space: nowrap;
+        }
+        .reading-actbar label.rp-ctx input { margin: 0; cursor: pointer; accent-color: var(--accent); }
         /* 书签：已标记段落 */
         .reading-merged p[data-p].rp-marked {
             border-left: 3px solid var(--accent); padding-left: 8px; margin-left: -11px;
@@ -20448,7 +20460,8 @@ body {
             bar.className = 'reading-actbar';
             var inputHtml = '<textarea class="rp-ask" rows="1" placeholder="问问这一段…（如：他这句话什么意思？）"></textarea>';
             var askHtml = '<button class="rp-ask-send">讨论</button>';
-            bar.innerHTML = leftSide ? (askHtml + inputHtml) : (inputHtml + askHtml);
+            var ctxHtml = readingAskCtxBoxHtml();
+            bar.innerHTML = leftSide ? (askHtml + inputHtml + ctxHtml) : (inputHtml + askHtml + ctxHtml);
             anchorEl.insertAdjacentElement('afterend', bar);
             // 一步式：直接出输入框；不自动聚焦弹键盘，等用户点输入框再唤起；点「提问」发送；再点该段收起
             var input = bar.querySelector('.rp-ask');
@@ -20456,6 +20469,7 @@ body {
             function go() { readingAskOne(msgIdx, pNum, input.value, bar); }
             send.onclick = go;
             readingBindAskBox(input);
+            readingBindCtxBox(bar);
         }
 
         function readingOnParaClick(pEl) {
@@ -20578,12 +20592,24 @@ body {
             if (!bar) return;
             bar.innerHTML = '<textarea class="rp-ask" rows="1" placeholder="问问这一段…（如：他这句话什么意思？）"></textarea>' +
                 '<button class="rp-ask-send">发送</button>' +
-                '<button class="rp-cancel" onclick="readingClearActbar()">取消</button>';
+                '<button class="rp-cancel" onclick="readingClearActbar()">取消</button>' +
+                readingAskCtxBoxHtml();
             var input = bar.querySelector('.rp-ask');
             var send = bar.querySelector('.rp-ask-send');
             function go() { readingAskOne(msgIdx, pNum, input.value, bar); }
             send.onclick = go;
             readingBindAskBox(input);
+            readingBindCtxBox(bar);
+        }
+        // 共读提问：是否把「本章前面已聊过的问答」一并发给 AI（粘性开关，存 localStorage）
+        function readingAskCtxOn() { return localStorage.getItem('reading_ask_ctx') === '1'; }
+        function readingAskCtxBoxHtml() {
+            return '<label class="rp-ctx" title="勾选后，把本章里这一段之前你问过的问答也一起发给 AI，让它接得上前面聊过的内容（会多用一点 token）">' +
+                '<input type="checkbox" class="rp-ctx-cb"' + (readingAskCtxOn() ? ' checked' : '') + '>带前文问答</label>';
+        }
+        function readingBindCtxBox(bar) {
+            var cb = bar && bar.querySelector('.rp-ctx-cb');
+            if (cb) cb.addEventListener('change', function() { localStorage.setItem('reading_ask_ctx', cb.checked ? '1' : '0'); });
         }
         // 共读追问输入框：随内容自动长高（换行交给键盘的回车键，发送用按钮）
         function readingBindAskBox(input) {
@@ -20704,6 +20730,21 @@ body {
             var commentBlock = existingComments.length
                 ? '\n\n你之前对 [P' + pNum + '] 写下的评论 / 问答如下：\n' + existingComments.map(function(t) { return '· ' + t; }).join('\n')
                 : '';
+            // 可选（「带前文问答」勾选时）：把本章里这一段「之前」聊过的问答一并带上，
+            // 让 AI 接得上前面别的段落的讨论（只取问答块，以「汐：」开头；不含 AI 自动点评）
+            var priorQaBlock = '';
+            if (readingAskCtxOn() && Array.isArray(parsedAll)) {
+                var _qaPrior = [];
+                for (var qi = 0; qi < parsedAll.length; qi++) {
+                    var _c = parsedAll[qi];
+                    if (_c.p > 0 && _c.p < pNum && _c.text && /^\s*汐：/.test(_c.text)) {
+                        _qaPrior.push('[P' + _c.p + '] ' + _c.text.trim());
+                    }
+                }
+                if (_qaPrior.length) {
+                    priorQaBlock = '\n\n本章前面我们已经聊过的问答（帮你了解我们之前讨论到哪了，回答时可参考、不必复述）：\n' + _qaPrior.join('\n\n');
+                }
+            }
             // 人设：系统提示词框为空时静默兜底用蘑菇默认，使追问回答与评论风格一致
             var _spAsk = document.getElementById('chatSysPrompt').value.trim();
             if (!_spAsk) _spAsk = READING_MODE_DEFAULT_PERSONA;
@@ -20712,7 +20753,7 @@ body {
                 '先分清是哪一种：如果是查证原文或细节的认真提问，就结合该段原文、你之前的相关评论 / 问答以及前文认真回答；如果只是闲聊、吐槽或假设性的发散讨论，就放松地顺着聊，像朋友拌嘴那样接话，不用正经分析、不用声明"超出原文 / 节选范围"、也不用反问对方是不是在考你。' +
                 '无论哪种，都保持你的人设语气，绝不剧透当前阅读位置之后的情节，回答自然、简洁，不要加 [P] 段落标记，也不要复述原文。';
             var userMsg = ctxPreface + '，[P' + pNum + '] 是我想问你的这一段：\n\n' + ctxLines.join('\n') +
-                commentBlock +
+                commentBlock + priorQaBlock +
                 '\n\n我的问题是：' + question;
             readingCommenting = true;
             readingAbortCtl = new AbortController();
