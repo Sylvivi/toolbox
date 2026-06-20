@@ -13165,6 +13165,20 @@ body {
         var chatFavModels = JSON.parse(localStorage.getItem('chat_fav_models') || '[]');
         // 保存收藏模型（含每个模型配的备注/价格）：写本地 + 盖时间戳 + 触发云同步。
         // 收藏模型跟着密钥一起同步——CF 走清单(manifest)、Gist 走整包，时间戳让两台设备「谁新用谁」、删除也能正确传播。
+        // 「最近调用」记录：收藏面板按它排序（每站组内最近用的在前）。纯本地视图偏好，不跨设备同步。
+        function chatMarkModelUsed(url, model) {
+            if (!url || !model) return;
+            var m = {};
+            try { m = JSON.parse(localStorage.getItem('chat_model_last_used') || '{}'); } catch (e) {}
+            m[url + '<|>' + model] = Date.now();
+            try { localStorage.setItem('chat_model_last_used', JSON.stringify(m)); } catch (e) {}
+        }
+        function chatModelUsedAt(url, model) {
+            try {
+                var m = JSON.parse(localStorage.getItem('chat_model_last_used') || '{}');
+                return m[(url || '') + '<|>' + (model || '')] || 0;
+            } catch (e) { return 0; }
+        }
         var _chatFavPushTimer = null;
         function chatFavModelsSave() {
             try { localStorage.setItem('chat_fav_models', JSON.stringify(chatFavModels)); } catch (e) {}
@@ -15077,14 +15091,36 @@ body {
                 }
             }
             if (_fnDirty) localStorage.setItem('chat_fav_models', JSON.stringify(chatFavModels));
-            // 按中转站名字分组
+            // 按中转站名字分组（不同站点绝不混排）
             var groups = {};
             var groupOrder = [];
             for (var i = 0; i < chatFavModels.length; i++) {
-                var gName = chatFavModels[i].providerName || '未知';
+                var fav = chatFavModels[i];
+                var gName = fav.providerName || '未知';
                 if (!groups[gName]) { groups[gName] = []; groupOrder.push(gName); }
-                groups[gName].push(chatFavModels[i]);
+                fav._origIdx = i; // 记原始收藏顺序，作为「没用过」时的次级排序键
+                groups[gName].push(fav);
             }
+            // 组内：最近调用过的排前面；都没用过则维持原收藏顺序。
+            var _groupUsed = {};
+            for (var gk = 0; gk < groupOrder.length; gk++) {
+                var arr = groups[groupOrder[gk]];
+                var maxU = 0;
+                for (var ai = 0; ai < arr.length; ai++) {
+                    arr[ai]._usedAt = chatModelUsedAt(arr[ai].url, arr[ai].model);
+                    if (arr[ai]._usedAt > maxU) maxU = arr[ai]._usedAt;
+                }
+                arr.sort(function (a, b) {
+                    if (b._usedAt !== a._usedAt) return b._usedAt - a._usedAt;
+                    return a._origIdx - b._origIdx;
+                });
+                _groupUsed[groupOrder[gk]] = maxU;
+            }
+            // 组间：刚用过模型的站点整体上移；都没用过的站维持原出现顺序。
+            groupOrder.sort(function (a, b) {
+                if (_groupUsed[b] !== _groupUsed[a]) return _groupUsed[b] - _groupUsed[a];
+                return 0;
+            });
             for (var gi = 0; gi < groupOrder.length; gi++) {
                 var gn = groupOrder[gi];
                 var gLabel = document.createElement('div');
@@ -15912,6 +15948,8 @@ body {
             var baseUrl = getBaseUrl(item.url);
             var apiKey = chatSelectedKeyStr || getActiveKey(item);
             var _reqModel = chatSelectedModel;
+            // 记一笔「最近调用」：收藏面板据此把刚用过的模型排到本站组最前
+            chatMarkModelUsed(item.url, chatSelectedModel);
             // 共读点评（发了整章正文）可单独指定收藏里的模型；配了就用它的站点/密钥/模型，没配跟随当前选中
             if (chatReadingMode && _userSentChapter) {
                 var _cmM = chatResolveReadingModel('comment');
