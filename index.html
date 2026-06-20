@@ -11922,6 +11922,8 @@ body {
                 checkinTasksTs: getCheckinTasksTs(),
                 bookmarks: readingGetAllBookmarks(),
                 bookmarksTs: readingGetBookmarksTs(),
+                favModels: (function () { try { return JSON.parse(localStorage.getItem('chat_fav_models') || '[]'); } catch (e) { return []; } })(),
+                favModelsTs: localStorage.getItem('chat_fav_models_ts') || '',
                 fonts: readingFontsLoad(),
                 fontsTs: readingGetFontsTs(),
                 fontName: localStorage.getItem('reading_font_name') || '',
@@ -12162,6 +12164,18 @@ body {
                     if (cloudBmTs > localBmTs) {
                         localStorage.setItem('reading_bookmarks', JSON.stringify(manifest.bookmarks));
                         localStorage.setItem('reading_bookmarks_ts', cloudBmTs);
+                    }
+                }
+
+                // 收藏模型（含每个模型配的备注/价格）：整块按时间戳后写覆盖，正确处理删除
+                if (manifest.favModels) {
+                    var cloudFavTs = manifest.favModelsTs || '';
+                    var localFavTs = localStorage.getItem('chat_fav_models_ts') || '';
+                    if (cloudFavTs > localFavTs) {
+                        localStorage.setItem('chat_fav_models', JSON.stringify(manifest.favModels));
+                        localStorage.setItem('chat_fav_models_ts', cloudFavTs);
+                        chatFavModels = manifest.favModels;
+                        if (typeof chatUpdateFavHeader === 'function') chatUpdateFavHeader();
                     }
                 }
 
@@ -12493,6 +12507,7 @@ body {
                 if (manifest.checkin) setCheckinDataSilent(manifest.checkin);
                 if (manifest.checkinTasks) { idbSet(CHECKIN_TASKS_KEY, manifest.checkinTasks); if (manifest.checkinTasksTs) idbSet(CHECKIN_TASKS_TS_KEY, manifest.checkinTasksTs); }
                 if (manifest.bookmarks) { localStorage.setItem('reading_bookmarks', JSON.stringify(manifest.bookmarks)); if (manifest.bookmarksTs) localStorage.setItem('reading_bookmarks_ts', manifest.bookmarksTs); }
+                if (manifest.favModels) { try { localStorage.setItem('chat_fav_models', JSON.stringify(manifest.favModels)); localStorage.setItem('chat_fav_models_ts', manifest.favModelsTs || new Date().toISOString()); chatFavModels = manifest.favModels; if (typeof chatUpdateFavHeader === 'function') chatUpdateFavHeader(); } catch (e) {} }
                 readingApplyFontSync(manifest); // 字体库+五个位置选择，带时间戳护栏（修复开机被云端旧值冲掉的问题）
                 if (manifest.readerPos) { try { localStorage.setItem('reader_pos', JSON.stringify(manifest.readerPos)); } catch (e) {} }
                 if (manifest.readerQA) { try { localStorage.setItem('reader_qa', JSON.stringify(manifest.readerQA)); } catch (e) {} }
@@ -12664,6 +12679,7 @@ body {
                 snippets: getSnipData(),
                 imgbeds: getImgBedData(),
                 chat_fav_models: JSON.parse(localStorage.getItem('chat_fav_models') || '[]'),
+                chat_fav_models_ts: localStorage.getItem('chat_fav_models_ts') || '',
                 tombstones: getTombstones(),
                 checkin: getCheckinData(),
                 checkinTasks: getCheckinTasks(),
@@ -12953,6 +12969,19 @@ body {
             });
         }
 
+        /* ---- 收藏模型：整包按时间戳后写覆盖（Gist 路径用；正确处理删除） ---- */
+        function applyRemoteFavModels(remote) {
+            if (!remote || !remote.chat_fav_models) return;
+            var rTs = remote.chat_fav_models_ts || remote.lastModified || '';
+            var lTs = localStorage.getItem('chat_fav_models_ts') || '';
+            // 远端有时间戳且不更新就跳过；远端没时间戳（旧数据）则沿用旧的「云端优先」行为
+            if (remote.chat_fav_models_ts && rTs <= lTs) return;
+            localStorage.setItem('chat_fav_models', JSON.stringify(remote.chat_fav_models));
+            if (rTs) localStorage.setItem('chat_fav_models_ts', rTs);
+            chatFavModels = remote.chat_fav_models;
+            if (typeof chatUpdateFavHeader === 'function') chatUpdateFavHeader();
+        }
+
         /* ---- 通用合并逻辑（Gist / CF 共用） ---- */
         function applySyncData(remote, manual) {
             var localSync = localStorage.getItem('toolbox_gist_last_sync');
@@ -12969,7 +12998,7 @@ body {
                 if (remote.checkin) setCheckinDataSilent(remote.checkin);
                 if (remote.checkinTasks) { idbSet(CHECKIN_TASKS_KEY, remote.checkinTasks); if (remote.checkinTasksTs) idbSet(CHECKIN_TASKS_TS_KEY, remote.checkinTasksTs); }
 
-                if (remote.chat_fav_models) { localStorage.setItem('chat_fav_models', JSON.stringify(remote.chat_fav_models)); chatFavModels = remote.chat_fav_models; }
+                applyRemoteFavModels(remote);
                 if (remote.tombstones) setTombstones(remote.tombstones);
             } else {
                 var localTombs = getTombstones();
@@ -13061,7 +13090,7 @@ body {
                     if (cResult.changed) needPushBack = true;
                 }
 
-                if (remote.chat_fav_models) { localStorage.setItem('chat_fav_models', JSON.stringify(remote.chat_fav_models)); chatFavModels = remote.chat_fav_models; }
+                applyRemoteFavModels(remote);
 
                 var totalChanges = kCount + sCount + kUpdated + sUpdated;
                 if (manual && totalChanges > 0) {
@@ -13130,6 +13159,17 @@ body {
         var chatSelectedModel = '';
         var chatSelectedKeyStr = '';
         var chatFavModels = JSON.parse(localStorage.getItem('chat_fav_models') || '[]');
+        // 保存收藏模型（含每个模型配的备注/价格）：写本地 + 盖时间戳 + 触发云同步。
+        // 收藏模型跟着密钥一起同步——CF 走清单(manifest)、Gist 走整包，时间戳让两台设备「谁新用谁」、删除也能正确传播。
+        var _chatFavPushTimer = null;
+        function chatFavModelsSave() {
+            try { localStorage.setItem('chat_fav_models', JSON.stringify(chatFavModels)); } catch (e) {}
+            localStorage.setItem('chat_fav_models_ts', new Date().toISOString());
+            if (typeof syncPushData === 'function') {
+                if (_chatFavPushTimer) clearTimeout(_chatFavPushTimer);
+                _chatFavPushTimer = setTimeout(syncPushData, 3000);
+            }
+        }
         var chatCurrentConvId = null; // 当前对话 ID
         var chatView = 'list';       // 'list' | 'conv'
         var chatContextMax = 0;      // 上下文轮数限制，0=全部
@@ -14721,7 +14761,7 @@ body {
             }
             if (idx >= 0) chatFavModels.splice(idx, 1);
             else chatFavModels.push({ url: provUrl, model: model, providerId: provId, providerName: item ? (item.name || '') : '' });
-            localStorage.setItem('chat_fav_models', JSON.stringify(chatFavModels));
+            chatFavModelsSave();
             chatSortModels();
             var curFilter = document.getElementById('chatModelInput').value;
             chatRenderModelDropdown(curFilter);
@@ -14731,7 +14771,7 @@ body {
             for (var i = 0; i < chatFavModels.length; i++) {
                 if (chatFavModels[i].url === url && chatFavModels[i].model === model) {
                     chatFavModels.splice(i, 1);
-                    localStorage.setItem('chat_fav_models', JSON.stringify(chatFavModels));
+                    chatFavModelsSave();
                     chatSortModels();
                     var curFilter = document.getElementById('chatModelInput').value;
                     chatRenderModelDropdown(curFilter);
@@ -15168,7 +15208,7 @@ body {
                     if (pk) target.price = { mode: 'call', per: +pk };
                     else delete target.price;
                 }
-                localStorage.setItem('chat_fav_models', JSON.stringify(chatFavModels));
+                chatFavModelsSave();
                 mask.remove();
                 chatRenderFavSection();
                 chatUpdateFavHeader();
