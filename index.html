@@ -13166,17 +13166,22 @@ body {
         // 保存收藏模型（含每个模型配的备注/价格）：写本地 + 盖时间戳 + 触发云同步。
         // 收藏模型跟着密钥一起同步——CF 走清单(manifest)、Gist 走整包，时间戳让两台设备「谁新用谁」、删除也能正确传播。
         // 「最近调用」记录：收藏面板按它排序（每站组内最近用的在前）。纯本地视图偏好，不跨设备同步。
+        // key 用 getBaseUrl 归一化站点地址（去尾斜杠、统一 /v1），免得同步来的收藏 url 与本机 item.url 差一点就对不上
+        function _chatUsedKey(url, model) {
+            var base = (typeof getBaseUrl === 'function') ? getBaseUrl(url || '') : (url || '');
+            return base + '<|>' + (model || '');
+        }
         function chatMarkModelUsed(url, model) {
             if (!url || !model) return;
             var m = {};
             try { m = JSON.parse(localStorage.getItem('chat_model_last_used') || '{}'); } catch (e) {}
-            m[url + '<|>' + model] = Date.now();
+            m[_chatUsedKey(url, model)] = Date.now();
             try { localStorage.setItem('chat_model_last_used', JSON.stringify(m)); } catch (e) {}
         }
         function chatModelUsedAt(url, model) {
             try {
                 var m = JSON.parse(localStorage.getItem('chat_model_last_used') || '{}');
-                return m[(url || '') + '<|>' + (model || '')] || 0;
+                return m[_chatUsedKey(url, model)] || 0;
             } catch (e) { return 0; }
         }
         var _chatFavPushTimer = null;
@@ -15948,13 +15953,13 @@ body {
             var baseUrl = getBaseUrl(item.url);
             var apiKey = chatSelectedKeyStr || getActiveKey(item);
             var _reqModel = chatSelectedModel;
-            // 记一笔「最近调用」：收藏面板据此把刚用过的模型排到本站组最前
-            chatMarkModelUsed(item.url, chatSelectedModel);
             // 共读点评（发了整章正文）可单独指定收藏里的模型；配了就用它的站点/密钥/模型，没配跟随当前选中
             if (chatReadingMode && _userSentChapter) {
                 var _cmM = chatResolveReadingModel('comment');
                 if (_cmM) { baseUrl = _cmM.baseUrl; apiKey = _cmM.apiKey; _reqModel = _cmM.model; }
             }
+            // 记一笔「最近调用」：收藏面板据此把刚用过的模型排到本站组最前（记真正调用的那个模型，含点评覆盖）
+            chatMarkModelUsed(baseUrl, _reqModel);
 
             chatStreaming = true;
             chatAbortCtrl = new AbortController();
