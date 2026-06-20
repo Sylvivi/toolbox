@@ -13143,6 +13143,9 @@ body {
         var READING_RENDER_BUFFER = 4;   // 锚点之前多带几条做缓冲，免得锚点贴在最顶端
         var READING_RENDER_WINDOW = 8;   // 没有存档位置时，默认只渲染最后这么多条
         var READING_RENDER_CHUNK = 8;    // 上滑到顶时，每次补渲染的条数
+        var READING_RENDER_FIRST = 18;   // 进会话先「同步」渲染这么多条（含锚点缓冲）让界面秒出，其余后台补
+        var READING_RENDER_FWD_BATCH = 8; // 「阅读位置→末尾」剩余内容：后台每批补这么多条（都接在末尾，不影响已定位的阅读位置）
+        var _chatRenderToken = 0;        // 渲染代次：会话切换/重渲时自增，作废在途的后台补渲染
         var _chatLoadingEarlier = false; // 补渲染进行中的防重入标记
         var _readingModeOrigText = '';  // 流式渲染用：当前原文
         var READING_MODE_INSTRUCTION = '【共读模式格式要求】当用户发送带有 [P1] [P2] 等段落编号的小说原文时，你只需要输出你的评论，不要重复原文。每条评论格式为：[P段落号] 评论内容。例如：\n[P3] 这段描写太细腻了\n[P7] 这里有个伏笔\n\n最重要的一条：每一轮你只评论【用户本次最新发来的这一条带 [P] 编号的章节原文】。之前已经读过、已经评过的章节，不要再补评论、不要再引用它们的段落编号。段落编号 [P1] [P2]… 每一章都是从头重新计数的，所以你输出的 [Px] 必须严格对应本章原文里的那一段，绝不能拿来指代上一章的内容。\n\n严格格式：每条评论开头只写一个 [Px] 标记，不要写成 [P25] [P26] 或 [P25-26] 这种合并格式。如果要同时评论多段，请分开写：\n[P25] 评论内容\n[P26] 评论内容\n\n重要：请模拟顺序阅读的视角写评论，评论某段时只基于该段及其之前的内容，不要引用或暗示后文还没出现的信息。你可以运用对作品已读部分（当前文本之前的剧情）的了解来丰富评论，但绝不剧透当前阅读位置之后的情节发展。像一个读过前文、但还没翻到下一页的读友一样。\n\n评论密度自己把握，有感觉的地方就评，没感觉的不要硬评。不需要每段都评。评论结束后可以简短聊两句整体感受。\n如果用户没发原文而是在聊天讨论，就正常回复，不用加 [P] 标记。';
@@ -14515,8 +14518,30 @@ body {
             chatRenderStartIdx = startIdx;
             if (startIdx > 0) container.appendChild(chatMakeEarlierSentinel());
             var seed = startIdx > 0 ? ((chatMessages[startIdx - 1] && chatMessages[startIdx - 1].ts) || 0) : 0;
-            chatAppendMsgRange(container, startIdx, chatMessages.length, seed, lastAiIdx, true);
+            var total = chatMessages.length;
+            var myToken = ++_chatRenderToken; // 作废上一轮在途的后台补渲染（会话切换/重渲时）
+
+            // 共读/翻译且「阅读位置→末尾」很长时：先同步画一小批让界面秒出，其余在后台逐帧补。
+            // 后台补的内容全部接在末尾（锚点下方），不会移动已定位的阅读位置，所以定位/上滑补章都不受影响。
+            var progressive = windowed && (chatReadingMode || chatTranslateMode)
+                && (total - startIdx) > (READING_RENDER_FIRST + READING_RENDER_FWD_BATCH);
+            var firstEnd = progressive ? Math.min(total, startIdx + READING_RENDER_FIRST) : total;
+            var lastTs = chatAppendMsgRange(container, startIdx, firstEnd, seed, lastAiIdx, true);
             chatScrollBottom();
+
+            if (progressive && firstEnd < total) {
+                var _pos = firstEnd, _prevTs = lastTs;
+                // 用 setTimeout 而非 rAF：页面不可见（切到别的 app）时 rAF 会暂停，setTimeout 仍会把后台补渲染跑完
+                var _step = function () {
+                    if (myToken !== _chatRenderToken) return;            // 会话已切换/重渲 → 放弃这一轮
+                    if (!document.body.contains(container)) return;       // 容器已不在文档里
+                    var next = Math.min(total, _pos + READING_RENDER_FWD_BATCH);
+                    _prevTs = chatAppendMsgRange(container, _pos, next, _prevTs, lastAiIdx, false);
+                    _pos = next;
+                    if (_pos < total) setTimeout(_step, 0);
+                };
+                setTimeout(_step, 0);
+            }
         }
 
         function chatBuildMsgEl(role, text, thinking, msgIdx, isLastAi) {
