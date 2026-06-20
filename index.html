@@ -21636,6 +21636,13 @@ body {
             var el = document.getElementById('chatMessages');
             if (!el) return;
             var _readingTapTimer = null;   // 共读左右点击翻页：延迟确认非双击
+            // 多指手势（如三指截屏）会被系统误合成 click/dblclick，记下最近一次「≥2 指同时按下」的时刻，
+            // 紧随其后的点击/双击一律忽略，避免截屏时误触翻页或段落提问；单指操作不受影响。
+            var _multiTouchAt = 0;
+            el.addEventListener('touchstart', function(e) {
+                if (e.touches && e.touches.length > 1) _multiTouchAt = Date.now();
+            }, { passive: true });
+            function _isMultiTouchEcho() { return Date.now() - _multiTouchAt < 1000; }
             el.addEventListener('click', function(e) {
                 if (!e.target.closest) return;
                 // 长按刚触发过追问 → 吞掉随之而来的 click，避免误触
@@ -21646,6 +21653,7 @@ body {
                 // 共读模式：点屏幕任意一边都往下翻一屏（左手握机随便点都能继续读，
                 // 往回看用手指上滑滚动）。双击留给段落评价、拖选/已选中文字留给复制，故排除并延迟确认。
                 if (chatReadingMode) {
+                    if (_isMultiTouchEcho()) return;   // 多指手势（如三指截屏）误合成的点击，不翻页
                     // 刚从列表进入对话的极短时间内忽略翻页，避免「幽灵点击」把阅读位置翻走
                     if (Date.now() < _readingTapSuppressUntil) return;
                     if (e.target.closest('button, input, textarea, a, svg, img, .reading-actbar')) return;
@@ -21699,6 +21707,7 @@ body {
             // 共读模式：双击段落 = 选中并提问（单击/拖选留给复制原文，避免误触）
             el.addEventListener('dblclick', function(e) {
                 if (!e.target.closest) return;
+                if (_isMultiTouchEcho()) return;   // 多指手势（如三指截屏）误合成的双击，忽略
                 clearTimeout(_readingTapTimer);   // 双击评价时取消左右点击翻页
                 // 翻译模式交给翻译逻辑（translate-merged 同带 reading-merged 类，需先排除）
                 if (e.target.closest('.translate-merged')) return;
