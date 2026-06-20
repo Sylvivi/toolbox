@@ -9056,18 +9056,34 @@ body {
             diagAppend(id, '<div class="diag-row">🤖 正在试聊… 模型: ' + esc(model) + '</div>');
 
             var baseUrl = getBaseUrl(item.url);
+            var apiKey = getActiveKey(item);
             var t0 = performance.now();
 
-            fetch(baseUrl + '/chat/completions', {
-                method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + getActiveKey(item), 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: model,
-                    messages: [{ role: 'user', content: 'hi' }],
-                    max_tokens: 5
-                })
-            })
-            .then(function(r) {
+            // Claude 模型走原生 /messages，失败回退兼容端点；非流式，逻辑与真实聊天一致
+            (async function() {
+                var msgs = [{ role: 'user', content: 'hi' }];
+                async function once(useAnth) {
+                    if (useAnth) {
+                        return fetch(baseUrl + '/messages', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'Authorization': 'Bearer ' + apiKey, 'anthropic-version': '2023-06-01' },
+                            body: JSON.stringify(aiBuildAnthropicBody(model, msgs, 16, false))
+                        });
+                    }
+                    return fetch(baseUrl + '/chat/completions', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ model: model, messages: msgs, max_tokens: 16 })
+                    });
+                }
+                var isAnth = aiModelIsAnthropic(model);
+                var r = await once(isAnth);
+                // 原生端点报错 → 回退兼容端点
+                if (isAnth && !r.ok) { isAnth = false; r = await once(false); }
+                return { r: r, isAnth: isAnth };
+            })()
+            .then(function(res) {
+                var r = res.r, isAnth = res.isAnth;
                 var ms = Math.round(performance.now() - t0);
                 if (!r.ok) {
                     return r.json().catch(function() { return {}; }).then(function(j) {
@@ -9076,14 +9092,15 @@ body {
                     });
                 }
                 return r.json().then(function(json) {
-                    var reply = '';
-                    if (json.choices && json.choices[0] && json.choices[0].message) {
-                        reply = json.choices[0].message.content || '';
+                    var reply = '', inTok = 0, outTok = 0;
+                    if (isAnth) {
+                        reply = (json.content || []).filter(function(b) { return b.type === 'text'; }).map(function(b) { return b.text || ''; }).join('');
+                        if (json.usage) { inTok = json.usage.input_tokens || 0; outTok = json.usage.output_tokens || 0; }
+                    } else {
+                        if (json.choices && json.choices[0] && json.choices[0].message) reply = json.choices[0].message.content || '';
+                        if (json.usage) { inTok = json.usage.prompt_tokens || 0; outTok = json.usage.completion_tokens || 0; }
                     }
-                    var tokens = '';
-                    if (json.usage) {
-                        tokens = '  |  Tokens: ↑' + (json.usage.prompt_tokens || 0) + ' ↓' + (json.usage.completion_tokens || 0);
-                    }
+                    var tokens = (json.usage) ? ('  |  Tokens: ↑' + inTok + ' ↓' + outTok) : '';
                     diagClear(id);
                     diagAppend(id, '<div class="diag-row">🤖 <span class="diag-label">试聊</span><span class="diag-ok">✅ Key 可用</span>  |  ' + ms + 'ms' + tokens + '</div>' +
                         (reply ? '<div class="diag-row" style="padding-left:56px;color:var(--text-muted);font-size:11px">回复: ' + esc(reply.substring(0, 100)) + '</div>' : ''));
@@ -13289,6 +13306,141 @@ body {
             }
             return null;
         }
+
+        /* ===== Claude 原生格式适配层 =====
+         * 中转站「agent 时代」要求：Claude 模型走自家原生端点 /v1/messages，
+         * 不要用 OpenAI 兼容的 /v1/chat/completions 硬转（否则参数不识别/报错）。
+         * 思路：对外仍按 OpenAI 形状传 messages、解析 chunk；这一层负责
+         *   ① 判模型 ② 把 OpenAI messages 转成 Anthropic 请求体
+         *   ③ 把 Anthropic 流式事件「翻译回」OpenAI 形状，让下游解析/记账零改动
+         *   ④ 统一开流：Claude 先试原生，失败自动回退兼容端点。 */
+        function aiModelIsAnthropic(model) { return /claude/i.test(model || ''); }
+
+        // OpenAI message.content（字符串或数组）→ Anthropic content
+        function _aiToAnthContent(content) {
+            if (typeof content === 'string') return content;
+            if (!Array.isArray(content)) return content;
+            var out = [];
+            for (var i = 0; i < content.length; i++) {
+                var part = content[i];
+                if (part && part.type === 'text') {
+                    out.push({ type: 'text', text: part.text || '' });
+                } else if (part && part.type === 'image_url' && part.image_url && part.image_url.url) {
+                    var url = part.image_url.url;
+                    var m = /^data:([^;]+);base64,([\s\S]*)$/.exec(url);
+                    if (m) out.push({ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } });
+                    else out.push({ type: 'image', source: { type: 'url', url: url } });
+                }
+            }
+            return out;
+        }
+        // 合并两段 content（保证 Anthropic 交替；正常对话已交替，仅兜底）
+        function _aiMergeContent(a, b) {
+            if (typeof a === 'string' && typeof b === 'string') return a + '\n\n' + b;
+            var arrA = (typeof a === 'string') ? [{ type: 'text', text: a }] : a.slice();
+            var arrB = (typeof b === 'string') ? [{ type: 'text', text: b }] : b.slice();
+            return arrA.concat(arrB);
+        }
+        // 文本前缀拼到一段 content 前
+        function _aiPrependText(content, prefix) {
+            if (typeof content === 'string') return prefix + '\n' + content;
+            if (Array.isArray(content)) return [{ type: 'text', text: prefix }].concat(content);
+            return content;
+        }
+
+        // OpenAI 请求 messages → Anthropic 请求体
+        function aiBuildAnthropicBody(model, messages, maxTokens, stream) {
+            var systemParts = [];
+            var msgs = [];
+            var pendingSys = '';   // 对话中途夹着的 system（时间戳等）折叠进下一条消息
+            var seenTurn = false;
+            for (var i = 0; i < (messages || []).length; i++) {
+                var msg = messages[i];
+                if (msg.role === 'system') {
+                    var t = (typeof msg.content === 'string') ? msg.content : '';
+                    if (!t) continue;
+                    if (!seenTurn) systemParts.push(t);
+                    else pendingSys += (pendingSys ? '\n' : '') + t;
+                    continue;
+                }
+                seenTurn = true;
+                var content = _aiToAnthContent(msg.content);
+                if (pendingSys) { content = _aiPrependText(content, '[' + pendingSys + ']'); pendingSys = ''; }
+                if (msgs.length && msgs[msgs.length - 1].role === msg.role) {
+                    msgs[msgs.length - 1].content = _aiMergeContent(msgs[msgs.length - 1].content, content);
+                } else {
+                    msgs.push({ role: msg.role, content: content });
+                }
+            }
+            // 收尾残留 system（极少见）→ 并到末条 user 或单开一条
+            if (pendingSys) {
+                if (msgs.length && msgs[msgs.length - 1].role === 'user') {
+                    msgs[msgs.length - 1].content = _aiMergeContent(msgs[msgs.length - 1].content, '[' + pendingSys + ']');
+                } else {
+                    msgs.push({ role: 'user', content: '[' + pendingSys + ']' });
+                }
+            }
+            // Anthropic 要求首条必须是 user
+            while (msgs.length && msgs[0].role !== 'user') msgs.shift();
+            var body = { model: model, max_tokens: maxTokens || 8192, messages: msgs };
+            if (stream) body.stream = true;
+            if (systemParts.length) body.system = systemParts.join('\n\n');
+            return body;
+        }
+
+        // Anthropic 流式事件 JSON → OpenAI 形状 chunk；state 累计 token
+        function aiNormalizeChunk(json, state) {
+            var out = { choices: [{ delta: {} }] };
+            var t = json && json.type;
+            if (t === 'content_block_delta' && json.delta) {
+                if (json.delta.type === 'text_delta') out.choices[0].delta.content = json.delta.text || '';
+                else if (json.delta.type === 'thinking_delta') out.choices[0].delta.reasoning_content = json.delta.thinking || '';
+            } else if (t === 'message_start' && json.message && json.message.usage) {
+                if (json.message.usage.input_tokens != null) state.inTok = json.message.usage.input_tokens;
+                if (json.message.usage.output_tokens != null) state.outTok = json.message.usage.output_tokens;
+            } else if (t === 'message_delta' && json.usage && json.usage.output_tokens != null) {
+                state.outTok = json.usage.output_tokens;
+            }
+            if (state.inTok != null || state.outTok != null) {
+                out.usage = { prompt_tokens: state.inTok || 0, completion_tokens: state.outTok || 0 };
+            }
+            return out;
+        }
+
+        // 统一开流：Claude 先试原生 /messages，失败回退兼容 /chat/completions
+        // 返回 { resp, isAnthropic, anthState }；调用方据 isAnthropic 决定是否归一 chunk
+        async function aiOpenStream(opts) {
+            if (aiModelIsAnthropic(opts.model)) {
+                try {
+                    var respA = await fetch(opts.baseUrl + '/messages', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': opts.apiKey,
+                            'Authorization': 'Bearer ' + opts.apiKey,
+                            'anthropic-version': '2023-06-01'
+                        },
+                        body: JSON.stringify(aiBuildAnthropicBody(opts.model, opts.messages, opts.max_tokens, true)),
+                        signal: opts.signal
+                    });
+                    if (respA.ok) return { resp: respA, isAnthropic: true, anthState: {} };
+                    console.warn('[Claude原生] /v1/messages 返回 ' + respA.status + '，回退 /chat/completions');
+                } catch (e) {
+                    if (e && e.name === 'AbortError') throw e;
+                    console.warn('[Claude原生] /v1/messages 异常，回退 /chat/completions：' + (e && e.message));
+                }
+            }
+            // OpenAI 兼容（默认 / 回退）
+            var body = { model: opts.model, messages: opts.messages, stream: true, stream_options: { include_usage: true } };
+            if (opts.max_tokens) body.max_tokens = opts.max_tokens;
+            var resp = await fetch(opts.baseUrl + '/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + opts.apiKey },
+                body: JSON.stringify(body),
+                signal: opts.signal
+            });
+            return { resp: resp, isAnthropic: false, anthState: {} };
+        }
         /* ===== 用量 / 计费面板 ===== */
         // 模型聚合键：带站点时用 modelstation，不带站点（旧数据）退回纯 model
         function _mkey(model, station) { return station ? (model + '' + station) : model; }
@@ -13576,14 +13728,11 @@ body {
          * 很多中转站只支持流式、会拒绝 stream:false，故全部改用此函数兼容。
          * onDelta(已拼接文本) 可选，用于实时显示；不传则等拼完一次性返回。 */
         async function chatStreamChat(opts) {
-            var body = { model: opts.model, messages: opts.messages, stream: true, stream_options: { include_usage: true } };
-            if (opts.max_tokens) body.max_tokens = opts.max_tokens;
-            var resp = await fetch(opts.baseUrl + '/chat/completions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + opts.apiKey },
-                body: JSON.stringify(body),
-                signal: opts.signal
-            });
+            // Claude 模型走原生 /messages，失败自动回退兼容端点
+            var _stream = await aiOpenStream(opts);
+            var resp = _stream.resp;
+            var _isAnth = _stream.isAnthropic;
+            var _anthState = _stream.anthState;
             if (!resp.ok) {
                 var errText = '';
                 try { errText = await resp.text(); } catch (x) {}
@@ -13607,6 +13756,7 @@ body {
                     if (payload === '[DONE]') continue;
                     try {
                         var chunk = JSON.parse(payload);
+                        if (_isAnth) chunk = aiNormalizeChunk(chunk, _anthState);
                         var delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
                         if (delta && delta.content) {
                             full += delta.content;
@@ -15746,20 +15896,14 @@ body {
             }
 
             try {
-                var resp = await fetch(baseUrl + '/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + apiKey
-                    },
-                    body: JSON.stringify({
-                        model: _reqModel,
-                        messages: reqMsgs,
-                        stream: true,
-                        stream_options: { include_usage: true }
-                    }),
-                    signal: chatAbortCtrl.signal
+                // Claude 模型走原生 /messages（max_tokens 给足防长篇点评截断），失败自动回退兼容端点
+                var _stream = await aiOpenStream({
+                    baseUrl: baseUrl, apiKey: apiKey, model: _reqModel, messages: reqMsgs,
+                    max_tokens: 16000, signal: chatAbortCtrl.signal
                 });
+                var resp = _stream.resp;
+                var _isAnth = _stream.isAnthropic;
+                var _anthState = _stream.anthState;
 
                 if (!resp.ok) {
                     var errText = '';
@@ -15786,6 +15930,7 @@ body {
                         if (payload === '[DONE]') continue;
                         try {
                             var chunk = JSON.parse(payload);
+                            if (_isAnth) chunk = aiNormalizeChunk(chunk, _anthState);
                             var _du = apiUsageFromChunk(chunk);
                             if (_du) _docUsage = _du;
                             var delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
@@ -15841,6 +15986,7 @@ body {
                     if (remaining.startsWith('data: ') && remaining.substring(6) !== '[DONE]') {
                         try {
                             var lastChunk = JSON.parse(remaining.substring(6));
+                            if (_isAnth) lastChunk = aiNormalizeChunk(lastChunk, _anthState);
                             var ld = lastChunk.choices && lastChunk.choices[0] && lastChunk.choices[0].delta;
                             if (ld && (ld.reasoning_content || ld.reasoning || ld.thinking)) thinkContent += (ld.reasoning_content || ld.reasoning || ld.thinking);
                             if (ld && ld.content) _contentBuf += ld.content;
