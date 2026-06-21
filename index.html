@@ -4356,18 +4356,23 @@ body {
                     <input type="text" id="keyFormName" placeholder="例如：百香果、西瓜">
                 </div>
                 <div class="form-group">
-                    <label>分组</label>
-                    <input type="text" id="keyFormGroup" placeholder="例如：按次 / 按量 / 免费">
-                </div>
-                <div class="form-group">
                     <label>官网地址 (查余额/管理用的)</label>
                     <input type="text" id="keyFormWebsite" placeholder="https://xxx.com">
                 </div>
-                <div class="form-group">
-                    <label>快捷路径 (留空用默认值)</label>
-                    <div style="display:flex;gap:8px">
-                        <input type="text" id="keyFormLogPath" placeholder="留空默认 /console/log" style="flex:1">
-                        <input type="text" id="keyFormPricingPath" placeholder="留空默认 /pricing" style="flex:1">
+                <button type="button" id="keyAdvancedToggle" onclick="toggleKeyAdvanced()" style="background:none;border:none;color:var(--text-sub);font-size:12px;cursor:pointer;padding:4px 0;margin:-2px 0 8px;display:flex;align-items:center;gap:5px">
+                    <span id="keyAdvancedArrow" style="display:inline-block;transition:transform .15s">▸</span> 更多设置（分组 / 快捷路径）
+                </button>
+                <div id="keyAdvancedBox" style="display:none">
+                    <div class="form-group">
+                        <label>分组</label>
+                        <input type="text" id="keyFormGroup" placeholder="例如：按次 / 按量 / 免费">
+                    </div>
+                    <div class="form-group">
+                        <label>快捷路径 (留空用默认值)</label>
+                        <div style="display:flex;gap:8px">
+                            <input type="text" id="keyFormLogPath" placeholder="留空默认 /console/log" style="flex:1">
+                            <input type="text" id="keyFormPricingPath" placeholder="留空默认 /pricing" style="flex:1">
+                        </div>
                     </div>
                 </div>
                 <div class="form-group">
@@ -8633,6 +8638,8 @@ body {
             document.getElementById('keyFormPricingPath').value = item ? (item.pricingPath || '') : '';
             document.getElementById('keyFormNote').value = item ? (item.note || '') : '';
             document.getElementById('keyFormBalance').value = item && item.balance ? item.balance : '';
+            // 三个少用框默认收起；编辑时若本来就填了内容，自动展开以免数据被藏住
+            setKeyAdvanced(!!(item && (item.group || item.logPath || item.pricingPath)));
             document.getElementById('keyEntriesList').innerHTML = '';
             if (item) {
                 var keys = getItemKeys(item);
@@ -8645,6 +8652,18 @@ body {
             }
         }
         function closeKeyModal() { document.getElementById('keyModalOverlay').classList.remove('show'); }
+        // 「更多设置」折叠区：分组 / 快捷路径 平时收起，点一下才展开（避免常用框被干扰）
+        function setKeyAdvanced(open) {
+            var box = document.getElementById('keyAdvancedBox');
+            var arr = document.getElementById('keyAdvancedArrow');
+            if (!box) return;
+            box.style.display = open ? '' : 'none';
+            if (arr) arr.style.transform = open ? 'rotate(90deg)' : '';
+        }
+        function toggleKeyAdvanced() {
+            var box = document.getElementById('keyAdvancedBox');
+            setKeyAdvanced(!!(box && box.style.display === 'none'));
+        }
 
         // 获取卡片的密钥列表（兼容旧数据）
         function getItemKeys(item) {
