@@ -13827,6 +13827,10 @@ body {
          * 很多中转站只支持流式、会拒绝 stream:false，故全部改用此函数兼容。
          * onDelta(已拼接文本) 可选，用于实时显示；不传则等拼完一次性返回。 */
         async function chatStreamChat(opts) {
+            // 记「最近调用」：仅用户主动发起的环节（共读点评/共读提问/翻译/翻译追问）带 markUsed，
+            // 自动后台任务（标题/摘要/大纲/记忆表格/人名识别）不记，免得它们把收藏排序搅乱。
+            // 收藏面板据此把刚用过的模型排到本站组最前——这条路原来漏了记账，共读/翻译里调用的模型一直升不上去。
+            if (opts.markUsed && opts.baseUrl && opts.model) chatMarkModelUsed(opts.baseUrl, opts.model);
             // Claude 模型走原生 /messages，失败自动回退兼容端点
             var _stream = await aiOpenStream(opts);
             var resp = _stream.resp;
@@ -21095,7 +21099,7 @@ body {
                 var _spOne = document.getElementById('chatSysPrompt').value.trim();
                 if (!_spOne) _spOne = READING_MODE_DEFAULT_PERSONA;
                 var content = (await chatStreamChat({
-                    baseUrl: baseUrl, apiKey: apiKey, model: _cMdl,
+                    baseUrl: baseUrl, apiKey: apiKey, model: _cMdl, markUsed: true,
                     purpose: '共读点评',
                     messages: [
                         { role: 'system', content: _spOne + '\n\n' + READING_MODE_INSTRUCTION },
@@ -21225,7 +21229,7 @@ body {
                 }
                 _askMsgs.push({ role: 'user', content: userMsg });
                 var answer = (await chatStreamChat({
-                    baseUrl: baseUrl, apiKey: apiKey, model: _qaMdl,
+                    baseUrl: baseUrl, apiKey: apiKey, model: _qaMdl, markUsed: true,
                     purpose: '共读提问',
                     messages: _askMsgs,
                     signal: readingAbortCtl.signal
@@ -21449,7 +21453,7 @@ body {
                 var baseUrl = getBaseUrl(item.url);
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
                 var answer = (await chatStreamChat({
-                    baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel,
+                    baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel, markUsed: true,
                     purpose: '翻译',
                     messages: [
                         { role: 'system', content: TRANSLATE_MODE_INSTRUCTION },
@@ -21568,7 +21572,7 @@ body {
                 var baseUrl = getBaseUrl(item.url);
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
                 var answer = (await chatStreamChat({
-                    baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel,
+                    baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel, markUsed: true,
                     purpose: '翻译追问',
                     messages: [
                         { role: 'system', content: sysPrompt },
