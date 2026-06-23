@@ -13583,27 +13583,51 @@ body {
             return out;
         }
 
+        // 记每个中转站「是否支持原生 /messages」，避免每次 Claude 调用都先白跑一次原生端点再回退（那会让每条消息多等一个完整往返，明显变慢）。
+        // 只记「确认不支持」的站（端点返回 404/405/501 = 没有这个路径）；其余情况只这次回退、不缓存，下次仍会重探。
+        var _aiNativeBad = null;
+        function aiNativeMap() {
+            if (_aiNativeBad) return _aiNativeBad;
+            try { _aiNativeBad = JSON.parse(localStorage.getItem('ai_native_unsupported') || '{}') || {}; }
+            catch (e) { _aiNativeBad = {}; }
+            return _aiNativeBad;
+        }
+        function aiNativeIsBad(baseUrl) { return !!aiNativeMap()[baseUrl]; }
+        function aiSetNativeBad(baseUrl, bad) {
+            var m = aiNativeMap();
+            if (bad) m[baseUrl] = 1; else delete m[baseUrl];
+            try { localStorage.setItem('ai_native_unsupported', JSON.stringify(m)); } catch (e) {}
+        }
+
         // 统一开流：Claude 先试原生 /messages，失败回退兼容 /chat/completions
         // 返回 { resp, isAnthropic, anthState }；调用方据 isAnthropic 决定是否归一 chunk
         async function aiOpenStream(opts) {
+            var skippedNative = false; // 本次是因为「记过不支持」而跳过原生，用于自愈判断
             if (aiModelIsAnthropic(opts.model)) {
-                try {
-                    var respA = await fetch(opts.baseUrl + '/messages', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'x-api-key': opts.apiKey,
-                            'Authorization': 'Bearer ' + opts.apiKey,
-                            'anthropic-version': '2023-06-01'
-                        },
-                        body: JSON.stringify(aiBuildAnthropicBody(opts.model, opts.messages, opts.max_tokens, true)),
-                        signal: opts.signal
-                    });
-                    if (respA.ok) return { resp: respA, isAnthropic: true, anthState: {} };
-                    console.warn('[Claude原生] /v1/messages 返回 ' + respA.status + '，回退 /chat/completions');
-                } catch (e) {
-                    if (e && e.name === 'AbortError') throw e;
-                    console.warn('[Claude原生] /v1/messages 异常，回退 /chat/completions：' + (e && e.message));
+                if (aiNativeIsBad(opts.baseUrl)) {
+                    // 这个站之前已确认没有原生端点 → 直接走兼容，省掉每次白跑的那个往返
+                    skippedNative = true;
+                } else {
+                    try {
+                        var respA = await fetch(opts.baseUrl + '/messages', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-api-key': opts.apiKey,
+                                'Authorization': 'Bearer ' + opts.apiKey,
+                                'anthropic-version': '2023-06-01'
+                            },
+                            body: JSON.stringify(aiBuildAnthropicBody(opts.model, opts.messages, opts.max_tokens, true)),
+                            signal: opts.signal
+                        });
+                        if (respA.ok) return { resp: respA, isAnthropic: true, anthState: {} };
+                        console.warn('[Claude原生] /v1/messages 返回 ' + respA.status + '，回退 /chat/completions');
+                        // 只有「没这个端点」(404/405/501) 才记成不支持；401/403/429/5xx 等多是鉴权/限流/临时故障，不缓存以免误判
+                        if (respA.status === 404 || respA.status === 405 || respA.status === 501) aiSetNativeBad(opts.baseUrl, true);
+                    } catch (e) {
+                        if (e && e.name === 'AbortError') throw e;
+                        console.warn('[Claude原生] /v1/messages 异常，回退 /chat/completions：' + (e && e.message));
+                    }
                 }
             }
             // OpenAI 兼容（默认 / 回退）
@@ -13615,6 +13639,8 @@ body {
                 body: JSON.stringify(body),
                 signal: opts.signal
             });
+            // 自愈：本来以为该站不支持原生才跳过的，结果兼容端点也失败 → 清掉标记，下次重新探原生（防把「其实要走原生」的站永久卡在兼容端点）
+            if (skippedNative && !resp.ok) aiSetNativeBad(opts.baseUrl, false);
             return { resp: resp, isAnthropic: false, anthState: {} };
         }
         /* ===== 用量 / 计费面板 ===== */
