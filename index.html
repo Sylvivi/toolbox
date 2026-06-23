@@ -11380,8 +11380,16 @@ body {
             var keys = getKeyData();
             var snips = getSnipData();
             var imgbeds = getImgBedData();
-            if (keys.length === 0 && snips.length === 0 && imgbeds.length === 0) { showToast('⚠️ 没有数据可导出'); return; }
-            var all = { api_keys: keys, snippets: snips, imgbeds: imgbeds };
+            // 共读/对话记录与阅读书库不参与云同步，必须随备份一起导出，否则「导出后清理」会永久丢小说
+            var chatHist = idbGet('chat_history') || [];
+            var _rb = idbGet('reading_books'); var books = (_rb && _rb.books) ? _rb.books : [];
+            if (keys.length === 0 && snips.length === 0 && imgbeds.length === 0 && chatHist.length === 0 && books.length === 0) { showToast('⚠️ 没有数据可导出'); return; }
+            var all = {
+                api_keys: keys, snippets: snips, imgbeds: imgbeds,
+                chat_fav_models: JSON.parse(localStorage.getItem('chat_fav_models') || '[]'),
+                chat_history: chatHist,
+                reading_books: books
+            };
             var blob = new Blob([JSON.stringify(all, null, 2)], { type: 'application/json' });
             var a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
@@ -11510,8 +11518,32 @@ body {
                         chatFavModels = imported.chat_fav_models;
                     }
 
+                    // 导入共读/对话记录：按对话 id 合并——本地没有的补进来，重复的留 updated 更新的一方，不覆盖本地新内容
+                    var chCount = 0, chUpd = 0;
+                    if (imported.chat_history && Array.isArray(imported.chat_history)) {
+                        var hist = chatGetHistory();
+                        var hIds = {}; hist.forEach(function(c, i) { hIds[c.id] = i; });
+                        imported.chat_history.forEach(function(c) {
+                            if (!c || !c.id) return;
+                            if (hIds[c.id] === undefined) { hIds[c.id] = hist.length; hist.push(c); chCount++; }
+                            else { var lc = hist[hIds[c.id]]; if ((c.updated || 0) > (lc.updated || 0)) { hist[hIds[c.id]] = c; chUpd++; } }
+                        });
+                        chatSetHistory(hist);
+                    }
+                    // 导入阅读书库：按书 id 合并，本地没有的才补进来
+                    var bkCount = 0;
+                    if (imported.reading_books && Array.isArray(imported.reading_books)) {
+                        var rbd = idbGet('reading_books'); var rbBks = (rbd && rbd.books) ? rbd.books : [];
+                        var bIds = {}; rbBks.forEach(function(b) { if (b && b.id) bIds[b.id] = true; });
+                        imported.reading_books.forEach(function(b) {
+                            if (b && b.id && !bIds[b.id]) { rbBks.push(b); bIds[b.id] = true; bkCount++; }
+                        });
+                        idbSet('reading_books', { books: rbBks });
+                        if (typeof rbLoad === 'function') rbLoad();
+                    }
+
                     var totalUpdated = kUpdated + sUpdated;
-                    showToast('📦 导入成功，密钥+' + kCount + '，收藏+' + sCount + (totalUpdated ? '，更新' + totalUpdated : '') + (ibCount ? '，图床+' + ibCount : ''));
+                    showToast('📦 导入成功，密钥+' + kCount + '，收藏+' + sCount + (totalUpdated ? '，更新' + totalUpdated : '') + (ibCount ? '，图床+' + ibCount : '') + (chCount || chUpd ? '，对话+' + chCount + (chUpd ? '/更新' + chUpd : '') : '') + (bkCount ? '，书库+' + bkCount : ''));
                 } catch (err) { showToast('❌ 文件格式错误'); }
             };
             reader.readAsText(file); event.target.value = '';
@@ -11777,41 +11809,55 @@ body {
         var _idbSizeCache = null;
         function _invalidateIdbSizeCache() { _idbSizeCache = null; }
         function checkStorageUsage() {
-            var used = 0;
-            try {
-                // 测量 IndexedDB 缓存数据大小（带缓存，避免重复 stringify）
-                if (_idbSizeCache === null) {
-                    _idbSizeCache = 0;
-                    _idbKeys.forEach(function(key) {
-                        var val = _idbCache[key];
-                        if (val !== undefined) _idbSizeCache += JSON.stringify(val).length;
-                    });
+            // 优先用浏览器真实配额：navigator.storage.estimate() 给 usage(已用)/quota(该站点可用上限)，
+            // 上限通常几百 MB~几个 G，不再用写死的 50MB 假想线，免得一点点数据就误报 100% 吓人。
+            // 老办法（估算 idb+localStorage 体积 / 假定上限）仅在浏览器不支持 estimate 时兜底。
+            function _apply(usedBytes, quotaBytes) {
+                var usedMB = (usedBytes / 1024 / 1024).toFixed(2);
+                var maxMB = quotaBytes / 1024 / 1024;
+                var maxLabel = maxMB >= 1024 ? (maxMB / 1024).toFixed(1) + ' GB' : Math.round(maxMB) + ' MB';
+                var pct = quotaBytes > 0 ? Math.min(100, Math.round(usedBytes / quotaBytes * 100)) : 0;
+                var el = document.getElementById('storageUsageInfo');
+                if (el) {
+                    var color = pct > 80 ? 'var(--red)' : pct > 60 ? 'var(--gold)' : 'var(--text-muted)';
+                    el.innerHTML = '💾 本地存储：' + usedMB + ' MB / ~' + maxLabel + '（' + pct + '%）';
+                    el.style.color = color;
                 }
-                used += _idbSizeCache;
-                // 加上 localStorage 中的小设置数据
-                for (var i = 0; i < localStorage.length; i++) {
-                    var k = localStorage.key(i);
-                    used += k.length + (localStorage.getItem(k) || '').length;
-                }
-            } catch(e) {}
-            var usedMB = (used * 2 / 1024 / 1024).toFixed(2);
-            var maxMB = 50; // IndexedDB 通常 50MB+
-            var pct = Math.min(100, Math.round(used * 2 / (maxMB * 1024 * 1024) * 100));
-            var el = document.getElementById('storageUsageInfo');
-            if (el) {
-                var color = pct > 80 ? 'var(--red)' : pct > 60 ? 'var(--gold)' : 'var(--text-muted)';
-                el.innerHTML = '💾 本地存储：' + usedMB + ' MB / ~' + maxMB + ' MB（' + pct + '%）';
-                el.style.color = color;
-            }
-            if (pct > 80) {
-                var bar = document.getElementById('backupReminder');
-                var textEl = document.getElementById('backupReminderText');
-                if (bar && textEl && bar.style.display === 'none') {
-                    textEl.textContent = '⚠️ 本地存储已用 ' + pct + '%（' + usedMB + ' MB），建议导出备份后清理旧数据';
-                    bar.style.display = 'flex';
+                if (pct > 80) {
+                    var bar = document.getElementById('backupReminder');
+                    var textEl = document.getElementById('backupReminderText');
+                    if (bar && textEl && bar.style.display === 'none') {
+                        textEl.textContent = '⚠️ 本地存储已用 ' + pct + '%（' + usedMB + ' MB / ' + maxLabel + '），建议导出备份后清理旧数据';
+                        bar.style.display = 'flex';
+                    }
                 }
             }
-            return { usedMB: usedMB, pct: pct };
+            function _estimateLocalBytes() {
+                var used = 0;
+                try {
+                    if (_idbSizeCache === null) {
+                        _idbSizeCache = 0;
+                        _idbKeys.forEach(function(key) {
+                            var val = _idbCache[key];
+                            if (val !== undefined) _idbSizeCache += JSON.stringify(val).length;
+                        });
+                    }
+                    used += _idbSizeCache;
+                    for (var i = 0; i < localStorage.length; i++) {
+                        var k = localStorage.key(i);
+                        used += k.length + (localStorage.getItem(k) || '').length;
+                    }
+                } catch (e) {}
+                return used * 2; // UTF-16，约 2 字节/字符
+            }
+            if (navigator.storage && navigator.storage.estimate) {
+                navigator.storage.estimate().then(function(est) {
+                    if (est && est.quota) _apply(est.usage || 0, est.quota);
+                    else _apply(_estimateLocalBytes(), 50 * 1024 * 1024);
+                }).catch(function() { _apply(_estimateLocalBytes(), 50 * 1024 * 1024); });
+            } else {
+                _apply(_estimateLocalBytes(), 50 * 1024 * 1024);
+            }
         }
 
         /* =========================================================================
