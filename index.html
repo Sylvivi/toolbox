@@ -15138,10 +15138,13 @@ body {
             for (var i = 0; i < chatFavModels.length; i++) {
                 var f = chatFavModels[i];
                 var _item = null;
-                // 用 url 反查（最可靠，因为 url 是实际的中转站地址）
+                // 用 url 反查（最可靠，因为 url 是实际的中转站地址）。
+                // 归一化比较：跨设备同步来的收藏，url 可能差个尾斜杠/'/v1'，
+                // 精确相等会漏匹配→错认成别的站→同名不同站排序乱。getBaseUrl 与全站口径一致。
                 if (f.url) {
+                    var _fBase = getBaseUrl(f.url);
                     for (var k = 0; k < _allKeys.length; k++) {
-                        if (_allKeys[k].url === f.url) { _item = _allKeys[k]; break; }
+                        if (getBaseUrl(_allKeys[k].url || '') === _fBase) { _item = _allKeys[k]; break; }
                     }
                 }
                 // url 没匹配到，fallback 用 providerId
