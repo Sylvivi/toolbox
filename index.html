@@ -13748,6 +13748,10 @@ body {
             for (var i = 0; i < GEN_STYLE_PRESETS.length; i++) { if (GEN_STYLE_PRESETS[i].name === styleStr) return GEN_STYLE_PRESETS[i].tag; }
             return styleStr || '';
         }
+        // 是不是生图类模型（这类只能走 /images/generations，绝不能拿去当文字模型调 /chat/completions）
+        function _isImageModelName(m) {
+            return /gpt-image|dall[\-\s]?e|flux|midjourney|\bmj\b|stable[\-\s]?diffusion|sdxl|kolors|seedream|imagen|wanx|cogview|hunyuan[\-\s]?image/i.test(m || '');
+        }
         function genImageSize() { return localStorage.getItem('gen_image_size') || '1024x1024'; }
         function genImageModelCfg() { return _chatResolveModelCfg(_chatGetModelCfg('chat_image_model')); }
         // 生图模型没配好时，说清到底卡在哪（区分「没在设置里选」和「选了但站找不到」）
@@ -13803,6 +13807,9 @@ body {
                 if (!item || !chatSelectedModel) return fallback;
                 baseUrl = getBaseUrl(item.url); apiKey = chatSelectedKeyStr || getActiveKey(item); model = chatSelectedModel;
             }
+            // 提炼要用「文字模型」。若解析出来的是生图类模型（如当前/共读点评模型正好是 gpt-image），
+            // 不能拿它去调 /chat/completions（会 503），直接跳过提炼、用原文+风格出图。
+            if (_isImageModelName(model)) return fallback;
             try {
                 var sys = '你是插画提示词助手。把用户给的小说片段凝练成一句【画面描述】：交代清楚人物外貌/动作/表情、场景环境、光影氛围、构图视角，可中英混合，控制在 80 字内。只输出画面描述本身，不要解说、不要引号、不要任何前缀。';
                 var usr = '书名：《' + (bookName || '未知') + '》\n期望风格：' + (styleStr || '') + '\n小说片段：\n' + (rawText || '').slice(0, 1500);
