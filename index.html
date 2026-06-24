@@ -3156,6 +3156,28 @@ body {
             max-width: 220px; max-height: 220px; border-radius: 10px; margin: 6px 0;
             display: block;
         }
+        /* 生图气泡 */
+        .chat-gen-bubble { padding: 6px; }
+        .chat-gen-wrap { position: relative; }
+        .chat-gen-img { max-width: 100%; border-radius: 10px; display: block; cursor: zoom-in; }
+        .chat-gen-ph {
+            min-width: 180px; min-height: 120px; display: flex; align-items: center; justify-content: center;
+            border-radius: 10px; background: var(--input-bg); border: 1px dashed var(--card-border);
+            color: var(--text-muted); font-size: 12px; padding: 24px 16px; text-align: center;
+        }
+        .chat-gen-ph-missing { font-size: 11px; }
+        .chat-gen-cap { margin-top: 5px; font-size: 10px; color: var(--text-muted); line-height: 1.5; }
+        .gen-lightbox-mask {
+            position: fixed; inset: 0; z-index: 99999; background: rgba(0,0,0,0.85);
+            display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+        .gen-lightbox-mask img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+        .genimg-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+        .genimg-chip {
+            background: var(--input-bg); border: 1px solid var(--card-border); color: var(--text-sub);
+            border-radius: 14px; padding: 4px 11px; font-size: 12px; cursor: pointer; transition: all 0.15s;
+        }
+        .genimg-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 
         /* ===== 导出按钮 ===== */
         .chat-hist-export {
@@ -4652,6 +4674,7 @@ body {
                         <button class="chat-topmenu-item" id="chatBookshelfBtn" onclick="chatHideTopMenu();rbOpenShelf()">📚 书架</button>
                         <button class="chat-topmenu-item" id="chatNavBtn" onclick="chatHideTopMenu();chatToggleNavPanel()">🧭 目录</button>
                         <button class="chat-topmenu-item" id="chatUsageBtn" onclick="chatHideTopMenu();apiLogShowPanel()" style="display:none">💰 用量</button>
+                        <button class="chat-topmenu-item" id="chatGenImgBtn" onclick="chatHideTopMenu();genImageOpenDialog()" style="display:none">🎨 生图</button>
                     </div>
                 </div>
                 <div class="reading-panel-mask" id="readingPanelMask" onclick="readingCloseFloatPanels()"></div>
@@ -7315,6 +7338,19 @@ body {
                                 <select id="readingQaModelSelect" onchange="chatSaveReadingQaModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">跟随当前模型</option></select>
                                 <div style="font-size:10px;color:var(--text-muted);margin-top:3px">共读点评/提问可各自指定收藏里的模型，留空则跟随当前选中模型</div>
                             </div>
+                            <div style="margin-top:8px">
+                                <span style="font-size:11px;color:var(--text-muted)">生图模型</span>
+                                <select id="imageModelSelect" onchange="chatSaveImageModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">未设置</option></select>
+                                <div style="font-size:10px;color:var(--text-muted);margin-top:3px">从「收藏」里选你的生图模型（如 gpt-image2）。共读/阅读双击段落「🎨 配图」、对话 ⋮ 菜单「🎨 生图」都用它。</div>
+                            </div>
+                            <div style="margin-top:8px">
+                                <span style="font-size:11px;color:var(--text-muted)">生图尺寸</span>
+                                <select id="imageSizeSelect" onchange="localStorage.setItem('gen_image_size', this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none">
+                                    <option value="1024x1024">1024×1024（方）</option>
+                                    <option value="1536x1024">1536×1024（横）</option>
+                                    <option value="1024x1536">1024×1536（竖）</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -7406,6 +7442,44 @@ body {
                 } catch(e) {}
             }
         });
+
+        /* ===== 生图本机图库（IndexedDB，不进 _idbCache，按需异步存取）=====
+         * 生成的图片体积大、又「只存本机不同步」，所以不走 idbGet/idbSet 那套固定键缓存，
+         * 改用动态键 genimg_<id> 直接读写同一个 'data' 对象库，渲染时才按需取，避免把大图全塞进内存。*/
+        function genImgPut(id, dataURL) {
+            return new Promise(function(resolve, reject) {
+                if (!_idb) { reject(new Error('IDB 未就绪')); return; }
+                try {
+                    var tx = _idb.transaction('data', 'readwrite');
+                    tx.objectStore('data').put(dataURL, 'genimg_' + id);
+                    tx.oncomplete = function() { if (typeof _invalidateIdbSizeCache === 'function') _invalidateIdbSizeCache(); resolve(); };
+                    tx.onerror = function() { reject(tx.error || new Error('写入失败')); };
+                    tx.onabort = function() { reject(tx.error || new Error('写入中止')); };
+                } catch (e) { reject(e); }
+            });
+        }
+        function genImgGet(id) {
+            return new Promise(function(resolve) {
+                if (!_idb) { resolve(undefined); return; }
+                try {
+                    var tx = _idb.transaction('data', 'readonly');
+                    var req = tx.objectStore('data').get('genimg_' + id);
+                    req.onsuccess = function() { resolve(req.result); };
+                    req.onerror = function() { resolve(undefined); };
+                } catch (e) { resolve(undefined); }
+            });
+        }
+        function genImgDel(id) {
+            return new Promise(function(resolve) {
+                if (!_idb) { resolve(); return; }
+                try {
+                    var tx = _idb.transaction('data', 'readwrite');
+                    tx.objectStore('data').delete('genimg_' + id);
+                    tx.oncomplete = function() { if (typeof _invalidateIdbSizeCache === 'function') _invalidateIdbSizeCache(); resolve(); };
+                    tx.onerror = function() { resolve(); };
+                } catch (e) { resolve(); }
+            });
+        }
 
         /* =========================================================================
          * [3.2] 安全与会话控制
@@ -13644,6 +13718,189 @@ body {
             if (skippedNative && !resp.ok) aiSetNativeBad(opts.baseUrl, false);
             return { resp: resp, isAnthropic: false, anthState: {} };
         }
+
+        /* ===== 生图（文生图 / 共读配图）===== */
+        // 风格预设：名字 → 英文词缀（英文喂生图模型更稳；自定义风格原样用）
+        var GEN_STYLE_PRESETS = [
+            { name: '写实', tag: 'photorealistic, cinematic lighting, highly detailed' },
+            { name: '电影感', tag: 'cinematic film still, dramatic lighting, shallow depth of field' },
+            { name: '日系动漫', tag: 'anime style, clean lineart, vibrant colors, studio anime illustration' },
+            { name: '水彩', tag: 'soft watercolor painting, delicate washes, paper texture' },
+            { name: '古风水墨', tag: 'traditional Chinese ink wash painting, guofeng, elegant brushwork' },
+            { name: '油画', tag: 'oil painting, rich brushstrokes, classical fine art' },
+            { name: '赛博朋克', tag: 'cyberpunk, neon lights, futuristic, moody atmosphere' },
+            { name: '吉卜力风', tag: 'Studio Ghibli style, hand-drawn, warm pastoral, whimsical' }
+        ];
+        function genStyleDefault() { return localStorage.getItem('gen_style_default') || '写实'; }
+        function _genStyleBookMap() { try { return JSON.parse(localStorage.getItem('gen_style_book') || '{}'); } catch (e) { return {}; } }
+        // 取风格：有书且该书设过 → 用书的；否则用全局默认
+        function genStyleGet(bookId) {
+            if (bookId) { var m = _genStyleBookMap(); if (m[bookId]) return m[bookId]; }
+            return genStyleDefault();
+        }
+        // 存风格：带 bookId 存到该书；不带则改全局默认
+        function genStyleSet(bookId, str) {
+            str = (str || '').trim(); if (!str) return;
+            if (bookId) { var m = _genStyleBookMap(); m[bookId] = str; try { localStorage.setItem('gen_style_book', JSON.stringify(m)); } catch (e) {} }
+            else { try { localStorage.setItem('gen_style_default', str); } catch (e) {} }
+        }
+        function genStyleTag(styleStr) {
+            for (var i = 0; i < GEN_STYLE_PRESETS.length; i++) { if (GEN_STYLE_PRESETS[i].name === styleStr) return GEN_STYLE_PRESETS[i].tag; }
+            return styleStr || '';
+        }
+        function genImageSize() { return localStorage.getItem('gen_image_size') || '1024x1024'; }
+        function genImageModelCfg() { return _chatResolveModelCfg(_chatGetModelCfg('chat_image_model')); }
+
+        // 远端图片 url → dataURL（落地本机，不依赖远端链接存活）
+        async function _genUrlToDataURL(url) {
+            var resp = await fetch(url);
+            var blob = await resp.blob();
+            return await new Promise(function (resolve, reject) {
+                var fr = new FileReader();
+                fr.onload = function () { resolve(fr.result); };
+                fr.onerror = function () { reject(new Error('图片读取失败')); };
+                fr.readAsDataURL(blob);
+            });
+        }
+        // 调 /images/generations，prompt 为最终提示词，返回 dataURL
+        async function aiGenerateImage(opts) {
+            var cfg = genImageModelCfg();
+            if (!cfg) throw new Error('请先在设置里配置「生图模型」');
+            var body = { model: cfg.model, prompt: opts.prompt, n: 1, size: opts.size || genImageSize() };
+            var resp = await fetch(cfg.baseUrl + '/images/generations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.apiKey },
+                body: JSON.stringify(body),
+                signal: opts.signal
+            });
+            if (!resp.ok) {
+                var et = ''; try { et = await resp.text(); } catch (e) {}
+                throw new Error('生图失败 HTTP ' + resp.status + (et ? ': ' + et.slice(0, 200) : ''));
+            }
+            var json = await resp.json();
+            var d = json && json.data && json.data[0];
+            if (!d) throw new Error('生图返回为空');
+            if (d.b64_json) return 'data:image/png;base64,' + d.b64_json;
+            if (d.url) return await _genUrlToDataURL(d.url);
+            throw new Error('生图返回格式不认识');
+        }
+        // 第一步：把小说片段（或用户描述）+ 书名 + 风格 提炼成画面描述；失败回退原文截断
+        async function aiBuildImagePrompt(rawText, bookName, styleStr, signal) {
+            var styleTag = genStyleTag(styleStr);
+            var fallback = (rawText || '').replace(/\s+/g, ' ').trim().slice(0, 300) + (styleTag ? ', ' + styleTag : '');
+            var cfg = chatResolveReadingModel('comment'); // 共读点评模型，没配回退当前选中
+            var baseUrl, apiKey, model;
+            if (cfg) { baseUrl = cfg.baseUrl; apiKey = cfg.apiKey; model = cfg.model; }
+            else {
+                var ps = document.getElementById('chatProviderSelect');
+                var item = getKeyItemById(ps ? ps.value : '');
+                if (!item || !chatSelectedModel) return fallback;
+                baseUrl = getBaseUrl(item.url); apiKey = chatSelectedKeyStr || getActiveKey(item); model = chatSelectedModel;
+            }
+            try {
+                var sys = '你是插画提示词助手。把用户给的小说片段凝练成一句【画面描述】：交代清楚人物外貌/动作/表情、场景环境、光影氛围、构图视角，可中英混合，控制在 80 字内。只输出画面描述本身，不要解说、不要引号、不要任何前缀。';
+                var usr = '书名：《' + (bookName || '未知') + '》\n期望风格：' + (styleStr || '') + '\n小说片段：\n' + (rawText || '').slice(0, 1500);
+                var out = (await chatStreamChat({
+                    baseUrl: baseUrl, apiKey: apiKey, model: model,
+                    purpose: '生图提示词',
+                    messages: [{ role: 'system', content: sys }, { role: 'user', content: usr }],
+                    signal: signal
+                })).trim();
+                if (!out) return fallback;
+                return out + (styleTag ? ', ' + styleTag : '');
+            } catch (e) {
+                if (e && e.name === 'AbortError') throw e;
+                return fallback;
+            }
+        }
+        // 把生成好的图作为一条「生图消息」追加到当前对话末尾（图字节已在本机 IDB，消息只放轻量引用）。
+        // 单条 append 而非整体重渲，长篇共读才不卡。
+        function chatInsertGenImage(imgId, caption, prompt) {
+            chatMessages.push({ role: 'assistant', genImage: true, imgId: imgId, caption: caption || '', prompt: prompt || '', ts: Date.now() });
+            chatSaveCurrentConv(true);
+            var container = document.getElementById('chatMessages');
+            if (container) {
+                var empty = container.querySelector('.chat-empty');
+                if (empty) container.innerHTML = '';
+                container.appendChild(chatBuildMsgEl('ai', '', null, chatMessages.length - 1, false));
+                if (typeof chatScrollBottom === 'function') chatScrollBottom();
+            }
+        }
+        // 生图大图查看
+        function genImgLightbox(dataURL) {
+            var mask = document.createElement('div');
+            mask.className = 'gen-lightbox-mask';
+            var img = document.createElement('img');
+            img.src = dataURL;
+            mask.appendChild(img);
+            mask.addEventListener('click', function () { mask.remove(); });
+            document.body.appendChild(mask);
+        }
+        // 对话模式：生图弹窗（描述 + 风格 → 生成）
+        function genImageOpenDialog() {
+            if (!genImageModelCfg()) { alert('请先在设置里配置「生图模型」（设置 → 生图模型）'); return; }
+            var existing = document.querySelector('.genimg-dialog-mask');
+            if (existing) existing.remove();
+            var mask = document.createElement('div');
+            mask.className = 'chat-summary-modal-mask genimg-dialog-mask';
+            var modal = document.createElement('div');
+            modal.className = 'chat-summary-modal';
+            var cur = genStyleDefault();
+            var chips = GEN_STYLE_PRESETS.map(function (p) {
+                return '<button type="button" class="genimg-chip' + (p.name === cur ? ' on' : '') + '" data-style="' + p.name + '">' + p.name + '</button>';
+            }).join('');
+            modal.innerHTML =
+                '<div class="chat-summary-modal-header"><span>🎨 生图</span><button onclick="this.closest(\'.genimg-dialog-mask\').remove()">✕</button></div>' +
+                '<div class="chat-summary-modal-body">' +
+                '<textarea id="genImgPrompt" placeholder="描述你想要的画面…" style="width:100%;box-sizing:border-box;min-height:90px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.6;color:var(--text);resize:none;font-family:inherit;outline:none"></textarea>' +
+                '<div style="font-size:11px;color:var(--text-muted);margin:10px 0 5px">风格</div>' +
+                '<div class="genimg-chips" id="genImgChips">' + chips +
+                '<input type="text" id="genImgStyleCustom" placeholder="自定义风格…" style="flex:1;min-width:80px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:14px;padding:4px 10px;font-size:12px;color:var(--text);outline:none">' +
+                '</div>' +
+                '<button id="genImgGoBtn" style="width:100%;margin-top:14px;padding:9px 0;font-size:13px;font-weight:600;color:#fff;background:var(--accent);border:none;border-radius:9px;cursor:pointer">生成</button>' +
+                '</div>';
+            mask.appendChild(modal);
+            mask.addEventListener('click', function (ev) { if (ev.target === mask) mask.remove(); });
+            document.body.appendChild(mask);
+            var chipsWrap = modal.querySelector('#genImgChips');
+            var customInp = modal.querySelector('#genImgStyleCustom');
+            chipsWrap.addEventListener('click', function (e) {
+                var b = e.target.closest('.genimg-chip'); if (!b) return;
+                var all = chipsWrap.querySelectorAll('.genimg-chip');
+                for (var i = 0; i < all.length; i++) all[i].classList.remove('on');
+                b.classList.add('on');
+                customInp.value = '';
+            });
+            modal.querySelector('#genImgGoBtn').onclick = function () { genImageDialogRun(modal); };
+        }
+        async function genImageDialogRun(modal) {
+            var promptEl = modal.querySelector('#genImgPrompt');
+            var desc = (promptEl.value || '').trim();
+            if (!desc) { promptEl.focus(); return; }
+            var custom = (modal.querySelector('#genImgStyleCustom').value || '').trim();
+            var activeChip = modal.querySelector('.genimg-chip.on');
+            var style = custom || (activeChip ? activeChip.getAttribute('data-style') : genStyleDefault());
+            genStyleSet(null, style); // 对话模式没有书：记成全局默认
+            var goBtn = modal.querySelector('#genImgGoBtn');
+            var ctl = new AbortController();
+            var _t0 = Date.now();
+            var _timer = setInterval(function () { goBtn.textContent = '生成中… ' + chatFmtElapsed(Math.floor((Date.now() - _t0) / 1000)); }, 1000);
+            goBtn.disabled = true; goBtn.textContent = '生成中…';
+            try {
+                var styleTag = genStyleTag(style);
+                var prompt = desc + (styleTag ? ', ' + styleTag : '');
+                var dataURL = await aiGenerateImage({ prompt: prompt, signal: ctl.signal });
+                var id = 'gi_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+                await genImgPut(id, dataURL);
+                var mask = modal.closest('.genimg-dialog-mask'); if (mask) mask.remove();
+                chatInsertGenImage(id, style + ' · ' + (desc.length > 24 ? desc.slice(0, 24) + '…' : desc), prompt);
+            } catch (e) {
+                showToast('生图失败：' + (e.message || '未知错误'));
+                goBtn.disabled = false; goBtn.textContent = '生成';
+            } finally {
+                clearInterval(_timer);
+            }
+        }
         /* ===== 用量 / 计费面板 ===== */
         // 模型聚合键：带站点时用 modelstation，不带站点（旧数据）退回纯 model
         function _mkey(model, station) { return station ? (model + '' + station) : model; }
@@ -14703,6 +14960,28 @@ body {
             if (typeof msgIdx === 'number') div.setAttribute('data-idx', msgIdx);
             var bubble = document.createElement('div');
             bubble.className = 'chat-bubble';
+            // 生图消息：图字节在本机 IDB，这里先占位，异步取回再设 src（取不到=别的设备同步来的，显示提示）
+            var _gm = (typeof msgIdx === 'number') ? chatMessages[msgIdx] : null;
+            if (_gm && _gm.genImage) {
+                bubble.classList.add('chat-gen-bubble');
+                var _cap = _gm.caption ? '<div class="chat-gen-cap">' + esc(_gm.caption) + '</div>' : '';
+                bubble.innerHTML = '<div class="chat-gen-wrap"><img class="chat-gen-img" alt="生成的插图" style="display:none"><div class="chat-gen-ph">🎨 生成中…</div></div>' + _cap;
+                (function (imgEl, phEl, id) {
+                    genImgGet(id).then(function (dataURL) {
+                        if (dataURL) {
+                            imgEl.src = dataURL;
+                            imgEl.style.display = '';
+                            imgEl.onclick = function () { if (typeof genImgLightbox === 'function') genImgLightbox(dataURL); };
+                            if (phEl) phEl.remove();
+                        } else if (phEl) {
+                            phEl.textContent = '🎨 此图仅存于生成它的设备';
+                            phEl.classList.add('chat-gen-ph-missing');
+                        }
+                    });
+                })(bubble.querySelector('.chat-gen-img'), bubble.querySelector('.chat-gen-ph'), _gm.imgId);
+                div.appendChild(bubble);
+                return div;
+            }
             if (role === 'user') {
                 var _displayText = text;
                 var _nextMode = (typeof msgIdx === 'number' && chatMessages[msgIdx + 1]) ? chatMessages[msgIdx + 1] : null;
@@ -16655,6 +16934,8 @@ body {
         }
 
         function chatSheetDelete(idx) {
+            var _dm = chatMessages[idx];
+            if (_dm && _dm.genImage && _dm.imgId) { try { genImgDel(_dm.imgId); } catch (e) {} } // 顺手清掉本机图字节
             chatMessages.splice(idx, 1);
             // 移除对应 DOM 节点
             var msgEl = document.querySelector('.chat-msg[data-idx="' + idx + '"]');
@@ -18408,6 +18689,9 @@ body {
             var usageShow = (chatView === 'conv') && !chatReadingMode && !chatTranslateMode && !chatReaderMode;
             var usageBtn = document.getElementById('chatUsageBtn');
             if (usageBtn) usageBtn.style.display = usageShow ? '' : 'none';
+            // 「生图」也只在对话模式的 ⋮ 菜单里出现（共读/阅读走双击段落的「🎨 配图」）
+            var genBtn = document.getElementById('chatGenImgBtn');
+            if (genBtn) genBtn.style.display = usageShow ? '' : 'none';
             // 共读/翻译模式下隐藏「回到底部」按钮（点输入框会自动回到底部）
             var inReading = (chatView === 'conv') && (chatReadingMode || chatTranslateMode);
             var sb = document.getElementById('chatScrollBtn');
@@ -21017,8 +21301,9 @@ body {
             bar.className = 'reading-actbar';
             var inputHtml = '<textarea class="rp-ask" rows="1" placeholder="问问这一段…（如：他这句话什么意思？）"></textarea>';
             var askHtml = '<button class="rp-ask-send">讨论</button>';
+            var genHtml = genImageModelCfg() ? '<button class="rp-genimg">🎨 配图</button>' : '';
             // 按钮和「带前文问答」勾选框竖排成右侧一列（按钮在上、勾选在下），左边输入框加高填满
-            var colHtml = '<div class="rp-col">' + askHtml + readingAskCtxBoxHtml() + '</div>';
+            var colHtml = '<div class="rp-col">' + askHtml + genHtml + readingAskCtxBoxHtml() + '</div>';
             bar.innerHTML = leftSide ? (colHtml + inputHtml) : (inputHtml + colHtml);
             anchorEl.insertAdjacentElement('afterend', bar);
             // 一步式：直接出输入框；不自动聚焦弹键盘，等用户点输入框再唤起；点「提问」发送；再点该段收起
@@ -21026,8 +21311,45 @@ body {
             var send = bar.querySelector('.rp-ask-send');
             function go() { readingAskOne(msgIdx, pNum, input.value, bar); }
             send.onclick = go;
+            var genBtn = bar.querySelector('.rp-genimg');
+            if (genBtn) genBtn.onclick = function () { readingGenImage(msgIdx, pNum, genBtn); };
             readingBindAskBox(input);
             readingBindCtxBox(bar);
+        }
+        // 共读/阅读：给某段原文生成插图（取该段+前后一行 → 提炼 → 生图 → 追加到对话末尾）
+        async function readingGenImage(msgIdx, pNum, btn) {
+            if (readingCommenting) { if (readingAbortCtl) readingAbortCtl.abort(); return; }
+            if (!genImageModelCfg()) { alert('请先在设置里配置「生图模型」'); return; }
+            var orig = readingModeStripParaNums(readingModeGetOriginalText(msgIdx));
+            var lines = orig.split('\n').filter(function (l) { return l.trim().length > 0; });
+            if (pNum < 1 || pNum > lines.length) { readingClearActbar(); return; }
+            var ctx = [];
+            for (var i = Math.max(0, pNum - 2); i < Math.min(lines.length, pNum + 1); i++) ctx.push(lines[i]);
+            var passage = ctx.join('\n');
+            var bookId = chatReaderMode ? readerBookId : rbGetConvBook();
+            var book = bookId ? rbGetBook(bookId) : null;
+            var bookName = book ? (book.fileName || '').replace(/\.[^.]+$/, '') : '';
+            var style = genStyleGet(bookId);
+            readingCommenting = true;
+            readingAbortCtl = new AbortController();
+            var _t0 = Date.now();
+            var _timer = setInterval(function () { if (btn) btn.textContent = '配图中… ' + chatFmtElapsed(Math.floor((Date.now() - _t0) / 1000)) + ' ✕'; }, 1000);
+            if (btn) { btn.textContent = '配图中… ✕'; btn.onclick = function () { if (readingAbortCtl) readingAbortCtl.abort(); }; }
+            try {
+                var prompt = await aiBuildImagePrompt(passage, bookName, style, readingAbortCtl.signal);
+                var dataURL = await aiGenerateImage({ prompt: prompt, signal: readingAbortCtl.signal });
+                var id = 'gi_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+                await genImgPut(id, dataURL);
+                var cap = (bookName ? '《' + bookName + '》· ' : '') + style + ' · 第' + pNum + '段';
+                readingClearActbar();
+                chatInsertGenImage(id, cap, prompt);
+            } catch (e) {
+                if (!(e && e.name === 'AbortError')) showToast('生图失败：' + (e.message || '未知错误'));
+            } finally {
+                clearInterval(_timer);
+                readingCommenting = false;
+                readingAbortCtl = null;
+            }
         }
 
         function readingOnParaClick(pEl) {
@@ -22531,9 +22853,16 @@ body {
         }
         function chatSaveReadingCommentModel(v) { _chatSaveModelCfg('chat_reading_comment_model', v); }
         function chatSaveReadingQaModel(v) { _chatSaveModelCfg('chat_reading_qa_model', v); }
+        function chatSaveImageModel(v) { _chatSaveModelCfg('chat_image_model', v); }
         function chatRenderReadingModelSelects() {
             _chatRenderModelSelect('readingCommentModelSelect', 'chat_reading_comment_model');
             _chatRenderModelSelect('readingQaModelSelect', 'chat_reading_qa_model');
+            _chatRenderModelSelect('imageModelSelect', 'chat_image_model');
+            // 生图模型没有「跟随当前」的概念：把空选项文案改清楚
+            var imgSel = document.getElementById('imageModelSelect');
+            if (imgSel && imgSel.options.length && imgSel.options[0].value === '') imgSel.options[0].textContent = '未设置';
+            var sizeSel = document.getElementById('imageSizeSelect');
+            if (sizeSel) sizeSel.value = genImageSize();
         }
         function chatUpdateCompressLabel() {
             var t = parseInt(document.getElementById('compressThresholdInput').value) || 40;
