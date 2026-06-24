@@ -13750,6 +13750,12 @@ body {
         }
         function genImageSize() { return localStorage.getItem('gen_image_size') || '1024x1024'; }
         function genImageModelCfg() { return _chatResolveModelCfg(_chatGetModelCfg('chat_image_model')); }
+        // 生图模型没配好时，说清到底卡在哪（区分「没在设置里选」和「选了但站找不到」）
+        function genImageNotReadyMsg() {
+            var cfg = _chatGetModelCfg('chat_image_model');
+            if (!cfg || !cfg.model) return '还没设置生图模型。\n请到「设置 → 生图模型」下拉里选一个。\n注意：在对话里把某个模型选成「当前模型」不算，必须在设置里那个专门的「生图模型」下拉里选。';
+            return '生图模型已选「' + cfg.model + '」，但它所属的中转站「' + (cfg.providerName || cfg.url || '未知') + '」现在找不到了。\n请到「设置 → 生图模型」重新选一次，或确认这个中转站还在你的密钥列表里。';
+        }
 
         // 远端图片 url → dataURL（落地本机，不依赖远端链接存活）
         async function _genUrlToDataURL(url) {
@@ -13838,7 +13844,7 @@ body {
         }
         // 对话模式：生图弹窗（描述 + 风格 → 生成）
         function genImageOpenDialog() {
-            if (!genImageModelCfg()) { alert('请先在设置里配置「生图模型」（设置 → 生图模型）'); return; }
+            if (!genImageModelCfg()) { alert(genImageNotReadyMsg()); return; }
             var existing = document.querySelector('.genimg-dialog-mask');
             if (existing) existing.remove();
             var mask = document.createElement('div');
@@ -21319,7 +21325,7 @@ body {
         // 共读/阅读：给某段原文生成插图（取该段+前后一行 → 提炼 → 生图 → 追加到对话末尾）
         async function readingGenImage(msgIdx, pNum, btn) {
             if (readingCommenting) { if (readingAbortCtl) readingAbortCtl.abort(); return; }
-            if (!genImageModelCfg()) { alert('请先在设置里配置「生图模型」'); return; }
+            if (!genImageModelCfg()) { alert(genImageNotReadyMsg()); return; }
             var orig = readingModeStripParaNums(readingModeGetOriginalText(msgIdx));
             var lines = orig.split('\n').filter(function (l) { return l.trim().length > 0; });
             if (pNum < 1 || pNum > lines.length) { readingClearActbar(); return; }
