@@ -13700,6 +13700,25 @@ body {
         function _apiNum(n) { return (n || 0).toLocaleString(); }
         function _apiTime(ts) { var d = new Date(ts), p = function (x) { return (x < 10 ? '0' : '') + x; }; return p(d.getMonth() + 1) + '/' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
         function _apiEsc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
+        // 小计折叠：行数组里前 topN 直接显示，其余收进可展开区（按环节/按模型用，免得列太长刷屏）
+        var _apiMoreSeq = 0;
+        function _apiCollapseRows(rowHtmls, topN) {
+            if (rowHtmls.length <= topN) return rowHtmls.join('');
+            var head = rowHtmls.slice(0, topN).join('');
+            var rest = rowHtmls.slice(topN).join('');
+            var n = rowHtmls.length - topN;
+            var gid = 'apiMore_' + (_apiMoreSeq++);
+            return head
+                + '<div id="' + gid + '" style="display:none">' + rest + '</div>'
+                + '<div onclick="apiToggleMore(\'' + gid + '\', this)" style="cursor:pointer;text-align:center;font-size:11px;color:var(--accent);padding:5px 0;user-select:none">展开剩余 ' + n + ' 项 ▾</div>';
+        }
+        function apiToggleMore(id, btn) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            var open = el.style.display !== 'none';
+            el.style.display = open ? 'none' : '';
+            btn.innerHTML = open ? ('展开剩余 ' + el.children.length + ' 项 ▾') : '收起 ▴';
+        }
         function apiClearLog() {
             if (!confirm('清空所有用量记录？（收藏里的模型价格不受影响）')) return;
             try { localStorage.removeItem('toolbox_api_log'); localStorage.removeItem('toolbox_api_agg'); } catch (e) {}
@@ -13846,19 +13865,19 @@ body {
                         rows.push({ model: g.model, station: '', stn: '', calls: calls, inTok: inT, outTok: outT, cost: cost, keys: kk });
                     }
                 });
-                rows.sort(function (a, b) { return b.cost - a.cost || (b.calls - a.calls); });
-                var s = '<div class="seg-label" style="margin:10px 0 4px">' + title + '</div>';
+                rows.sort(function (a, b) { return b.calls - a.calls || (b.cost - a.cost); });
+                var rowHtmls = [];
                 for (var k = 0; k < rows.length; k++) {
                     var r = rows[k];
                     var mp = _apiModelPrice(r.model, r.station);
                     var label = mp ? (mp.mode === 'call' ? '按次' : '按量') : '未设价';
                     var nameHtml = _apiEsc(r.model) + (r.stn ? ' <span style="color:var(--accent-mid);font-size:10px">@' + _apiEsc(r.stn) + '</span>' : '');
-                    s += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:3px 0;border-bottom:1px solid var(--card-border)">'
+                    rowHtmls.push('<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:3px 0;border-bottom:1px solid var(--card-border)">'
                         + '<span style="color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + nameHtml + ' <span style="color:var(--text-muted);font-size:10px">[' + label + '] ' + r.calls + '次</span></span>'
                         + '<span style="color:var(--accent);flex-shrink:0;margin-left:8px">' + (hasAnyPrice ? '￥' + _apiMoney(r.cost) : _apiNum(r.inTok + r.outTok) + ' tok') + '</span>'
-                        + '<span onclick="apiDeleteModel(\'' + encodeURIComponent(JSON.stringify(r.keys)) + '\')" title="从统计里删掉这个模型" style="flex-shrink:0;margin-left:8px;cursor:pointer;color:var(--text-muted);font-size:13px;opacity:0.55;line-height:1">✕</span></div>';
+                        + '<span onclick="apiDeleteModel(\'' + encodeURIComponent(JSON.stringify(r.keys)) + '\')" title="从统计里删掉这个模型" style="flex-shrink:0;margin-left:8px;cursor:pointer;color:var(--text-muted);font-size:13px;opacity:0.55;line-height:1">✕</span></div>');
                 }
-                return s;
+                return '<div class="seg-label" style="margin:10px 0 4px">' + title + '</div>' + _apiCollapseRows(rowHtmls, 5);
             }
             // —— 按环节小计：底层用 byPurposeModel 组合键逐模型各按各价精确计费，但显示时按「环节」合并成一行
             //   （同一环节用了多个不同模型时，token 累加、成本逐模型算好再相加，不再拆成多行同名）——
@@ -13880,17 +13899,17 @@ body {
                     if (mkeyName) p.models[mkeyName] = 1;
                 }
                 var pkeys = Object.keys(byP);
-                pkeys.sort(function (a, b) { return byP[b].cost - byP[a].cost || (byP[b].calls - byP[a].calls); });
-                var s = '<div class="seg-label" style="margin:10px 0 4px">' + title + '</div>';
+                pkeys.sort(function (a, b) { return byP[b].calls - byP[a].calls || (byP[b].cost - byP[a].cost); });
+                var rowHtmls = [];
                 for (var k = 0; k < pkeys.length; k++) {
                     var pv = byP[pkeys[k]];
                     var nModels = Object.keys(pv.models).length;
                     var meta = pv.calls + '次' + (nModels > 1 ? ' · ' + nModels + '个模型' : '');
-                    s += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:3px 0;border-bottom:1px solid var(--card-border)">'
+                    rowHtmls.push('<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:3px 0;border-bottom:1px solid var(--card-border)">'
                         + '<span style="color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _apiEsc(pkeys[k]) + ' <span style="color:var(--text-muted);font-size:10px">' + meta + '</span></span>'
-                        + '<span style="color:var(--accent);flex-shrink:0;margin-left:8px">' + (hasAnyPrice ? '￥' + _apiMoney(pv.cost) : _apiNum(pv.inTok + pv.outTok) + ' tok') + '</span></div>';
+                        + '<span style="color:var(--accent);flex-shrink:0;margin-left:8px">' + (hasAnyPrice ? '￥' + _apiMoney(pv.cost) : _apiNum(pv.inTok + pv.outTok) + ' tok') + '</span></div>');
                 }
-                return s;
+                return '<div class="seg-label" style="margin:10px 0 4px">' + title + '</div>' + _apiCollapseRows(rowHtmls, 5);
             }
             html += breakdownPurpose('按环节', agg.byPurposeModel || {});
             html += breakdownModel('按模型', agg.byModel);
