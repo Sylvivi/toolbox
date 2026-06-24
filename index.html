@@ -13798,16 +13798,19 @@ body {
         async function aiBuildImagePrompt(rawText, bookName, styleStr, signal) {
             var styleTag = genStyleTag(styleStr);
             var fallback = (rawText || '').replace(/\s+/g, ' ').trim().slice(0, 300) + (styleTag ? ', ' + styleTag : '');
-            var cfg = chatResolveReadingModel('comment'); // 共读点评模型，没配回退当前选中
+            // 提炼用「当前选中的文字模型」（收藏/模型选择器里选的那个）；生图才用设置里的生图模型。两者分开。
             var baseUrl, apiKey, model;
-            if (cfg) { baseUrl = cfg.baseUrl; apiKey = cfg.apiKey; model = cfg.model; }
-            else {
-                var ps = document.getElementById('chatProviderSelect');
-                var item = getKeyItemById(ps ? ps.value : '');
-                if (!item || !chatSelectedModel) return fallback;
+            var ps = document.getElementById('chatProviderSelect');
+            var item = getKeyItemById(ps ? ps.value : '');
+            if (item && chatSelectedModel) {
                 baseUrl = getBaseUrl(item.url); apiKey = chatSelectedKeyStr || getActiveKey(item); model = chatSelectedModel;
+            } else {
+                // 当前没有选中模型时，退回共读点评模型
+                var cfg = chatResolveReadingModel('comment');
+                if (!cfg) return fallback;
+                baseUrl = cfg.baseUrl; apiKey = cfg.apiKey; model = cfg.model;
             }
-            // 提炼要用「文字模型」。若解析出来的是生图类模型（如当前/共读点评模型正好是 gpt-image），
+            // 提炼要用「文字模型」。若当前选中的正好是生图类模型（如在用 gpt-image 聊天），
             // 不能拿它去调 /chat/completions（会 503），直接跳过提炼、用原文+风格出图。
             if (_isImageModelName(model)) return fallback;
             try {
