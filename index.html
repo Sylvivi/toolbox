@@ -17805,9 +17805,12 @@ body {
                 body = '<div class="empty">' + (chatCompressEnabled ? '压缩已开启，尚无摘要' : '压缩未开启') + '</div>';
             } else {
                 // 倒序显示：最新生成的段在最上面，方便查看（发送给 AI 时仍按正序，不受影响）
+                var _segHtmls = [];
                 for (var i = chatCompressSummaries.length - 1; i >= 0; i--) {
-                    body += _segHtml('段 ' + (i + 1), 'chatDeleteSummaryseg(' + i + ')', 'data-seg-idx="' + i + '"', 'chatEditSummaryseg(this)', chatCompressSummaries[i]);
+                    _segHtmls.push(_segHtml('段 ' + (i + 1), 'chatDeleteSummaryseg(' + i + ')', 'data-seg-idx="' + i + '"', 'chatEditSummaryseg(this)', chatCompressSummaries[i]));
                 }
+                // 段多了列表太长：前 7 段直接显示，其余收进「展开剩余 N 项」
+                body += _apiCollapseRows(_segHtmls, 7);
                 if (chatCompressSummaries.length) body += '<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:8px">共 ' + chatCompressedCount + ' 条消息已压缩为 ' + chatCompressSummaries.length + ' 段（最新在上）</div>';
             }
             modal.innerHTML = header + '<div class="chat-summary-modal-body">' + body + '</div>';
