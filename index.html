@@ -22828,8 +22828,12 @@ body {
         function _chatResolveModelCfg(cfg) {
             if (!cfg || !cfg.model) return null;
             var item = null;
-            if (cfg.url) { var allK = getKeyData(); for (var i = 0; i < allK.length; i++) { if (allK[i].url === cfg.url) { item = allK[i]; break; } } }
+            var allK = getKeyData();
+            // 按网址匹配站点：用 getBaseUrl 归一化比较，忽略 /v1 与尾斜杠差异（跨设备同步来的收藏 url 常差这一点，精确相等会漏匹配）
+            if (cfg.url) { var want = getBaseUrl(cfg.url); for (var i = 0; i < allK.length; i++) { if (getBaseUrl(allK[i].url || '') === want) { item = allK[i]; break; } } }
             if (!item && cfg.providerId) item = getKeyItemById(cfg.providerId);
+            // 再按站名兜底（providerId 跨设备可能变，但用户给站起的名字一般一致）
+            if (!item && cfg.providerName) { for (var j = 0; j < allK.length; j++) { if ((allK[j].name || '') === cfg.providerName) { item = allK[j]; break; } } }
             if (!item) { var ps = document.getElementById('chatProviderSelect'); if (ps) item = getKeyItemById(ps.value); }
             if (!item) return null;
             return { model: cfg.model, baseUrl: getBaseUrl(item.url), apiKey: getActiveKey(item) };
