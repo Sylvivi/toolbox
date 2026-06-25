@@ -3018,6 +3018,17 @@ body {
         .rd-hl-bar button.rd-act:hover { background: var(--accent-light); color: var(--accent); }
         .rd-hl-bar button.rd-act.rd-del { color: #e5484d; }
         .rd-hl-bar button.rd-act.rd-del.armed { background: #e5484d; color: #fff; }
+        /* 选中态停靠底部：躲开系统自带的「复制/分享/全选」选区气泡（它贴着选区、位置不可控，只能把颜色条挪远）。
+           固定屏幕底部居中，比选区位置稳、手机也好按；带个小标签提示这是给划线的。 */
+        .rd-hl-bar.rd-dock {
+            left: 50%; right: auto; top: auto; transform: translateX(-50%);
+            bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+            padding: 8px 12px; gap: 8px; box-shadow: 0 8px 28px rgba(0,0,0,0.28);
+            animation: rdDockIn 0.16s ease;
+        }
+        .rd-hl-bar.rd-dock .rd-sw { width: 26px; height: 26px; }
+        .rd-hl-bar.rd-dock .rd-dock-tip { font-size: 12px; color: var(--text-muted); margin-right: 2px; flex-shrink: 0; }
+        @keyframes rdDockIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
         /* 批注输入气泡 */
         .rd-hl-note { position: fixed; z-index: 4001; width: min(280px, 88vw); background: var(--card-bg, #fff); border: 1px solid var(--card-border, rgba(0,0,0,0.12)); border-radius: 10px; box-shadow: 0 6px 22px rgba(0,0,0,0.18); padding: 8px; }
         .rd-hl-note textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--card-border, rgba(0,0,0,0.15)); border-radius: 8px; padding: 6px 8px; font-size: 13px; resize: vertical; min-height: 56px; background: transparent; color: var(--text); font-family: inherit; }
@@ -22526,10 +22537,11 @@ body {
             if (!(off.end > off.start)) return;
             var full = ctx.range.toString().trim();
             _rdHlPending = { msgIdx: ctx.msgIdx, pNum: ctx.pNum, start: off.start, end: off.end, text: full };
-            var rect = ctx.range.getBoundingClientRect();
             var bar = document.createElement('div');
-            bar.className = 'rd-hl-bar'; bar.id = 'rdHlBar';
-            bar.innerHTML = rdHlSwatchHtml('') +
+            // 停靠底部，躲开系统选区气泡（见 CSS .rd-dock 注释）
+            bar.className = 'rd-hl-bar rd-dock'; bar.id = 'rdHlBar';
+            bar.innerHTML = '<span class="rd-dock-tip">划线</span>' +
+                rdHlSwatchHtml('') +
                 '<span class="rd-sep"></span>' +
                 '<button class="rd-act" data-act="ask">💬 问</button>';
             // 按住小条不丢选区
@@ -22545,7 +22557,7 @@ body {
                     if (pend) rdHlAskClawd({ msgIdx: pend.msgIdx, p: pend.pNum, text: pend.text });
                 }
             });
-            rdHlPlaceBar(bar, rect);
+            document.body.appendChild(bar);   // 位置交给 CSS（固定底部），不按选区 rect 摆
         }
         // 新建一条划线（从暂存选区）
         function rdHlCreate(color) {
