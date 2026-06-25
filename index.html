@@ -7332,7 +7332,7 @@ body {
                             <div style="margin-top:8px">
                                 <span style="font-size:11px;color:var(--text-muted)">记忆模型</span>
                                 <select id="memoryModelSelect" onchange="chatSaveMemoryModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">跟随摘要模型</option><option value="claude-opus-4-6-request-antigravity||https://vsllm.com/v1">VSLLM / claude-opus-4-6-request-antigravity</option><option value="claude-opus-4-6||https://cc.lucoo.net/v1">Lucoo / claude-opus-4-6</option></select>
-                                <div style="font-size:10px;color:var(--text-muted);margin-top:3px">人物表/伏笔表单独用，可选个便宜的模型省钱</div>
+                                <div style="font-size:10px;color:var(--text-muted);margin-top:3px">可选便宜模型省钱</div>
                             </div>
                             <div style="margin-top:8px">
                                 <span style="font-size:11px;color:var(--text-muted)">共读点评模型</span>
@@ -7341,7 +7341,7 @@ body {
                             <div style="margin-top:8px">
                                 <span style="font-size:11px;color:var(--text-muted)">共读提问模型</span>
                                 <select id="readingQaModelSelect" onchange="chatSaveReadingQaModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">跟随当前模型</option></select>
-                                <div style="font-size:10px;color:var(--text-muted);margin-top:3px">共读点评/提问可各自指定收藏里的模型，留空则跟随当前选中模型</div>
+                                <div style="font-size:10px;color:var(--text-muted);margin-top:3px">留空＝跟随当前模型</div>
                             </div>
                             <div style="margin-top:8px">
                                 <div style="display:flex;align-items:center;justify-content:space-between">
@@ -7352,12 +7352,12 @@ body {
                                         <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);box-shadow:rgba(0,0,0,0.18) 0px 1px 4px"></span>
                                     </label>
                                 </div>
-                                <div style="font-size:10px;color:var(--text-muted);margin-top:3px">开了之后，问某段时会把本章这段之前问过的问答一起发给 AI，接得上前面聊的（会多花点 token）</div>
+                                <div style="font-size:10px;color:var(--text-muted);margin-top:3px">带上本段前面的问答，更连贯（多花点 token）</div>
                             </div>
                             <div style="margin-top:8px">
                                 <span style="font-size:11px;color:var(--text-muted)">生图模型</span>
                                 <select id="imageModelSelect" onchange="chatSaveImageModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">未设置</option></select>
-                                <div style="font-size:10px;color:var(--text-muted);margin-top:3px">从「收藏」里选你的生图模型（如 gpt-image2）。共读/阅读双击段落「🎨 配图」、对话 ⋮ 菜单「🎨 生图」都用它。</div>
+                                <div style="font-size:10px;color:var(--text-muted);margin-top:3px">从「收藏」里选，如 gpt-image2</div>
                             </div>
                             <div style="margin-top:8px">
                                 <span style="font-size:11px;color:var(--text-muted)">生图尺寸</span>
@@ -21451,8 +21451,8 @@ body {
             readingOpenAskBar(msgIdx, pNum, pEl);
         }
 
-        // 长按原文段落：弹出「🎨 配图」操作条（双击留给提问，配图从这里走，保持双击栏极简）
-        function readingOnParaLongPress(pEl) {
+        // 三击原文段落：弹出「🎨 配图」操作条（双击留给提问，配图从这里走，保持双击栏极简）
+        function readingOnParaTripleTap(pEl) {
             if (readingCommenting) return;
             readingClearActbar();
             var msgEl = pEl.closest('.chat-msg.ai');
@@ -22351,6 +22351,8 @@ body {
             var el = document.getElementById('chatMessages');
             if (!el) return;
             var _readingTapTimer = null;   // 共读左右点击翻页：延迟确认非双击
+            var _readingAskTimer = null;   // 双击提问延迟开栏：留个窗口给第三击改判成「配图」
+            var _pTapEl = null, _pTapCount = 0, _pTapTime = 0;   // 段落连击计数：1 翻页 / 2 提问 / 3 配图
             // 多指手势（如三指截屏）会被系统误合成 click/dblclick，记下最近一次「≥2 指同时按下」的时刻，
             // 紧随其后的点击/双击一律忽略，避免截屏时误触翻页或段落提问；单指操作不受影响。
             var _multiTouchAt = 0;
@@ -22374,6 +22376,21 @@ body {
                     if (e.target.closest('button, input, textarea, a, svg, img, .reading-actbar')) return;
                     var sel = window.getSelection && window.getSelection();
                     if (sel && String(sel).length > 0) return;
+                    // 原文段落连击计数：第三击 = 配图（取消翻页和待开的提问栏）
+                    var rpara = e.target.closest('.reading-merged p[data-p]');
+                    if (rpara && !e.target.closest('.translate-merged')) {
+                        var now = Date.now();
+                        if (_pTapEl === rpara && now - _pTapTime < 600) _pTapCount++; else _pTapCount = 1;
+                        _pTapEl = rpara; _pTapTime = now;
+                        if (_pTapCount >= 3) {
+                            _pTapCount = 0;
+                            clearTimeout(_readingTapTimer);   // 不翻页
+                            clearTimeout(_readingAskTimer);   // 取消待开的提问栏
+                            readingClearActbar();
+                            readingOnParaTripleTap(rpara);    // 开配图栏
+                            return;
+                        }
+                    } else { _pTapCount = 0; _pTapEl = null; }
                     clearTimeout(_readingTapTimer);
                     _readingTapTimer = setTimeout(function() {
                         readingPageDown();
@@ -22401,18 +22418,7 @@ body {
                         }, 500);
                         return;
                     }
-                    // 长按原文段落 = 给这一段配图（双击留给提问，单击留给翻页/复制）
-                    var rlp = e.target.closest('.reading-merged p[data-p]');
-                    if (rlp && !e.target.closest('.reading-actbar, button, input, textarea')) {
-                        _lpStart = { x: e.clientX, y: e.clientY };
-                        _lpTimer = setTimeout(function() {
-                            _lpTimer = null;
-                            _lpFired = true;
-                            try { window.getSelection().removeAllRanges(); } catch (x) {}
-                            readingOnParaLongPress(rlp);
-                        }, 500);
-                        return;
-                    }
+                    // 原文段落：单击翻页 / 双击提问 / 三击配图，都走 click+dblclick 计数，不用长按
                 }
                 var tb = e.target.closest('.translate-block');
                 if (!tb || e.target.closest('.translate-askbar')) { _lpClear(); return; }
@@ -22438,9 +22444,13 @@ body {
                 clearTimeout(_readingTapTimer);   // 双击评价时取消左右点击翻页
                 // 翻译模式交给翻译逻辑（translate-merged 同带 reading-merged 类，需先排除）
                 if (e.target.closest('.translate-merged')) return;
-                // 共读模式：双击原文段落 = 问这一段
+                // 共读模式：双击原文段落 = 问这一段（延迟一点开栏，留窗口给第三击改判成「配图」）
                 var rp = e.target.closest('.reading-merged p[data-p]');
-                if (rp) { readingOnParaClick(rp); return; }
+                if (rp) {
+                    clearTimeout(_readingAskTimer);
+                    _readingAskTimer = setTimeout(function() { readingOnParaClick(rp); }, 260);
+                    return;
+                }
                 // 双击 AI 回答 / 评论块 = 接着聊同一段（更直觉）
                 var bq = e.target.closest('.reading-merged blockquote[data-cp]');
                 if (bq) { readingOnCommentClick(bq); return; }
