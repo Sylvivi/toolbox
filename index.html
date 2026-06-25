@@ -13327,6 +13327,7 @@ body {
          * ========================================================================= */
         var chatMessages = [];       // 当前对话的 {role, content} 数组
         var chatCompressSummaries = []; // 分段摘要数组，每段独立保存防止信息衰减
+        var chatCompressSegEnds = [];   // 与 chatCompressSummaries 对齐：每段「覆盖到原始消息的第几条为止」（结束下标，独占）。段 i 的原文范围 = [segEnds[i-1]||0, segEnds[i])。用于「单段重新生成」。旧对话可能为空（无范围记录）。
         var CHAT_SUMMARY_MAX_SEGS = 5; // 发请求时最多带最近几段详细摘要；更早的折进「大纲」（两层记忆）
         var chatCompressOutline = '';  // 两层记忆的上层：超出最近窗口的旧摘要段浓缩成的全程大纲（人物+主线+伏笔）
         var chatOutlineCovers = 0;     // 大纲已覆盖 chatCompressSummaries 的前几段（下标 < covers 的已折入大纲）
@@ -13463,6 +13464,7 @@ body {
                     list[i].keyStr = chatSelectedKeyStr;
                     list[i].contextMax = chatContextMax;
                     list[i].compressSummaries = chatCompressSummaries.length ? chatCompressSummaries : [];
+                    list[i].compressSegEnds = chatCompressSegEnds.length ? chatCompressSegEnds : [];
                     list[i].compressOutline = chatCompressOutline || '';
                     list[i].outlineCovers = chatOutlineCovers || 0;
                     list[i].memoryTables = chatMemoryTables || null;
@@ -13495,6 +13497,7 @@ body {
                     systemPrompt: document.getElementById('chatSysPrompt').value || '',
                     contextMax: chatContextMax,
                     compressSummaries: chatCompressSummaries.length ? chatCompressSummaries : [],
+                    compressSegEnds: chatCompressSegEnds.length ? chatCompressSegEnds : [],
                     compressOutline: chatCompressOutline || '',
                     outlineCovers: chatOutlineCovers || 0,
                     memoryTables: chatMemoryTables || null,
@@ -14552,6 +14555,7 @@ body {
                 chatCurrentConvId = null;
                 chatMessages = [];
                 chatCompressSummaries = [];
+                chatCompressSegEnds = [];
                 chatCompressOutline = ''; chatOutlineCovers = 0;
                 chatCompressedCount = 0;
                 chatUpdateCtxIndicator();
@@ -14815,6 +14819,7 @@ body {
             translateClearSel();
             chatSyncReadingChip();
             chatCompressSummaries = [];
+            chatCompressSegEnds = [];
             chatCompressOutline = ''; chatOutlineCovers = 0;
             chatMemoryTables = null;
             chatCompressedCount = 0;
@@ -14896,6 +14901,8 @@ body {
             } else {
                 chatCompressSummaries = [];
             }
+            // 段范围数组：只有「长度与摘要段数完全一致」才认（否则视为旧对话无记录，留空 → 重做时走「请手动编辑」兜底）
+            chatCompressSegEnds = (conv.compressSegEnds && Array.isArray(conv.compressSegEnds) && conv.compressSegEnds.length === chatCompressSummaries.length) ? conv.compressSegEnds.slice() : [];
             chatCompressOutline = conv.compressOutline || '';
             chatOutlineCovers = conv.outlineCovers || 0;
             chatMemoryTables = conv.memoryTables || null;
@@ -18160,12 +18167,16 @@ body {
             modal.className = 'chat-summary-modal';
             var header = '<div class="chat-summary-modal-header"><span>对话摘要</span><button onclick="this.closest(\'.chat-summary-modal-mask\').remove()">✕</button></div>';
             // 每段默认折叠：只露两行预览，点标题/预览展开成编辑框（再点标题收起），长对话不再难滑
-            function _segHtml(label, delCall, taAttrs, editCall, text) {
+            function _segHtml(label, delCall, taAttrs, editCall, text, regenCall) {
                 var escText = (text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                var regenBtn = regenCall
+                    ? '<button onclick="event.stopPropagation();' + regenCall + '" title="按原文重新生成这一段" style="background:none;border:none;font-size:12px;color:var(--text-muted);cursor:pointer;padding:2px 6px;border-radius:6px;transition:color 0.2s" onmouseover="this.style.color=\'var(--accent)\'" onmouseout="this.style.color=\'var(--text-muted)\'">♻️ 重做</button>'
+                    : '';
                 return '<div class="seg">'
                     + '<div onclick="chatToggleSummarySeg(this)" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;cursor:pointer">'
                     + '<span class="seg-label" style="margin-bottom:0">' + label + ' <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + (text || '').length + ' 字</span></span>'
                     + '<span style="display:flex;align-items:center;gap:6px">'
+                    + regenBtn
                     + '<button onclick="event.stopPropagation();' + delCall + '" style="background:none;border:none;font-size:12px;color:var(--text-muted);cursor:pointer;padding:2px 6px;border-radius:6px;transition:color 0.2s" onmouseover="this.style.color=\'#e55\'" onmouseout="this.style.color=\'var(--text-muted)\'">🗑 删除</button>'
                     + '<span class="seg-arrow" style="font-size:10px;color:var(--text-muted)">▸</span>'
                     + '</span></div>'
@@ -18261,7 +18272,7 @@ body {
                 // 倒序显示：最新生成的段在最上面，方便查看（发送给 AI 时仍按正序，不受影响）
                 var _segHtmls = [];
                 for (var i = chatCompressSummaries.length - 1; i >= 0; i--) {
-                    _segHtmls.push(_segHtml('段 ' + (i + 1), 'chatDeleteSummaryseg(' + i + ')', 'data-seg-idx="' + i + '"', 'chatEditSummaryseg(this)', chatCompressSummaries[i]));
+                    _segHtmls.push(_segHtml('段 ' + (i + 1), 'chatDeleteSummaryseg(' + i + ')', 'data-seg-idx="' + i + '"', 'chatEditSummaryseg(this)', chatCompressSummaries[i], 'chatRegenerateSummarySeg(' + i + ')'));
                 }
                 // 段多了列表太长：前 7 段直接显示，其余收进「展开剩余 N 项」
                 body += _apiCollapseRows(_segHtmls, 7);
@@ -18389,11 +18400,63 @@ body {
         function chatDeleteSummaryseg(idx) {
             if (idx >= 0 && idx < chatCompressSummaries.length) {
                 var sc = _summaryModalScroll();
+                var _wasAligned = chatCompressSegEnds.length === chatCompressSummaries.length;
                 chatCompressSummaries.splice(idx, 1);
+                if (_wasAligned) chatCompressSegEnds.splice(idx, 1); // 范围数组对齐时同步删，保持「段↔范围」一一对应
                 if (idx < (chatOutlineCovers || 0)) chatOutlineCovers--; // 删的是已折入大纲的段，计数跟着前移
                 chatSaveCurrentConv(true);
                 chatShowSummaryModal(sc);
             }
+        }
+        // 单段重新生成：按该段记录的原文范围重新切片、重新总结，替换这一段（旧摘要无范围记录则提示手动编辑）
+        var _chatRegenBusy = false;
+        async function chatRegenerateSummarySeg(idx) {
+            if (_chatRegenBusy) return;
+            if (!(idx >= 0 && idx < chatCompressSummaries.length)) return;
+            if (chatCompressSegEnds.length !== chatCompressSummaries.length) {
+                alert('这一段是旧版摘要，没有记录它对应的原文范围，没法自动重做。\n请直接点开这一段，手动把缺的内容补上即可。');
+                return;
+            }
+            var start = idx > 0 ? chatCompressSegEnds[idx - 1] : 0;
+            var end = chatCompressSegEnds[idx];
+            if (!(end > start) || end > chatMessages.length) {
+                alert('这一段对应的原文范围已失效（可能原始消息被删过），没法自动重做。\n请直接点开手动编辑。');
+                return;
+            }
+            var mc = (typeof chatResolveCompressModel === 'function') ? chatResolveCompressModel() : null;
+            if (!mc || !mc.model) { showToast('⚠️ 请先在设置里选好「摘要 / 记忆模型」或当前模型'); return; }
+            var msgs = chatMessages.slice(start, end);
+            if (!msgs.length) { alert('这一段没有可用的原文，没法重做。'); return; }
+            var isReading = !!chatReadingMode;
+            var convId = chatCurrentConvId;
+            // 共读：把前几段摘要作为上下文喂进去，保持连贯、不重复（与自动压缩同口径）
+            var prevText = '';
+            if (isReading && idx > 0) {
+                var _prev = chatCompressSummaries.slice(Math.max(0, idx - 6), idx);
+                prevText = _prev.join('\n\n---\n\n');
+                if (prevText.length > 2400) prevText = prevText.slice(prevText.length - 2400);
+            }
+            _chatRegenBusy = true;
+            showToast('♻️ 正在重新生成这一段…', true);
+            try {
+                var seg = await chatSummarizeMsgs(msgs, isReading ? 40000 : 600, isReading, prevText, mc.baseUrl, mc.apiKey, mc.model);
+                if (chatCurrentConvId !== convId) { _chatRegenBusy = false; return; } // 期间切走了会话，丢弃结果
+                if (seg) {
+                    // 保留原本的「【章节号】」前缀（共读模式段首），免得重做后丢了章节标记
+                    var oldSeg = chatCompressSummaries[idx] || '';
+                    var mPre = oldSeg.match(/^【[^】]*】/);
+                    if (mPre && seg.indexOf('【') !== 0) seg = mPre[0] + seg;
+                    chatCompressSummaries[idx] = seg;
+                    chatSaveCurrentConv(true);
+                    showToast('♻️ 已重新生成（' + seg.length + ' 字）');
+                    chatShowSummaryModal(_summaryModalScroll());
+                } else {
+                    showToast('⚠️ 重新生成失败（模型返回空）');
+                }
+            } catch (e) {
+                showToast('⚠️ 重新生成失败：' + (e.message || ''));
+            }
+            _chatRegenBusy = false;
         }
 
         /* ===== 上下文压缩 ===== */
@@ -18406,6 +18469,39 @@ body {
                 }, 500);
             });
         }
+        // 顶层「把一组消息总结成一段摘要」：压缩流程和「单段重新生成」共用，保证提示词/上限一致。
+        // 返回 trim 后的摘要文本或 null。模型三件套由调用方传入（已解析好的 baseUrl/apiKey/model）。
+        async function chatSummarizeMsgs(msgs, truncCap, isReading, prevSummaryText, useBaseUrl, useApiKey, useModel) {
+            var prompt = '';
+            if (isReading && prevSummaryText) {
+                prompt += '【前文已记录的摘要】（仅供你了解前情、保持连贯，不要重复其中已写过的内容）：\n' + prevSummaryText + '\n\n';
+            }
+            prompt += isReading ? '【本章内容】（小说正文、AI 的逐段点评，可能含读者读完后围绕本章的讨论）：\n' : '以下是一段对话：\n';
+            for (var i = 0; i < msgs.length; i++) {
+                var m = msgs[i];
+                if (m.genImage) continue; // 独立生图消息不进摘要
+                var c = typeof m.content === 'string' ? _stripGenImgMarkers(m.content) : '[多模态内容]';
+                if (!c) continue; // 剥掉图标记后空了就跳过
+                if (c.length > truncCap) c = c.substring(0, truncCap) + '…';
+                prompt += (m.role === 'user' ? '用户：' : '助手：') + c + '\n';
+            }
+            prompt += isReading
+                ? '\n请把「本章内容」浓缩成一段连贯、简洁的剧情摘要，供日后回忆前情：\n· 必须保留本章登场人物姓名、关键情节进展、重要设定与伏笔；\n· 若上方提供了前文摘要，只补充本章新增的进展，不要重复前文已写过的内容；\n· 读者讨论（正文里以「汐：」开头的问答，或章节后的多轮对话）最多用一句话带过，没有就不写；\n· 若本段没有新的小说正文、只有讨论，就用一句话概括讨论主题即可，不要硬凑、不要写「本章未涉及正文」之类的说明；\n· 直接输出一段流畅的中文，不分小标题、不加粗、不写「本章」「以下是摘要」之类的开场白或客套话，控制在 200 字以内。'
+                : '\n请用简洁的语言总结以上对话要点，保留关键信息（数据、决策、代码片段名、具体数值等），去除寒暄和重复。直接输出摘要，不要加前缀。';
+            var summary = await chatStreamChat({
+                baseUrl: useBaseUrl, apiKey: useApiKey, model: useModel,
+                purpose: isReading ? '共读摘要' : '对话摘要',
+                messages: [
+                    { role: 'system', content: isReading ? '你是小说共读摘要助手。把当前章节浓缩成一段连贯、客观的剧情摘要：人物姓名、关键情节与伏笔不可省略；读者讨论只一句话带过。只输出纯摘要正文，不分小标题、不加粗、不写开场白或客套话。' : '你是对话摘要助手。简洁准确地总结内容，保留关键信息。控制在 300 字以内。' },
+                    { role: 'user', content: prompt }
+                ],
+                // 中文 1 字常占 2.5~3 token，旧上限 500/600 实际只够约 180~220 字，
+                // 摘要常在句中被硬切。给足余量（约够 700+ 中文字），长度仍由提示词「200/300字以内」约束，不会变长。
+                max_tokens: 2000
+            });
+            return summary ? summary.trim() : null;
+        }
+
         async function chatCompressContext() {
             if (chatCompressing || chatStreaming) return;
             // 触发方式按模式区分：
@@ -18471,36 +18567,10 @@ body {
 
             // _waitIfStreaming 已提到外层，共读压缩和阅读预取都能用
 
-            // 单次摘要调用：把一组消息总结成一段。返回 trim 后的摘要文本或 null。
-            async function _doSummarize(msgs, truncCap, isReading, prevSummaryText) {
-                var prompt = '';
-                if (isReading && prevSummaryText) {
-                    prompt += '【前文已记录的摘要】（仅供你了解前情、保持连贯，不要重复其中已写过的内容）：\n' + prevSummaryText + '\n\n';
-                }
-                prompt += isReading ? '【本章内容】（小说正文、AI 的逐段点评，可能含读者读完后围绕本章的讨论）：\n' : '以下是一段对话：\n';
-                for (var i = 0; i < msgs.length; i++) {
-                    var m = msgs[i];
-                    if (m.genImage) continue; // 独立生图消息不进摘要
-                    var c = typeof m.content === 'string' ? _stripGenImgMarkers(m.content) : '[多模态内容]';
-                    if (!c) continue; // 剥掉图标记后空了就跳过
-                    if (c.length > truncCap) c = c.substring(0, truncCap) + '…';
-                    prompt += (m.role === 'user' ? '用户：' : '助手：') + c + '\n';
-                }
-                prompt += isReading
-                    ? '\n请把「本章内容」浓缩成一段连贯、简洁的剧情摘要，供日后回忆前情：\n· 必须保留本章登场人物姓名、关键情节进展、重要设定与伏笔；\n· 若上方提供了前文摘要，只补充本章新增的进展，不要重复前文已写过的内容；\n· 读者讨论（正文里以「汐：」开头的问答，或章节后的多轮对话）最多用一句话带过，没有就不写；\n· 若本段没有新的小说正文、只有讨论，就用一句话概括讨论主题即可，不要硬凑、不要写「本章未涉及正文」之类的说明；\n· 直接输出一段流畅的中文，不分小标题、不加粗、不写「本章」「以下是摘要」之类的开场白或客套话，控制在 200 字以内。'
-                    : '\n请用简洁的语言总结以上对话要点，保留关键信息（数据、决策、代码片段名、具体数值等），去除寒暄和重复。直接输出摘要，不要加前缀。';
-                var summary = await chatStreamChat({
-                    baseUrl: _useBaseUrl, apiKey: _useApiKey, model: _useModel,
-                    purpose: isReading ? '共读摘要' : '对话摘要',
-                    messages: [
-                        { role: 'system', content: isReading ? '你是小说共读摘要助手。把当前章节浓缩成一段连贯、客观的剧情摘要：人物姓名、关键情节与伏笔不可省略；读者讨论只一句话带过。只输出纯摘要正文，不分小标题、不加粗、不写开场白或客套话。' : '你是对话摘要助手。简洁准确地总结内容，保留关键信息。控制在 300 字以内。' },
-                        { role: 'user', content: prompt }
-                    ],
-                    // 中文 1 字常占 2.5~3 token，旧上限 500/600 实际只够约 180~220 字，
-                    // 摘要常在句中被硬切。给足余量（约够 700+ 中文字），长度仍由提示词「200/300字以内」约束，不会变长。
-                    max_tokens: isReading ? 2000 : 2000
-                });
-                return summary ? summary.trim() : null;
+            // 单次摘要调用：转调顶层 chatSummarizeMsgs（与「单段重新生成」共用同一套提示词/上限），
+            // 模型用本次压缩已解析好的 _useModel/_useBaseUrl/_useApiKey。
+            function _doSummarize(msgs, truncCap, isReading, prevSummaryText) {
+                return chatSummarizeMsgs(msgs, truncCap, isReading, prevSummaryText, _useBaseUrl, _useApiKey, _useModel);
             }
 
             // 两层记忆的上层：超出「最近 5 段」窗口的旧摘要段攒满 3 段，就折进一份全程大纲
@@ -18682,6 +18752,7 @@ body {
                             chatCompressSummaries.push(seg);
                             // 逐段推进 compressedCount，断点续传更稳
                             chatCompressedCount = (chatCompressedCount || 0) + batch.length;
+                            chatCompressSegEnds.push(chatCompressedCount); // 记本段覆盖到第几条为止，供「单段重做」按范围切原文
                             // 必须强制标脏：摘要不是消息，消息条数没变，不带 true 的话这条对话
                             // 不会被标记为「需推送」，导致自动生成的摘要永远同步不到其它设备。
                             chatSaveCurrentConv(true);
@@ -18717,6 +18788,7 @@ body {
                     if (summary && chatCurrentConvId === convId) {
                         chatCompressSummaries.push(summary);
                         chatCompressedCount = compressEnd;
+                        chatCompressSegEnds.push(chatCompressedCount); // 记本段覆盖到第几条为止，供「单段重做」按范围切原文
                         // 同上：强制标脏，否则自动生成的摘要不会推送到云端。
                         chatSaveCurrentConv(true);
                         chatUpdateCtxIndicator();
