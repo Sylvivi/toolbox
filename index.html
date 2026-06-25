@@ -3031,14 +3031,6 @@ body {
         /* 条上的「样式」按钮：底色 ↔ 划线，当场切，不进设置 */
         .rd-hl-bar button.rd-style { font-size: 12px; color: var(--text); border: 1px solid var(--card-border, rgba(0,0,0,0.18)); }
         @keyframes rdDockIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
-        /* 批注输入气泡 */
-        .rd-hl-note { position: fixed; z-index: 4001; width: min(280px, 88vw); background: var(--card-bg, #fff); border: 1px solid var(--card-border, rgba(0,0,0,0.12)); border-radius: 10px; box-shadow: 0 6px 22px rgba(0,0,0,0.18); padding: 8px; }
-        .rd-hl-note textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--card-border, rgba(0,0,0,0.15)); border-radius: 8px; padding: 6px 8px; font-size: 13px; resize: vertical; min-height: 56px; background: transparent; color: var(--text); font-family: inherit; }
-        .rd-hl-note .rd-note-row { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
-        .rd-hl-note .rd-note-row button { border: none; border-radius: 7px; padding: 5px 10px; font-size: 13px; cursor: pointer; }
-        .rd-hl-note .rd-note-row .rd-note-save { background: var(--accent); color: #fff; }
-        .rd-hl-note .rd-note-row .rd-note-cancel { background: transparent; color: var(--text-muted); }
-
         /* ===== 剧本翻译模式 ===== */
         .translate-merged p[data-p].tp-sel {
             background: var(--accent-light);
@@ -22518,7 +22510,6 @@ body {
         var _rdHlPending = null;   // 选中态：暂存选区信息，点色板时用（避免移动端点按钮丢选区）
         function rdHlHideBar() {
             var bar = document.getElementById('rdHlBar'); if (bar) bar.remove();
-            var note = document.getElementById('rdHlNote'); if (note) note.remove();
             _rdHlPending = null;
         }
         function rdHlPlaceBar(bar, rect) {
@@ -22608,7 +22599,7 @@ body {
                 var act = e.target.closest('.rd-act'); if (!act) return;
                 var a = act.getAttribute('data-act');
                 if (a === 'style') { rdHlToggleStyle(); return; }
-                if (a === 'note') { rdHlOpenNote(id, rect); return; }
+                if (a === 'note') { rdHlOpenNote(id); return; }
                 if (a === 'ask') { rdHlHideBar(); rdHlAskClawd({ msgIdx: hl.msgIdx, p: hl.p, text: hl.text || hl.preview || '' }); return; }
                 if (a === 'del') {
                     if (act.classList.contains('armed')) { rdHlDelete(id); return; }
@@ -22636,35 +22627,41 @@ body {
             if (typeof showToast === 'function') showToast('已删除划线');
             readingRefreshBookmarkUI && readingRefreshBookmarkUI();
         }
-        // 批注输入气泡
-        function rdHlOpenNote(id, rect) {
-            var existing = document.getElementById('rdHlNote'); if (existing) existing.remove();
+        // 批注：复用「点段提问」那套流内单行框（rp-ask），插在划线所在段落后面。
+        // 流内元素聚焦时浏览器会自动把它滚到键盘上方，不会被键盘挡住（旧的 fixed 浮层做不到）。
+        function rdHlOpenNote(id) {
             var list = readingGetConvHl();
             var hl = null; for (var i = 0; i < list.length; i++) { if (list[i].id === id) { hl = list[i]; break; } }
             if (!hl) return;
-            var box = document.createElement('div');
-            box.className = 'rd-hl-note'; box.id = 'rdHlNote';
-            box.innerHTML = '<textarea placeholder="写点你的想法…">' + (hl.note ? hl.note.replace(/</g, '&lt;') : '') + '</textarea>' +
-                '<div class="rd-note-row"><button class="rd-note-cancel">取消</button><button class="rd-note-save">保存</button></div>';
-            box.addEventListener('mousedown', function(e) { e.stopPropagation(); });
-            document.body.appendChild(box);
-            var bw = box.offsetWidth, bh = box.offsetHeight;
-            var left = Math.max(8, Math.min(window.innerWidth - bw - 8, rect.left));
-            var top = rect.bottom + 8; if (top + bh > window.innerHeight - 8) top = Math.max(8, rect.top - bh - 8);
-            box.style.left = left + 'px'; box.style.top = top + 'px';
-            var ta = box.querySelector('textarea'); ta.focus();
-            box.querySelector('.rd-note-cancel').onclick = function() { box.remove(); };
-            box.querySelector('.rd-note-save').onclick = function() {
-                var v = ta.value.trim();
+            var p = document.querySelector('.chat-msg.ai[data-idx="' + hl.msgIdx + '"] .reading-merged p[data-p="' + hl.p + '"]');
+            if (!p) { if (typeof showToast === 'function') showToast('找不到这一段了'); return; }
+            rdHlHideBar();
+            readingClearActbar();
+            p.classList.add('rp-active');
+            var pos = localStorage.getItem('reading_pagebtn_pos') || 'rb';
+            var leftSide = (pos === 'lm' || pos === 'lb');   // 跟随翻页按钮位置，按钮贴拿机手拇指那侧
+            var snip = (hl.preview || '').slice(0, 12);
+            var bar = document.createElement('div');
+            bar.className = 'reading-actbar rp-note-bar';
+            var taHtml = '<textarea class="rp-ask" rows="1" placeholder="给「' + esc(snip) + '」写点想法…"></textarea>';
+            var saveHtml = '<button class="rp-ask-send">保存</button>';
+            bar.innerHTML = leftSide ? (saveHtml + taHtml) : (taHtml + saveHtml);
+            p.insertAdjacentElement('afterend', bar);
+            var input = bar.querySelector('.rp-ask');
+            input.value = hl.note || '';
+            bar.querySelector('.rp-ask-send').onclick = function() {
+                var v = input.value.trim();
                 var l2 = readingGetConvHl();
                 for (var k = 0; k < l2.length; k++) { if (l2[k].id === id) { l2[k].note = v; break; } }
                 readingSaveConvHl(l2);
                 var marks = document.querySelectorAll('mark.rd-hl[data-hlid="' + id + '"]');
                 for (var m = 0; m < marks.length; m++) { marks[m].classList.toggle('rd-hl-noted', !!v); }
-                box.remove(); rdHlHideBar();
+                readingClearActbar();
                 if (typeof showToast === 'function') showToast(v ? '已记下批注' : '已清空批注');
                 readingRefreshBookmarkUI && readingRefreshBookmarkUI();
             };
+            readingBindAskBox(input);   // 自适应高度 + 回车保存
+            input.focus();              // 在点击手势内同步聚焦，移动端才会弹键盘
         }
         // 把所选内容拿去问 clawd：复用「点段提问」那套（带前文上下文开关一并生效），只是把所选句子引上
         function rdHlAskClawd(hl) {
@@ -22978,14 +22975,12 @@ body {
         (function() {
             var _rdSelTimer = null;
             function evalSel() {
-                // 小条 / 批注气泡自身的交互不触发重判
-                var hasNote = document.getElementById('rdHlNote');
                 var ctx = rdHlCurrentSel();
                 if (ctx) { rdHlShowSelBar(ctx); }
-                else if (!hasNote) {
-                    // 选区空了：若不是停在编辑小条上，收起选中态小条
+                else {
+                    // 选区空了：只收「选中态」小条（编辑态 _rdHlPending=null，留着）
                     var bar = document.getElementById('rdHlBar');
-                    if (bar && _rdHlPending) rdHlHideBar();   // 仅收「选中态」，编辑态(_rdHlPending=null)留着
+                    if (bar && _rdHlPending) rdHlHideBar();
                 }
             }
             document.addEventListener('selectionchange', function() {
@@ -22993,17 +22988,15 @@ body {
                 if (_rdSelTimer) clearTimeout(_rdSelTimer);
                 _rdSelTimer = setTimeout(evalSel, 220);
             });
-            // 点小条/批注气泡/划线以外的地方 → 收起
+            // 点小条/划线以外的地方 → 收起小条
             document.addEventListener('pointerdown', function(e) {
-                var bar = document.getElementById('rdHlBar');
-                var note = document.getElementById('rdHlNote');
-                if (!bar && !note) return;
-                if (e.target.closest && (e.target.closest('.rd-hl-bar') || e.target.closest('.rd-hl-note') || e.target.closest('mark.rd-hl'))) return;
+                if (!document.getElementById('rdHlBar')) return;
+                if (e.target.closest && (e.target.closest('.rd-hl-bar') || e.target.closest('mark.rd-hl'))) return;
                 rdHlHideBar();
             }, true);
-            // 滚动时跟手收起，免得小条飘在错位置
+            // 滚动时跟手收起小条，免得它飘在错位置（批注框是流内元素，跟着滚，不在此列）
             var sc = document.getElementById('chatMessages');
-            if (sc) sc.addEventListener('scroll', function() { if (document.getElementById('rdHlBar') || document.getElementById('rdHlNote')) rdHlHideBar(); }, { passive: true });
+            if (sc) sc.addEventListener('scroll', function() { if (document.getElementById('rdHlBar')) rdHlHideBar(); }, { passive: true });
         })();
 
         function readingModeAddParaNums(text) {
