@@ -15665,6 +15665,23 @@ body {
             var arrow = document.getElementById('chatFavArrow');
             if (section) section.style.display = _chatFavExpanded ? '' : 'none';
             if (arrow) arrow.style.transform = _chatFavExpanded ? 'rotate(90deg)' : '';
+            // 展开后把整个收藏框滚进可视区：这样它自己的独立滚动就能够到所有模型，
+            // 不必再靠「带动设置面板」才能看到底部（配合 overscroll:contain，互不干扰）。
+            // 直接操作面板滚动容器，不用 scrollIntoView（它会顺带动 window、且 smooth 时机不稳）。
+            if (_chatFavExpanded && section) {
+                setTimeout(function () {
+                    var sp = section.parentElement;
+                    while (sp) {
+                        var oy = getComputedStyle(sp).overflowY;
+                        if ((oy === 'auto' || oy === 'scroll') && sp.scrollHeight > sp.clientHeight + 1) break;
+                        sp = sp.parentElement;
+                    }
+                    if (!sp) return;
+                    // 这个弹出层容器不认 behavior:'smooth'（会被忽略），必须用瞬时滚动
+                    var delta = section.getBoundingClientRect().bottom - sp.getBoundingClientRect().bottom;
+                    if (delta > 0) sp.scrollTop = sp.scrollTop + delta + 8;
+                }, 50);
+            }
         }
         var _chatThemeExpanded = false;
         function chatToggleThemeSection() {
