@@ -11509,6 +11509,8 @@ body {
             var all = {
                 api_keys: keys, snippets: snips, imgbeds: imgbeds,
                 chat_fav_models: JSON.parse(localStorage.getItem('chat_fav_models') || '[]'),
+                model_prices: (function () { try { return JSON.parse(localStorage.getItem('toolbox_model_prices') || '{}'); } catch (e) { return {}; } })(),
+                model_prices_ts: localStorage.getItem('toolbox_model_prices_ts') || '',
                 chat_history: chatHist,
                 reading_books: books
             };
@@ -11638,6 +11640,10 @@ body {
                     if (imported.chat_fav_models && Array.isArray(imported.chat_fav_models)) {
                         localStorage.setItem('chat_fav_models', JSON.stringify(imported.chat_fav_models));
                         chatFavModels = imported.chat_fav_models;
+                    }
+                    if (imported.model_prices && typeof imported.model_prices === 'object') {
+                        localStorage.setItem('toolbox_model_prices', JSON.stringify(imported.model_prices));
+                        if (imported.model_prices_ts) localStorage.setItem('toolbox_model_prices_ts', imported.model_prices_ts);
                     }
 
                     // 导入共读/对话记录：按对话 id 合并——本地没有的补进来，重复的留 updated 更新的一方，不覆盖本地新内容
@@ -12115,6 +12121,8 @@ body {
                 bookmarksTs: readingGetBookmarksTs(),
                 favModels: (function () { try { return JSON.parse(localStorage.getItem('chat_fav_models') || '[]'); } catch (e) { return []; } })(),
                 favModelsTs: localStorage.getItem('chat_fav_models_ts') || '',
+                modelPrices: (function () { try { return JSON.parse(localStorage.getItem('toolbox_model_prices') || '{}'); } catch (e) { return {}; } })(),
+                modelPricesTs: localStorage.getItem('toolbox_model_prices_ts') || '',
                 fonts: readingFontsLoad(),
                 fontsTs: readingGetFontsTs(),
                 fontName: localStorage.getItem('reading_font_name') || '',
@@ -12367,6 +12375,15 @@ body {
                         localStorage.setItem('chat_fav_models_ts', cloudFavTs);
                         chatFavModels = manifest.favModels;
                         if (typeof chatUpdateFavHeader === 'function') chatUpdateFavHeader();
+                    }
+                }
+                // 模型单价独立表：同样整块按时间戳后写覆盖（取消收藏也不丢的价就靠它跨设备）
+                if (manifest.modelPrices) {
+                    var cloudMpTs = manifest.modelPricesTs || '';
+                    var localMpTs = localStorage.getItem('toolbox_model_prices_ts') || '';
+                    if (cloudMpTs > localMpTs) {
+                        localStorage.setItem('toolbox_model_prices', JSON.stringify(manifest.modelPrices));
+                        localStorage.setItem('toolbox_model_prices_ts', cloudMpTs);
                     }
                 }
 
@@ -12699,6 +12716,7 @@ body {
                 if (manifest.checkinTasks) { idbSet(CHECKIN_TASKS_KEY, manifest.checkinTasks); if (manifest.checkinTasksTs) idbSet(CHECKIN_TASKS_TS_KEY, manifest.checkinTasksTs); }
                 if (manifest.bookmarks) { localStorage.setItem('reading_bookmarks', JSON.stringify(manifest.bookmarks)); if (manifest.bookmarksTs) localStorage.setItem('reading_bookmarks_ts', manifest.bookmarksTs); }
                 if (manifest.favModels) { try { localStorage.setItem('chat_fav_models', JSON.stringify(manifest.favModels)); localStorage.setItem('chat_fav_models_ts', manifest.favModelsTs || new Date().toISOString()); chatFavModels = manifest.favModels; if (typeof chatUpdateFavHeader === 'function') chatUpdateFavHeader(); } catch (e) {} }
+                if (manifest.modelPrices) { try { localStorage.setItem('toolbox_model_prices', JSON.stringify(manifest.modelPrices)); localStorage.setItem('toolbox_model_prices_ts', manifest.modelPricesTs || new Date().toISOString()); } catch (e) {} }
                 readingApplyFontSync(manifest); // 字体库+五个位置选择，带时间戳护栏（修复开机被云端旧值冲掉的问题）
                 if (manifest.readerPos) { try { localStorage.setItem('reader_pos', JSON.stringify(manifest.readerPos)); } catch (e) {} }
                 if (manifest.readerQA) { try { localStorage.setItem('reader_qa', JSON.stringify(manifest.readerQA)); } catch (e) {} }
@@ -12871,6 +12889,8 @@ body {
                 imgbeds: getImgBedData(),
                 chat_fav_models: JSON.parse(localStorage.getItem('chat_fav_models') || '[]'),
                 chat_fav_models_ts: localStorage.getItem('chat_fav_models_ts') || '',
+                model_prices: (function () { try { return JSON.parse(localStorage.getItem('toolbox_model_prices') || '{}'); } catch (e) { return {}; } })(),
+                model_prices_ts: localStorage.getItem('toolbox_model_prices_ts') || '',
                 tombstones: getTombstones(),
                 checkin: getCheckinData(),
                 checkinTasks: getCheckinTasks(),
@@ -12966,6 +12986,7 @@ body {
             if (p.snippets) setSnipData(p.snippets);
             if (p.imgbeds) setImgBedData(p.imgbeds);
             if (p.chat_fav_models) { localStorage.setItem('chat_fav_models', JSON.stringify(p.chat_fav_models)); chatFavModels = p.chat_fav_models; }
+            if (p.model_prices) { try { localStorage.setItem('toolbox_model_prices', JSON.stringify(p.model_prices)); if (p.model_prices_ts) localStorage.setItem('toolbox_model_prices_ts', p.model_prices_ts); } catch (e) {} }
             if (p.tombstones) setTombstones(p.tombstones);
             localStorage.setItem('toolbox_last_local_modified', new Date().toISOString());
             if (typeof renderKeyFilters === 'function') renderKeyFilters();
@@ -13172,6 +13193,15 @@ body {
             chatFavModels = remote.chat_fav_models;
             if (typeof chatUpdateFavHeader === 'function') chatUpdateFavHeader();
         }
+        // 模型单价独立表（Gist 整包路径）：远端有更新的时间戳才覆盖
+        function applyRemoteModelPrices(remote) {
+            if (!remote || !remote.model_prices) return;
+            var rTs = remote.model_prices_ts || remote.lastModified || '';
+            var lTs = localStorage.getItem('toolbox_model_prices_ts') || '';
+            if (remote.model_prices_ts && rTs <= lTs) return;
+            localStorage.setItem('toolbox_model_prices', JSON.stringify(remote.model_prices));
+            if (rTs) localStorage.setItem('toolbox_model_prices_ts', rTs);
+        }
 
         /* ---- 通用合并逻辑（Gist / CF 共用） ---- */
         function applySyncData(remote, manual) {
@@ -13190,6 +13220,7 @@ body {
                 if (remote.checkinTasks) { idbSet(CHECKIN_TASKS_KEY, remote.checkinTasks); if (remote.checkinTasksTs) idbSet(CHECKIN_TASKS_TS_KEY, remote.checkinTasksTs); }
 
                 applyRemoteFavModels(remote);
+                applyRemoteModelPrices(remote);
                 if (remote.tombstones) setTombstones(remote.tombstones);
             } else {
                 var localTombs = getTombstones();
@@ -13282,6 +13313,7 @@ body {
                 }
 
                 applyRemoteFavModels(remote);
+                applyRemoteModelPrices(remote);
 
                 var totalChanges = kCount + sCount + kUpdated + sUpdated;
                 if (manual && totalChanges > 0) {
@@ -13353,6 +13385,7 @@ body {
         var chatSelectedModel = '';
         var chatSelectedKeyStr = '';
         var chatFavModels = JSON.parse(localStorage.getItem('chat_fav_models') || '[]');
+        try { modelPriceMigrateFromFav(); } catch (e) {}  // 把老的「收藏内价」迁进独立价格表（一次性，幂等）
         // 保存收藏模型（含每个模型配的备注/价格）：写本地 + 盖时间戳 + 触发云同步。
         // 收藏模型跟着密钥一起同步——CF 走清单(manifest)、Gist 走整包，时间戳让两台设备「谁新用谁」、删除也能正确传播。
         // 「最近调用」记录：收藏面板按它排序（每站组内最近用的在前）。纯本地视图偏好，不跨设备同步。
@@ -13974,8 +14007,57 @@ body {
             } catch (e) {}
             return station.replace(/^https?:\/\//, '').replace(/\/v1$/i, '');
         }
-        // 找收藏模型配的单价：先精确匹配「站点+模型」，没有再退回只按模型名（兼容旧数据）；没配返回 null
+        // ===== 模型单价独立表（不再寄生在收藏里）=====
+        // key = _mkey(model, station)，值 = price 对象（{mode:'token',in,out} 或 {mode:'call',per}）。
+        // 这样取消收藏也不丢价；用量面板可直接给任意模型设价/改价。跨设备同步（仿收藏模型）。
+        var _modelPricePushTimer = null;
+        function modelPriceTableLoad() {
+            try { return JSON.parse(localStorage.getItem('toolbox_model_prices') || '{}') || {}; } catch (e) { return {}; }
+        }
+        function modelPriceTableSaveRaw(t) { try { localStorage.setItem('toolbox_model_prices', JSON.stringify(t)); } catch (e) {} }
+        function modelPriceTableSave(t) {
+            modelPriceTableSaveRaw(t);
+            localStorage.setItem('toolbox_model_prices_ts', new Date().toISOString());
+            if (typeof syncPushData === 'function') {
+                if (_modelPricePushTimer) clearTimeout(_modelPricePushTimer);
+                _modelPricePushTimer = setTimeout(syncPushData, 3000);
+            }
+        }
+        function _priceValid(p) { return p && p.mode && (p.mode === 'call' ? (+p.per > 0) : (+p.in > 0 || +p.out > 0)); }
+        // 读某模型的价：先查独立表（精确站点 → 纯模型名兜底）
+        function modelPriceGet(model, station) {
+            var t = modelPriceTableLoad();
+            if (station) { var k = _mkey(model, station); if (_priceValid(t[k])) return t[k]; }
+            if (_priceValid(t[model])) return t[model];
+            return null;
+        }
+        // 写某模型的价（无效则删除该项）
+        function modelPriceSet(model, station, price) {
+            var t = modelPriceTableLoad();
+            var k = _mkey(model, station || '');
+            if (_priceValid(price)) t[k] = price; else { delete t[k]; if (!station) delete t[model]; }
+            modelPriceTableSave(t);
+        }
+        // 一次性迁移：把现有收藏里配的价灌进独立表（仅当表里还没该项时），让老用户无缝过渡
+        function modelPriceMigrateFromFav() {
+            var t = modelPriceTableLoad(); var changed = false;
+            for (var i = 0; i < chatFavModels.length; i++) {
+                var f = chatFavModels[i];
+                if (f && _priceValid(f.price)) {
+                    var st = (typeof getBaseUrl === 'function') ? getBaseUrl(f.url || '') : (f.url || '');
+                    var k = _mkey(f.model, st);
+                    if (!t[k]) { t[k] = f.price; changed = true; }
+                }
+            }
+            if (changed) {
+                modelPriceTableSaveRaw(t);
+                if (!localStorage.getItem('toolbox_model_prices_ts')) localStorage.setItem('toolbox_model_prices_ts', new Date().toISOString());
+            }
+        }
+        // 找模型单价：先查独立表，再兼容老的收藏内价（万一没迁到）；没配返回 null
         function _apiModelPrice(model, station) {
+            var p = modelPriceGet(model, station);
+            if (p) return p;
             var i, f;
             if (station) {
                 for (i = 0; i < chatFavModels.length; i++) {
@@ -14001,6 +14083,8 @@ body {
         // 是否存在任何价格（全局默认价 或 某个收藏模型配了价）；都没有时面板显示 token 数而非金额
         function _apiHasAnyPrice(gp) {
             if (gp.in || gp.out) return true;
+            var t = modelPriceTableLoad();
+            for (var k in t) { if (_priceValid(t[k])) return true; }
             for (var i = 0; i < chatFavModels.length; i++) {
                 var f = chatFavModels[i];
                 if (f.price && f.price.mode) {
@@ -14038,6 +14122,70 @@ body {
             apiLogRenderBody();
         }
         // 从「按模型」里删掉某个模型：累计、按环节、明细一起减掉（不可恢复；收藏里的价格不动）
+        // 用量面板里就地给某模型设价/改价（写独立价格表；若该模型也在收藏里，顺带更新收藏价保持一致）
+        function apiEditModelPrice(encModel, encStation) {
+            var model = '', station = '';
+            try { model = decodeURIComponent(encModel); } catch (e) { model = encModel; }
+            try { station = decodeURIComponent(encStation); } catch (e) { station = encStation; }
+            var cur = _apiModelPrice(model, station) || {};
+            var _mode = cur.mode || 'token';
+            var existing = document.querySelector('.api-price-modal-mask'); if (existing) existing.remove();
+            var mask = document.createElement('div'); mask.className = 'chat-summary-modal-mask api-price-modal-mask';
+            var modal = document.createElement('div'); modal.className = 'fav-note-modal';
+            var stn = station ? _apiStationName(station) : '';
+            modal.innerHTML = '<div class="chat-summary-modal-header"><span>💰 ' + _apiEsc(model) + (stn ? ' <span style="color:var(--accent-mid);font-size:11px">@' + _apiEsc(stn) + '</span>' : '') + '</span><button onclick="this.closest(\'.api-price-modal-mask\').remove()">✕</button></div>'
+                + '<div class="chat-summary-modal-body" id="apiPriceBody"></div>';
+            mask.appendChild(modal);
+            mask.addEventListener('click', function (ev) { if (ev.target === mask) mask.remove(); });
+            document.body.appendChild(mask);
+            var bodyEl = modal.querySelector('#apiPriceBody');
+            function render() {
+                var p = _apiModelPrice(model, station) || {};
+                var html = '';
+                html += '<div style="display:flex;gap:6px;margin-bottom:8px">';
+                html += '<button onclick="window._apiPriceSetMode(\'token\')" style="flex:1;padding:7px 0;border:1px solid var(--card-border);border-radius:8px;font-size:12px;cursor:pointer;background:' + (_mode === 'token' ? 'var(--accent-light)' : 'transparent') + ';color:' + (_mode === 'token' ? 'var(--accent)' : 'var(--text-muted)') + ';font-weight:' + (_mode === 'token' ? '600' : '400') + '">按量（元/百万 token）</button>';
+                html += '<button onclick="window._apiPriceSetMode(\'call\')" style="flex:1;padding:7px 0;border:1px solid var(--card-border);border-radius:8px;font-size:12px;cursor:pointer;background:' + (_mode === 'call' ? 'var(--accent-light)' : 'transparent') + ';color:' + (_mode === 'call' ? 'var(--accent)' : 'var(--text-muted)') + ';font-weight:' + (_mode === 'call' ? '600' : '400') + '">按次（元/次）</button>';
+                html += '</div>';
+                if (_mode === 'token') {
+                    html += '<div style="display:flex;gap:8px">'
+                        + '<input id="apIn" type="number" inputmode="decimal" min="0" step="0.01" placeholder="输入单价" value="' + (p.mode === 'token' && p.in ? p.in : '') + '" style="flex:1;min-width:0;box-sizing:border-box;padding:8px 10px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none">'
+                        + '<input id="apOut" type="number" inputmode="decimal" min="0" step="0.01" placeholder="输出单价" value="' + (p.mode === 'token' && p.out ? p.out : '') + '" style="flex:1;min-width:0;box-sizing:border-box;padding:8px 10px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none">'
+                        + '</div>';
+                } else {
+                    html += '<input id="apPer" type="number" inputmode="decimal" min="0" step="0.001" placeholder="每次调用价格（元）" value="' + (p.mode === 'call' && p.per ? p.per : '') + '" style="width:100%;padding:8px 10px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box">';
+                }
+                html += '<div style="font-size:11px;color:var(--text-muted);margin-top:5px">价格独立保存，取消收藏也不丢。留空＝清除价格。</div>';
+                html += '<div style="text-align:center;margin-top:12px"><button onclick="window._apiPriceSave()" style="padding:9px 32px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">保存</button></div>';
+                bodyEl.innerHTML = html;
+            }
+            window._apiPriceSetMode = function (m) { _mode = m; render(); };
+            window._apiPriceSave = function () {
+                var price = null;
+                if (_mode === 'token') {
+                    var inp = document.getElementById('apIn'), outp = document.getElementById('apOut');
+                    var hasIn = inp && inp.value.trim(), hasOut = outp && outp.value.trim();
+                    if (hasIn || hasOut) price = { mode: 'token', in: hasIn ? +inp.value : 0, out: hasOut ? +outp.value : 0 };
+                } else {
+                    var perk = document.getElementById('apPer');
+                    if (perk && perk.value.trim()) price = { mode: 'call', per: +perk.value };
+                }
+                modelPriceSet(model, station, price);
+                // 若该模型也在收藏里，顺带更新收藏价，保持两边一致
+                for (var i = 0; i < chatFavModels.length; i++) {
+                    var f = chatFavModels[i];
+                    var fst = (typeof getBaseUrl === 'function') ? getBaseUrl(f.url || '') : (f.url || '');
+                    if (f.model === model && fst === station) {
+                        if (price) f.price = price; else delete f.price;
+                        chatFavModelsSave();
+                        if (typeof chatRenderFavSection === 'function') chatRenderFavSection();
+                        break;
+                    }
+                }
+                mask.remove();
+                if (typeof apiLogRenderBody === 'function') apiLogRenderBody();
+            };
+            render();
+        }
         function apiDeleteModel(encKeys) {
             var raw = '';
             try { raw = decodeURIComponent(encKeys); } catch (e) { raw = encKeys; }
@@ -14181,8 +14329,10 @@ body {
                     var mp = _apiModelPrice(r.model, r.station);
                     var label = mp ? (mp.mode === 'call' ? '按次' : '按量') : '未设价';
                     var nameHtml = _apiEsc(r.model) + (r.stn ? ' <span style="color:var(--accent-mid);font-size:10px">@' + _apiEsc(r.stn) + '</span>' : '');
+                    // 价格标签可点：点一下就地给这个模型设价/改价（写独立价格表，跟收藏脱钩）
+                    var priceTag = '<span onclick="apiEditModelPrice(\'' + encodeURIComponent(r.model) + '\',\'' + encodeURIComponent(r.station || '') + '\')" title="点这里设价/改价" style="color:' + (mp ? 'var(--accent)' : 'var(--text-muted)') + ';font-size:10px;cursor:pointer;text-decoration:underline dotted">[' + label + ']</span>';
                     rowHtmls.push('<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:3px 0;border-bottom:1px solid var(--card-border)">'
-                        + '<span style="color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + nameHtml + ' <span style="color:var(--text-muted);font-size:10px">[' + label + '] ' + r.calls + '次</span></span>'
+                        + '<span style="color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + nameHtml + ' ' + priceTag + ' <span style="color:var(--text-muted);font-size:10px">' + r.calls + '次</span></span>'
                         + '<span style="color:var(--accent);flex-shrink:0;margin-left:8px">' + (hasAnyPrice ? '￥' + _apiMoney(r.cost) : _apiNum(r.inTok + r.outTok) + ' tok') + '</span>'
                         + '<span onclick="apiDeleteModel(\'' + encodeURIComponent(JSON.stringify(r.keys)) + '\')" title="从统计里删掉这个模型" style="flex-shrink:0;margin-left:8px;cursor:pointer;color:var(--text-muted);font-size:13px;opacity:0.55;line-height:1">✕</span></div>');
                 }
@@ -15761,6 +15911,9 @@ body {
                     if (pk) target.price = { mode: 'call', per: +pk };
                     else delete target.price;
                 }
+                // 同步写进独立价格表（收藏改价 → 价格表也更新；删价 → 表里也删），收藏被删后价仍在
+                var _st = (typeof getBaseUrl === 'function') ? getBaseUrl(url || '') : (url || '');
+                modelPriceSet(model, _st, target.price || null);
                 chatFavModelsSave();
                 mask.remove();
                 chatRenderFavSection();
