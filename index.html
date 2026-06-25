@@ -3159,6 +3159,9 @@ body {
         /* 生图气泡 */
         .chat-gen-bubble { padding: 6px; }
         .chat-gen-wrap { position: relative; }
+        .chat-gen-del { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border: none; border-radius: 50%; background: rgba(0,0,0,0.45); color: #fff; font-size: 13px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; }
+        .chat-gen-wrap:hover .chat-gen-del { opacity: 1; }
+        @media (hover: none) { .chat-gen-del { opacity: 0.8; } }
         .chat-gen-img { max-width: 100%; border-radius: 10px; display: block; cursor: zoom-in; }
         .chat-gen-ph {
             min-width: 180px; min-height: 120px; display: flex; align-items: center; justify-content: center;
@@ -13750,6 +13753,11 @@ body {
             for (var i = 0; i < GEN_STYLE_PRESETS.length; i++) { if (GEN_STYLE_PRESETS[i].name === styleStr) return GEN_STYLE_PRESETS[i].tag; }
             return styleStr || '';
         }
+        // 把内联生图标记从文本里剥掉（发给 AI 的上下文/总结/提问都不该带它，更不会带图字节）
+        function _stripGenImgMarkers(s) {
+            if (typeof s !== 'string' || s.indexOf('⟦genimg:') < 0) return s;
+            return s.replace(/(^|\n)[ \t]*(?:\[P\d+\][ \t]*)?⟦genimg:[A-Za-z0-9_]+⟧[ \t]*(?=\n|$)/g, '').replace(/\n{3,}/g, '\n\n').trim();
+        }
         // 是不是生图类模型（这类只能走 /images/generations，绝不能拿去当文字模型调 /chat/completions）
         function _isImageModelName(m) {
             return /gpt-image|dall[\-\s]?e|flux|midjourney|\bmj\b|stable[\-\s]?diffusion|sdxl|kolors|seedream|imagen|wanx|cogview|hunyuan[\-\s]?image/i.test(m || '');
@@ -15006,20 +15014,10 @@ body {
             if (_gm && _gm.genImage) {
                 bubble.classList.add('chat-gen-bubble');
                 var _cap = _gm.caption ? '<div class="chat-gen-cap">' + esc(_gm.caption) + '</div>' : '';
-                bubble.innerHTML = '<div class="chat-gen-wrap"><img class="chat-gen-img" alt="生成的插图" style="display:none"><div class="chat-gen-ph">🎨 生成中…</div></div>' + _cap;
-                (function (imgEl, phEl, id) {
-                    genImgGet(id).then(function (dataURL) {
-                        if (dataURL) {
-                            imgEl.src = dataURL;
-                            imgEl.style.display = '';
-                            imgEl.onclick = function () { if (typeof genImgLightbox === 'function') genImgLightbox(dataURL); };
-                            if (phEl) phEl.remove();
-                        } else if (phEl) {
-                            phEl.textContent = '🎨 此图仅存于生成它的设备';
-                            phEl.classList.add('chat-gen-ph-missing');
-                        }
-                    });
-                })(bubble.querySelector('.chat-gen-img'), bubble.querySelector('.chat-gen-ph'), _gm.imgId);
+                bubble.innerHTML = '<div class="chat-gen-wrap"><img class="chat-gen-img" data-genimg="' + _gm.imgId + '" alt="生成的插图" style="display:none"><div class="chat-gen-ph">🎨 生成中…</div><button class="chat-gen-del" title="删除这张图">✕</button></div>' + _cap;
+                var _delBtn = bubble.querySelector('.chat-gen-del');
+                if (_delBtn && typeof msgIdx === 'number') _delBtn.onclick = function (e) { e.stopPropagation(); if (confirm('删除这张图？')) chatSheetDelete(msgIdx); };
+                if (typeof genImgHydrate === 'function') genImgHydrate(bubble);
                 div.appendChild(bubble);
                 return div;
             }
@@ -16432,7 +16430,9 @@ body {
                 src = src.slice(startIdx);
             }
             for (var i = 0; i < src.length; i++) {
-                var _mc = src[i].content;
+                if (src[i].genImage) continue; // 独立生图消息不进上下文（无文本内容，纯图）
+                var _mc = _stripGenImgMarkers(src[i].content); // 剥掉内联图标记，绝不把图相关内容带给 AI
+                if (typeof _mc === 'string' && !_mc.trim()) continue; // 剥完空了（整段只有图）就跳过，不发空消息
                 // 时间戳作为 system 提示插入，不污染用户消息原文
                 if (src[i].ts) {
                     var _d = new Date(src[i].ts);
@@ -18349,7 +18349,9 @@ body {
                 prompt += isReading ? '【本章内容】（小说正文、AI 的逐段点评，可能含读者读完后围绕本章的讨论）：\n' : '以下是一段对话：\n';
                 for (var i = 0; i < msgs.length; i++) {
                     var m = msgs[i];
-                    var c = typeof m.content === 'string' ? m.content : '[多模态内容]';
+                    if (m.genImage) continue; // 独立生图消息不进摘要
+                    var c = typeof m.content === 'string' ? _stripGenImgMarkers(m.content) : '[多模态内容]';
+                    if (!c) continue; // 剥掉图标记后空了就跳过
                     if (c.length > truncCap) c = c.substring(0, truncCap) + '…';
                     prompt += (m.role === 'user' ? '用户：' : '助手：') + c + '\n';
                 }
@@ -21686,7 +21688,8 @@ body {
                 var parsedAll = readingModeParseComments(msg.content);
                 for (var pc = 0; pc < parsedAll.length; pc++) {
                     if (parsedAll[pc].p === pNum && parsedAll[pc].text && parsedAll[pc].text.trim()) {
-                        existingComments.push(parsedAll[pc].text.trim());
+                        var _ct = _stripGenImgMarkers(parsedAll[pc].text).trim(); // 别把生图标记当成评论喂给 AI
+                        if (_ct) existingComments.push(_ct);
                     }
                 }
             } catch (eParse) {}
