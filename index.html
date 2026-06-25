@@ -7727,11 +7727,11 @@ body {
         }
         new MutationObserver(checkModalScroll).observe(document.documentElement, { attributes: true, subtree: true, attributeFilter: ['class'] });
 
-        function showToast(msg) {
+        function showToast(msg, sticky) {
             var t = document.getElementById('toast');
             t.textContent = msg; t.classList.add('show');
             if (t._t) clearTimeout(t._t);
-            t._t = setTimeout(function() { t.classList.remove('show'); }, 2000);
+            if (!sticky) t._t = setTimeout(function() { t.classList.remove('show'); }, 2000);
         }
         function fmtTime(iso) {
             if (!iso) return '-';
@@ -13929,25 +13929,21 @@ body {
             var custom = (modal.querySelector('#genImgStyleCustom').value || '').trim();
             var activeChip = modal.querySelector('.genimg-chip.on');
             var style = custom || (activeChip ? activeChip.getAttribute('data-style') : genStyleDefault());
-            genStyleSet(null, style); // 对话模式没有书：记成全局默认
-            var goBtn = modal.querySelector('#genImgGoBtn');
-            var ctl = new AbortController();
-            var _t0 = Date.now();
-            var _timer = setInterval(function () { goBtn.textContent = '生成中… ' + chatFmtElapsed(Math.floor((Date.now() - _t0) / 1000)); }, 1000);
-            goBtn.disabled = true; goBtn.textContent = '生成中…';
+            genStyleSet(null, style);
+            var styleTag = genStyleTag(style);
+            var prompt = desc + (styleTag ? ', ' + styleTag : '');
+            var caption = style + ' · ' + (desc.length > 24 ? desc.slice(0, 24) + '…' : desc);
+            // 立刻关弹窗，不阻塞操作
+            var mask = modal.closest('.genimg-dialog-mask'); if (mask) mask.remove();
+            showToast('🎨 正在生图…', true);
             try {
-                var styleTag = genStyleTag(style);
-                var prompt = desc + (styleTag ? ', ' + styleTag : '');
-                var dataURL = await aiGenerateImage({ prompt: prompt, signal: ctl.signal });
+                var dataURL = await aiGenerateImage({ prompt: prompt });
                 var id = 'gi_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
                 await genImgPut(id, dataURL);
-                var mask = modal.closest('.genimg-dialog-mask'); if (mask) mask.remove();
-                chatInsertGenImage(id, style + ' · ' + (desc.length > 24 ? desc.slice(0, 24) + '…' : desc), prompt);
+                chatInsertGenImage(id, caption, prompt);
+                showToast('🎨 生图完成');
             } catch (e) {
                 showToast('生图失败：' + (e.message || '未知错误'));
-                goBtn.disabled = false; goBtn.textContent = '生成';
-            } finally {
-                clearInterval(_timer);
             }
         }
         /* ===== 用量 / 计费面板 ===== */
@@ -21400,6 +21396,7 @@ body {
             };
         }
         // 共读/阅读：实际生成——取该段+前后一行 → 提炼 → 生图 → 作为该段下方的内联评论写入（不再追加到末尾）
+        // 选完风格立刻关弹窗，后台生成，不阻塞阅读
         async function _readingDoGenImage(msgIdx, pNum, style, goBtn) {
             if (!genImageModelCfg()) { alert(genImageNotReadyMsg()); return; }
             var msg = chatMessages[msgIdx];
@@ -21411,29 +21408,26 @@ body {
             for (var i = Math.max(0, pNum - 2); i < Math.min(lines.length, pNum + 1); i++) ctx.push(lines[i]);
             var passage = ctx.join('\n');
             var bookId = chatReaderMode ? readerBookId : rbGetConvBook();
-            genStyleSet(bookId, style); // 记住这本书的风格
+            genStyleSet(bookId, style);
             var book = bookId ? rbGetBook(bookId) : null;
             var bookName = book ? (book.fileName || '').replace(/\.[^.]+$/, '') : '';
-            var ctl = new AbortController();
-            var _t0 = Date.now();
-            var _timer = setInterval(function () { if (goBtn) goBtn.textContent = '生成中… ' + chatFmtElapsed(Math.floor((Date.now() - _t0) / 1000)); }, 1000);
-            if (goBtn) { goBtn.disabled = true; goBtn.textContent = '生成中…'; }
+            // 立刻关弹窗，不阻塞阅读
+            var mask = document.querySelector('.genimg-dialog-mask'); if (mask) mask.remove();
+            readingClearActbar();
+            showToast('🎨 正在生图…', true);
+            // 后台生成
             try {
-                var prompt = await aiBuildImagePrompt(passage, bookName, style, ctl.signal);
-                var dataURL = await aiGenerateImage({ prompt: prompt, signal: ctl.signal });
+                var prompt = await aiBuildImagePrompt(passage, bookName, style);
+                var dataURL = await aiGenerateImage({ prompt: prompt });
                 var id = 'gi_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
                 await genImgPut(id, dataURL);
-                // 内联写入：作为 [P段号] 下方的一条评论（与提问答案同一套渲染），图字节在本机 IDB
                 msg.content += '\n[P' + pNum + '] ⟦genimg:' + id + '⟧';
                 chatSaveCurrentConv(true);
                 if (typeof readerPersistQA === 'function') readerPersistQA(msgIdx);
-                var mask = document.querySelector('.genimg-dialog-mask'); if (mask) mask.remove();
-                readingClearActbar();
                 readingRerenderMsg(msgIdx, pNum);
+                showToast('🎨 配图完成');
             } catch (e) {
-                if (!(e && e.name === 'AbortError')) { alert('生图失败：' + (e.message || '未知错误')); if (goBtn) { goBtn.disabled = false; goBtn.textContent = '生成'; } }
-            } finally {
-                clearInterval(_timer);
+                if (!(e && e.name === 'AbortError')) showToast('生图失败：' + (e.message || '未知错误'));
             }
         }
 
