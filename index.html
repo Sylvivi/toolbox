@@ -18496,7 +18496,9 @@ body {
                         { role: 'system', content: isReading ? '你是小说共读摘要助手。把当前章节浓缩成一段连贯、客观的剧情摘要：人物姓名、关键情节与伏笔不可省略；读者讨论只一句话带过。只输出纯摘要正文，不分小标题、不加粗、不写开场白或客套话。' : '你是对话摘要助手。简洁准确地总结内容，保留关键信息。控制在 300 字以内。' },
                         { role: 'user', content: prompt }
                     ],
-                    max_tokens: isReading ? 600 : 500
+                    // 中文 1 字常占 2.5~3 token，旧上限 500/600 实际只够约 180~220 字，
+                    // 摘要常在句中被硬切。给足余量（约够 700+ 中文字），长度仍由提示词「200/300字以内」约束，不会变长。
+                    max_tokens: isReading ? 2000 : 2000
                 });
                 return summary ? summary.trim() : null;
             }
@@ -20231,7 +20233,7 @@ body {
             var _rChTitle = (b.chapters[idx].title || '').trim();
             var p = chatStreamChat({
                 baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model,
-                max_tokens: 400, purpose: '阅读摘要',
+                max_tokens: 1500, purpose: '阅读摘要',   // 中文吃 token，旧值 400 约 150 字就被切；留足余量，长度仍由提示词约束
                 messages: [
                     { role: 'system', content: '你是小说前情摘要助手。把给到的章节正文浓缩成一段连贯客观的剧情摘要：登场人物姓名、关键情节进展、重要设定与伏笔不可省略。只输出纯摘要正文，不分小标题、不加粗、不写开场白，控制在 150 字以内。' },
                     { role: 'user', content: '请概括这一章：\n\n' + body }
