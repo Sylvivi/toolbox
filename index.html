@@ -7344,6 +7344,17 @@ body {
                                 <div style="font-size:10px;color:var(--text-muted);margin-top:3px">共读点评/提问可各自指定收藏里的模型，留空则跟随当前选中模型</div>
                             </div>
                             <div style="margin-top:8px">
+                                <div style="display:flex;align-items:center;justify-content:space-between">
+                                    <span style="font-size:11px;color:var(--text-muted)">提问带前文问答</span>
+                                    <label style="position:relative;width:40px;height:22px;cursor:pointer">
+                                        <input type="checkbox" id="readingAskCtxToggle" onchange="readingSetAskCtx(this.checked)" style="display:none">
+                                        <span style="position:absolute;inset:0;background:var(--input-border);border-radius:11px;transition:background 0.3s cubic-bezier(0.4,0,0.2,1)"></span>
+                                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);box-shadow:rgba(0,0,0,0.18) 0px 1px 4px"></span>
+                                    </label>
+                                </div>
+                                <div style="font-size:10px;color:var(--text-muted);margin-top:3px">开了之后，问某段时会把本章这段之前问过的问答一起发给 AI，接得上前面聊的（会多花点 token）</div>
+                            </div>
+                            <div style="margin-top:8px">
                                 <span style="font-size:11px;color:var(--text-muted)">生图模型</span>
                                 <select id="imageModelSelect" onchange="chatSaveImageModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">未设置</option></select>
                                 <div style="font-size:10px;color:var(--text-muted);margin-top:3px">从「收藏」里选你的生图模型（如 gpt-image2）。共读/阅读双击段落「🎨 配图」、对话 ⋮ 菜单「🎨 生图」都用它。</div>
@@ -15841,6 +15852,7 @@ body {
             chatRenderCompressModelSelect();
             chatRenderMemoryModelSelect();
             chatRenderReadingModelSelects();
+            syncReadingAskCtxToggleStyle();
             syncChatMaskToggleStyle();
             readingApplyQuoteHl();
             readingApplyQuoteUl();
@@ -21341,20 +21353,15 @@ body {
             bar.className = 'reading-actbar';
             var inputHtml = '<textarea class="rp-ask" rows="1" placeholder="问问这一段…（如：他这句话什么意思？）"></textarea>';
             var askHtml = '<button class="rp-ask-send">讨论</button>';
-            var genHtml = '<button class="rp-genimg">🎨 配图</button>'; // 始终显示，没配生图模型则点击时提示（与对话入口一致）
-            // 按钮和「带前文问答」勾选框竖排成右侧一列（按钮在上、勾选在下），左边输入框加高填满
-            var colHtml = '<div class="rp-col">' + askHtml + genHtml + readingAskCtxBoxHtml() + '</div>';
-            bar.innerHTML = leftSide ? (colHtml + inputHtml) : (inputHtml + colHtml);
+            // 极简：只留输入框 + 讨论。配图改走长按段落，「带前文问答」改到设置里全局开关。
+            bar.innerHTML = leftSide ? (askHtml + inputHtml) : (inputHtml + askHtml);
             anchorEl.insertAdjacentElement('afterend', bar);
-            // 一步式：直接出输入框；不自动聚焦弹键盘，等用户点输入框再唤起；点「提问」发送；再点该段收起
+            // 一步式：直接出输入框；不自动聚焦弹键盘，等用户点输入框再唤起；点「讨论」发送；再点该段收起
             var input = bar.querySelector('.rp-ask');
             var send = bar.querySelector('.rp-ask-send');
             function go() { readingAskOne(msgIdx, pNum, input.value, bar); }
             send.onclick = go;
-            var genBtn = bar.querySelector('.rp-genimg');
-            if (genBtn) genBtn.onclick = function () { readingGenImageStart(msgIdx, pNum); };
             readingBindAskBox(input);
-            readingBindCtxBox(bar);
         }
         // 共读/阅读：点「🎨 配图」先弹风格选择（这本书会记住），选完再生成
         function readingGenImageStart(msgIdx, pNum) {
@@ -21442,6 +21449,24 @@ body {
             var msgIdx = parseInt(msgEl.getAttribute('data-idx'));
             var pNum = parseInt(pEl.getAttribute('data-p'));
             readingOpenAskBar(msgIdx, pNum, pEl);
+        }
+
+        // 长按原文段落：弹出「🎨 配图」操作条（双击留给提问，配图从这里走，保持双击栏极简）
+        function readingOnParaLongPress(pEl) {
+            if (readingCommenting) return;
+            readingClearActbar();
+            var msgEl = pEl.closest('.chat-msg.ai');
+            if (!msgEl || !msgEl.hasAttribute('data-idx')) return;
+            var msgIdx = parseInt(msgEl.getAttribute('data-idx'));
+            var pNum = parseInt(pEl.getAttribute('data-p'));
+            if (!(pNum > 0)) return;
+            pEl.classList.add('rp-active');
+            var bar = document.createElement('div');
+            bar.className = 'reading-actbar rp-actions';
+            bar.innerHTML = '<button class="rp-genimg">🎨 配图</button>' +
+                '<button class="rp-cancel" onclick="readingClearActbar()">取消</button>';
+            pEl.insertAdjacentElement('afterend', bar);
+            bar.querySelector('.rp-genimg').onclick = function() { readingGenImageStart(msgIdx, pNum); };
         }
 
         // 双击 AI 回答 / 评论块：接着聊同一段，输入框插在该段问答串的最下面（贴着正在看的回答）
@@ -21560,8 +21585,18 @@ body {
             readingBindAskBox(input);
             readingBindCtxBox(bar);
         }
-        // 共读提问：是否把「本章前面已聊过的问答」一并发给 AI（粘性开关，存 localStorage）
+        // 共读提问：是否把「本章前面已聊过的问答」一并发给 AI（粘性开关，存 localStorage；在设置面板里切换）
         function readingAskCtxOn() { return localStorage.getItem('reading_ask_ctx') === '1'; }
+        function readingSetAskCtx(on) { localStorage.setItem('reading_ask_ctx', on ? '1' : '0'); syncReadingAskCtxToggleStyle(); }
+        function syncReadingAskCtxToggleStyle() {
+            var cb = document.getElementById('readingAskCtxToggle');
+            if (!cb) return;
+            cb.checked = readingAskCtxOn();
+            var track = cb.nextElementSibling;
+            var thumb = track.nextElementSibling;
+            if (cb.checked) { track.style.background = 'var(--accent)'; thumb.style.transform = 'translateX(18px)'; }
+            else { track.style.background = 'var(--input-border)'; thumb.style.transform = 'translateX(0)'; }
+        }
         function readingAskCtxBoxHtml() {
             return '<label class="rp-ctx" title="勾选后，把本章里这一段之前你问过的问答也一起发给 AI，让它接得上前面聊过的内容（会多用一点 token）">' +
                 '<input type="checkbox" class="rp-ctx-cb"' + (readingAskCtxOn() ? ' checked' : '') + '>带前文问答</label>';
@@ -22363,6 +22398,18 @@ body {
                             _lpFired = true;
                             try { window.getSelection().removeAllRanges(); } catch (x) {}
                             readingOnBlockLongPress(rbq);
+                        }, 500);
+                        return;
+                    }
+                    // 长按原文段落 = 给这一段配图（双击留给提问，单击留给翻页/复制）
+                    var rlp = e.target.closest('.reading-merged p[data-p]');
+                    if (rlp && !e.target.closest('.reading-actbar, button, input, textarea')) {
+                        _lpStart = { x: e.clientX, y: e.clientY };
+                        _lpTimer = setTimeout(function() {
+                            _lpTimer = null;
+                            _lpFired = true;
+                            try { window.getSelection().removeAllRanges(); } catch (x) {}
+                            readingOnParaLongPress(rlp);
                         }, 500);
                         return;
                     }
