@@ -15862,58 +15862,20 @@ body {
             var bodyEl = document.getElementById('favNoteBody');
             function _esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
             function render() {
-                var p2 = target.price || {};
-                var m = p2.mode || 'token';
                 var html = '';
                 html += '<div style="margin-bottom:14px">'
                     + '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">备注</div>'
                     + '<input id="fnNote" type="text" value="' + _esc(target.note || '') + '" placeholder="如：好用 / 写作首选 / 贵" style="width:100%;padding:8px 10px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box">'
                     + '</div>';
-                html += '<div style="margin-bottom:14px">'
-                    + '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">价格</div>';
-                html += '<div style="display:flex;gap:6px;margin-bottom:8px">';
-                html += '<button id="fnModeToken" onclick="favNoteSetMode(\'token\')" style="flex:1;padding:7px 0;border:1px solid var(--card-border);border-radius:8px;font-size:12px;cursor:pointer;background:' + (m === 'token' ? 'var(--accent-light)' : 'transparent') + ';color:' + (m === 'token' ? 'var(--accent)' : 'var(--text-muted)') + ';font-weight:' + (m === 'token' ? '600' : '400') + '">按量（元/百万 token）</button>';
-                html += '<button id="fnModeCall" onclick="favNoteSetMode(\'call\')" style="flex:1;padding:7px 0;border:1px solid var(--card-border);border-radius:8px;font-size:12px;cursor:pointer;background:' + (m === 'call' ? 'var(--accent-light)' : 'transparent') + ';color:' + (m === 'call' ? 'var(--accent)' : 'var(--text-muted)') + ';font-weight:' + (m === 'call' ? '600' : '400') + '">按次（元/次）</button>';
-                html += '</div>';
-                if (m === 'token') {
-                    html += '<div style="display:flex;gap:8px">'
-                        + '<input id="fnIn" type="number" inputmode="decimal" min="0" step="0.01" placeholder="输入单价" value="' + (p2.in || '') + '" style="flex:1;min-width:0;box-sizing:border-box;padding:8px 10px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none">'
-                        + '<input id="fnOut" type="number" inputmode="decimal" min="0" step="0.01" placeholder="输出单价" value="' + (p2.out || '') + '" style="flex:1;min-width:0;box-sizing:border-box;padding:8px 10px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none">'
-                        + '</div>';
-                } else {
-                    html += '<input id="fnPer" type="number" inputmode="decimal" min="0" step="0.001" placeholder="每次调用价格（元）" value="' + (p2.per || '') + '" style="width:100%;padding:8px 10px;background:var(--card-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box">';
-                }
-                html += '<div style="font-size:11px;color:var(--text-muted);margin-top:5px">不填价格则使用「默认价」；设置了价格后优先于默认值。</div>';
-                html += '</div>';
+                html += '<div style="font-size:11px;color:var(--text-muted);margin:-6px 0 14px;line-height:1.5">💡 计价请到「💰 用量」面板里设，那边取消收藏也不会丢价。</div>';
                 html += '<div style="text-align:center;margin-top:4px">'
                     + '<button onclick="favNoteSave()" style="padding:9px 32px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">保存</button>'
                     + '</div>';
                 bodyEl.innerHTML = html;
             }
-            window.favNoteSetMode = function (mode) {
-                if (!target.price) target.price = {};
-                target.price.mode = mode;
-                render();
-            };
             window.favNoteSave = function () {
                 var noteVal = document.getElementById('fnNote').value.trim();
                 if (noteVal) target.note = noteVal; else delete target.note;
-                var m = (target.price && target.price.mode) ? target.price.mode : 'token';
-                var inp = document.getElementById('fnIn'), outp = document.getElementById('fnOut'), perk = document.getElementById('fnPer');
-                if (m === 'token') {
-                    var hasIn = inp && inp.value.trim();
-                    var hasOut = outp && outp.value.trim();
-                    if (hasIn || hasOut) {
-                        target.price = { mode: 'token', in: hasIn ? +inp.value : 0, out: hasOut ? +outp.value : 0 };
-                    } else { delete target.price; }
-                } else {
-                    var pk = perk && perk.value.trim();
-                    if (pk) target.price = { mode: 'call', per: +pk };
-                    else delete target.price;
-                }
-                // 同步写进独立价格表（收藏改价 → 价格表也更新；删价 → 表里也删），收藏被删后价仍在
-                var _st = (typeof getBaseUrl === 'function') ? getBaseUrl(url || '') : (url || '');
-                modelPriceSet(model, _st, target.price || null);
                 chatFavModelsSave();
                 mask.remove();
                 chatRenderFavSection();
