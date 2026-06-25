@@ -2964,6 +2964,67 @@ body {
         @keyframes rpFlash { 0%,100% { background: transparent; } 30% { background: var(--accent-light); } }
         .reading-merged p[data-p].rp-flash { animation: rpFlash 1.1s ease; }
 
+        /* ===== 划线（读者自己在正文里划的重点/批注）=====
+           颜色取自 7 个主题里那套「夜间会发光」的亮强调色，挑 5 个色相拉得开的当分类色板。
+           半透明，白天压在白底、夜间压在暗底都读得清；颜色管「分类含义」，底色/下划线两种长相靠 body class 全书切换。
+           mark 只描在文字上、color:inherit 不夺字色，不破坏既有的人名/引号高亮结构。 */
+        mark.rd-hl { color: inherit; background: transparent; border-radius: 2px; -webkit-box-decoration-break: clone; box-decoration-break: clone; cursor: pointer; }
+        /* 底色款（默认）：半透明荧光底 */
+        body:not(.rd-hl-underline) .reading-merged mark.rd-hl.rd-hl-gold  { background: rgba(245,200,66,0.30); }
+        body:not(.rd-hl-underline) .reading-merged mark.rd-hl.rd-hl-orange { background: rgba(255,154,82,0.30); }
+        body:not(.rd-hl-underline) .reading-merged mark.rd-hl.rd-hl-green  { background: rgba(95,196,106,0.30); }
+        body:not(.rd-hl-underline) .reading-merged mark.rd-hl.rd-hl-sky    { background: rgba(124,200,255,0.32); }
+        body:not(.rd-hl-underline) .reading-merged mark.rd-hl.rd-hl-rose   { background: rgba(255,138,163,0.30); }
+        /* 夜间底色压淡一档，避免亮底糊住字 */
+        body.dark:not(.rd-hl-underline) .reading-merged mark.rd-hl.rd-hl-gold  { background: rgba(245,200,66,0.24); }
+        body.dark:not(.rd-hl-underline) .reading-merged mark.rd-hl.rd-hl-orange { background: rgba(255,154,82,0.24); }
+        body.dark:not(.rd-hl-underline) .reading-merged mark.rd-hl.rd-hl-green  { background: rgba(95,196,106,0.24); }
+        body.dark:not(.rd-hl-underline) .reading-merged mark.rd-hl.rd-hl-sky    { background: rgba(124,200,255,0.26); }
+        body.dark:not(.rd-hl-underline) .reading-merged mark.rd-hl.rd-hl-rose   { background: rgba(255,138,163,0.24); }
+        /* 下划线款：彩色实线在字下，不夺底 */
+        body.rd-hl-underline .reading-merged mark.rd-hl { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+        body.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-gold  { text-decoration-color: #e0b020; }
+        body.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-orange { text-decoration-color: #f5883f; }
+        body.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-green  { text-decoration-color: #4cb558; }
+        body.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-sky    { text-decoration-color: #62baf2; }
+        body.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-rose   { text-decoration-color: #f5728e; }
+        body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-gold  { text-decoration-color: #f5c842; }
+        body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-orange { text-decoration-color: #ff9a52; }
+        body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-green  { text-decoration-color: #5fc46a; }
+        body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-sky    { text-decoration-color: #7cc8ff; }
+        body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-rose   { text-decoration-color: #ff8aa3; }
+        /* 带批注的划线：右上角缀一个小点提示「这条有笔记」 */
+        mark.rd-hl.rd-hl-noted { position: relative; }
+        mark.rd-hl.rd-hl-noted::after { content: '✎'; font-size: 9px; opacity: 0.6; vertical-align: super; margin-left: 1px; }
+
+        /* 划线浮动小条：选中文字 / 点已有划线时冒出 */
+        .rd-hl-bar {
+            position: fixed; z-index: 4000; display: flex; align-items: center; gap: 6px;
+            padding: 6px 8px; border-radius: 10px;
+            background: var(--card-bg, #fff); border: 1px solid var(--card-border, rgba(0,0,0,0.12));
+            box-shadow: 0 6px 22px rgba(0,0,0,0.18); font-size: 13px;
+            -webkit-user-select: none; user-select: none; max-width: 92vw; flex-wrap: wrap;
+        }
+        .rd-hl-bar .rd-sw { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; flex-shrink: 0; padding: 0; }
+        .rd-hl-bar .rd-sw.cur { border-color: var(--text, #333); }
+        .rd-hl-bar .rd-sw-gold  { background: #f5c842; }
+        .rd-hl-bar .rd-sw-orange { background: #ff9a52; }
+        .rd-hl-bar .rd-sw-green  { background: #5fc46a; }
+        .rd-hl-bar .rd-sw-sky    { background: #7cc8ff; }
+        .rd-hl-bar .rd-sw-rose   { background: #ff8aa3; }
+        .rd-hl-bar .rd-sep { width: 1px; align-self: stretch; background: var(--card-border, rgba(0,0,0,0.12)); margin: 2px 1px; }
+        .rd-hl-bar button.rd-act { background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px 6px; border-radius: 6px; font-size: 13px; }
+        .rd-hl-bar button.rd-act:hover { background: var(--accent-light); color: var(--accent); }
+        .rd-hl-bar button.rd-act.rd-del { color: #e5484d; }
+        .rd-hl-bar button.rd-act.rd-del.armed { background: #e5484d; color: #fff; }
+        /* 批注输入气泡 */
+        .rd-hl-note { position: fixed; z-index: 4001; width: min(280px, 88vw); background: var(--card-bg, #fff); border: 1px solid var(--card-border, rgba(0,0,0,0.12)); border-radius: 10px; box-shadow: 0 6px 22px rgba(0,0,0,0.18); padding: 8px; }
+        .rd-hl-note textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--card-border, rgba(0,0,0,0.15)); border-radius: 8px; padding: 6px 8px; font-size: 13px; resize: vertical; min-height: 56px; background: transparent; color: var(--text); font-family: inherit; }
+        .rd-hl-note .rd-note-row { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
+        .rd-hl-note .rd-note-row button { border: none; border-radius: 7px; padding: 5px 10px; font-size: 13px; cursor: pointer; }
+        .rd-hl-note .rd-note-row .rd-note-save { background: var(--accent); color: #fff; }
+        .rd-hl-note .rd-note-row .rd-note-cancel { background: transparent; color: var(--text-muted); }
+
         /* ===== 剧本翻译模式 ===== */
         .translate-merged p[data-p].tp-sel {
             background: var(--accent-light);
@@ -7204,6 +7265,13 @@ body {
                         <button class="pagebtn-pos-opt" id="chipNameDash" onclick="readingToggleNameStyle('dash')" title="名词加虚线下划线（同引号「划线」款）">划线</button>
                         <button class="pagebtn-pos-opt" id="chipNameGlow" onclick="readingToggleNameGlow()" title="名词柔光，单击循环换款：关→光晕→光带→关（夜间会发光）">柔光</button>
                         <button class="pagebtn-pos-opt" id="chipNameList" onclick="readingOpenNamesEditor()" title="填写/自动识别本书名词">名单…</button>
+                    </div>
+                </div>
+                <div id="readingHlRow" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0">划线</span>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:center">
+                        <span style="font-size:11px;color:var(--text-muted)">读时选中文字即可划线</span>
+                        <button class="pagebtn-pos-opt" id="chipHlStyle" onclick="rdHlToggleStyle()" title="划线长相：底色（荧光笔款）↔ 下划线（彩线款），全书统一">底色</button>
                     </div>
                 </div>
                 <div id="readingFontRow" style="display:flex;align-items:center;justify-content:space-between">
@@ -12111,6 +12179,8 @@ body {
                 checkinTasksTs: getCheckinTasksTs(),
                 bookmarks: readingGetAllBookmarks(),
                 bookmarksTs: readingGetBookmarksTs(),
+                highlights: readingGetAllHl(),
+                highlightsTs: readingGetHlTs(),
                 favModels: (function () { try { return JSON.parse(localStorage.getItem('chat_fav_models') || '[]'); } catch (e) { return []; } })(),
                 favModelsTs: localStorage.getItem('chat_fav_models_ts') || '',
                 modelPrices: (function () { try { return JSON.parse(localStorage.getItem('toolbox_model_prices') || '{}'); } catch (e) { return {}; } })(),
@@ -12355,6 +12425,16 @@ body {
                     if (cloudBmTs > localBmTs) {
                         localStorage.setItem('reading_bookmarks', JSON.stringify(manifest.bookmarks));
                         localStorage.setItem('reading_bookmarks_ts', cloudBmTs);
+                    }
+                }
+
+                // highlights(划线): 同书签，整块按时间戳后写覆盖
+                if (manifest.highlights) {
+                    var cloudHlTs = manifest.highlightsTs || '';
+                    var localHlTs = readingGetHlTs();
+                    if (cloudHlTs > localHlTs) {
+                        localStorage.setItem('reading_highlights', JSON.stringify(manifest.highlights));
+                        localStorage.setItem('reading_highlights_ts', cloudHlTs);
                     }
                 }
 
@@ -12707,6 +12787,7 @@ body {
                 if (manifest.checkin) setCheckinDataSilent(manifest.checkin);
                 if (manifest.checkinTasks) { idbSet(CHECKIN_TASKS_KEY, manifest.checkinTasks); if (manifest.checkinTasksTs) idbSet(CHECKIN_TASKS_TS_KEY, manifest.checkinTasksTs); }
                 if (manifest.bookmarks) { localStorage.setItem('reading_bookmarks', JSON.stringify(manifest.bookmarks)); if (manifest.bookmarksTs) localStorage.setItem('reading_bookmarks_ts', manifest.bookmarksTs); }
+                if (manifest.highlights) { localStorage.setItem('reading_highlights', JSON.stringify(manifest.highlights)); if (manifest.highlightsTs) localStorage.setItem('reading_highlights_ts', manifest.highlightsTs); }
                 if (manifest.favModels) { try { localStorage.setItem('chat_fav_models', JSON.stringify(manifest.favModels)); localStorage.setItem('chat_fav_models_ts', manifest.favModelsTs || new Date().toISOString()); chatFavModels = manifest.favModels; if (typeof chatUpdateFavHeader === 'function') chatUpdateFavHeader(); } catch (e) {} }
                 if (manifest.modelPrices) { try { localStorage.setItem('toolbox_model_prices', JSON.stringify(manifest.modelPrices)); localStorage.setItem('toolbox_model_prices_ts', manifest.modelPricesTs || new Date().toISOString()); } catch (e) {} }
                 readingApplyFontSync(manifest); // 字体库+五个位置选择，带时间戳护栏（修复开机被云端旧值冲掉的问题）
@@ -15244,7 +15325,7 @@ body {
                     h += text ? renderText(text) : '';
                 }
                 bubble.innerHTML = h;
-                if (_isReadingMsg && (text || _isReaderChap)) readingMarkBookmarks(bubble, msgIdx);
+                if (_isReadingMsg && (text || _isReaderChap)) { readingMarkBookmarks(bubble, msgIdx); readingApplyHighlights(bubble, msgIdx); }
                 if (typeof genImgHydrate === 'function') genImgHydrate(bubble); // 共读内联插图：异步从本机 IDB 填图
             }
             div.appendChild(bubble);
@@ -19004,6 +19085,7 @@ body {
             c = document.getElementById('chipQuoteWave'); if (c) c.classList.toggle('active', wave);
             c = document.getElementById('chipQuoteGlow'); if (c) c.classList.toggle('active', glow);
             c = document.getElementById('chipQuoteLs'); if (c) c.classList.toggle('active', split);
+            if (typeof rdHlInitStyle === 'function') rdHlInitStyle();   // 顺带恢复「划线」底色/下划线样式
             updateStatusBarColor();
         }
         // 共读：引号高亮（着色）
@@ -22301,6 +22383,281 @@ body {
                 return t || ('第 ' + p + ' 段');
             } catch (e) { return '第 ' + p + ' 段'; }
         }
+        /* ===================== 划线（读者在正文里划重点 + 批注 + 问 clawd） =====================
+           存账思路同书签：按「会话 → 第几条消息 + 第几段 + 段内第几个字到第几个字」记，
+           正文内容稳定不变，所以刷新/换设备/窗口化补渲染都能按账把线重新描回去，且不破坏既有人名/引号高亮。 */
+        var RD_HL_COLORS = ['gold', 'orange', 'green', 'sky', 'rose'];   // 取自主题夜间亮强调色，色相拉开当分类色板
+        function readingGetAllHl() {
+            try { return JSON.parse(localStorage.getItem('reading_highlights')) || {}; }
+            catch (e) { return {}; }
+        }
+        var _rdHlPushTimer = null;
+        function readingSaveAllHl(obj) {
+            localStorage.setItem('reading_highlights', JSON.stringify(obj));
+            localStorage.setItem('reading_highlights_ts', new Date().toISOString());
+            if (activeSyncProvider === 'cf') {
+                if (_rdHlPushTimer) clearTimeout(_rdHlPushTimer);
+                _rdHlPushTimer = setTimeout(syncPushData, 3000);
+            }
+        }
+        function readingGetHlTs() { return localStorage.getItem('reading_highlights_ts') || ''; }
+        function readingGetConvHl() {
+            if (!chatCurrentConvId) return [];
+            var all = readingGetAllHl();
+            return all[chatCurrentConvId] || [];
+        }
+        function readingSaveConvHl(list) {
+            if (!chatCurrentConvId) return;
+            var all = readingGetAllHl();
+            all[chatCurrentConvId] = list;
+            readingSaveAllHl(all);
+        }
+        // 划线样式：底色 ↔ 下划线，全书统一，存本机
+        function rdHlSetStyle(underline) {
+            document.body.classList.toggle('rd-hl-underline', !!underline);
+            localStorage.setItem('reading_hl_style', underline ? 'underline' : 'band');
+            var chip = document.getElementById('chipHlStyle');
+            if (chip) chip.textContent = underline ? '下划线' : '底色';
+        }
+        function rdHlToggleStyle() { rdHlSetStyle(!document.body.classList.contains('rd-hl-underline')); }
+        function rdHlInitStyle() { rdHlSetStyle(localStorage.getItem('reading_hl_style') === 'underline'); }
+
+        // 把段落 p 内 [start,end) 这段字描成一条 mark（可能横跨人名/引号 span，按文本节点逐段包，不动元素结构）
+        function rdHlWrapRange(p, start, end, color, id, noted) {
+            if (!(end > start)) return;
+            var walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, null, false);
+            var idx = 0, segs = [], n;
+            while ((n = walker.nextNode())) {
+                if (n.parentNode && n.parentNode.closest && n.parentNode.closest('mark.rd-hl')) { idx += n.nodeValue.length; continue; } // 已在别的划线里，跳过避免嵌套
+                var len = n.nodeValue.length;
+                var s = Math.max(start, idx), e = Math.min(end, idx + len);
+                if (s < e) segs.push({ node: n, from: s - idx, to: e - idx });
+                idx += len;
+            }
+            var cls = 'rd-hl rd-hl-' + color + (noted ? ' rd-hl-noted' : '');
+            for (var i = 0; i < segs.length; i++) {
+                try {
+                    var r = document.createRange();
+                    r.setStart(segs[i].node, segs[i].from);
+                    r.setEnd(segs[i].node, segs[i].to);
+                    var m = document.createElement('mark');
+                    m.className = cls;
+                    m.setAttribute('data-hlid', id);
+                    r.surroundContents(m);
+                } catch (ex) {}
+            }
+        }
+        // 渲染一条共读气泡后，把这条消息上的所有划线描回去（挂在 readingMarkBookmarks 同一处）
+        function readingApplyHighlights(bubble, msgIdx) {
+            if (!bubble) return;
+            var list = readingGetConvHl();
+            for (var i = 0; i < list.length; i++) {
+                var hl = list[i];
+                if (hl.msgIdx !== msgIdx) continue;
+                var p = bubble.querySelector('.reading-merged p[data-p="' + hl.p + '"]');
+                if (!p || p.closest('.translate-merged')) continue;
+                rdHlWrapRange(p, hl.start, hl.end, hl.color, hl.id, !!(hl.note && hl.note.trim()));
+            }
+        }
+        // 拆掉某条划线的所有 mark（删除/重描时用），还原成纯文字
+        function rdHlUnwrap(id) {
+            var marks = document.querySelectorAll('mark.rd-hl[data-hlid="' + id + '"]');
+            for (var i = 0; i < marks.length; i++) {
+                var m = marks[i], pa = m.parentNode;
+                while (m.firstChild) pa.insertBefore(m.firstChild, m);
+                pa.removeChild(m);
+                if (pa.normalize) pa.normalize();
+            }
+        }
+        // 求选区在段落 p 内的字符偏移
+        function rdHlOffsets(p, range) {
+            var pre = range.cloneRange();
+            pre.selectNodeContents(p);
+            pre.setEnd(range.startContainer, range.startOffset);
+            var start = pre.toString().length;
+            var end = start + range.toString().length;
+            return { start: start, end: end };
+        }
+        // 当前选区是否落在「同一个共读原文段落」内；是则返回上下文，否则 null
+        function rdHlCurrentSel() {
+            if (!chatReadingMode) return null;
+            var sel = window.getSelection && window.getSelection();
+            if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+            if (String(sel).trim().length === 0) return null;
+            var r = sel.getRangeAt(0);
+            function paraOf(node) { var el = node.nodeType === 1 ? node : node.parentNode; return el && el.closest ? el.closest('.reading-merged p[data-p]') : null; }
+            var pa = paraOf(r.startContainer), pb = paraOf(r.endContainer);
+            if (!pa || pa !== pb || pa.closest('.translate-merged')) return null;
+            var msgEl = pa.closest('.chat-msg.ai');
+            if (!msgEl || !msgEl.hasAttribute('data-idx')) return null;
+            return { p: pa, range: r, msgIdx: parseInt(msgEl.getAttribute('data-idx')), pNum: parseInt(pa.getAttribute('data-p')) };
+        }
+
+        // ---- 浮动小条 ----
+        var _rdHlPending = null;   // 选中态：暂存选区信息，点色板时用（避免移动端点按钮丢选区）
+        function rdHlHideBar() {
+            var bar = document.getElementById('rdHlBar'); if (bar) bar.remove();
+            var note = document.getElementById('rdHlNote'); if (note) note.remove();
+            _rdHlPending = null;
+        }
+        function rdHlPlaceBar(bar, rect) {
+            document.body.appendChild(bar);
+            var bw = bar.offsetWidth, bh = bar.offsetHeight;
+            var cx = rect.left + rect.width / 2;
+            var left = Math.max(8, Math.min(window.innerWidth - bw - 8, cx - bw / 2));
+            var top = rect.top - bh - 8;
+            if (top < 8) top = rect.bottom + 8;
+            bar.style.left = left + 'px'; bar.style.top = top + 'px';
+        }
+        function rdHlSwatchHtml(curColor) {
+            var h = '';
+            for (var i = 0; i < RD_HL_COLORS.length; i++) {
+                var c = RD_HL_COLORS[i];
+                h += '<button class="rd-sw rd-sw-' + c + (c === curColor ? ' cur' : '') + '" data-c="' + c + '"></button>';
+            }
+            return h;
+        }
+        // 选中文字后的小条：选色即划线 + 问 clawd
+        function rdHlShowSelBar(ctx) {
+            rdHlHideBar();
+            if (!chatCurrentConvId) return;
+            var off = rdHlOffsets(ctx.p, ctx.range);
+            if (!(off.end > off.start)) return;
+            var full = ctx.range.toString().trim();
+            _rdHlPending = { msgIdx: ctx.msgIdx, pNum: ctx.pNum, start: off.start, end: off.end, text: full };
+            var rect = ctx.range.getBoundingClientRect();
+            var bar = document.createElement('div');
+            bar.className = 'rd-hl-bar'; bar.id = 'rdHlBar';
+            bar.innerHTML = rdHlSwatchHtml('') +
+                '<span class="rd-sep"></span>' +
+                '<button class="rd-act" data-act="ask">💬 问</button>';
+            // 按住小条不丢选区
+            bar.addEventListener('mousedown', function(e) { e.preventDefault(); });
+            bar.addEventListener('touchstart', function(e) { e.stopPropagation(); }, { passive: true });
+            bar.addEventListener('click', function(e) {
+                var sw = e.target.closest('.rd-sw');
+                if (sw) { rdHlCreate(sw.getAttribute('data-c')); return; }
+                var act = e.target.closest('.rd-act');
+                if (act && act.getAttribute('data-act') === 'ask') {
+                    var pend = _rdHlPending;
+                    rdHlHideBar();
+                    if (pend) rdHlAskClawd({ msgIdx: pend.msgIdx, p: pend.pNum, text: pend.text });
+                }
+            });
+            rdHlPlaceBar(bar, rect);
+        }
+        // 新建一条划线（从暂存选区）
+        function rdHlCreate(color) {
+            var pend = _rdHlPending; if (!pend) return;
+            var id = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+            var full = pend.text || '';
+            var hl = { id: id, msgIdx: pend.msgIdx, p: pend.pNum, start: pend.start, end: pend.end,
+                color: color, note: '', text: full, preview: full.length > 60 ? full.slice(0, 60) + '…' : full, ts: Date.now() };
+            var list = readingGetConvHl(); list.push(hl); readingSaveConvHl(list);
+            try { window.getSelection().removeAllRanges(); } catch (e) {}
+            var p = document.querySelector('.chat-msg.ai[data-idx="' + hl.msgIdx + '"] .reading-merged p[data-p="' + hl.p + '"]');
+            if (p) rdHlWrapRange(p, hl.start, hl.end, hl.color, hl.id, false);
+            rdHlHideBar();
+            if (typeof showToast === 'function') showToast('已划线');
+            readingRefreshBookmarkUI && readingRefreshBookmarkUI();
+        }
+        // 点已有划线的小条：换色 / 批注 / 问 clawd / 删除
+        function rdHlShowEditBar(markEl) {
+            rdHlHideBar();
+            var id = markEl.getAttribute('data-hlid');
+            var list = readingGetConvHl();
+            var hl = null; for (var i = 0; i < list.length; i++) { if (list[i].id === id) { hl = list[i]; break; } }
+            if (!hl) return;
+            var rect = markEl.getBoundingClientRect();
+            var bar = document.createElement('div');
+            bar.className = 'rd-hl-bar'; bar.id = 'rdHlBar';
+            bar.innerHTML = rdHlSwatchHtml(hl.color) +
+                '<span class="rd-sep"></span>' +
+                '<button class="rd-act" data-act="note">✎ 批注</button>' +
+                '<button class="rd-act" data-act="ask">💬 问</button>' +
+                '<button class="rd-act rd-del" data-act="del">删除</button>';
+            bar.addEventListener('mousedown', function(e) { e.preventDefault(); });
+            bar.addEventListener('click', function(e) {
+                var sw = e.target.closest('.rd-sw');
+                if (sw) { rdHlRecolor(id, sw.getAttribute('data-c')); return; }
+                var act = e.target.closest('.rd-act'); if (!act) return;
+                var a = act.getAttribute('data-act');
+                if (a === 'note') { rdHlOpenNote(id, rect); return; }
+                if (a === 'ask') { rdHlHideBar(); rdHlAskClawd({ msgIdx: hl.msgIdx, p: hl.p, text: hl.text || hl.preview || '' }); return; }
+                if (a === 'del') {
+                    if (act.classList.contains('armed')) { rdHlDelete(id); return; }
+                    act.classList.add('armed'); act.textContent = '确认删除';
+                }
+            });
+            rdHlPlaceBar(bar, rect);
+        }
+        function rdHlRecolor(id, color) {
+            var list = readingGetConvHl();
+            for (var i = 0; i < list.length; i++) { if (list[i].id === id) { list[i].color = color; break; } }
+            readingSaveConvHl(list);
+            var marks = document.querySelectorAll('mark.rd-hl[data-hlid="' + id + '"]');
+            for (var j = 0; j < marks.length; j++) {
+                marks[j].className = marks[j].className.replace(/rd-hl-(gold|orange|green|sky|rose)/g, 'rd-hl-' + color);
+            }
+            rdHlHideBar();
+            readingRefreshBookmarkUI && readingRefreshBookmarkUI();
+        }
+        function rdHlDelete(id) {
+            var list = readingGetConvHl().filter(function(h) { return h.id !== id; });
+            readingSaveConvHl(list);
+            rdHlUnwrap(id);
+            rdHlHideBar();
+            if (typeof showToast === 'function') showToast('已删除划线');
+            readingRefreshBookmarkUI && readingRefreshBookmarkUI();
+        }
+        // 批注输入气泡
+        function rdHlOpenNote(id, rect) {
+            var existing = document.getElementById('rdHlNote'); if (existing) existing.remove();
+            var list = readingGetConvHl();
+            var hl = null; for (var i = 0; i < list.length; i++) { if (list[i].id === id) { hl = list[i]; break; } }
+            if (!hl) return;
+            var box = document.createElement('div');
+            box.className = 'rd-hl-note'; box.id = 'rdHlNote';
+            box.innerHTML = '<textarea placeholder="写点你的想法…">' + (hl.note ? hl.note.replace(/</g, '&lt;') : '') + '</textarea>' +
+                '<div class="rd-note-row"><button class="rd-note-cancel">取消</button><button class="rd-note-save">保存</button></div>';
+            box.addEventListener('mousedown', function(e) { e.stopPropagation(); });
+            document.body.appendChild(box);
+            var bw = box.offsetWidth, bh = box.offsetHeight;
+            var left = Math.max(8, Math.min(window.innerWidth - bw - 8, rect.left));
+            var top = rect.bottom + 8; if (top + bh > window.innerHeight - 8) top = Math.max(8, rect.top - bh - 8);
+            box.style.left = left + 'px'; box.style.top = top + 'px';
+            var ta = box.querySelector('textarea'); ta.focus();
+            box.querySelector('.rd-note-cancel').onclick = function() { box.remove(); };
+            box.querySelector('.rd-note-save').onclick = function() {
+                var v = ta.value.trim();
+                var l2 = readingGetConvHl();
+                for (var k = 0; k < l2.length; k++) { if (l2[k].id === id) { l2[k].note = v; break; } }
+                readingSaveConvHl(l2);
+                var marks = document.querySelectorAll('mark.rd-hl[data-hlid="' + id + '"]');
+                for (var m = 0; m < marks.length; m++) { marks[m].classList.toggle('rd-hl-noted', !!v); }
+                box.remove(); rdHlHideBar();
+                if (typeof showToast === 'function') showToast(v ? '已记下批注' : '已清空批注');
+                readingRefreshBookmarkUI && readingRefreshBookmarkUI();
+            };
+        }
+        // 把所选内容拿去问 clawd：复用「点段提问」那套（带前文上下文开关一并生效），只是把所选句子引上
+        function rdHlAskClawd(hl) {
+            var p = document.querySelector('.chat-msg.ai[data-idx="' + hl.msgIdx + '"] .reading-merged p[data-p="' + hl.p + '"]');
+            if (!p) { if (typeof showToast === 'function') showToast('找不到这一段了'); return; }
+            try { window.getSelection().removeAllRanges(); } catch (e) {}
+            readingClearActbar();
+            p.classList.add('rp-active');
+            readingOpenAskBar(hl.msgIdx, hl.p, p);
+            var bar = document.querySelector('.reading-actbar');
+            var ta = bar && bar.querySelector('.rp-ask');
+            if (ta) {
+                var q = (hl.text || '').trim();
+                ta.value = q ? ('「' + q + '」 ') : '';
+                ta.focus();
+                try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (x) {}
+            }
+        }
+
         function readingToggleBookmark(msgIdx, p) {
             if (!chatCurrentConvId) return false;
             var all = readingGetAllBookmarks();
@@ -22402,28 +22759,43 @@ body {
             var nav = document.getElementById('chatNavPanel');
             if (!nav || !nav.classList.contains('show')) readingHidePanelMask();
         }
+        var RD_HL_SW = { gold: '#f5c842', orange: '#ff9a52', green: '#5fc46a', sky: '#7cc8ff', rose: '#ff8aa3' };
         function chatBuildBookmarkPanel() {
             var panel = document.getElementById('chatBookmarkPanel');
             panel.innerHTML = '';
+            // 书签（段落 / 提问）+ 划线，合并进同一条读痕流
             var list = readingGetConvBookmarks().slice();
+            readingGetConvHl().forEach(function(h) {
+                list.push({ type: 'hl', msgIdx: h.msgIdx, p: h.p, id: h.id, color: h.color, note: h.note || '',
+                    preview: h.preview || ('第 ' + h.p + ' 段'), ts: h.ts || 0 });
+            });
             if (list.length === 0) {
-                panel.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">还没有读痕<br><span style="font-size:11px">点一下正文里的某段去问问它，你的提问会自动收进这里</span></div>';
+                panel.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">还没有读痕<br><span style="font-size:11px">读时选中文字划线、或点一下某段去问问它，都会收进这里</span></div>';
                 return;
             }
-            // 按消息、段落排序；同段内段落书签在前、问题按时间先后
-            list.sort(function(a, b) { return a.msgIdx - b.msgIdx || a.p - b.p || ((a.type === 'ask') - (b.type === 'ask')) || (a.ts || 0) - (b.ts || 0); });
+            // 按消息、段落排序；同段内：段落书签 → 划线 → 提问，再按时间先后
+            function rank(x) { return x.type === 'ask' ? 2 : (x.type === 'hl' ? 1 : 0); }
+            list.sort(function(a, b) { return a.msgIdx - b.msgIdx || a.p - b.p || rank(a) - rank(b) || (a.ts || 0) - (b.ts || 0); });
             for (var i = 0; i < list.length; i++) {
                 (function(bm) {
-                    var isAsk = bm.type === 'ask';
+                    var isAsk = bm.type === 'ask', isHl = bm.type === 'hl';
                     var item = document.createElement('div');
                     item.className = 'chat-nav-item';
-                    item.innerHTML = '<div class="chat-nav-role ' + (isAsk ? 'user' : 'ai') + '">' + (isAsk ? '汐' : '🔖') + '</div>' +
-                        '<div class="chat-nav-text">' + esc(bm.preview || ('第 ' + bm.p + ' 段')) + '</div>' +
+                    var roleHtml = isHl
+                        ? '<div class="chat-nav-role" style="background:transparent"><span style="display:inline-block;width:13px;height:13px;border-radius:50%;background:' + (RD_HL_SW[bm.color] || '#f5c842') + '"></span></div>'
+                        : '<div class="chat-nav-role ' + (isAsk ? 'user' : 'ai') + '">' + (isAsk ? '汐' : '🔖') + '</div>';
+                    var noteHtml = (isHl && bm.note) ? '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">✎ ' + esc(bm.note) + '</div>' : '';
+                    item.innerHTML = roleHtml +
+                        '<div class="chat-nav-text">' + esc(bm.preview || ('第 ' + bm.p + ' 段')) + noteHtml + '</div>' +
                         '<button class="chat-nav-idx" style="border:none;background:transparent;color:var(--text-muted);cursor:pointer;font-size:14px" title="删除">✕</button>';
-                    item.onclick = function() { readingJumpBookmark(bm.msgIdx, bm.p); chatCloseBookmarkPanel(); };
+                    item.onclick = function() {
+                        if (isHl) readingJumpHighlight(bm.id, bm.msgIdx, bm.p); else readingJumpBookmark(bm.msgIdx, bm.p);
+                        chatCloseBookmarkPanel();
+                    };
                     var delBtn = item.querySelector('button');
                     delBtn.onclick = function(e) {
                         e.stopPropagation();
+                        if (isHl) { rdHlDelete(bm.id); chatBuildBookmarkPanel(); return; }
                         readingRemoveBookmarkObj(bm);
                         chatBuildBookmarkPanel();
                         readingRefreshBookmarkUI();
@@ -22431,6 +22803,15 @@ body {
                     panel.appendChild(item);
                 })(list[i]);
             }
+        }
+        // 跳到某条划线：滚到其所在段落并让划线闪一下
+        function readingJumpHighlight(id, msgIdx, p) {
+            var pEl = document.querySelector('.chat-msg.ai[data-idx="' + msgIdx + '"] p[data-p="' + p + '"]');
+            if (!pEl) { showToast('未找到该段落'); return; }
+            var mark = document.querySelector('mark.rd-hl[data-hlid="' + id + '"]') || pEl;
+            mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            pEl.classList.remove('rp-flash'); void pEl.offsetWidth; pEl.classList.add('rp-flash');
+            setTimeout(function() { pEl.classList.remove('rp-flash'); }, 1200);
         }
         function readingJumpBookmark(msgIdx, p) {
             var pEl = document.querySelector('.chat-msg.ai[data-idx="' + msgIdx + '"] p[data-p="' + p + '"]');
@@ -22469,6 +22850,12 @@ body {
                 if (!e.target.closest) return;
                 // 长按刚触发过追问 → 吞掉随之而来的 click，避免误触
                 if (_lpFired) { _lpFired = false; return; }
+                // 点已有划线（且没在拖选）→ 弹划线编辑小条，吞掉点击不翻页
+                var _hlMark = e.target.closest('mark.rd-hl');
+                if (_hlMark) {
+                    var _selNow = window.getSelection && window.getSelection();
+                    if (!(_selNow && String(_selNow).trim().length > 0)) { rdHlShowEditBar(_hlMark); return; }
+                }
                 // translate-merged 同时带 reading-merged 类，必须先判翻译模式
                 var tp = e.target.closest('.translate-merged p[data-p]');
                 if (tp) { translateOnParaClick(tp); return; }
@@ -22559,6 +22946,38 @@ body {
                 var bq = e.target.closest('.reading-merged blockquote[data-cp]');
                 if (bq) { readingOnCommentClick(bq); return; }
             });
+        })();
+
+        // 划线：选区变化 → 选到同一原文段落内就冒「划线小条」；选空 / 点别处 → 收起小条
+        (function() {
+            var _rdSelTimer = null;
+            function evalSel() {
+                // 小条 / 批注气泡自身的交互不触发重判
+                var hasNote = document.getElementById('rdHlNote');
+                var ctx = rdHlCurrentSel();
+                if (ctx) { rdHlShowSelBar(ctx); }
+                else if (!hasNote) {
+                    // 选区空了：若不是停在编辑小条上，收起选中态小条
+                    var bar = document.getElementById('rdHlBar');
+                    if (bar && _rdHlPending) rdHlHideBar();   // 仅收「选中态」，编辑态(_rdHlPending=null)留着
+                }
+            }
+            document.addEventListener('selectionchange', function() {
+                if (!chatReadingMode) return;
+                if (_rdSelTimer) clearTimeout(_rdSelTimer);
+                _rdSelTimer = setTimeout(evalSel, 220);
+            });
+            // 点小条/批注气泡/划线以外的地方 → 收起
+            document.addEventListener('pointerdown', function(e) {
+                var bar = document.getElementById('rdHlBar');
+                var note = document.getElementById('rdHlNote');
+                if (!bar && !note) return;
+                if (e.target.closest && (e.target.closest('.rd-hl-bar') || e.target.closest('.rd-hl-note') || e.target.closest('mark.rd-hl'))) return;
+                rdHlHideBar();
+            }, true);
+            // 滚动时跟手收起，免得小条飘在错位置
+            var sc = document.getElementById('chatMessages');
+            if (sc) sc.addEventListener('scroll', function() { if (document.getElementById('rdHlBar') || document.getElementById('rdHlNote')) rdHlHideBar(); }, { passive: true });
         })();
 
         function readingModeAddParaNums(text) {
