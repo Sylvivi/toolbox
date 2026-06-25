@@ -18856,7 +18856,7 @@ body {
             var usageShow = (chatView === 'conv') && !chatReadingMode && !chatTranslateMode && !chatReaderMode;
             var usageBtn = document.getElementById('chatUsageBtn');
             if (usageBtn) usageBtn.style.display = usageShow ? '' : 'none';
-            // 「生图」也只在对话模式的 ⋮ 菜单里出现（共读/阅读走双击段落的「🎨 配图」）
+            // 「生图」只在对话模式的 ⋮ 菜单里出现（共读/阅读已不做配图）
             var genBtn = document.getElementById('chatGenImgBtn');
             if (genBtn) genBtn.style.display = usageShow ? '' : 'none';
             // 共读/翻译模式下隐藏「回到底部」按钮（点输入框会自动回到底部）
@@ -21468,7 +21468,7 @@ body {
             bar.className = 'reading-actbar';
             var inputHtml = '<textarea class="rp-ask" rows="1" placeholder="问问这一段…（如：他这句话什么意思？）"></textarea>';
             var askHtml = '<button class="rp-ask-send">讨论</button>';
-            // 极简：只留输入框 + 讨论。配图改走长按段落，「带前文问答」改到设置里全局开关。
+            // 极简：只留输入框 + 讨论。「带前文问答」改到设置里全局开关。共读已不做配图。
             bar.innerHTML = leftSide ? (askHtml + inputHtml) : (inputHtml + askHtml);
             anchorEl.insertAdjacentElement('afterend', bar);
             // 一步式：直接出输入框；不自动聚焦弹键盘，等用户点输入框再唤起；点「讨论」发送；再点该段收起
@@ -21478,81 +21478,6 @@ body {
             send.onclick = go;
             readingBindAskBox(input);
         }
-        // 共读/阅读：点「🎨 配图」先弹风格选择（这本书会记住），选完再生成
-        function readingGenImageStart(msgIdx, pNum) {
-            if (!genImageModelCfg()) { alert(genImageNotReadyMsg()); return; }
-            var bookId = chatReaderMode ? readerBookId : rbGetConvBook();
-            var cur = genStyleGet(bookId);
-            var isPreset = GEN_STYLE_PRESETS.some(function (p) { return p.name === cur; });
-            var existing = document.querySelector('.genimg-dialog-mask'); if (existing) existing.remove();
-            var mask = document.createElement('div'); mask.className = 'chat-summary-modal-mask genimg-dialog-mask';
-            var modal = document.createElement('div'); modal.className = 'chat-summary-modal';
-            var chips = GEN_STYLE_PRESETS.map(function (p) {
-                return '<button type="button" class="genimg-chip' + (p.name === cur ? ' on' : '') + '" data-style="' + p.name + '">' + p.name + '</button>';
-            }).join('');
-            modal.innerHTML =
-                '<div class="chat-summary-modal-header"><span>🎨 给这段配图</span><button onclick="this.closest(\'.genimg-dialog-mask\').remove()">✕</button></div>' +
-                '<div class="chat-summary-modal-body">' +
-                '<div style="font-size:11px;color:var(--text-muted);margin:0 0 6px">选个风格（这本书会记住，下次默认用它）</div>' +
-                '<div class="genimg-chips" id="genImgChips2">' + chips +
-                '<input type="text" id="genImgStyleCustom2" placeholder="自定义风格…" value="' + (isPreset ? '' : _apiEsc(cur)) + '" style="flex:1;min-width:80px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:14px;padding:4px 10px;font-size:12px;color:var(--text);outline:none">' +
-                '</div>' +
-                '<button id="genImgGoBtn2" style="width:100%;margin-top:14px;padding:9px 0;font-size:13px;font-weight:600;color:#fff;background:var(--accent);border:none;border-radius:9px;cursor:pointer">生成</button>' +
-                '</div>';
-            mask.appendChild(modal);
-            mask.addEventListener('click', function (ev) { if (ev.target === mask) mask.remove(); });
-            document.body.appendChild(mask);
-            var chipsWrap = modal.querySelector('#genImgChips2');
-            var customInp = modal.querySelector('#genImgStyleCustom2');
-            chipsWrap.addEventListener('click', function (e) {
-                var b = e.target.closest('.genimg-chip'); if (!b) return;
-                var all = chipsWrap.querySelectorAll('.genimg-chip');
-                for (var i = 0; i < all.length; i++) all[i].classList.remove('on');
-                b.classList.add('on'); customInp.value = '';
-            });
-            modal.querySelector('#genImgGoBtn2').onclick = function () {
-                var custom = (customInp.value || '').trim();
-                var active = modal.querySelector('.genimg-chip.on');
-                var style = custom || (active ? active.getAttribute('data-style') : cur);
-                _readingDoGenImage(msgIdx, pNum, style, modal.querySelector('#genImgGoBtn2'));
-            };
-        }
-        // 共读/阅读：实际生成——取该段+前后一行 → 提炼 → 生图 → 作为该段下方的内联评论写入（不再追加到末尾）
-        // 选完风格立刻关弹窗，后台生成，不阻塞阅读
-        async function _readingDoGenImage(msgIdx, pNum, style, goBtn) {
-            if (!genImageModelCfg()) { alert(genImageNotReadyMsg()); return; }
-            var msg = chatMessages[msgIdx];
-            if (!msg || typeof msg.content !== 'string') return;
-            var orig = readingModeStripParaNums(readingModeGetOriginalText(msgIdx));
-            var lines = orig.split('\n').filter(function (l) { return l.trim().length > 0; });
-            if (pNum < 1 || pNum > lines.length) return;
-            var ctx = [];
-            for (var i = Math.max(0, pNum - 2); i < Math.min(lines.length, pNum + 1); i++) ctx.push(lines[i]);
-            var passage = ctx.join('\n');
-            var bookId = chatReaderMode ? readerBookId : rbGetConvBook();
-            genStyleSet(bookId, style);
-            var book = bookId ? rbGetBook(bookId) : null;
-            var bookName = book ? (book.fileName || '').replace(/\.[^.]+$/, '') : '';
-            // 立刻关弹窗，不阻塞阅读
-            var mask = document.querySelector('.genimg-dialog-mask'); if (mask) mask.remove();
-            readingClearActbar();
-            showToast('🎨 正在生图…', true);
-            // 后台生成
-            try {
-                var prompt = await aiBuildImagePrompt(passage, bookName, style);
-                var dataURL = await aiGenerateImage({ prompt: prompt });
-                var id = 'gi_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
-                await genImgPut(id, dataURL);
-                msg.content += '\n[P' + pNum + '] ⟦genimg:' + id + '⟧';
-                chatSaveCurrentConv(true);
-                if (typeof readerPersistQA === 'function') readerPersistQA(msgIdx);
-                readingRerenderMsg(msgIdx, pNum);
-                showToast('🎨 配图完成');
-            } catch (e) {
-                if (!(e && e.name === 'AbortError')) showToast('生图失败：' + (e.message || '未知错误'));
-            }
-        }
-
         function readingOnParaClick(pEl) {
             if (readingCommenting) return;
             var wasActive = pEl.classList.contains('rp-active');
@@ -21564,24 +21489,6 @@ body {
             var msgIdx = parseInt(msgEl.getAttribute('data-idx'));
             var pNum = parseInt(pEl.getAttribute('data-p'));
             readingOpenAskBar(msgIdx, pNum, pEl);
-        }
-
-        // 三击原文段落：弹出「🎨 配图」操作条（双击留给提问，配图从这里走，保持双击栏极简）
-        function readingOnParaTripleTap(pEl) {
-            if (readingCommenting) return;
-            readingClearActbar();
-            var msgEl = pEl.closest('.chat-msg.ai');
-            if (!msgEl || !msgEl.hasAttribute('data-idx')) return;
-            var msgIdx = parseInt(msgEl.getAttribute('data-idx'));
-            var pNum = parseInt(pEl.getAttribute('data-p'));
-            if (!(pNum > 0)) return;
-            pEl.classList.add('rp-active');
-            var bar = document.createElement('div');
-            bar.className = 'reading-actbar rp-actions';
-            bar.innerHTML = '<button class="rp-genimg">🎨 配图</button>' +
-                '<button class="rp-cancel" onclick="readingClearActbar()">取消</button>';
-            pEl.insertAdjacentElement('afterend', bar);
-            bar.querySelector('.rp-genimg').onclick = function() { readingGenImageStart(msgIdx, pNum); };
         }
 
         // 双击 AI 回答 / 评论块：接着聊同一段，输入框插在该段问答串的最下面（贴着正在看的回答）
@@ -22468,7 +22375,7 @@ body {
             var el = document.getElementById('chatMessages');
             if (!el) return;
             var _readingTapTimer = null;   // 共读：段落连击 / 边缘点击的「停手后判定」定时器
-            var _pTapEl = null, _pTapCount = 0, _pTapTime = 0;   // 段落连击计数：1 翻页 / 2 提问 / 3 配图
+            var _pTapEl = null, _pTapCount = 0, _pTapTime = 0;   // 段落连击计数：1 翻页 / 2 提问
             // 多指手势（如三指截屏）会被系统误合成 click/dblclick，记下最近一次「≥2 指同时按下」的时刻，
             // 紧随其后的点击/双击一律忽略，避免截屏时误触翻页或段落提问；单指操作不受影响。
             var _multiTouchAt = 0;
@@ -22492,9 +22399,9 @@ body {
                     if (e.target.closest('button, input, textarea, a, svg, img, .reading-actbar')) return;
                     var sel = window.getSelection && window.getSelection();
                     if (sel && String(sel).length > 0) return;
-                    // 原文段落：单击翻页 / 双击提问 / 三击配图，统一用「连击计数 + 停手后判定」。
-                    // 每点一下就把判定往后推 320ms，等彻底停手再按总点击数决定动作——
-                    // 三击中途绝不会先闪出提问栏，也不依赖 dblclick（移动端更稳）。
+                    // 原文段落：单击翻页 / 双击提问，统一用「连击计数 + 停手后判定」。
+                    // 每点一下把判定往后推 250ms，等停手再按总点击数决定动作——
+                    // 单击不会在双击中途先翻页，也不依赖 dblclick（移动端更稳）。
                     var rpara = e.target.closest('.reading-merged p[data-p]');
                     if (rpara && !e.target.closest('.translate-merged')) {
                         var now = Date.now();
@@ -22504,10 +22411,9 @@ body {
                         clearTimeout(_readingTapTimer);
                         _readingTapTimer = setTimeout(function() {
                             _pTapCount = 0; _pTapEl = null;
-                            if (_n >= 3) { readingClearActbar(); readingOnParaTripleTap(_el); }
-                            else if (_n === 2) { readingOnParaClick(_el); }
+                            if (_n >= 2) { readingOnParaClick(_el); }
                             else { readingPageDown(); }
-                        }, 320);
+                        }, 250);
                         return;
                     }
                     _pTapCount = 0; _pTapEl = null;
@@ -22539,7 +22445,7 @@ body {
                         }, 500);
                         return;
                     }
-                    // 原文段落：单击翻页 / 双击提问 / 三击配图，都走 click+dblclick 计数，不用长按
+                    // 原文段落：单击翻页 / 双击提问，都走 click 连击计数，不用长按
                 }
                 var tb = e.target.closest('.translate-block');
                 if (!tb || e.target.closest('.translate-askbar')) { _lpClear(); return; }
@@ -22558,13 +22464,13 @@ body {
             el.addEventListener('pointerup', _lpClear);
             el.addEventListener('pointercancel', _lpClear);
             el.addEventListener('pointerleave', _lpClear);
-            // 共读模式：双击 AI 回答块 = 接着聊。原文段落的单/双/三击改由 click 连击计数统一处理。
+            // 共读模式：双击 AI 回答块 = 接着聊。原文段落的单/双击改由 click 连击计数统一处理。
             el.addEventListener('dblclick', function(e) {
                 if (!e.target.closest) return;
                 if (_isMultiTouchEcho()) return;   // 多指手势（如三指截屏）误合成的双击，忽略
                 // 翻译模式交给翻译逻辑（translate-merged 同带 reading-merged 类，需先排除）
                 if (e.target.closest('.translate-merged')) return;
-                // 原文段落：什么都不做，也别清判定定时器（提问/配图全在 click 计数里判，dblclick 插手会把它清掉）
+                // 原文段落：什么都不做，也别清判定定时器（提问全在 click 计数里判，dblclick 插手会把它清掉）
                 if (e.target.closest('.reading-merged p[data-p]')) return;
                 clearTimeout(_readingTapTimer);   // 双击 AI 回答块时取消左右点击翻页
                 // 双击 AI 回答 / 评论块 = 接着聊同一段（更直觉）
