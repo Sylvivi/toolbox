@@ -22350,8 +22350,7 @@ body {
         (function() {
             var el = document.getElementById('chatMessages');
             if (!el) return;
-            var _readingTapTimer = null;   // 共读左右点击翻页：延迟确认非双击
-            var _readingAskTimer = null;   // 双击提问延迟开栏：留个窗口给第三击改判成「配图」
+            var _readingTapTimer = null;   // 共读：段落连击 / 边缘点击的「停手后判定」定时器
             var _pTapEl = null, _pTapCount = 0, _pTapTime = 0;   // 段落连击计数：1 翻页 / 2 提问 / 3 配图
             // 多指手势（如三指截屏）会被系统误合成 click/dblclick，记下最近一次「≥2 指同时按下」的时刻，
             // 紧随其后的点击/双击一律忽略，避免截屏时误触翻页或段落提问；单指操作不受影响。
@@ -22376,21 +22375,26 @@ body {
                     if (e.target.closest('button, input, textarea, a, svg, img, .reading-actbar')) return;
                     var sel = window.getSelection && window.getSelection();
                     if (sel && String(sel).length > 0) return;
-                    // 原文段落连击计数：第三击 = 配图（取消翻页和待开的提问栏）
+                    // 原文段落：单击翻页 / 双击提问 / 三击配图，统一用「连击计数 + 停手后判定」。
+                    // 每点一下就把判定往后推 320ms，等彻底停手再按总点击数决定动作——
+                    // 三击中途绝不会先闪出提问栏，也不依赖 dblclick（移动端更稳）。
                     var rpara = e.target.closest('.reading-merged p[data-p]');
                     if (rpara && !e.target.closest('.translate-merged')) {
                         var now = Date.now();
-                        if (_pTapEl === rpara && now - _pTapTime < 600) _pTapCount++; else _pTapCount = 1;
+                        if (_pTapEl === rpara && now - _pTapTime < 500) _pTapCount++; else _pTapCount = 1;
                         _pTapEl = rpara; _pTapTime = now;
-                        if (_pTapCount >= 3) {
-                            _pTapCount = 0;
-                            clearTimeout(_readingTapTimer);   // 不翻页
-                            clearTimeout(_readingAskTimer);   // 取消待开的提问栏
-                            readingClearActbar();
-                            readingOnParaTripleTap(rpara);    // 开配图栏
-                            return;
-                        }
-                    } else { _pTapCount = 0; _pTapEl = null; }
+                        var _n = _pTapCount, _el = rpara;
+                        clearTimeout(_readingTapTimer);
+                        _readingTapTimer = setTimeout(function() {
+                            _pTapCount = 0; _pTapEl = null;
+                            if (_n >= 3) { readingClearActbar(); readingOnParaTripleTap(_el); }
+                            else if (_n === 2) { readingOnParaClick(_el); }
+                            else { readingPageDown(); }
+                        }, 320);
+                        return;
+                    }
+                    _pTapCount = 0; _pTapEl = null;
+                    // 点段落以外（屏幕边缘空白）：仍是单击翻页，延迟略短
                     clearTimeout(_readingTapTimer);
                     _readingTapTimer = setTimeout(function() {
                         readingPageDown();
@@ -22437,20 +22441,15 @@ body {
             el.addEventListener('pointerup', _lpClear);
             el.addEventListener('pointercancel', _lpClear);
             el.addEventListener('pointerleave', _lpClear);
-            // 共读模式：双击段落 = 选中并提问（单击/拖选留给复制原文，避免误触）
+            // 共读模式：双击 AI 回答块 = 接着聊。原文段落的单/双/三击改由 click 连击计数统一处理。
             el.addEventListener('dblclick', function(e) {
                 if (!e.target.closest) return;
                 if (_isMultiTouchEcho()) return;   // 多指手势（如三指截屏）误合成的双击，忽略
-                clearTimeout(_readingTapTimer);   // 双击评价时取消左右点击翻页
                 // 翻译模式交给翻译逻辑（translate-merged 同带 reading-merged 类，需先排除）
                 if (e.target.closest('.translate-merged')) return;
-                // 共读模式：双击原文段落 = 问这一段（延迟一点开栏，留窗口给第三击改判成「配图」）
-                var rp = e.target.closest('.reading-merged p[data-p]');
-                if (rp) {
-                    clearTimeout(_readingAskTimer);
-                    _readingAskTimer = setTimeout(function() { readingOnParaClick(rp); }, 260);
-                    return;
-                }
+                // 原文段落：什么都不做，也别清判定定时器（提问/配图全在 click 计数里判，dblclick 插手会把它清掉）
+                if (e.target.closest('.reading-merged p[data-p]')) return;
+                clearTimeout(_readingTapTimer);   // 双击 AI 回答块时取消左右点击翻页
                 // 双击 AI 回答 / 评论块 = 接着聊同一段（更直觉）
                 var bq = e.target.closest('.reading-merged blockquote[data-cp]');
                 if (bq) { readingOnCommentClick(bq); return; }
