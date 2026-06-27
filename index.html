@@ -1912,6 +1912,10 @@ body {
         .rd-trace-note { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
         .rd-trace-para { font-size: 13px; color: var(--text-sub); line-height: 1.5; }
         .rd-trace-meta { font-size: 10px; color: var(--text-muted); margin-top: 5px; }
+        .rd-trace-sort { margin-left: auto; padding: 4px 12px; border-radius: 14px; border: 1px solid var(--card-border); background: transparent; color: var(--text-sub); font-size: 12px; cursor: pointer; }
+        .rd-trace-thread { border-color: var(--accent); background: var(--accent-light); }
+        .rd-trace-badge { display: inline-block; font-size: 11px; font-weight: 700; color: var(--accent); margin-bottom: 6px; }
+        .rd-trace-qa + .rd-trace-qa { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--card-border); }
         .rd-trace-foot { margin-top: 14px; text-align: center; }
         .rd-trace-export { padding: 8px 20px; border-radius: 18px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font-size: 13px; cursor: pointer; }
         .rd-trace-export:hover { background: var(--accent); color: #fff; }
@@ -23317,29 +23321,18 @@ body {
             }
         }
         /* ===== 读痕「完备版」整屏弹窗（当前这本书 / 当前对话）=====
-           以「提问」为主角，划线/书签为配角；支持类型筛选、颜色筛选、搜索、导出摘抄。 */
-        var _rdTraceType = 'all';     // all | ask | hl | para
+           以「提问」为主角：同一段只问一次=单问，连续追问≥2次=追问串（话题更深、更在意）。
+           划线/颜色为配角；书签已按用户要求移除。支持类型筛选、颜色筛选、搜索、正/倒序、导出摘抄。 */
+        var _rdTraceType = 'all';     // all | single | thread | hl
         var _rdTraceColor = null;     // 颜色筛选（仅对划线生效）
         var _rdTraceQuery = '';
-        var _rdTraceShown = [];       // 当前列表里显示的条目（按 data-i 取回，含原始对象）
+        var _rdTraceDesc = true;      // 默认倒序（最近的在最上面）
+        var _rdTraceShown = [];       // 当前列表显示的条目（按 data-i 取回）
         function rdTraceTime(ts) { if (!ts) return ''; var d = new Date(ts); if (isNaN(d.getTime())) return ''; return (d.getMonth() + 1) + '月' + d.getDate() + '日'; }
         function rdTraceBookTitle() {
             try { var c = rdStatCurBook(); if (c && c.title) return c.title; } catch (e) {}
             try { var list = chatGetHistory(); for (var i = 0; i < list.length; i++) { if (list[i].id === chatCurrentConvId) return list[i].title || '未命名'; } } catch (e) {}
             return '未命名';
-        }
-        // 把当前对话的「提问书签 / 段落书签 / 划线」收成统一条目，按阅读顺序排
-        function rdTraceCollect() {
-            var items = [];
-            readingGetConvBookmarks().forEach(function (b) {
-                if (b.type === 'ask') items.push({ kind: 'ask', msgIdx: b.msgIdx, p: b.p, q: b.q || '', preview: b.preview || b.q || '', ts: b.ts || 0, raw: b });
-                else items.push({ kind: 'para', msgIdx: b.msgIdx, p: b.p, preview: b.preview || ('第 ' + b.p + ' 段'), ts: b.ts || 0, raw: b });
-            });
-            readingGetConvHl().forEach(function (h) {
-                items.push({ kind: 'hl', msgIdx: h.msgIdx, p: h.p, id: h.id, color: h.color, note: h.note || '', preview: h.preview || ('第 ' + h.p + ' 段'), ts: h.ts || 0 });
-            });
-            items.sort(function (a, b) { return a.msgIdx - b.msgIdx || a.p - b.p || (a.ts || 0) - (b.ts || 0); });
-            return items;
         }
         // 提问书签的答案不存在书签里，得回正文 msg.content 按 [Pn] 汐：问题 匹配捞出来
         function rdTraceAnswerFor(msgIdx, p, q) {
@@ -23359,6 +23352,27 @@ body {
             } catch (e) {}
             return '';
         }
+        // 收集 → 把提问按「同一段」聚成话题：一段问 1 次=单问(single)，连续追问≥2 次=追问串(thread)；划线(hl) 各自一条。
+        function rdTraceBuildEntries() {
+            var groups = {}, order = [];
+            readingGetConvBookmarks().forEach(function (b) {
+                if (b.type !== 'ask') return;   // 书签(段落 bookmark)已从面板移除
+                var k = b.msgIdx + '#' + b.p;
+                if (!groups[k]) { groups[k] = []; order.push(k); }
+                groups[k].push({ msgIdx: b.msgIdx, p: b.p, q: b.q || '', ts: b.ts || 0, raw: b });
+            });
+            var entries = [];
+            order.forEach(function (k) {
+                var g = groups[k].slice().sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
+                var qas = g.map(function (a) { return { q: a.q, a: rdTraceAnswerFor(a.msgIdx, a.p, a.q), ts: a.ts, raw: a.raw }; });
+                var lastTs = g.reduce(function (m, a) { return Math.max(m, a.ts || 0); }, 0);
+                entries.push({ type: g.length >= 2 ? 'thread' : 'single', msgIdx: g[0].msgIdx, p: g[0].p, qas: qas, count: g.length, sortTs: lastTs });
+            });
+            readingGetConvHl().forEach(function (h) {
+                entries.push({ type: 'hl', msgIdx: h.msgIdx, p: h.p, id: h.id, color: h.color, note: h.note || '', preview: h.preview || ('第 ' + h.p + ' 段'), sortTs: h.ts || 0 });
+            });
+            return entries;
+        }
         function rdTraceShowPanel() {
             var existing = document.querySelector('.rd-trace-modal-mask');
             if (existing) { existing.remove(); return; }
@@ -23376,31 +23390,31 @@ body {
         function rdTraceRenderBody() {
             var body = document.getElementById('rdTraceBody');
             if (!body) return;
-            var all = rdTraceCollect();
-            if (!all.length) {
+            var entries = rdTraceBuildEntries();
+            if (!entries.length) {
                 body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">还没有读痕<br><span style="font-size:11px">看书时点一段去问问它、或选中文字划线，都会收进这里</span></div>';
                 return;
             }
-            var nAsk = 0, nHl = 0, nPara = 0, nNote = 0, colorCnt = {};
-            all.forEach(function (it) {
-                if (it.kind === 'ask') nAsk++;
-                else if (it.kind === 'para') nPara++;
-                else { nHl++; if (it.note) nNote++; colorCnt[it.color] = (colorCnt[it.color] || 0) + 1; }
+            var totalQ = 0, threadCnt = 0, hlCnt = 0, colorCnt = {};
+            entries.forEach(function (e) {
+                if (e.type === 'hl') { hlCnt++; colorCnt[e.color] = (colorCnt[e.color] || 0) + 1; }
+                else { totalQ += e.count; if (e.type === 'thread') threadCnt++; }
             });
             var html = '';
-            // 概览卡：提问为主角（大卡），划线/书签为小卡
+            // 概览卡：提问为主角（大卡）；追问串 = 深聊话题数；划线为配角
             html += '<div class="rd-trace-cards">'
-                + '<div class="rd-trace-card rd-trace-card-main"><div class="rd-tc-n">' + nAsk + '</div><div class="rd-tc-l">提问</div></div>'
-                + '<div class="rd-trace-card"><div class="rd-tc-n">' + nHl + '</div><div class="rd-tc-l">划线' + (nNote ? ' · ' + nNote + ' 批注' : '') + '</div></div>'
-                + '<div class="rd-trace-card"><div class="rd-tc-n">' + nPara + '</div><div class="rd-tc-l">书签</div></div>'
+                + '<div class="rd-trace-card rd-trace-card-main"><div class="rd-tc-n">' + totalQ + '</div><div class="rd-tc-l">提问</div></div>'
+                + '<div class="rd-trace-card"><div class="rd-tc-n">' + threadCnt + '</div><div class="rd-tc-l">追问串</div></div>'
+                + '<div class="rd-trace-card"><div class="rd-tc-n">' + hlCnt + '</div><div class="rd-tc-l">划线</div></div>'
                 + '</div>';
-            // 类型筛选
-            var types = [['all', '全部'], ['ask', '提问'], ['hl', '划线'], ['para', '书签']];
+            // 类型筛选 + 正/倒序
+            var types = [['all', '全部'], ['single', '单问'], ['thread', '追问'], ['hl', '划线']];
             html += '<div class="rd-trace-chips">';
             types.forEach(function (t) { html += '<button class="rd-trace-chip' + (_rdTraceType === t[0] ? ' on' : '') + '" data-t="' + t[0] + '">' + t[1] + '</button>'; });
+            html += '<button class="rd-trace-sort" id="rdTraceSortBtn">' + (_rdTraceDesc ? '↓ 倒序' : '↑ 正序') + '</button>';
             html += '</div>';
-            // 颜色点：仅有划线时出现，且放小、次要
-            if (nHl) {
+            // 颜色点：仅有划线时出现，放小、次要
+            if (hlCnt) {
                 html += '<div class="rd-trace-colors"><span class="rd-trace-colors-l">划线颜色</span>';
                 Object.keys(RD_HL_SW).forEach(function (c) { if (!colorCnt[c]) return; html += '<button class="rd-trace-dot' + (_rdTraceColor === c ? ' on' : '') + '" data-c="' + c + '"><i style="background:' + RD_HL_SW[c] + '"></i>' + colorCnt[c] + '</button>'; });
                 html += '</div>';
@@ -23411,83 +23425,88 @@ body {
             body.innerHTML = html;
             body.querySelectorAll('.rd-trace-chip').forEach(function (b) { b.onclick = function () { _rdTraceType = b.getAttribute('data-t'); if (_rdTraceType !== 'hl') _rdTraceColor = null; rdTraceRenderBody(); }; });
             body.querySelectorAll('.rd-trace-dot').forEach(function (b) { b.onclick = function () { var c = b.getAttribute('data-c'); _rdTraceColor = (_rdTraceColor === c ? null : c); _rdTraceType = 'hl'; rdTraceRenderBody(); }; });
+            var sb = document.getElementById('rdTraceSortBtn'); if (sb) sb.onclick = function () { _rdTraceDesc = !_rdTraceDesc; rdTraceRenderBody(); };
             var si = document.getElementById('rdTraceSearch');
             if (si) si.oninput = function () { _rdTraceQuery = si.value; rdTraceRenderList(); };
             rdTraceRenderList();
         }
-        function rdTraceItemHtml(it, ans, i) {
-            var meta = '第 ' + it.p + ' 段' + (rdTraceTime(it.ts) ? ' · ' + rdTraceTime(it.ts) : '');
-            var del = '<button class="rd-trace-del" title="删除">✕</button>';
-            if (it.kind === 'ask') {
-                var ansHtml = ans ? '<div class="rd-trace-a">' + renderText(ans) + '</div>'
+        function rdTraceQaHtml(qas) {
+            return qas.map(function (x) {
+                var ans = x.a ? '<div class="rd-trace-a">' + renderText(x.a) + '</div>'
                     : '<div class="rd-trace-a rd-trace-a-empty">（答案不在当前记录里）</div>';
+                return '<div class="rd-trace-qa"><div class="rd-trace-q"><span class="rd-trace-qn">汐</span>：' + esc(x.q) + '</div>' + ans + '</div>';
+            }).join('');
+        }
+        function rdTraceItemHtml(e, i) {
+            var del = '<button class="rd-trace-del" title="删除">✕</button>';
+            var meta = '第 ' + e.p + ' 段' + (rdTraceTime(e.sortTs) ? ' · ' + rdTraceTime(e.sortTs) : '');
+            if (e.type === 'hl') {
                 return '<div class="rd-trace-item" data-i="' + i + '">' + del
-                    + '<div class="rd-trace-q"><span class="rd-trace-qn">汐</span>：' + esc(it.q) + '</div>'
-                    + ansHtml
+                    + '<div class="rd-trace-hl"><span class="rd-trace-cdot" style="background:' + (RD_HL_SW[e.color] || '#f5c842') + '"></span>「' + esc(e.preview) + '」</div>'
+                    + (e.note ? '<div class="rd-trace-note">✎ ' + esc(e.note) + '</div>' : '')
                     + '<div class="rd-trace-meta">' + meta + '</div></div>';
             }
-            if (it.kind === 'hl') {
-                return '<div class="rd-trace-item" data-i="' + i + '">' + del
-                    + '<div class="rd-trace-hl"><span class="rd-trace-cdot" style="background:' + (RD_HL_SW[it.color] || '#f5c842') + '"></span>「' + esc(it.preview) + '」</div>'
-                    + (it.note ? '<div class="rd-trace-note">✎ ' + esc(it.note) + '</div>' : '')
+            if (e.type === 'thread') {
+                return '<div class="rd-trace-item rd-trace-thread" data-i="' + i + '">' + del
+                    + '<div class="rd-trace-badge">🔥 追问 ×' + e.count + '</div>'
+                    + rdTraceQaHtml(e.qas)
                     + '<div class="rd-trace-meta">' + meta + '</div></div>';
             }
             return '<div class="rd-trace-item" data-i="' + i + '">' + del
-                + '<div class="rd-trace-para">🔖 ' + esc(it.preview) + '</div>'
+                + rdTraceQaHtml(e.qas)
                 + '<div class="rd-trace-meta">' + meta + '</div></div>';
         }
         function rdTraceRenderList() {
             var list = document.getElementById('rdTraceList');
             if (!list) return;
-            var all = rdTraceCollect();
+            var entries = rdTraceBuildEntries();
+            entries = entries.filter(function (e) { return _rdTraceType === 'all' ? true : e.type === _rdTraceType; });
+            if (_rdTraceColor) entries = entries.filter(function (e) { return e.type === 'hl' && e.color === _rdTraceColor; });
             var q = _rdTraceQuery.trim().toLowerCase();
-            _rdTraceShown = [];
-            var htmlArr = [];
-            all.forEach(function (it) {
-                if (_rdTraceType !== 'all' && it.kind !== _rdTraceType) return;
-                if (_rdTraceColor && !(it.kind === 'hl' && it.color === _rdTraceColor)) return;
-                var ans = (it.kind === 'ask') ? rdTraceAnswerFor(it.msgIdx, it.p, it.q) : '';
-                if (q) {
-                    var hay = ((it.q || '') + ' ' + (it.preview || '') + ' ' + (it.note || '') + ' ' + ans).toLowerCase();
-                    if (hay.indexOf(q) < 0) return;
-                }
-                var idx = _rdTraceShown.length;
-                _rdTraceShown.push(it);
-                htmlArr.push(rdTraceItemHtml(it, ans, idx));
+            if (q) entries = entries.filter(function (e) {
+                var hay = (e.type === 'hl') ? ((e.preview || '') + ' ' + (e.note || '')) : e.qas.map(function (x) { return x.q + ' ' + x.a; }).join(' ');
+                return hay.toLowerCase().indexOf(q) >= 0;
             });
-            list.innerHTML = htmlArr.length ? htmlArr.join('') : '<div class="rd-trace-empty">没有符合条件的读痕</div>';
+            entries.sort(function (a, b) { return _rdTraceDesc ? ((b.sortTs || 0) - (a.sortTs || 0)) : ((a.sortTs || 0) - (b.sortTs || 0)); });
+            _rdTraceShown = entries;
+            list.innerHTML = entries.length ? entries.map(function (e, i) { return rdTraceItemHtml(e, i); }).join('') : '<div class="rd-trace-empty">没有符合条件的读痕</div>';
             list.querySelectorAll('.rd-trace-item').forEach(function (el) {
-                var it = _rdTraceShown[+el.getAttribute('data-i')];
-                if (!it) return;
-                var a = el.querySelector('.rd-trace-a:not(.rd-trace-a-empty)');
-                if (a) a.onclick = function (e) { e.stopPropagation(); a.classList.toggle('open'); };
-                el.querySelector('.rd-trace-del').onclick = function (e) {
-                    e.stopPropagation();
-                    if (it.kind === 'hl') rdHlDelete(it.id);
-                    else { readingRemoveBookmarkObj(it.raw); if (typeof showToast === 'function') showToast('已删除'); }
+                var e = _rdTraceShown[+el.getAttribute('data-i')];
+                if (!e) return;
+                el.querySelectorAll('.rd-trace-a:not(.rd-trace-a-empty)').forEach(function (a) { a.onclick = function (ev) { ev.stopPropagation(); a.classList.toggle('open'); }; });
+                var del = el.querySelector('.rd-trace-del');
+                if (del) del.onclick = function (ev) {
+                    ev.stopPropagation();
+                    if (e.type === 'hl') rdHlDelete(e.id);
+                    else { e.qas.forEach(function (x) { readingRemoveBookmarkObj(x.raw); }); if (typeof showToast === 'function') showToast('已删除'); }
                     rdTraceRenderBody();
                     if (typeof readingRefreshBookmarkUI === 'function') readingRefreshBookmarkUI();
                 };
                 el.onclick = function () {
                     var mask = document.querySelector('.rd-trace-modal-mask'); if (mask) mask.remove();
-                    if (it.kind === 'hl') readingJumpHighlight(it.id, it.msgIdx, it.p); else readingJumpBookmark(it.msgIdx, it.p);
+                    if (e.type === 'hl') readingJumpHighlight(e.id, e.msgIdx, e.p); else readingJumpBookmark(e.msgIdx, e.p);
                 };
             });
         }
         function rdTraceExport() {
-            var all = rdTraceCollect();
-            if (!all.length) { if (typeof showToast === 'function') showToast('没有读痕可导出'); return; }
+            var entries = rdTraceBuildEntries();
+            if (!entries.length) { if (typeof showToast === 'function') showToast('没有读痕可导出'); return; }
             var title = rdTraceBookTitle();
-            var asks = [], hls = [], paras = [];
-            all.forEach(function (it) {
-                if (it.kind === 'ask') { var a = rdTraceAnswerFor(it.msgIdx, it.p, it.q); asks.push('- [第 ' + it.p + ' 段] **问：**' + it.q + (a ? '\n  **答：**' + a.replace(/\n+/g, ' ') : '')); }
-                else if (it.kind === 'hl') hls.push('- [第 ' + it.p + ' 段] 「' + it.preview + '」' + (it.note ? '　✎ ' + it.note : ''));
-                else paras.push('- [第 ' + it.p + ' 段] ' + it.preview);
+            var byRead = entries.slice().sort(function (a, b) { return a.msgIdx - b.msgIdx || a.p - b.p; });
+            var qLines = [], hLines = [];
+            byRead.forEach(function (e) {
+                if (e.type === 'hl') { hLines.push('- [第 ' + e.p + ' 段] 「' + e.preview + '」' + (e.note ? '　✎ ' + e.note : '')); return; }
+                if (e.type === 'thread') {
+                    qLines.push('### 追问 ×' + e.count + ' · 第 ' + e.p + ' 段');
+                    e.qas.forEach(function (x) { qLines.push('- **问：**' + x.q + (x.a ? '\n  **答：**' + x.a.replace(/\n+/g, ' ') : '')); });
+                } else {
+                    var x = e.qas[0];
+                    qLines.push('- [第 ' + e.p + ' 段] **问：**' + x.q + (x.a ? '\n  **答：**' + x.a.replace(/\n+/g, ' ') : ''));
+                }
             });
             var md = '# 读痕 · ' + title + '\n\n';
-            if (asks.length) md += '## 提问（' + asks.length + '）\n' + asks.join('\n') + '\n\n';
-            if (hls.length) md += '## 划线（' + hls.length + '）\n' + hls.join('\n') + '\n\n';
-            if (paras.length) md += '## 书签（' + paras.length + '）\n' + paras.join('\n') + '\n\n';
+            if (qLines.length) md += '## 提问\n' + qLines.join('\n') + '\n\n';
+            if (hLines.length) md += '## 划线\n' + hLines.join('\n') + '\n\n';
             try {
                 var blob = new Blob([md], { type: 'text/markdown' });
                 var a = document.createElement('a');
