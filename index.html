@@ -1873,6 +1873,9 @@ body {
         .rd-cal-today { box-shadow: 0 0 0 2px var(--accent); }
         .rd-cal-legend { display: flex; align-items: center; gap: 4px; justify-content: flex-end; margin-top: 10px; font-size: 10px; color: var(--text-muted); }
         .rd-cal-legend i { width: 13px; height: 13px; border-radius: 3px; display: inline-block; }
+        /* 双击提问流式回答的打字光标 */
+        .rd-stream-cursor { display: inline-block; margin-left: 1px; color: var(--accent); animation: rdStreamBlink 1s steps(1) infinite; font-weight: 600; }
+        @keyframes rdStreamBlink { 50% { opacity: 0; } }
         .chat-bubble h1,.chat-bubble h2,.chat-bubble h3,.chat-bubble h4 {
             font-size: 14px; font-weight: 600; margin: 12px 0 6px; color: var(--text);
         }
@@ -22389,12 +22392,52 @@ body {
                     _askMsgs.push({ role: 'system', content: '以下是本书前文已读章节的摘要（剧情核心、人物姓名、关键伏笔），请据此理解上下文；但绝不要剧透摘要之后、用户尚未读到的情节：\n' + _summaryLines.join('\n\n---\n\n') });
                 }
                 _askMsgs.push({ role: 'user', content: userMsg });
+                // 流式显示：答案边生成边往一个临时小气泡里增量渲染（只渲染答案本身，不重渲整条消息，避免长章节卡顿）；
+                // 全部到齐后再走下面的「落进 msg.content + 整条重渲一次定稿」，临时气泡随整条重渲被替换掉。
+                var _stm = { node: null, ans: null, follow: true, last: 0, scrollH: null };
+                function _stmEnsure() {
+                    if (_stm.node) return;
+                    var msgEl = document.querySelector('.chat-msg.ai[data-idx="' + msgIdx + '"]');
+                    var merged = msgEl && msgEl.querySelector('.reading-merged');
+                    if (!merged) return;   // 找不到锚点（如翻译模式结构不同）就不流式，照旧等整体渲染
+                    var anchor = null;
+                    var bqs = merged.querySelectorAll('blockquote[data-cp="' + pNum + '"]');
+                    if (bqs.length) anchor = bqs[bqs.length - 1];
+                    else anchor = merged.querySelector('p[data-p="' + pNum + '"]');
+                    if (!anchor) return;
+                    var bq = document.createElement('blockquote');
+                    bq.setAttribute('style', 'margin:0.4em 0 0.6em;padding:6px 12px;border-left:3px solid var(--accent);background:var(--quote-bg, var(--accent-light));border-radius:0 8px 8px 0;font-size:0.92em;color:var(--text-sub);line-height:1.6');
+                    bq.innerHTML = '<div class="reading-q"><span class="reading-q-name">汐</span>：' + esc(question) + '</div><div class="rd-stream-ans" style="margin-top:0.4em"></div>';
+                    anchor.parentNode.insertBefore(bq, anchor.nextSibling);
+                    _stm.node = bq; _stm.ans = bq.querySelector('.rd-stream-ans');
+                    var cont = document.getElementById('chatMessages');
+                    if (cont) { _stm.scrollH = function () { _stm.follow = (cont.scrollHeight - cont.scrollTop - cont.clientHeight) < 80; }; cont.addEventListener('scroll', _stm.scrollH, { passive: true }); }
+                    try { bq.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+                }
+                function _stmRender(full) {
+                    _stmEnsure();
+                    if (!_stm.ans) return;
+                    _stm.ans.innerHTML = renderText((full || '').replace(/\[P\d+\]/gi, '')) + '<span class="rd-stream-cursor">▍</span>';
+                    if (_stm.follow && _stm.node) { try { _stm.node.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
+                }
+                function _stmKill() {
+                    if (_stm.scrollH) { var c = document.getElementById('chatMessages'); if (c) c.removeEventListener('scroll', _stm.scrollH); _stm.scrollH = null; }
+                    if (_stm.node && _stm.node.parentNode) _stm.node.parentNode.removeChild(_stm.node);
+                    _stm.node = null; _stm.ans = null;
+                }
                 var answer = (await chatStreamChat({
                     baseUrl: baseUrl, apiKey: apiKey, model: _qaMdl, markUsed: true,
                     purpose: '共读提问',
                     messages: _askMsgs,
-                    signal: readingAbortCtl.signal
+                    signal: readingAbortCtl.signal,
+                    onDelta: function (full) {
+                        var now = Date.now();
+                        if (now - _stm.last < 60) return;   // 节流：最多约每 60ms 渲一次；最终文本下面会整体重渲，漏掉末段无妨
+                        _stm.last = now;
+                        _stmRender(full);
+                    }
                 })).trim();
+                _stmKill();   // 收尾：移除临时气泡 + 滚动监听（下面会整条重渲出正式评论块）
                 // 去掉段落标记，并把答案内部的空行折叠为单换行——
                 // 否则空行会被 readingModeParseComments 当作该段评论的结束，
                 // 导致答案被丢到整条消息末尾的 trailing 区而非贴在本段下方。
@@ -22414,6 +22457,13 @@ body {
                 if (e.name !== 'AbortError') alert('提问失败：' + (e.message || e));
             } finally {
                 clearInterval(_askTimer);
+                // 兜底清理流式临时气泡 + 滚动监听（中止/报错时正式重渲不会发生，必须自己收尾；成功路径里已重渲掉，这里再清一次也无害）
+                try {
+                    if (_stm) {
+                        if (_stm.scrollH) { var _sc = document.getElementById('chatMessages'); if (_sc) _sc.removeEventListener('scroll', _stm.scrollH); }
+                        if (_stm.node && _stm.node.parentNode) _stm.node.parentNode.removeChild(_stm.node);
+                    }
+                } catch (e) {}
                 readingCommenting = false;
                 readingAbortCtl = null;
             }
