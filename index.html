@@ -21585,29 +21585,91 @@ body {
         // 没关联书架书的共读（直接贴文）退回会话 id。文件键与书删除无关，删书后记录照留、重导同一文件还能接上。
         function rdStatCurBook() {
             if (!(chatReadingMode || chatReaderMode) || !chatCurrentConvId) return null;
-            var bookId = null;
-            if (chatReaderMode && readerBookId) bookId = readerBookId;
-            else { try { bookId = (typeof rbGetConvBook === 'function') ? rbGetConvBook() : null; } catch (e) {} }
-            var title = '';
-            if (bookId && typeof rbGetBook === 'function') { var b = rbGetBook(bookId); if (b) title = b.title || b.name || ''; }
-            if (!title) {
-                try { var list = chatGetHistory(); for (var i = 0; i < list.length; i++) { if (list[i].id === chatCurrentConvId) { title = list[i].title || ''; break; } } } catch (e) {}
+            // 纯阅读：固定按「书文件键」记（同一本书跨设备/重导入都稳定）
+            if (chatReaderMode && readerBookId) {
+                if (typeof rbLoad === 'function' && (!rbBooks || !rbBooks.length)) { try { rbLoad(); } catch (e) {} }
+                var rb = (typeof rbGetBook === 'function') ? rbGetBook(readerBookId) : null;
+                var rtitle = rb ? (rb.title || rb.name || '') : '';
+                return { key: 'book:' + readerBookKey(readerBookId), title: rtitle || '未命名' };
             }
-            var key = bookId ? ('book:' + readerBookKey(bookId)) : ('conv:' + chatCurrentConvId);
-            return { key: key, title: title || '未命名' };
+            // 共读：永远按「对话 id」记一条 —— 一个对话 = 一条记录，绝不因「那天有没有绑书 / 书有没有加载好 / 书是否被删」
+            //       而把 key 在 conv: 和 book: 之间来回翻面、裂成多条。是否跟同一本书的纯阅读合并，留到统计面板展示时再分组。
+            var title = '';
+            try { var list = chatGetHistory(); for (var i = 0; i < list.length; i++) { if (list[i].id === chatCurrentConvId) { title = list[i].title || ''; break; } } } catch (e) {}
+            return { key: 'conv:' + chatCurrentConvId, title: title || '未命名' };
         }
-        // 某统计书键对应的所有会话 id（共读会话 + 纯阅读会话），用于跨模式统计划线数
-        function rdStatConvIdsForKey(key) {
+        // 单条存储键对应的所有会话 id（共读会话 + 纯阅读会话），用于跨模式统计划线数
+        function rdStatConvIdsForStorageKey(key) {
             if (key.indexOf('conv:') === 0) return [key.slice(5)];
             if (key.indexOf('book:') !== 0) return [key];   // 兜底：旧裸键
-            var fileKey = key.slice(5), ids = [], bookIds = {};
+            var x = key.slice(5), ids = [], bookIds = {};
             try {
-                for (var i = 0; i < rbBooks.length; i++) { var b = rbBooks[i]; if (((b.fileName || '') + '|' + (b.fileSize || 0)) === fileKey) bookIds[b.id] = true; }
+                if (x.indexOf('|') >= 0) {   // 文件键：名|大小
+                    for (var i = 0; i < rbBooks.length; i++) { var b = rbBooks[i]; if (((b.fileName || '') + '|' + (b.fileSize || 0)) === x) bookIds[b.id] = true; }
+                } else {                      // 旧的「book:<bookId>」退回形态
+                    bookIds[x] = true;
+                }
                 Object.keys(bookIds).forEach(function (bid) { ids.push('reader_' + bid); });
                 var map = rbConvBookMap();
                 Object.keys(map).forEach(function (cid) { if (bookIds[map[cid]]) ids.push(cid); });
             } catch (e) {}
             return ids;
+        }
+        // 把一条存储键归到「分组键」：能定位到书文件就按文件(f:)，否则按标题(t:)，再兜底用原键(k:)。
+        // 这样同一本书的「共读(conv:)＋纯阅读(book:)」会并到一组，历史上裂开的同名记录也会自动合并。
+        function rdStatGroupKey(storageKey, bk) {
+            var fileKey = null;
+            try {
+                if (storageKey.indexOf('book:') === 0) {
+                    var x = storageKey.slice(5);
+                    if (x.indexOf('|') >= 0) fileKey = x;
+                    else { var b = rbGetBook(x); if (b && b.fileName != null) fileKey = b.fileName + '|' + (b.fileSize || 0); }
+                } else if (storageKey.indexOf('conv:') === 0) {
+                    var bid = rbConvBookMap()[storageKey.slice(5)] || null;
+                    if (bid) { var b2 = rbGetBook(bid); if (b2 && b2.fileName != null) fileKey = b2.fileName + '|' + (b2.fileSize || 0); }
+                }
+            } catch (e) {}
+            if (fileKey) return 'f:' + fileKey;
+            var t = ((bk && bk.title) || '').trim();
+            if (t) return 't:' + t;
+            return 'k:' + storageKey;
+        }
+        // 把所有存储记录按分组键合并，返回 { order:[gid...按最近阅读排序], map:{gid:{gid,title,keys,firstDay,lastDay,totalSec,finishedDay,days}} }
+        function rdStatBuildGroups(st) {
+            var map = {}, order = [];
+            var ks = Object.keys(st.books || {});
+            for (var i = 0; i < ks.length; i++) {
+                var sk = ks[i], bk = st.books[sk];
+                var gid = rdStatGroupKey(sk, bk);
+                var g = map[gid];
+                if (!g) { g = map[gid] = { gid: gid, keys: [], title: '', firstDay: '', lastDay: '', totalSec: 0, finishedDay: '', days: {} }; order.push(gid); }
+                g.keys.push(sk);
+                g.totalSec += bk.totalSec || 0;
+                if (bk.firstDay && (!g.firstDay || bk.firstDay < g.firstDay)) g.firstDay = bk.firstDay;
+                if (bk.lastDay && (!g.lastDay || bk.lastDay > g.lastDay)) g.lastDay = bk.lastDay;
+                if (bk.finishedDay && (!g.finishedDay || bk.finishedDay < g.finishedDay)) g.finishedDay = bk.finishedDay;
+                var dd = bk.days || {}, dks = Object.keys(dd);
+                for (var j = 0; j < dks.length; j++) g.days[dks[j]] = (g.days[dks[j]] || 0) + dd[dks[j]];
+            }
+            Object.keys(map).forEach(function (gid) {
+                var g = map[gid], t = '';
+                if (gid.indexOf('f:') === 0 && typeof readerBookByKey === 'function') { var b = readerBookByKey(gid.slice(2)); if (b) t = b.title || b.name || ''; }
+                if (!t) { for (var i = 0; i < g.keys.length; i++) { var bb = st.books[g.keys[i]]; if (bb && bb.title) { t = bb.title; break; } } }
+                g.title = t || '未命名';
+            });
+            order.sort(function (a, b) { return (map[b].lastDay || '').localeCompare(map[a].lastDay || ''); });
+            return { order: order, map: map };
+        }
+        // 分组维度的会话 id 汇总（合并组内每条存储键的会话）
+        function rdStatConvIdsForKey(gid) {
+            var st = rdStatLoad();
+            var g = rdStatBuildGroups(st).map[gid];
+            if (!g) return [];
+            var seen = {}, out = [];
+            for (var i = 0; i < g.keys.length; i++) {
+                rdStatConvIdsForStorageKey(g.keys[i]).forEach(function (id) { if (!seen[id]) { seen[id] = 1; out.push(id); } });
+            }
+            return out;
         }
         // 旧版（用会话 id 当键）一次性迁移到新「书文件键」，并把同一本书的多条合并。幂等。
         function _rdStatMergeBook(books, key, src) {
@@ -21690,9 +21752,12 @@ body {
         }
         function rdStatFmtDate(s) { if (!s) return ''; var p = s.split('-'); return (+p[1]) + '月' + (+p[2]) + '日'; }
         function rdStatDaysBetween(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
-        // 取某本书的统计；'__all__' 把所有书合并
-        function rdStatAggBook(st, key) {
-            if (key !== '__all__') return st.books[key] || null;
+        // 取统计；gid='__all__' 把所有书合并，否则取该分组的合并结果
+        function rdStatAggBook(st, gid) {
+            if (gid !== '__all__') {
+                var g = rdStatBuildGroups(st).map[gid];
+                return g ? { title: g.title, firstDay: g.firstDay, lastDay: g.lastDay, totalSec: g.totalSec, finishedDay: g.finishedDay, days: g.days } : null;
+            }
             var ks = Object.keys(st.books);
             if (!ks.length) return null;
             var agg = { title: '全部书', firstDay: '', lastDay: '', totalSec: 0, finishedDay: '', days: {} };
@@ -21711,11 +21776,12 @@ body {
             if (existing) { existing.remove(); return; }
             rdStatMigrate();   // 旧「会话键」并到新「书文件键」，让同一本书的共读/纯阅读合并
             var st = rdStatLoad();
-            var keys = Object.keys(st.books);
+            var groups = rdStatBuildGroups(st);
             var cur = rdStatCurBook();
-            if (cur && st.books[cur.key]) _rdStatViewKey = cur.key;
-            else if (!_rdStatViewKey || (_rdStatViewKey !== '__all__' && !st.books[_rdStatViewKey])) {
-                _rdStatViewKey = keys.slice().sort(function (a, b) { return (st.books[b].lastDay || '').localeCompare(st.books[a].lastDay || ''); })[0] || null;
+            var curGid = cur ? rdStatGroupKey(cur.key, { title: cur.title }) : null;
+            if (curGid && groups.map[curGid]) _rdStatViewKey = curGid;
+            else if (!_rdStatViewKey || (_rdStatViewKey !== '__all__' && !groups.map[_rdStatViewKey])) {
+                _rdStatViewKey = groups.order[0] || null;
             }
             _rdStatViewMonth = null;
             var mask = document.createElement('div');
@@ -21732,19 +21798,20 @@ body {
             var body = document.getElementById('rdStatBody');
             if (!body) return;
             var st = rdStatLoad();
-            var keys = Object.keys(st.books);
-            if (!keys.length) {
+            var groups = rdStatBuildGroups(st);
+            var gids = groups.order;
+            if (!gids.length) {
                 body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">还没有阅读记录<br><span style="font-size:11px">进共读 / 纯阅读看书，时长会自动记在这里<br>（只从现在开始记，以前的找不回来）</span></div>';
                 return;
             }
+            if (_rdStatViewKey !== '__all__' && !groups.map[_rdStatViewKey]) _rdStatViewKey = gids[0];
             var bk = rdStatAggBook(st, _rdStatViewKey);
-            if (!bk) { _rdStatViewKey = keys[0]; bk = st.books[keys[0]]; }
-            var sorted = keys.slice().sort(function (a, b) { return (st.books[b].lastDay || '').localeCompare(st.books[a].lastDay || ''); });
+            if (!bk) { _rdStatViewKey = gids[0]; bk = rdStatAggBook(st, gids[0]); }
             var sel = '<select id="rdStatBookSel" onchange="rdStatPickBook(this.value)" style="width:100%;padding:8px 10px;border-radius:10px;border:1px solid var(--card-border);background:var(--card-bg,#fff);color:var(--text);font-size:13px">';
-            sel += '<option value="__all__"' + (_rdStatViewKey === '__all__' ? ' selected' : '') + '>📚 全部（' + keys.length + ' 本合计）</option>';
-            for (var i = 0; i < sorted.length; i++) {
-                var t = st.books[sorted[i]].title || '未命名';
-                sel += '<option value="' + escAttr(sorted[i]) + '"' + (_rdStatViewKey === sorted[i] ? ' selected' : '') + '>' + esc(t.length > 20 ? t.slice(0, 20) + '…' : t) + '</option>';
+            sel += '<option value="__all__"' + (_rdStatViewKey === '__all__' ? ' selected' : '') + '>📚 全部（' + gids.length + ' 本合计）</option>';
+            for (var i = 0; i < gids.length; i++) {
+                var t = groups.map[gids[i]].title || '未命名';
+                sel += '<option value="' + escAttr(gids[i]) + '"' + (_rdStatViewKey === gids[i] ? ' selected' : '') + '>' + esc(t.length > 20 ? t.slice(0, 20) + '…' : t) + '</option>';
             }
             sel += '</select>';
             var dayKeys = Object.keys(bk.days || {});
@@ -21826,12 +21893,13 @@ body {
         function rdStatToggleFinish() {
             if (_rdStatViewKey === '__all__') return;
             var st = rdStatLoad();
-            var bk = st.books[_rdStatViewKey];
-            if (!bk) return;
-            bk.finishedDay = bk.finishedDay ? '' : rdStatTodayStr();
+            var g = rdStatBuildGroups(st).map[_rdStatViewKey];
+            if (!g) return;
+            var newVal = g.finishedDay ? '' : rdStatTodayStr();
+            for (var i = 0; i < g.keys.length; i++) { if (st.books[g.keys[i]]) st.books[g.keys[i]].finishedDay = newVal; }
             rdStatSave(st);
             rdStatRenderBody();
-            if (typeof showToast === 'function') showToast(bk.finishedDay ? '🎉 标记为读完' : '已取消读完标记');
+            if (typeof showToast === 'function') showToast(newVal ? '🎉 标记为读完' : '已取消读完标记');
         }
 
         // 共读/翻译：更新本章阅读进度小标志
