@@ -21680,31 +21680,47 @@ body {
             if (t) return 't:' + t;
             return 'k:' + storageKey;
         }
-        // 把所有存储记录按分组键合并，返回 { order:[gid...按最近阅读排序], map:{gid:{gid,title,keys,firstDay,lastDay,totalSec,finishedDay,days}} }
+        // 把一条记录 / 一个组的数值折进目标组
+        function _rdStatFold(dst, src, srcKeys) {
+            (srcKeys || [src._sk]).forEach(function (k) { if (k != null) dst.keys.push(k); });
+            dst.totalSec += src.totalSec || 0;
+            if (src.firstDay && (!dst.firstDay || src.firstDay < dst.firstDay)) dst.firstDay = src.firstDay;
+            if (src.lastDay && (!dst.lastDay || src.lastDay > dst.lastDay)) dst.lastDay = src.lastDay;
+            if (src.finishedDay && (!dst.finishedDay || src.finishedDay < dst.finishedDay)) dst.finishedDay = src.finishedDay;
+            var dd = src.days || {}, dks = Object.keys(dd);
+            for (var j = 0; j < dks.length; j++) dst.days[dks[j]] = (dst.days[dks[j]] || 0) + dd[dks[j]];
+        }
+        // 把所有存储记录分组合并。两趟：①按分组键(文件/标题/原键) ②再把「显示标题相同」的组并起来
+        //（覆盖共读 conv: 与文件 book: 同名、跨修复边界裂开、书名即讨论名等导致的同名分裂）。
+        // 返回 { order:[canon gid...], map:{canon gid:组}, alias:{任一 gid → canon gid} }
         function rdStatBuildGroups(st) {
-            var map = {}, order = [];
+            var raw = {}, rawOrder = [];
             var ks = Object.keys(st.books || {});
             for (var i = 0; i < ks.length; i++) {
                 var sk = ks[i], bk = st.books[sk];
                 var gid = rdStatGroupKey(sk, bk);
-                var g = map[gid];
-                if (!g) { g = map[gid] = { gid: gid, keys: [], title: '', firstDay: '', lastDay: '', totalSec: 0, finishedDay: '', days: {} }; order.push(gid); }
-                g.keys.push(sk);
-                g.totalSec += bk.totalSec || 0;
-                if (bk.firstDay && (!g.firstDay || bk.firstDay < g.firstDay)) g.firstDay = bk.firstDay;
-                if (bk.lastDay && (!g.lastDay || bk.lastDay > g.lastDay)) g.lastDay = bk.lastDay;
-                if (bk.finishedDay && (!g.finishedDay || bk.finishedDay < g.finishedDay)) g.finishedDay = bk.finishedDay;
-                var dd = bk.days || {}, dks = Object.keys(dd);
-                for (var j = 0; j < dks.length; j++) g.days[dks[j]] = (g.days[dks[j]] || 0) + dd[dks[j]];
+                var g = raw[gid];
+                if (!g) { g = raw[gid] = { gid: gid, keys: [], title: '', firstDay: '', lastDay: '', totalSec: 0, finishedDay: '', days: {} }; rawOrder.push(gid); }
+                _rdStatFold(g, bk, [sk]);
             }
-            Object.keys(map).forEach(function (gid) {
-                var g = map[gid], t = '';
+            // 定标题：文件组优先用书名，否则用任一成员记录的标题
+            rawOrder.forEach(function (gid) {
+                var g = raw[gid], t = '';
                 if (gid.indexOf('f:') === 0 && typeof readerBookByKey === 'function') { var b = readerBookByKey(gid.slice(2)); if (b) t = b.title || b.name || ''; }
                 if (!t) { for (var i = 0; i < g.keys.length; i++) { var bb = st.books[g.keys[i]]; if (bb && bb.title) { t = bb.title; break; } } }
                 g.title = t || '未命名';
             });
+            // 第二趟：同名归一
+            var map = {}, order = [], byTitle = {}, alias = {};
+            rawOrder.forEach(function (gid) {
+                var g = raw[gid];
+                var tkey = (g.title && g.title !== '未命名') ? ('T:' + g.title) : null;
+                var canon = tkey ? byTitle[tkey] : null;
+                if (canon) { _rdStatFold(map[canon], g, g.keys); alias[gid] = canon; }
+                else { map[gid] = g; order.push(gid); alias[gid] = gid; if (tkey) byTitle[tkey] = gid; }
+            });
             order.sort(function (a, b) { return (map[b].lastDay || '').localeCompare(map[a].lastDay || ''); });
-            return { order: order, map: map };
+            return { order: order, map: map, alias: alias };
         }
         // 分组维度的会话 id 汇总（合并组内每条存储键的会话）
         function rdStatConvIdsForKey(gid) {
@@ -21824,7 +21840,7 @@ body {
             var st = rdStatLoad();
             var groups = rdStatBuildGroups(st);
             var cur = rdStatCurBook();
-            var curGid = cur ? rdStatGroupKey(cur.key, { title: cur.title }) : null;
+            var curGid = cur ? (groups.alias[rdStatGroupKey(cur.key, { title: cur.title })] || rdStatGroupKey(cur.key, { title: cur.title })) : null;
             if (curGid && groups.map[curGid]) _rdStatViewKey = curGid;
             else if (!_rdStatViewKey || (_rdStatViewKey !== '__all__' && !groups.map[_rdStatViewKey])) {
                 _rdStatViewKey = groups.order[0] || null;
