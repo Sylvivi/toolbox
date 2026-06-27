@@ -1855,6 +1855,24 @@ body {
         }
         .code-copy:hover { opacity: 1; }
         .code-copy.copied { background: rgba(34,197,94,0.15); color: #16a34a; border-color: rgba(34,197,94,0.3); opacity: 1; }
+        /* 阅读统计：月历热力图 */
+        .rd-cal { margin-top: 2px; }
+        .rd-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: var(--text); }
+        .rd-cal-head button { width: 30px; height: 30px; border: none; background: var(--accent-light); color: var(--accent); border-radius: 8px; font-size: 16px; cursor: pointer; line-height: 1; }
+        .rd-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+        .rd-cal-w { text-align: center; font-size: 11px; color: var(--text-muted); padding: 2px 0; }
+        .rd-cal-cell { position: relative; aspect-ratio: 1 / 1; border-radius: 7px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; color: var(--text-sub); background: rgba(127,127,127,0.10); cursor: pointer; }
+        .rd-cal-empty { background: transparent; cursor: default; }
+        .rd-cal-num { line-height: 1; }
+        .rd-cal-min { font-size: 9px; color: var(--accent); margin-top: 1px; line-height: 1; }
+        .rd-cal-l1 { background: var(--accent-light); }
+        .rd-cal-l2 { background: color-mix(in srgb, var(--accent) 32%, transparent); }
+        .rd-cal-l3 { background: color-mix(in srgb, var(--accent) 56%, transparent); }
+        .rd-cal-l4 { background: color-mix(in srgb, var(--accent) 82%, transparent); color: #fff; }
+        .rd-cal-l4 .rd-cal-min { color: #fff; }
+        .rd-cal-today { box-shadow: 0 0 0 2px var(--accent); }
+        .rd-cal-legend { display: flex; align-items: center; gap: 4px; justify-content: flex-end; margin-top: 10px; font-size: 10px; color: var(--text-muted); }
+        .rd-cal-legend i { width: 13px; height: 13px; border-radius: 3px; display: inline-block; }
         .chat-bubble h1,.chat-bubble h2,.chat-bubble h3,.chat-bubble h4 {
             font-size: 14px; font-weight: 600; margin: 12px 0 6px; color: var(--text);
         }
@@ -4756,6 +4774,7 @@ body {
                     <button class="chat-sp-btn" id="chatSpBtn" onclick="chatToggleTopMenu(event)" title="更多">⋮</button>
                     <div class="chat-topmenu" id="chatTopMenu" style="display:none">
                         <button class="chat-topmenu-item" id="chatBookmarkBtn" onclick="chatHideTopMenu();chatToggleBookmarkPanel()" style="">🔖 读痕</button>
+                        <button class="chat-topmenu-item" id="chatStatBtn" onclick="chatHideTopMenu();rdStatShowPanel()" style="">📊 统计</button>
                         <button class="chat-topmenu-item" id="chatBookshelfBtn" onclick="chatHideTopMenu();rbOpenShelf()">📚 书架</button>
                         <button class="chat-topmenu-item" id="chatNavBtn" onclick="chatHideTopMenu();chatToggleNavPanel()">🧭 目录</button>
                         <button class="chat-topmenu-item" id="chatUsageBtn" onclick="chatHideTopMenu();apiLogShowPanel()" style="display:none">💰 用量</button>
@@ -7116,6 +7135,7 @@ body {
                         <button onclick="clawdMenuAct('back')">← 退出</button>
                         <button onclick="clawdMenuAct('search')">🔍 搜索</button>
                         <button onclick="clawdMenuAct('bookmark')">🔖 读痕</button>
+                        <button onclick="clawdMenuAct('stats')">📊 统计</button>
                         <button onclick="clawdMenuAct('nav')">🧭 跳转</button>
                         <button onclick="clawdMenuAct('shelf')">📚 目录</button>
                         <button onclick="clawdMenuAct('summary')">📋 摘要</button>
@@ -11169,6 +11189,7 @@ body {
             readingApplyNames();
             readingRegisterLocalFonts();
             readingApplyFonts();
+            rdStatInitTracking();   // 阅读时长统计：开始心跳计时 + 监听活跃/可见
         });
 
         /* =========================================================================
@@ -12204,6 +12225,8 @@ body {
                 bookmarksTs: readingGetBookmarksTs(),
                 highlights: readingGetAllHl(),
                 highlightsTs: readingGetHlTs(),
+                readingStats: rdStatLoad(),
+                readingStatsTs: rdStatTs(),
                 favModels: (function () { try { return JSON.parse(localStorage.getItem('chat_fav_models') || '[]'); } catch (e) { return []; } })(),
                 favModelsTs: localStorage.getItem('chat_fav_models_ts') || '',
                 modelPrices: (function () { try { return JSON.parse(localStorage.getItem('toolbox_model_prices') || '{}'); } catch (e) { return {}; } })(),
@@ -12458,6 +12481,14 @@ body {
                     if (cloudHlTs > localHlTs) {
                         localStorage.setItem('reading_highlights', JSON.stringify(manifest.highlights));
                         localStorage.setItem('reading_highlights_ts', cloudHlTs);
+                    }
+                }
+
+                // readingStats(阅读统计): 整块按时间戳后写覆盖
+                if (manifest.readingStats) {
+                    var cloudStTs = manifest.readingStatsTs || '';
+                    if (cloudStTs > rdStatTs()) {
+                        localStorage.setItem('reading_stats', JSON.stringify(manifest.readingStats));
                     }
                 }
 
@@ -12811,6 +12842,7 @@ body {
                 if (manifest.checkinTasks) { idbSet(CHECKIN_TASKS_KEY, manifest.checkinTasks); if (manifest.checkinTasksTs) idbSet(CHECKIN_TASKS_TS_KEY, manifest.checkinTasksTs); }
                 if (manifest.bookmarks) { localStorage.setItem('reading_bookmarks', JSON.stringify(manifest.bookmarks)); if (manifest.bookmarksTs) localStorage.setItem('reading_bookmarks_ts', manifest.bookmarksTs); }
                 if (manifest.highlights) { localStorage.setItem('reading_highlights', JSON.stringify(manifest.highlights)); if (manifest.highlightsTs) localStorage.setItem('reading_highlights_ts', manifest.highlightsTs); }
+                if (manifest.readingStats) { localStorage.setItem('reading_stats', JSON.stringify(manifest.readingStats)); }
                 if (manifest.favModels) { try { localStorage.setItem('chat_fav_models', JSON.stringify(manifest.favModels)); localStorage.setItem('chat_fav_models_ts', manifest.favModelsTs || new Date().toISOString()); chatFavModels = manifest.favModels; if (typeof chatUpdateFavHeader === 'function') chatUpdateFavHeader(); } catch (e) {} }
                 if (manifest.modelPrices) { try { localStorage.setItem('toolbox_model_prices', JSON.stringify(manifest.modelPrices)); localStorage.setItem('toolbox_model_prices_ts', manifest.modelPricesTs || new Date().toISOString()); } catch (e) {} }
                 readingApplyFontSync(manifest); // 字体库+五个位置选择，带时间戳护栏（修复开机被云端旧值冲掉的问题）
@@ -17886,6 +17918,7 @@ body {
             if (what === 'shelf') { rbOpenShelf(); return; }
             if (what === 'nextchap') { clawdNextChapter(); return; }
             if (what === 'usage') { apiLogShowPanel(); return; }
+            if (what === 'stats') { rdStatShowPanel(); return; }
             if (what === 'model') { chatOpenModelSheet(); return; }
             if (what === 'summary') { if (chatReaderMode) readerShowSummaryModal(); else chatShowSummaryModal(); return; }
             // 阅读/翻译模式下，书签/搜索/导航不再依赖横栏——直接浮出来，横栏始终不露面
@@ -21515,6 +21548,245 @@ body {
             if (typeof pos.top === 'number') { el.scrollTop = pos.top; return false; }
             return false;
         }
+
+        /* ===================== 阅读统计（每本书 · 每天阅读时长 + 月历热力图） =====================
+           只在「共读 / 纯阅读」里、屏幕亮着且最近有动作时计时；切后台或 2 分钟没动作自动暂停，
+           避免「挂着没看」被算进去。存账（reading_stats，走 CF 同步）：
+             { books: { <bookKey>: { title, firstDay, lastDay, totalSec, finishedDay, days:{ 'YYYY-MM-DD': 秒 } } }, ts }
+           bookKey 用 chatCurrentConvId（共读=会话id，纯阅读=reader_<id>），与划线同键，便于统计本书划线数。 */
+        var RD_STAT_IDLE_MS = 120000;   // 2 分钟无动作 → 判为没在看，暂停计时
+        var RD_STAT_TICK_MS = 5000;     // 每 5 秒心跳一次
+        var _rdStatLastActive = Date.now();
+        var _rdStatPending = 0;         // 攒着还没落盘的秒数（减少写盘次数）
+        var _rdStatPushTimer = null;
+
+        function rdStatPad(n) { return n < 10 ? '0' + n : '' + n; }
+        function rdStatTodayStr() {
+            var d = new Date();
+            return d.getFullYear() + '-' + rdStatPad(d.getMonth() + 1) + '-' + rdStatPad(d.getDate());
+        }
+        function rdStatLoad() {
+            try { var o = JSON.parse(localStorage.getItem('reading_stats')); if (o && o.books) return o; } catch (e) {}
+            return { books: {}, ts: '' };
+        }
+        function rdStatSave(obj, push) {
+            obj.ts = new Date().toISOString();
+            localStorage.setItem('reading_stats', JSON.stringify(obj));
+            if (push !== false && typeof activeSyncProvider !== 'undefined' && activeSyncProvider === 'cf') {
+                if (_rdStatPushTimer) clearTimeout(_rdStatPushTimer);
+                _rdStatPushTimer = setTimeout(syncPushData, 4000);
+            }
+        }
+        function rdStatTs() { return rdStatLoad().ts || ''; }
+        // 当前在读的书：返回 { key, title } 或 null
+        function rdStatCurBook() {
+            if (!(chatReadingMode || chatReaderMode) || !chatCurrentConvId) return null;
+            var title = '';
+            if (chatReaderMode && readerBookId && typeof rbGetBook === 'function') {
+                var b = rbGetBook(readerBookId);
+                title = b ? (b.title || b.name || '未命名') : '未命名';
+            } else {
+                try {
+                    var list = chatGetHistory();
+                    for (var i = 0; i < list.length; i++) { if (list[i].id === chatCurrentConvId) { title = list[i].title || ''; break; } }
+                } catch (e) {}
+                title = title || '未命名';
+            }
+            return { key: chatCurrentConvId, title: title };
+        }
+        // 记一笔阅读秒数进「今天」
+        function rdStatAdd(sec) {
+            var cur = rdStatCurBook();
+            if (!cur || sec <= 0) return;
+            var st = rdStatLoad();
+            var bk = st.books[cur.key] || { title: cur.title, firstDay: '', lastDay: '', totalSec: 0, finishedDay: '', days: {} };
+            bk.title = cur.title || bk.title;           // 跟随改名
+            if (!bk.days) bk.days = {};
+            var today = rdStatTodayStr();
+            bk.days[today] = (bk.days[today] || 0) + sec;
+            bk.totalSec = (bk.totalSec || 0) + sec;
+            if (!bk.firstDay || today < bk.firstDay) bk.firstDay = today;
+            if (!bk.lastDay || today > bk.lastDay) bk.lastDay = today;
+            st.books[cur.key] = bk;
+            rdStatSave(st);
+        }
+        function rdStatFlushPending() {
+            if (_rdStatPending > 0) { var s = _rdStatPending; _rdStatPending = 0; rdStatAdd(s); }
+        }
+        function _rdStatTick() {
+            if (!(chatReadingMode || chatReaderMode)) return;
+            if (document.hidden) return;
+            if (Date.now() - _rdStatLastActive > RD_STAT_IDLE_MS) return;
+            _rdStatPending += RD_STAT_TICK_MS / 1000;
+            if (_rdStatPending >= 15) rdStatFlushPending();
+        }
+        function _rdStatMarkActive() { _rdStatLastActive = Date.now(); }
+        function rdStatInitTracking() {
+            setInterval(_rdStatTick, RD_STAT_TICK_MS);
+            ['touchstart', 'pointerdown', 'keydown', 'wheel'].forEach(function (ev) {
+                document.addEventListener(ev, _rdStatMarkActive, { passive: true, capture: true });
+            });
+            var cm = document.getElementById('chatMessages');
+            if (cm) cm.addEventListener('scroll', _rdStatMarkActive, { passive: true });
+            document.addEventListener('visibilitychange', function () { if (document.hidden) rdStatFlushPending(); });
+            window.addEventListener('pagehide', rdStatFlushPending);
+        }
+
+        /* ---- 统计面板（点 ⋮ / clawd 菜单「📊 统计」打开）---- */
+        var _rdStatViewKey = null;      // 当前查看的书 key；'__all__' = 全部合并
+        var _rdStatViewMonth = null;    // { y, m } 当前查看的月份
+        function rdStatFmtDur(sec) {
+            sec = Math.round(sec || 0);
+            var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+            if (h > 0) return h + ' 小时 ' + m + ' 分';
+            if (m > 0) return m + ' 分钟';
+            return sec + ' 秒';
+        }
+        function rdStatFmtDate(s) { if (!s) return ''; var p = s.split('-'); return (+p[1]) + '月' + (+p[2]) + '日'; }
+        function rdStatDaysBetween(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
+        // 取某本书的统计；'__all__' 把所有书合并
+        function rdStatAggBook(st, key) {
+            if (key !== '__all__') return st.books[key] || null;
+            var ks = Object.keys(st.books);
+            if (!ks.length) return null;
+            var agg = { title: '全部书', firstDay: '', lastDay: '', totalSec: 0, finishedDay: '', days: {} };
+            for (var i = 0; i < ks.length; i++) {
+                var b = st.books[ks[i]];
+                agg.totalSec += b.totalSec || 0;
+                if (b.firstDay && (!agg.firstDay || b.firstDay < agg.firstDay)) agg.firstDay = b.firstDay;
+                if (b.lastDay && (!agg.lastDay || b.lastDay > agg.lastDay)) agg.lastDay = b.lastDay;
+                var dk = Object.keys(b.days || {});
+                for (var j = 0; j < dk.length; j++) agg.days[dk[j]] = (agg.days[dk[j]] || 0) + b.days[dk[j]];
+            }
+            return agg;
+        }
+        function rdStatShowPanel() {
+            var existing = document.querySelector('.rd-stat-modal-mask');
+            if (existing) { existing.remove(); return; }
+            var st = rdStatLoad();
+            var keys = Object.keys(st.books);
+            var cur = rdStatCurBook();
+            if (cur && st.books[cur.key]) _rdStatViewKey = cur.key;
+            else if (!_rdStatViewKey || (_rdStatViewKey !== '__all__' && !st.books[_rdStatViewKey])) {
+                _rdStatViewKey = keys.slice().sort(function (a, b) { return (st.books[b].lastDay || '').localeCompare(st.books[a].lastDay || ''); })[0] || null;
+            }
+            _rdStatViewMonth = null;
+            var mask = document.createElement('div');
+            mask.className = 'chat-summary-modal-mask rd-stat-modal-mask';
+            var modal = document.createElement('div');
+            modal.className = 'chat-summary-modal';
+            modal.innerHTML = '<div class="chat-summary-modal-header"><span>📊 阅读统计</span><button onclick="this.closest(\'.rd-stat-modal-mask\').remove()">✕</button></div><div class="chat-summary-modal-body" id="rdStatBody"></div>';
+            mask.appendChild(modal);
+            mask.addEventListener('click', function (ev) { if (ev.target === mask) mask.remove(); });
+            document.body.appendChild(mask);
+            rdStatRenderBody();
+        }
+        function rdStatRenderBody() {
+            var body = document.getElementById('rdStatBody');
+            if (!body) return;
+            var st = rdStatLoad();
+            var keys = Object.keys(st.books);
+            if (!keys.length) {
+                body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">还没有阅读记录<br><span style="font-size:11px">进共读 / 纯阅读看书，时长会自动记在这里<br>（只从现在开始记，以前的找不回来）</span></div>';
+                return;
+            }
+            var bk = rdStatAggBook(st, _rdStatViewKey);
+            if (!bk) { _rdStatViewKey = keys[0]; bk = st.books[keys[0]]; }
+            var sorted = keys.slice().sort(function (a, b) { return (st.books[b].lastDay || '').localeCompare(st.books[a].lastDay || ''); });
+            var sel = '<select id="rdStatBookSel" onchange="rdStatPickBook(this.value)" style="width:100%;padding:8px 10px;border-radius:10px;border:1px solid var(--card-border);background:var(--card-bg,#fff);color:var(--text);font-size:13px">';
+            sel += '<option value="__all__"' + (_rdStatViewKey === '__all__' ? ' selected' : '') + '>📚 全部（' + keys.length + ' 本合计）</option>';
+            for (var i = 0; i < sorted.length; i++) {
+                var t = st.books[sorted[i]].title || '未命名';
+                sel += '<option value="' + escAttr(sorted[i]) + '"' + (_rdStatViewKey === sorted[i] ? ' selected' : '') + '>' + esc(t.length > 20 ? t.slice(0, 20) + '…' : t) + '</option>';
+            }
+            sel += '</select>';
+            var dayKeys = Object.keys(bk.days || {});
+            var readDays = dayKeys.length;
+            var maxDay = '', maxSec = 0;
+            for (var d = 0; d < dayKeys.length; d++) { if (bk.days[dayKeys[d]] > maxSec) { maxSec = bk.days[dayKeys[d]]; maxDay = dayKeys[d]; } }
+            var hlCount = 0;
+            var allHl = readingGetAllHl();
+            if (_rdStatViewKey === '__all__') { var hk = Object.keys(allHl); for (var h = 0; h < hk.length; h++) hlCount += (allHl[hk[h]] || []).length; }
+            else hlCount = (allHl[_rdStatViewKey] || []).length;
+            function card(label, big, sub) {
+                return '<div style="flex:1;min-width:0;background:var(--accent-light);border-radius:10px;padding:10px;text-align:center">'
+                    + '<div style="font-size:11px;color:var(--text-muted)">' + label + '</div>'
+                    + '<div style="font-size:15px;font-weight:700;color:var(--accent);margin:2px 0;white-space:nowrap">' + big + '</div>'
+                    + '<div style="font-size:10px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (sub || '&nbsp;') + '</div></div>';
+            }
+            var html = '';
+            html += '<div style="margin-bottom:12px">' + sel + '</div>';
+            if (bk.finishedDay && bk.firstDay) {
+                var spanDays = rdStatDaysBetween(bk.firstDay, bk.finishedDay) + 1;
+                html += '<div style="background:var(--accent-light);border-radius:10px;padding:8px 12px;margin-bottom:10px;text-align:center;font-size:13px;color:var(--accent);font-weight:600">🎉 ' + rdStatFmtDate(bk.finishedDay) + ' 读完 · 历时 ' + spanDays + ' 天</div>';
+            }
+            html += '<div style="display:flex;gap:8px;margin-bottom:8px">'
+                + card('累计时长', rdStatFmtDur(bk.totalSec), bk.firstDay ? (rdStatFmtDate(bk.firstDay) + ' 起') : '')
+                + card('阅读天数', readDays + ' 天', bk.lastDay ? ('上次 ' + rdStatFmtDate(bk.lastDay)) : '')
+                + '</div>';
+            html += '<div style="display:flex;gap:8px;margin-bottom:14px">'
+                + card('单日最久', maxSec ? rdStatFmtDur(maxSec) : '—', maxDay ? rdStatFmtDate(maxDay) : '')
+                + card('划线 / 想法', hlCount + ' 条', hlCount ? '满满的划线' : '')
+                + '</div>';
+            html += rdStatCalendarHtml(bk);
+            if (_rdStatViewKey !== '__all__') {
+                html += '<div style="text-align:center;margin-top:14px">'
+                    + '<button onclick="rdStatToggleFinish()" style="padding:7px 18px;border-radius:18px;border:1px solid var(--card-border);background:var(--card-bg,#fff);color:var(--text-sub);font-size:13px;cursor:pointer">'
+                    + (bk.finishedDay ? '取消「读完」标记' : '✓ 标记为读完') + '</button></div>';
+            }
+            body.innerHTML = html;
+        }
+        function rdStatCalendarHtml(bk) {
+            var days = bk.days || {};
+            if (!_rdStatViewMonth) {
+                var base = bk.lastDay || rdStatTodayStr();
+                _rdStatViewMonth = { y: parseInt(base.slice(0, 4), 10), m: parseInt(base.slice(5, 7), 10) };
+            }
+            var y = _rdStatViewMonth.y, m = _rdStatViewMonth.m;
+            var startW = new Date(y, m - 1, 1).getDay();
+            var daysInMonth = new Date(y, m, 0).getDate();
+            var maxV = 0;
+            for (var dd = 1; dd <= daysInMonth; dd++) { var v = days[y + '-' + rdStatPad(m) + '-' + rdStatPad(dd)] || 0; if (v > maxV) maxV = v; }
+            function lvl(sec) { if (!sec) return 0; if (maxV <= 0) return 1; var r = sec / maxV; return r > 0.75 ? 4 : r > 0.5 ? 3 : r > 0.25 ? 2 : 1; }
+            var todayS = rdStatTodayStr();
+            var html = '<div class="rd-cal"><div class="rd-cal-head"><button onclick="rdStatNavMonth(-1)">‹</button><span>' + y + ' 年 ' + m + ' 月</span><button onclick="rdStatNavMonth(1)">›</button></div><div class="rd-cal-grid">';
+            ['日', '一', '二', '三', '四', '五', '六'].forEach(function (w) { html += '<div class="rd-cal-w">' + w + '</div>'; });
+            for (var b = 0; b < startW; b++) html += '<div class="rd-cal-cell rd-cal-empty"></div>';
+            for (var dn = 1; dn <= daysInMonth; dn++) {
+                var dstr = y + '-' + rdStatPad(m) + '-' + rdStatPad(dn);
+                var sec = days[dstr] || 0;
+                var mins = sec ? Math.max(1, Math.round(sec / 60)) : 0;
+                var cls = 'rd-cal-cell rd-cal-l' + lvl(sec) + (dstr === todayS ? ' rd-cal-today' : '');
+                html += '<div class="' + cls + '" data-d="' + dstr + '" data-sec="' + sec + '" onclick="rdStatDayTap(this)"><span class="rd-cal-num">' + dn + '</span>' + (sec ? '<span class="rd-cal-min">' + mins + '′</span>' : '') + '</div>';
+            }
+            html += '</div><div class="rd-cal-legend"><span>少</span><i class="rd-cal-l1"></i><i class="rd-cal-l2"></i><i class="rd-cal-l3"></i><i class="rd-cal-l4"></i><span>多</span></div></div>';
+            return html;
+        }
+        function rdStatPickBook(k) { _rdStatViewKey = k; _rdStatViewMonth = null; rdStatRenderBody(); }
+        function rdStatNavMonth(delta) {
+            if (!_rdStatViewMonth) return;
+            var m = _rdStatViewMonth.m + delta, y = _rdStatViewMonth.y;
+            if (m < 1) { m = 12; y--; } else if (m > 12) { m = 1; y++; }
+            _rdStatViewMonth = { y: y, m: m };
+            rdStatRenderBody();
+        }
+        function rdStatDayTap(el) {
+            var sec = +el.getAttribute('data-sec') || 0;
+            var dstr = el.getAttribute('data-d');
+            if (typeof showToast !== 'function') return;
+            showToast(sec ? (rdStatFmtDate(dstr) + ' 读了 ' + rdStatFmtDur(sec)) : (rdStatFmtDate(dstr) + ' 没有阅读记录'));
+        }
+        function rdStatToggleFinish() {
+            if (_rdStatViewKey === '__all__') return;
+            var st = rdStatLoad();
+            var bk = st.books[_rdStatViewKey];
+            if (!bk) return;
+            bk.finishedDay = bk.finishedDay ? '' : rdStatTodayStr();
+            rdStatSave(st);
+            rdStatRenderBody();
+            if (typeof showToast === 'function') showToast(bk.finishedDay ? '🎉 标记为读完' : '已取消读完标记');
+        }
+
         // 共读/翻译：更新本章阅读进度小标志
         function readingUpdateProgress() {
             var badge = document.getElementById('readingProgressInline');
