@@ -22399,7 +22399,8 @@ body {
             readingClearActbar();   // 发出后立刻收起输入小条——答案改为在段落下方流式显示，进度肉眼可见，不再需要输入框占位和「思考中…」正计时
             // 流式答案小气泡：发出即出现（先显示「思考中…」占位给即时反馈），随后边生成边把答案增量渲染进去；
             // 只渲染答案本身、不重渲整条消息（长章节防卡）；右上角「停止」可中止；全部到齐后由下方整条重渲替换成正式评论块。
-            var _stm = { node: null, ans: null, follow: true, last: 0, scrollH: null };
+            var _stm = { node: null, ans: null, follow: true, last: 0, scrollH: null, t0: 0, phTimer: null, started: false };
+            function _stmStopPhTimer() { if (_stm.phTimer) { clearInterval(_stm.phTimer); _stm.phTimer = null; } }
             function _stmEnsure() {
                 if (_stm.node) return;
                 var msgEl = document.querySelector('.chat-msg.ai[data-idx="' + msgIdx + '"]');
@@ -22414,7 +22415,7 @@ body {
                 bq.setAttribute('style', 'position:relative;margin:0.4em 0 0.6em;padding:6px 12px;border-left:3px solid var(--accent);background:var(--quote-bg, var(--accent-light));border-radius:0 8px 8px 0;font-size:0.92em;color:var(--text-sub);line-height:1.6');
                 bq.innerHTML = '<button class="rd-stream-stop" type="button">停止</button>'
                     + '<div class="reading-q"><span class="reading-q-name">汐</span>：' + esc(question) + '</div>'
-                    + '<div class="rd-stream-ans"><span class="rd-stream-ph">思考中…<span class="rd-stream-cursor">▍</span></span></div>';
+                    + '<div class="rd-stream-ans"><span class="rd-stream-ph">思考中…<span class="rd-stream-sec"></span><span class="rd-stream-cursor">▍</span></span></div>';
                 anchor.parentNode.insertBefore(bq, anchor.nextSibling);
                 _stm.node = bq; _stm.ans = bq.querySelector('.rd-stream-ans');
                 var stopBtn = bq.querySelector('.rd-stream-stop');
@@ -22422,14 +22423,23 @@ body {
                 var cont = document.getElementById('chatMessages');
                 if (cont) { _stm.scrollH = function () { _stm.follow = (cont.scrollHeight - cont.scrollTop - cont.clientHeight) < 80; }; cont.addEventListener('scroll', _stm.scrollH, { passive: true }); }
                 try { bq.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+                // 首字出来前，「思考中…」后面挂个自增秒数，减轻干等的感觉；首字一到（_stmRender）就停。
+                _stm.t0 = Date.now();
+                _stm.phTimer = setInterval(function () {
+                    if (_stm.started) { _stmStopPhTimer(); return; }
+                    var sec = _stm.node && _stm.node.querySelector('.rd-stream-sec');
+                    if (sec) sec.textContent = ' ' + chatFmtElapsed(Math.floor((Date.now() - _stm.t0) / 1000));
+                }, 1000);
             }
             function _stmRender(full) {
                 _stmEnsure();
                 if (!_stm.ans) return;
+                _stm.started = true; _stmStopPhTimer();   // 首字已到，撤掉「思考中…计时」占位
                 _stm.ans.innerHTML = renderText((full || '').replace(/\[P\d+\]/gi, '')) + '<span class="rd-stream-cursor">▍</span>';
                 if (_stm.follow && _stm.node) { try { _stm.node.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
             }
             function _stmKill() {
+                _stmStopPhTimer();
                 if (_stm.scrollH) { var c = document.getElementById('chatMessages'); if (c) c.removeEventListener('scroll', _stm.scrollH); _stm.scrollH = null; }
                 if (_stm.node && _stm.node.parentNode) _stm.node.parentNode.removeChild(_stm.node);
                 _stm.node = null; _stm.ans = null;
@@ -22498,6 +22508,7 @@ body {
                 // 兜底清理流式气泡 + 滚动监听（中止/报错时正式重渲不会发生，必须自己收尾；成功路径里已 _stmKill 过，这里再清一次也无害）
                 try {
                     if (_stm) {
+                        if (_stm.phTimer) { clearInterval(_stm.phTimer); _stm.phTimer = null; }
                         if (_stm.scrollH) { var _sc = document.getElementById('chatMessages'); if (_sc) _sc.removeEventListener('scroll', _stm.scrollH); }
                         if (_stm.node && _stm.node.parentNode) _stm.node.parentNode.removeChild(_stm.node);
                     }
