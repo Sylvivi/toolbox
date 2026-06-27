@@ -18618,6 +18618,8 @@ body {
                 var m = msgs[i];
                 if (m.genImage) continue; // 独立生图消息不进摘要
                 var c = typeof m.content === 'string' ? _stripGenImgMarkers(m.content) : '[多模态内容]';
+                // 共读：助手消息里剔掉读者双击提问的「汐：」问答块，别把闲聊问答当剧情压进摘要
+                if (isReading && m.role === 'assistant' && typeof c === 'string') c = readingStripReaderQA(c);
                 if (!c) continue; // 剥掉图标记后空了就跳过
                 if (c.length > truncCap) c = c.substring(0, truncCap) + '…';
                 prompt += (m.role === 'user' ? '用户：' : '助手：') + c + '\n';
@@ -23357,6 +23359,24 @@ body {
                 comments.push({ p: -1, text: trailing.trim() });
             }
             return comments;
+        }
+
+        // 摘要取材时，把助手消息里「读者双击提问」的问答块（以「汐：」开头）整块剔掉，
+        // 只留 AI 逐段点评——否则读者提问会被当剧情压进对话摘要（用户反馈：很少见但确实会冒出来）。
+        function readingStripReaderQA(content) {
+            if (!content || content.indexOf('汐：') < 0) return content;
+            try {
+                var comments = readingModeParseComments(content);
+                var kept = [];
+                for (var i = 0; i < comments.length; i++) {
+                    var t = (comments[i].text || '').trim();
+                    if (!t || /^汐：/.test(t)) continue;          // 整块是读者问答 → 丢
+                    var cut = t.indexOf('\n汐：');                 // 块内点评后又接了问答 → 只留点评部分
+                    if (cut >= 0) t = t.slice(0, cut).trim();
+                    if (t) kept.push((comments[i].p > 0 ? '[P' + comments[i].p + '] ' : '') + t);
+                }
+                return kept.join('\n');
+            } catch (e) { return content; }
         }
 
         // 原文段落 HTML 缓存：AI 边写点评时整章正文不变，避免每 0.1 秒把整章重新转义+高亮一遍（输出完全一致，只是少做重复活）
