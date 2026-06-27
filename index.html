@@ -21581,20 +21581,64 @@ body {
         }
         function rdStatTs() { return rdStatLoad().ts || ''; }
         // 当前在读的书：返回 { key, title } 或 null
+        // 统一书键：同一本书的「共读」和「纯阅读」按【文件名|大小】合到一处统计；
+        // 没关联书架书的共读（直接贴文）退回会话 id。文件键与书删除无关，删书后记录照留、重导同一文件还能接上。
         function rdStatCurBook() {
             if (!(chatReadingMode || chatReaderMode) || !chatCurrentConvId) return null;
+            var bookId = null;
+            if (chatReaderMode && readerBookId) bookId = readerBookId;
+            else { try { bookId = (typeof rbGetConvBook === 'function') ? rbGetConvBook() : null; } catch (e) {} }
             var title = '';
-            if (chatReaderMode && readerBookId && typeof rbGetBook === 'function') {
-                var b = rbGetBook(readerBookId);
-                title = b ? (b.title || b.name || '未命名') : '未命名';
-            } else {
-                try {
-                    var list = chatGetHistory();
-                    for (var i = 0; i < list.length; i++) { if (list[i].id === chatCurrentConvId) { title = list[i].title || ''; break; } }
-                } catch (e) {}
-                title = title || '未命名';
+            if (bookId && typeof rbGetBook === 'function') { var b = rbGetBook(bookId); if (b) title = b.title || b.name || ''; }
+            if (!title) {
+                try { var list = chatGetHistory(); for (var i = 0; i < list.length; i++) { if (list[i].id === chatCurrentConvId) { title = list[i].title || ''; break; } } } catch (e) {}
             }
-            return { key: chatCurrentConvId, title: title };
+            var key = bookId ? ('book:' + readerBookKey(bookId)) : ('conv:' + chatCurrentConvId);
+            return { key: key, title: title || '未命名' };
+        }
+        // 某统计书键对应的所有会话 id（共读会话 + 纯阅读会话），用于跨模式统计划线数
+        function rdStatConvIdsForKey(key) {
+            if (key.indexOf('conv:') === 0) return [key.slice(5)];
+            if (key.indexOf('book:') !== 0) return [key];   // 兜底：旧裸键
+            var fileKey = key.slice(5), ids = [], bookIds = {};
+            try {
+                for (var i = 0; i < rbBooks.length; i++) { var b = rbBooks[i]; if (((b.fileName || '') + '|' + (b.fileSize || 0)) === fileKey) bookIds[b.id] = true; }
+                Object.keys(bookIds).forEach(function (bid) { ids.push('reader_' + bid); });
+                var map = rbConvBookMap();
+                Object.keys(map).forEach(function (cid) { if (bookIds[map[cid]]) ids.push(cid); });
+            } catch (e) {}
+            return ids;
+        }
+        // 旧版（用会话 id 当键）一次性迁移到新「书文件键」，并把同一本书的多条合并。幂等。
+        function _rdStatMergeBook(books, key, src) {
+            var dst = books[key];
+            if (!dst) { books[key] = src; return; }
+            dst.totalSec = (dst.totalSec || 0) + (src.totalSec || 0);
+            if (src.firstDay && (!dst.firstDay || src.firstDay < dst.firstDay)) dst.firstDay = src.firstDay;
+            if (src.lastDay && (!dst.lastDay || src.lastDay > dst.lastDay)) dst.lastDay = src.lastDay;
+            if (src.finishedDay && !dst.finishedDay) dst.finishedDay = src.finishedDay;
+            if (!dst.title && src.title) dst.title = src.title;
+            var sd = src.days || {}; if (!dst.days) dst.days = {};
+            Object.keys(sd).forEach(function (d) { dst.days[d] = (dst.days[d] || 0) + sd[d]; });
+        }
+        function rdStatMigrate() {
+            var st = rdStatLoad();
+            if (st._mig2) return;
+            if (typeof rbLoad === 'function' && (!rbBooks || !rbBooks.length)) { try { rbLoad(); } catch (e) {} }
+            var keys = Object.keys(st.books), moved = false;
+            for (var i = 0; i < keys.length; i++) {
+                var k = keys[i];
+                if (k.indexOf('book:') === 0 || k.indexOf('conv:') === 0) continue;  // 已是新键
+                var bookId = null;
+                if (k.indexOf('reader_') === 0) bookId = k.slice(7);
+                else { try { bookId = rbConvBookMap()[k] || null; } catch (e) {} }
+                var nk = (bookId && typeof rbGetBook === 'function' && rbGetBook(bookId)) ? ('book:' + readerBookKey(bookId)) : ('conv:' + k);
+                _rdStatMergeBook(st.books, nk, st.books[k]);
+                delete st.books[k];
+                moved = true;
+            }
+            st._mig2 = true;
+            localStorage.setItem('reading_stats', JSON.stringify(st));  // 本地静默迁移，不动 ts、不触发推送
         }
         // 记一笔阅读秒数进「今天」
         function rdStatAdd(sec) {
@@ -21665,6 +21709,7 @@ body {
         function rdStatShowPanel() {
             var existing = document.querySelector('.rd-stat-modal-mask');
             if (existing) { existing.remove(); return; }
+            rdStatMigrate();   // 旧「会话键」并到新「书文件键」，让同一本书的共读/纯阅读合并
             var st = rdStatLoad();
             var keys = Object.keys(st.books);
             var cur = rdStatCurBook();
@@ -21709,7 +21754,7 @@ body {
             var hlCount = 0;
             var allHl = readingGetAllHl();
             if (_rdStatViewKey === '__all__') { var hk = Object.keys(allHl); for (var h = 0; h < hk.length; h++) hlCount += (allHl[hk[h]] || []).length; }
-            else hlCount = (allHl[_rdStatViewKey] || []).length;
+            else { var cids = rdStatConvIdsForKey(_rdStatViewKey); for (var ci = 0; ci < cids.length; ci++) hlCount += (allHl[cids[ci]] || []).length; }
             function card(label, big, sub) {
                 return '<div style="flex:1;min-width:0;background:var(--accent-light);border-radius:10px;padding:10px;text-align:center">'
                     + '<div style="font-size:11px;color:var(--text-muted)">' + label + '</div>'
