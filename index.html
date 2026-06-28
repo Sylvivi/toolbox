@@ -1903,8 +1903,11 @@ body {
         .rd-trace-del { position: absolute; top: 6px; right: 6px; border: none; background: transparent; color: var(--text-muted); font-size: 14px; cursor: pointer; line-height: 1; padding: 2px 4px; }
         .rd-trace-q { font-size: 13px; color: var(--text); font-weight: 600; line-height: 1.5; }
         .rd-trace-qn { color: var(--accent); }
-        .rd-trace-a { margin-top: 4px; font-size: 12px; color: var(--text-sub); line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-        .rd-trace-a.open { display: block; -webkit-line-clamp: unset; }
+        .rd-trace-a { display: none; margin-top: 4px; font-size: 12px; color: var(--text-sub); line-height: 1.55; }
+        .rd-trace-a.open { display: block; }
+        .rd-trace-q { cursor: pointer; }
+        .rd-trace-qchev { display: inline-block; margin-left: 5px; font-size: 10px; color: var(--text-muted); transition: transform .15s; }
+        .rd-trace-q.q-open .rd-trace-qchev { transform: rotate(180deg); }
         .rd-trace-a p { margin: 0 0 4px; }
         .rd-trace-a-empty { color: var(--text-muted); font-style: italic; }
         .rd-trace-hl { font-size: 13px; color: var(--text-sub); line-height: 1.5; }
@@ -21884,6 +21887,12 @@ body {
             var allHl = readingGetAllHl();
             if (_rdStatViewKey === '__all__') { var hk = Object.keys(allHl); for (var h = 0; h < hk.length; h++) hlCount += (allHl[hk[h]] || []).length; }
             else { var cids = rdStatConvIdsForKey(_rdStatViewKey); for (var ci = 0; ci < cids.length; ci++) hlCount += (allHl[cids[ci]] || []).length; }
+            // 提问数：书签里 type==='ask' 的条数，按本书涉及的所有会话 id 累加（共读+纯阅读）
+            var askCount = 0;
+            var allBm = readingGetAllBookmarks();
+            function _cntAsk(arr) { var n = 0; (arr || []).forEach(function (b) { if (b.type === 'ask') n++; }); return n; }
+            if (_rdStatViewKey === '__all__') { var bmk = Object.keys(allBm); for (var bi = 0; bi < bmk.length; bi++) askCount += _cntAsk(allBm[bmk[bi]]); }
+            else { var cids2 = rdStatConvIdsForKey(_rdStatViewKey); for (var ci2 = 0; ci2 < cids2.length; ci2++) askCount += _cntAsk(allBm[cids2[ci2]]); }
             function card(label, big, sub) {
                 return '<div style="flex:1;min-width:0;background:var(--accent-light);border-radius:10px;padding:10px;text-align:center">'
                     + '<div style="font-size:11px;color:var(--text-muted)">' + label + '</div>'
@@ -21902,7 +21911,7 @@ body {
                 + '</div>';
             html += '<div style="display:flex;gap:8px;margin-bottom:14px">'
                 + card('单日最久', maxSec ? rdStatFmtDur(maxSec) : '—', maxDay ? rdStatFmtDate(maxDay) : '')
-                + card('划线 / 想法', hlCount + ' 条', hlCount ? '满满的划线' : '')
+                + card('提问', askCount + ' 次', askCount ? '常问常新' : '')
                 + '</div>';
             html += rdStatCalendarHtml(bk);
             if (_rdStatViewKey !== '__all__') {
@@ -23461,7 +23470,7 @@ body {
             return qas.map(function (x) {
                 var ans = x.a ? '<div class="rd-trace-a">' + renderText(x.a) + '</div>'
                     : '<div class="rd-trace-a rd-trace-a-empty">（答案不在当前记录里）</div>';
-                return '<div class="rd-trace-qa"><div class="rd-trace-q"><span class="rd-trace-qn">汐</span>：' + esc(x.q) + '</div>' + ans + '</div>';
+                return '<div class="rd-trace-qa"><div class="rd-trace-q" data-toggle="1"><span class="rd-trace-qn">汐</span>：' + esc(x.q) + '<span class="rd-trace-qchev">▾</span></div>' + ans + '</div>';
             }).join('');
         }
         function rdTraceItemHtml(e, i) {
@@ -23500,7 +23509,9 @@ body {
             list.querySelectorAll('.rd-trace-item').forEach(function (el) {
                 var e = _rdTraceShown[+el.getAttribute('data-i')];
                 if (!e) return;
-                el.querySelectorAll('.rd-trace-a:not(.rd-trace-a-empty)').forEach(function (a) { a.onclick = function (ev) { ev.stopPropagation(); a.classList.toggle('open'); }; });
+                // 默认只显示问题，回答全部折叠；点问题（或答案）展开/收起本条回答
+                el.querySelectorAll('.rd-trace-q[data-toggle]').forEach(function (q) { q.onclick = function (ev) { ev.stopPropagation(); var a = q.nextElementSibling; if (a && a.classList.contains('rd-trace-a')) { a.classList.toggle('open'); q.classList.toggle('q-open'); } }; });
+                el.querySelectorAll('.rd-trace-a').forEach(function (a) { a.onclick = function (ev) { ev.stopPropagation(); a.classList.remove('open'); var q = a.previousElementSibling; if (q && q.classList.contains('rd-trace-q')) q.classList.remove('q-open'); }; });
                 var del = el.querySelector('.rd-trace-del');
                 if (del) del.onclick = function (ev) {
                     ev.stopPropagation();
