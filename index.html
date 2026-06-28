@@ -21947,7 +21947,8 @@ body {
                 + '</div>';
             html += rdStatCalendarHtml(bk);
             if (_rdStatViewKey !== '__all__') {
-                html += '<div style="text-align:center;margin-top:14px">'
+                html += '<div style="text-align:center;margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">'
+                    + '<button onclick="rdStatRenameBook()" style="padding:7px 18px;border-radius:18px;border:1px solid var(--card-border);background:var(--card-bg,#fff);color:var(--text-sub);font-size:13px;cursor:pointer">✏️ 改名 / 合并</button>'
                     + '<button onclick="rdStatToggleFinish()" style="padding:7px 18px;border-radius:18px;border:1px solid var(--card-border);background:var(--card-bg,#fff);color:var(--text-sub);font-size:13px;cursor:pointer">'
                     + (bk.finishedDay ? '取消「读完」标记' : '✓ 标记为读完') + '</button></div>';
             }
@@ -22003,6 +22004,38 @@ body {
             rdStatSave(st);
             rdStatRenderBody();
             if (typeof showToast === 'function') showToast(newVal ? '🎉 标记为读完' : '已取消读完标记');
+        }
+        // 给这本书改名：把它名下所有记录（含底层共读对话）都改成新名字。
+        // 改成和另一本一模一样的名字，下次渲染就会自动合并成一本——这是用户手动合并两本书的入口。
+        function rdStatRenameBook() {
+            if (_rdStatViewKey === '__all__') return;
+            var st = rdStatLoad();
+            var groups = rdStatBuildGroups(st);
+            var g = groups.map[_rdStatViewKey];
+            if (!g) return;
+            var cur = (g.title && g.title !== '未命名') ? g.title : '';
+            var nv = prompt('给这本书改名（想合并两本？把名字改成跟另一本一模一样即可）', cur);
+            if (nv === null) return;
+            nv = nv.trim();
+            if (!nv || nv === cur) return;
+            // ① 底层共读对话也跟着改名，保证书名 = 对话名，自动归拢也认这个名
+            var list = chatGetHistory(), listDirty = false;
+            g.keys.forEach(function (k) {
+                if (k.indexOf('conv:') !== 0) return;
+                var cid = k.slice(5);
+                for (var i = 0; i < list.length; i++) { if (list[i].id === cid) { list[i].title = nv; list[i].aiTitle = true; list[i].updated = Date.now(); list[i]._dirty = true; listDirty = true; break; } }
+            });
+            if (listDirty) { chatSetHistory(list); if (chatView === 'list') chatRenderHistoryList(); if (typeof chatScheduleSyncPush === 'function') chatScheduleSyncPush(); }
+            // ② 这组所有存储记录的标题也写成新名（含没绑对话的旧键 / 纯阅读记录）
+            g.keys.forEach(function (k) { if (st.books[k]) st.books[k].title = nv; });
+            rdStatSave(st);
+            // ③ 跳到改名（可能已合并）后的那本书
+            var g2 = rdStatBuildGroups(rdStatLoad()), pick = '__all__';
+            for (var j = 0; j < g2.order.length; j++) { if (g2.map[g2.order[j]].title === nv) { pick = g2.order[j]; break; } }
+            _rdStatViewKey = pick;
+            _rdStatViewMonth = null;
+            rdStatRenderBody();
+            if (typeof showToast === 'function') showToast('已改名为「' + nv + '」');
         }
 
         // 共读/翻译：更新本章阅读进度小标志
