@@ -21706,6 +21706,27 @@ body {
             } catch (e) {}
             return '';
         }
+        // 自动归拢标题：把每条共读(conv:)记录的标题刷成「对话列表当前标题」（跟着重命名走，跨设备也行）；
+        // 凡是原本和它同名的兄弟记录（旧名相同 → 之前就合在一起的），一并改成新名，避免改一个名字把一本书拆成两条。
+        function rdStatHealTitles(push) {
+            try {
+                var st = rdStatLoad(), books = st.books || {}, keys = Object.keys(books), dirty = false, renames = [];
+                // ① 先按对话列表把 conv: 记录的标题刷新，记下「旧名 → 新名」
+                keys.forEach(function (k) {
+                    if (k.indexOf('conv:') !== 0) return;
+                    var rec = books[k]; if (!rec) return;
+                    var live = rdStatLiveTitle(k);
+                    if (live && rec.title !== live) { renames.push({ old: rec.title, neu: live }); rec.title = live; dirty = true; }
+                });
+                // ② 把和「旧名」相同的兄弟记录一起改成新名（保持原本的合并关系）
+                renames.forEach(function (r) {
+                    if (!r.old || r.old === r.neu) return;
+                    keys.forEach(function (k) { var rec = books[k]; if (rec && rec.title === r.old) { rec.title = r.neu; dirty = true; } });
+                });
+                if (dirty) rdStatSave(st, push);
+                return dirty;
+            } catch (e) { return false; }
+        }
         function rdStatBuildGroups(st) {
             var raw = {}, rawOrder = [];
             var ks = Object.keys(st.books || {});
@@ -21716,12 +21737,10 @@ body {
                 if (!g) { g = raw[gid] = { gid: gid, keys: [], title: '', firstDay: '', lastDay: '', totalSec: 0, finishedDay: '', days: {} }; rawOrder.push(gid); }
                 _rdStatFold(g, bk, [sk]);
             }
-            // 定标题：文件组优先用书名；共读记录优先用「对话列表里的当前标题」（跟着重命名走）；
-            //          取不到再退回存档里记下的旧标题快照。
+            // 定标题：文件组优先用书名，否则用任一成员记录的标题（共读记录的标题已由 rdStatHealTitles 刷成对话当前名）
             rawOrder.forEach(function (gid) {
                 var g = raw[gid], t = '';
                 if (gid.indexOf('f:') === 0 && typeof readerBookByKey === 'function') { var b = readerBookByKey(gid.slice(2)); if (b) t = b.title || b.name || ''; }
-                if (!t) { for (var i = 0; i < g.keys.length; i++) { var live = rdStatLiveTitle(g.keys[i]); if (live) { t = live; break; } } }
                 if (!t) { for (var i = 0; i < g.keys.length; i++) { var bb = st.books[g.keys[i]]; if (bb && bb.title) { t = bb.title; break; } } }
                 g.title = t || '未命名';
             });
@@ -21874,6 +21893,7 @@ body {
         function rdStatRenderBody() {
             var body = document.getElementById('rdStatBody');
             if (!body) return;
+            rdStatHealTitles();   // 先按对话当前标题归拢，避免改名把一本书拆成两条
             var st = rdStatLoad();
             var groups = rdStatBuildGroups(st);
             var gids = groups.order;
