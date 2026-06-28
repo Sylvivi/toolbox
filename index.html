@@ -21696,6 +21696,16 @@ body {
         // 把所有存储记录分组合并。两趟：①按分组键(文件/标题/原键) ②再把「显示标题相同」的组并起来
         //（覆盖共读 conv: 与文件 book: 同名、跨修复边界裂开、书名即讨论名等导致的同名分裂）。
         // 返回 { order:[canon gid...], map:{canon gid:组}, alias:{任一 gid → canon gid} }
+        // 一条存储键当前对应的「对话列表标题」（共读记录用，跟着重命名实时变）；取不到返回空串
+        function rdStatLiveTitle(storageKey) {
+            try {
+                if (storageKey.indexOf('conv:') === 0) {
+                    var cid = storageKey.slice(5), list = chatGetHistory();
+                    for (var i = 0; i < list.length; i++) { if (list[i].id === cid && list[i].title) return list[i].title; }
+                }
+            } catch (e) {}
+            return '';
+        }
         function rdStatBuildGroups(st) {
             var raw = {}, rawOrder = [];
             var ks = Object.keys(st.books || {});
@@ -21706,10 +21716,12 @@ body {
                 if (!g) { g = raw[gid] = { gid: gid, keys: [], title: '', firstDay: '', lastDay: '', totalSec: 0, finishedDay: '', days: {} }; rawOrder.push(gid); }
                 _rdStatFold(g, bk, [sk]);
             }
-            // 定标题：文件组优先用书名，否则用任一成员记录的标题
+            // 定标题：文件组优先用书名；共读记录优先用「对话列表里的当前标题」（跟着重命名走）；
+            //          取不到再退回存档里记下的旧标题快照。
             rawOrder.forEach(function (gid) {
                 var g = raw[gid], t = '';
                 if (gid.indexOf('f:') === 0 && typeof readerBookByKey === 'function') { var b = readerBookByKey(gid.slice(2)); if (b) t = b.title || b.name || ''; }
+                if (!t) { for (var i = 0; i < g.keys.length; i++) { var live = rdStatLiveTitle(g.keys[i]); if (live) { t = live; break; } } }
                 if (!t) { for (var i = 0; i < g.keys.length; i++) { var bb = st.books[g.keys[i]]; if (bb && bb.title) { t = bb.title; break; } } }
                 g.title = t || '未命名';
             });
