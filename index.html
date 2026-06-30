@@ -13864,7 +13864,22 @@ body {
             while (msgs.length && msgs[0].role !== 'user') msgs.shift();
             var body = { model: model, max_tokens: maxTokens || 8192, messages: msgs };
             if (stream) body.stream = true;
-            if (systemParts.length) body.system = systemParts.join('\n\n');
+            // ── 提示词缓存（prompt caching）─────────────────────────────
+            // 给「稳定前缀」打缓存断点：① 整段 system（最稳定，每轮都一样）；
+            // ② 最后一条消息末尾（缓存「截至本轮的全部历史」）。下一轮请求时，
+            //    服务器自动命中最长相同前缀 → 重复部分按 0.1x 计价、还更快。
+            // 断点最多 4 个，这里用 2 个；不够缓存最小长度的短对话会被服务器忽略（不报错）。
+            if (systemParts.length) {
+                body.system = [{ type: 'text', text: systemParts.join('\n\n'), cache_control: { type: 'ephemeral' } }];
+            }
+            if (msgs.length) {
+                var _lastMsg = msgs[msgs.length - 1];
+                if (typeof _lastMsg.content === 'string') {
+                    _lastMsg.content = [{ type: 'text', text: _lastMsg.content, cache_control: { type: 'ephemeral' } }];
+                } else if (Array.isArray(_lastMsg.content) && _lastMsg.content.length) {
+                    _lastMsg.content[_lastMsg.content.length - 1].cache_control = { type: 'ephemeral' };
+                }
+            }
             return body;
         }
 
@@ -13876,8 +13891,13 @@ body {
                 if (json.delta.type === 'text_delta') out.choices[0].delta.content = json.delta.text || '';
                 else if (json.delta.type === 'thinking_delta') out.choices[0].delta.reasoning_content = json.delta.thinking || '';
             } else if (t === 'message_start' && json.message && json.message.usage) {
-                if (json.message.usage.input_tokens != null) state.inTok = json.message.usage.input_tokens;
-                if (json.message.usage.output_tokens != null) state.outTok = json.message.usage.output_tokens;
+                var _mu = json.message.usage;
+                // 命中缓存时 input_tokens 只算「未缓存的新 token」，缓存读/写的另列；
+                // 全加起来才是真实输入总量，否则用量面板会少算。
+                if (_mu.input_tokens != null || _mu.cache_read_input_tokens != null || _mu.cache_creation_input_tokens != null) {
+                    state.inTok = (_mu.input_tokens || 0) + (_mu.cache_read_input_tokens || 0) + (_mu.cache_creation_input_tokens || 0);
+                }
+                if (_mu.output_tokens != null) state.outTok = _mu.output_tokens;
             } else if (t === 'message_delta' && json.usage && json.usage.output_tokens != null) {
                 state.outTok = json.usage.output_tokens;
             }
@@ -13919,7 +13939,8 @@ body {
                                 'Content-Type': 'application/json',
                                 'x-api-key': opts.apiKey,
                                 'Authorization': 'Bearer ' + opts.apiKey,
-                                'anthropic-version': '2023-06-01'
+                                'anthropic-version': '2023-06-01',
+                                'anthropic-beta': 'prompt-caching-2024-07-31'
                             },
                             body: JSON.stringify(aiBuildAnthropicBody(opts.model, opts.messages, opts.max_tokens, true)),
                             signal: opts.signal
