@@ -3137,6 +3137,9 @@ body {
         .tb-pending .tb-pending-t { font-variant-numeric: tabular-nums; }
         .tb-pending .tb-pending-x { margin-left: auto; cursor: pointer; padding: 0 4px; opacity: 0.7; }
         .tb-pending .tb-pending-x:hover { opacity: 1; }
+        /* 流式出字中的译文块：定位「停止」按钮，正文右侧留点空避免压到按钮 */
+        .translate-block.tb-streaming { position: relative; }
+        .translate-block.tb-streaming .tb-body { padding-right: 56px; }
         @keyframes tbPendingPulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
         .translate-block .tb-qa {
             margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--card-border);
@@ -22715,6 +22718,22 @@ body {
                 if (translatePending[i].id === id) { try { translatePending[i].ctl.abort(); } catch (e) {} break; }
             }
         }
+        // 流式渲染：把正在生成的译文增量写进该段的占位块（首帧从「翻译中…」切成流式布局，带「停止」按钮）
+        function translateRenderStream(pp) {
+            if (!pp) return;
+            var node = document.querySelector('.translate-block[data-pid="' + pp.id + '"]');
+            if (!node) return;
+            var txt = (pp.partial || '').replace(/\[\[\/?TR[^\]]*\]\]/g, '');
+            if (!node.classList.contains('tb-streaming')) {
+                node.classList.remove('tb-pending');
+                node.classList.add('tb-streaming');
+                node.innerHTML = '<button class="rd-stream-stop" type="button" onclick="translateAbortPending(' + pp.id + ')">停止</button>' +
+                    '<div class="tb-body"></div>';
+            }
+            var body = node.querySelector('.tb-body');
+            if (body) body.innerHTML = renderText(txt) + '<span class="rd-stream-cursor">▍</span>';
+            if (typeof chatIsNearBottom === 'function' && chatIsNearBottom()) { try { node.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
+        }
 
         function translateClearSel() {
             translateSelMsgIdx = -1; translateSelAnchor = -1; translateSelEnd = -1;
@@ -22839,13 +22858,15 @@ body {
             var segment = paras.slice(lo - 1, hi).join('\n');
             var id = ++translatePendingSeq;
             var ctl = new AbortController();
-            translatePending.push({ id: id, msgIdx: msgIdx, lo: lo, hi: hi, ctl: ctl, t0: Date.now() });
+            var pendObj = { id: id, msgIdx: msgIdx, lo: lo, hi: hi, ctl: ctl, t0: Date.now(), partial: '' };
+            translatePending.push(pendObj);
             translateClearSel();            // 立刻释放选区/操作条
             translateStartPendingTimer();
             readingRerenderMsg(msgIdx);      // 画出「翻译中…」占位
             try {
                 var baseUrl = getBaseUrl(item.url);
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
+                var _tlast = 0;
                 var answer = (await chatStreamChat({
                     baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel, markUsed: true,
                     purpose: '翻译',
@@ -22853,7 +22874,14 @@ body {
                         { role: 'system', content: TRANSLATE_MODE_INSTRUCTION },
                         { role: 'user', content: segment }
                     ],
-                    signal: ctl.signal
+                    signal: ctl.signal,
+                    onDelta: function (full) {
+                        pendObj.partial = full;            // 存一份，并发重渲时不会被「翻译中…」占位冲掉
+                        var now = Date.now();
+                        if (now - _tlast < 60) return;     // 节流：最多约每 60ms 渲一次；最终文本由下方整体重渲收尾
+                        _tlast = now;
+                        translateRenderStream(pendObj);
+                    }
                 })).trim();
                 // 去掉模型可能误带的 [[TR]] 标记，避免破坏存储块
                 answer = answer.replace(/\[\[\/?TR[^\]]*\]\]/g, '').trim();
@@ -24195,10 +24223,18 @@ body {
                 if (pendByEnd[pNum]) {
                     for (var pk = 0; pk < pendByEnd[pNum].length; pk++) {
                         var pe = pendByEnd[pNum][pk];
-                        html += '<div class="translate-block tb-pending" data-pid="' + pe.id + '">' +
-                            '<div class="tb-body"><span class="tb-pending-dot"></span>翻译中… ' +
-                            '<span class="tb-pending-t">' + chatFmtElapsed(Math.floor((Date.now() - pe.t0) / 1000)) + '</span>' +
-                            '<span class="tb-pending-x" onclick="translateAbortPending(' + pe.id + ')">✕</span></div></div>';
+                        var _pstx = (pe.partial || '').replace(/\[\[\/?TR[^\]]*\]\]/g, '');
+                        if (_pstx.trim()) {
+                            // 已经出字：渲染流式布局（与 translateRenderStream 保持一致），带「停止」按钮
+                            html += '<div class="translate-block tb-streaming" data-pid="' + pe.id + '">' +
+                                '<button class="rd-stream-stop" type="button" onclick="translateAbortPending(' + pe.id + ')">停止</button>' +
+                                '<div class="tb-body">' + renderText(_pstx) + '<span class="rd-stream-cursor">▍</span></div></div>';
+                        } else {
+                            html += '<div class="translate-block tb-pending" data-pid="' + pe.id + '">' +
+                                '<div class="tb-body"><span class="tb-pending-dot"></span>翻译中… ' +
+                                '<span class="tb-pending-t">' + chatFmtElapsed(Math.floor((Date.now() - pe.t0) / 1000)) + '</span>' +
+                                '<span class="tb-pending-x" onclick="translateAbortPending(' + pe.id + ')">✕</span></div></div>';
+                        }
                     }
                 }
             }
