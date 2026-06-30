@@ -22217,7 +22217,8 @@ body {
         }
 
         // 共读：在 anchorEl 后面插入「问这一段」操作栏（原文段落、AI 回答块都能触发，复用同一套）
-        function readingOpenAskBar(msgIdx, pNum, anchorEl) {
+        // prefill：可选，预填问题文本（提问失败时用来把原问题塞回输入框，不让用户白打一遍）
+        function readingOpenAskBar(msgIdx, pNum, anchorEl, prefill) {
             // 左右跟随翻页按钮位置：靠左则「提问」在最左、靠右则在最右（贴近拿机手拇指）
             var pos = localStorage.getItem('reading_pagebtn_pos') || 'rb';
             var leftSide = (pos === 'lm' || pos === 'lb');
@@ -22234,6 +22235,23 @@ body {
             function go() { readingAskOne(msgIdx, pNum, input.value, bar); }
             send.onclick = go;
             readingBindAskBox(input);
+            if (prefill) { input.value = prefill; try { input.dispatchEvent(new Event('input')); } catch (e) {} try { input.focus(); } catch (e) {} }
+        }
+        // 提问失败后，把输入框带着原问题重新挂回该段下方（找该段最后一个问答块、没有就贴原文段）
+        function readingReopenAskBar(msgIdx, pNum, question) {
+            try {
+                readingClearActbar();
+                var msgEl = document.querySelector('.chat-msg.ai[data-idx="' + msgIdx + '"]');
+                var merged = msgEl && msgEl.querySelector('.reading-merged');
+                if (!merged) return;
+                var anchor = null;
+                var bqs = merged.querySelectorAll('blockquote[data-cp="' + pNum + '"]');
+                if (bqs.length) anchor = bqs[bqs.length - 1];
+                else anchor = merged.querySelector('p[data-p="' + pNum + '"]');
+                if (!anchor) return;
+                anchor.classList.add('rp-active');
+                readingOpenAskBar(msgIdx, pNum, anchor, question);
+            } catch (e) {}
         }
         function readingOnParaClick(pEl) {
             if (readingCommenting) return;
@@ -22640,7 +22658,11 @@ body {
                 readingClearActbar();
                 readingRerenderMsg(msgIdx, pNum);
             } catch (e) {
-                if (e.name !== 'AbortError') alert('提问失败：' + (e.message || e));
+                if (e.name !== 'AbortError') {
+                    alert('提问失败：' + (e.message || e));
+                    // 把刚才的问题塞回输入框，别让用户白打一遍（中止是用户主动的，不用恢复）
+                    readingReopenAskBar(msgIdx, pNum, question);
+                }
             } finally {
                 // 兜底清理流式气泡 + 滚动监听（中止/报错时正式重渲不会发生，必须自己收尾；成功路径里已 _stmKill 过，这里再清一次也无害）
                 try {
