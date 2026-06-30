@@ -23146,6 +23146,9 @@ body {
 
         // ---- 浮动小条 ----
         var _rdHlPending = null;   // 选中态：暂存选区信息，点色板时用（避免移动端点按钮丢选区）
+        // 「刚因点击空白而关掉浮层（划线小条等）」的时刻：这一下点击只用来收浮层，
+        // 紧随其后的 click 要被吞掉、不翻页/不提问——让点击有层次（先关菜单，再点才翻页）。
+        var _rdOverlayClosedAt = 0;
         function rdHlHideBar() {
             var bar = document.getElementById('rdHlBar'); if (bar) bar.remove();
             _rdHlPending = null;
@@ -23724,6 +23727,8 @@ body {
                     if (_isMultiTouchEcho()) return;   // 多指手势（如三指截屏）误合成的点击，不翻页
                     // 刚从列表进入对话的极短时间内忽略翻页，避免「幽灵点击」把阅读位置翻走
                     if (Date.now() < _readingTapSuppressUntil) return;
+                    // 这一下点击刚把划线小条等浮层收掉了（pointerdown 阶段）→ 只收浮层，不翻页/不提问
+                    if (Date.now() - _rdOverlayClosedAt < 400) { clearTimeout(_readingTapTimer); _pTapCount = 0; _pTapEl = null; return; }
                     if (e.target.closest('button, input, textarea, a, svg, img, .reading-actbar, .chat-thinking')) return;
                     var sel = window.getSelection && window.getSelection();
                     if (sel && String(sel).length > 0) return;
@@ -23828,6 +23833,7 @@ body {
             document.addEventListener('pointerdown', function(e) {
                 if (!document.getElementById('rdHlBar')) return;
                 if (e.target.closest && (e.target.closest('.rd-hl-bar') || e.target.closest('mark.rd-hl'))) return;
+                _rdOverlayClosedAt = Date.now();   // 标记：这一下是用来收浮层的，随后的 click 别翻页
                 rdHlHideBar();
             }, true);
             // 滚动时跟手收起小条，免得它飘在错位置（批注框是流内元素，跟着滚，不在此列）
