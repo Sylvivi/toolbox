@@ -23803,8 +23803,17 @@ body {
                 if (_isMultiTouchEcho()) return;   // 多指手势（如三指截屏）误合成的双击，忽略
                 // 翻译模式交给翻译逻辑（translate-merged 同带 reading-merged 类，需先排除）
                 if (e.target.closest('.translate-merged')) return;
-                // 原文段落：什么都不做，也别清判定定时器（提问全在 click 计数里判，dblclick 插手会把它清掉）
-                if (e.target.closest('.reading-merged p[data-p]')) return;
+                // 原文段落：桌面双击会选中词，第二次 click 被「有选区」拦下、连击计数到不了 2 → 提问弹不出来。
+                // 这里用 dblclick 兜底提问；同时清掉连击状态/翻页定时器和双击选中的词，避免移动端 click 连击再触发一次
+                // （dblclick 紧跟第二次 click，能抢在 250ms 翻页定时器触发前清掉，移动端从而也统一走这条、不会提问两次）。
+                var _rp = e.target.closest('.reading-merged p[data-p]');
+                if (_rp) {
+                    clearTimeout(_readingTapTimer);
+                    _pTapCount = 0; _pTapEl = null;
+                    try { window.getSelection().removeAllRanges(); } catch (x) {}
+                    readingOnParaClick(_rp);
+                    return;
+                }
                 clearTimeout(_readingTapTimer);   // 双击 AI 回答块时取消左右点击翻页
                 // 双击 AI 回答 / 评论块 = 接着聊同一段（更直觉）
                 var bq = e.target.closest('.reading-merged blockquote[data-cp]');
