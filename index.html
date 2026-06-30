@@ -23028,6 +23028,7 @@ body {
                 if (!answer) throw new Error('空回复');
                 msg.content = translateAppendQA(msg.content, s, e, question, answer);
                 chatSaveCurrentConv(true);
+                readingAddQuestionBookmark(msgIdx, hi, question, { trS: lo, trE: hi }); // 收进读痕（按译文块末段归位，答案存在 [[TR]] 块里）
                 readingRerenderMsg(msgIdx, hi);
             } catch (err) {
                 if (send) { send.disabled = false; send.textContent = err.name === 'AbortError' ? '提问' : '重试'; }
@@ -23386,7 +23387,7 @@ body {
             return nowOn;
         }
         // 共读提问后，把问题作为「💬 问题书签」加入同一书签列表，便于跳转回该段
-        function readingAddQuestionBookmark(msgIdx, p, question) {
+        function readingAddQuestionBookmark(msgIdx, p, question, meta) {
             if (!chatCurrentConvId) return;
             question = (question || '').trim();
             if (!question) return;
@@ -23396,7 +23397,9 @@ body {
                 if (list[i].type === 'ask' && list[i].msgIdx === msgIdx && list[i].p === p && list[i].q === question) return;
             }
             var prev = question.length > 60 ? question.slice(0, 60) + '…' : question;
-            list.push({ msgIdx: msgIdx, p: p, q: question, preview: prev, type: 'ask', ts: Date.now() });
+            var bm = { msgIdx: msgIdx, p: p, q: question, preview: prev, type: 'ask', ts: Date.now() };
+            if (meta) { for (var mk in meta) { if (meta.hasOwnProperty(mk)) bm[mk] = meta[mk]; } } // 翻译追问带 trS/trE，回取答案时认这个
+            list.push(bm);
             all[chatCurrentConvId] = list;
             readingSaveAllBookmarks(all);
             readingRefreshBookmarkUI();
@@ -23550,6 +23553,22 @@ body {
             } catch (e) {}
             return '';
         }
+        // 翻译追问的答案存在 [[TR s e]] 块里的 [[QA]]问[[ANS]]答[[/QA]]，按区间 + 问题匹配捞出来
+        function rdTraceTransAnswerFor(msgIdx, s, e, q) {
+            try {
+                var msg = chatMessages[msgIdx];
+                if (!msg || typeof msg.content !== 'string') return '';
+                var blocks = translateModeParseBlocks(msg.content);
+                for (var b = 0; b < blocks.length; b++) {
+                    if (blocks[b].s !== s || blocks[b].e !== e) continue;
+                    var parsed = translateBlockSplitQA(blocks[b].text);
+                    for (var i = 0; i < parsed.qas.length; i++) {
+                        if (parsed.qas[i].q === q) return parsed.qas[i].a;
+                    }
+                }
+            } catch (e2) {}
+            return '';
+        }
         // 收集 → 把提问按「同一段」聚成话题：一段问 1 次=单问(single)，连续追问≥2 次=追问串(thread)；划线(hl) 各自一条。
         function rdTraceBuildEntries() {
             var groups = {}, order = [];
@@ -23562,7 +23581,12 @@ body {
             var entries = [];
             order.forEach(function (k) {
                 var g = groups[k].slice().sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
-                var qas = g.map(function (a) { return { q: a.q, a: rdTraceAnswerFor(a.msgIdx, a.p, a.q), ts: a.ts, raw: a.raw }; });
+                var qas = g.map(function (a) {
+                    var ans = (a.raw && a.raw.trE != null)
+                        ? rdTraceTransAnswerFor(a.msgIdx, a.raw.trS, a.raw.trE, a.q)   // 翻译追问
+                        : rdTraceAnswerFor(a.msgIdx, a.p, a.q);                          // 共读提问
+                    return { q: a.q, a: ans, ts: a.ts, raw: a.raw };
+                });
                 var lastTs = g.reduce(function (m, a) { return Math.max(m, a.ts || 0); }, 0);
                 entries.push({ type: g.length >= 2 ? 'thread' : 'single', msgIdx: g[0].msgIdx, p: g[0].p, qas: qas, count: g.length, sortTs: lastTs });
             });
