@@ -13749,28 +13749,31 @@ body {
             if (typeof o.calls !== 'number') o.calls = 0;
             if (typeof o.inTok !== 'number') o.inTok = 0;
             if (typeof o.outTok !== 'number') o.outTok = 0;
+            if (typeof o.cacheTok !== 'number') o.cacheTok = 0;  // 累计缓存命中读取量
             return o;
         }
         function apiAggSave(o) { try { localStorage.setItem('toolbox_api_agg', JSON.stringify(o)); } catch (e) {} }
         // 记一笔调用：写明细（超 API_LOG_CAP 截断）+ 累加聚合；面板开着就重渲
-        function apiLogRecord(purpose, model, inTok, outTok, est, station) {
+        function apiLogRecord(purpose, model, inTok, outTok, est, station, cacheTok) {
             inTok = Math.max(0, Math.round(inTok || 0));
             outTok = Math.max(0, Math.round(outTok || 0));
+            cacheTok = Math.max(0, Math.round(cacheTok || 0));  // 这笔里命中缓存的输入 token（已含在 inTok 内）
             if (!inTok && !outTok) return; // 空调用（中止且无内容）不记
             purpose = purpose || '其它';
             model = model || '未知';
             station = station || '';
             var mkey = _mkey(model, station);  // 按「模型+站点」聚合，让不同站的同名模型各按各价、不互相串价
             var log = apiLogLoad();
-            log.push({ ts: Date.now(), purpose: purpose, model: model, station: station, inTok: inTok, outTok: outTok, est: !!est });
+            log.push({ ts: Date.now(), purpose: purpose, model: model, station: station, inTok: inTok, outTok: outTok, est: !!est, cacheTok: cacheTok });
             log = apiLogPrune(log);
             apiLogSave(log);
             var agg = apiAggLoad();
-            agg.calls++; agg.inTok += inTok; agg.outTok += outTok;
+            agg.calls++; agg.inTok += inTok; agg.outTok += outTok; agg.cacheTok = (agg.cacheTok || 0) + cacheTok;
             if (!agg.byPurpose[purpose]) agg.byPurpose[purpose] = { calls: 0, inTok: 0, outTok: 0 };
             agg.byPurpose[purpose].calls++; agg.byPurpose[purpose].inTok += inTok; agg.byPurpose[purpose].outTok += outTok;
             if (!agg.byModel[mkey]) agg.byModel[mkey] = { calls: 0, inTok: 0, outTok: 0 };
             agg.byModel[mkey].calls++; agg.byModel[mkey].inTok += inTok; agg.byModel[mkey].outTok += outTok;
+            agg.byModel[mkey].cacheTok = (agg.byModel[mkey].cacheTok || 0) + cacheTok;
             // purpose+模型键 组合用于按环节计费（同一环节可能用了不同站/不同价的模型）
             var pmKey = purpose + '|' + mkey;
             if (!agg.byPurposeModel[pmKey]) agg.byPurposeModel[pmKey] = { calls: 0, inTok: 0, outTok: 0 };
@@ -13782,7 +13785,7 @@ body {
         function apiUsageFromChunk(chunk) {
             var u = chunk && chunk.usage;
             if (u && (u.prompt_tokens != null || u.completion_tokens != null)) {
-                return { inTok: u.prompt_tokens || 0, outTok: u.completion_tokens || 0 };
+                return { inTok: u.prompt_tokens || 0, outTok: u.completion_tokens || 0, cacheTok: u.cache_read || 0 };
             }
             return null;
         }
@@ -13897,12 +13900,15 @@ body {
                 if (_mu.input_tokens != null || _mu.cache_read_input_tokens != null || _mu.cache_creation_input_tokens != null) {
                     state.inTok = (_mu.input_tokens || 0) + (_mu.cache_read_input_tokens || 0) + (_mu.cache_creation_input_tokens || 0);
                 }
+                // 单独记「缓存命中读取」的 token（只算 read，写入 creation 不算省），用于用量面板展示省了多少
+                if (_mu.cache_read_input_tokens != null) state.cacheTok = _mu.cache_read_input_tokens || 0;
                 if (_mu.output_tokens != null) state.outTok = _mu.output_tokens;
             } else if (t === 'message_delta' && json.usage && json.usage.output_tokens != null) {
                 state.outTok = json.usage.output_tokens;
             }
             if (state.inTok != null || state.outTok != null) {
                 out.usage = { prompt_tokens: state.inTok || 0, completion_tokens: state.outTok || 0 };
+                if (state.cacheTok != null) out.usage.cache_read = state.cacheTok;
             }
             return out;
         }
@@ -14478,6 +14484,16 @@ body {
                 var _mp0 = _mkeyParts(modelKeys[mk]);
                 modelTotalCost += _apiCostOf(_mp0.model, _mp0.station, mv.inTok, mv.outTok, mv.calls, gp);
             }
+            // 缓存命中：累计命中的输入 token + 估算省下的钱。缓存读取价≈输入价的 1/10，
+            // 即这些 token 原本要花全价，命中后只花 10% → 省了约 90%；按各模型自己的输入价折算。
+            var cacheTokTotal = agg.cacheTok || 0, cacheSaved = 0;
+            for (var ck = 0; ck < modelKeys.length; ck++) {
+                var cv = agg.byModel[modelKeys[ck]];
+                if (cv && cv.cacheTok) {
+                    var _cp = _mkeyParts(modelKeys[ck]);
+                    cacheSaved += _apiCostOf(_cp.model, _cp.station, cv.cacheTok, 0, 0, gp) * 0.9;
+                }
+            }
             var html = '';
             // —— 合计：累计用精确模型累计，今日用明细逐条算（明细里有 byPurposeModel）——
             html += '<div style="display:flex;gap:8px;margin-bottom:10px">'
@@ -14490,6 +14506,13 @@ body {
                 + '<div style="font-size:16px;font-weight:700;color:var(--accent)">' + (hasAnyPrice ? '￥' + _apiMoney(modelTotalCost) : '—') + '</div>'
                 + '<div style="font-size:10px;color:var(--text-muted)">' + (agg.calls || 0) + ' 次</div></div>'
                 + '</div>';
+            // —— 缓存命中条（只有真命中过才显示）——
+            if (cacheTokTotal > 0) {
+                html += '<div style="background:var(--accent-light);border-radius:10px;padding:8px 11px;margin-bottom:10px;font-size:12px;display:flex;justify-content:space-between;align-items:center">'
+                    + '<span style="color:var(--text)">⚡ 缓存命中 <b style="color:var(--accent)">' + _apiNum(cacheTokTotal) + '</b> tok</span>'
+                    + (hasAnyPrice ? '<span style="color:var(--accent);font-weight:600">约省 ￥' + _apiMoney(cacheSaved) + '</span>' : '')
+                    + '</div>';
+            }
             // —— 按模型小计（精确）——
             function breakdownModel(title, map) {
                 var keys = Object.keys(map || {});
@@ -14656,7 +14679,7 @@ body {
             // 记账：有真实 usage 用真实值，否则按 messages / 回复文本估算
             try {
                 if (_usage) {
-                    apiLogRecord(opts.purpose, opts.model, _usage.inTok, _usage.outTok, false, opts.baseUrl || '');
+                    apiLogRecord(opts.purpose, opts.model, _usage.inTok, _usage.outTok, false, opts.baseUrl || '', _usage.cacheTok);
                 } else {
                     var _inStr = (opts.messages || []).map(function (m) { return typeof m.content === 'string' ? m.content : ''; }).join('\n');
                     apiLogRecord(opts.purpose, opts.model, estTokens(_inStr), estTokens(full), true, opts.baseUrl || '');
@@ -16952,7 +16975,7 @@ body {
                 try {
                     var _docPurpose = (chatReadingMode && _userSentChapter) ? '共读点评' : (chatTranslateMode ? '翻译' : '对话');
                     if (_docUsage) {
-                        apiLogRecord(_docPurpose, _reqModel, _docUsage.inTok, _docUsage.outTok, false, baseUrl || '');
+                        apiLogRecord(_docPurpose, _reqModel, _docUsage.inTok, _docUsage.outTok, false, baseUrl || '', _docUsage.cacheTok);
                     } else {
                         var _docInStr = (reqMsgs || []).map(function (m) { return typeof m.content === 'string' ? m.content : ''; }).join('\n');
                         apiLogRecord(_docPurpose, _reqModel, estTokens(_docInStr), estTokens(fullContent + thinkContent), true, baseUrl || '');
