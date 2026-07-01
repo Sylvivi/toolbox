@@ -21222,8 +21222,12 @@ body {
                     newChaps.push({ title: first || ('片段 ' + (s + 1)), body: seg });
                 }
                 b.chapters.splice.apply(b.chapters, [i, 1].concat(newChaps));
-                // 当前在读章在被拆章之后的，下标要顺延，别指错章
-                if (b.lastChapter != null && b.lastChapter > i) b.lastChapter += (newChaps.length - 1);
+                var delta = newChaps.length - 1;
+                // 拆点之后的章下标整体后移。共读侧（lastChapter）和阅读器侧（进度里的章号）都要顺延，
+                // 否则拆完你在读的那一章会指错。两边用的是同一份目录，这样才真正保持一致。
+                if (b.lastChapter != null && b.lastChapter > i) b.lastChapter += delta;
+                var rp = readerGetProgress(b.id);
+                if (rp && rp.chapter != null && rp.chapter > i) readerSetProgress(b.id, { chapter: rp.chapter + delta });
                 rbSave();
                 document.body.removeChild(mask);
                 rbRenderChapters();
