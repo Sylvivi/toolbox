@@ -17,7 +17,14 @@
 - **多模型（2026-07-03 加）**：桥的 `/v1/models` 暴露多个型号供选（如 `cc-opus-4-8`/`cc-sonnet-5`/`cc-haiku-4-5`/`cc-fable-5` 等，另有 `cc-subscription` 为默认），`/v1/chat/completions` 按请求 model 映射到 `claude -p --model`。要加/改型号＝让服务器上的 cc 改 `bridge.py` 后重启。Pro 订阅实测可用 Opus 4.8 / Sonnet 5 / Haiku 4.5（Fable 5 促销期到 7/7）。
 - **已知坑**：① `/v1/models` 不校验口令，所以「能拉到 cc-subscription 模型」只证明地址对、**不代表口令对**；只有真聊天才校验，口令错 → **401 invalid bearer token**。② 口令别用易混字符（`I`/`l`/`0`/`1`/`O`），复制时别把两侧空格一起带进去。
 - **运维**：`sudo systemctl status cc-bridge` / `restart cc-bridge`；日志 `/home/ubuntu/cc-bridge/service.log`；换口令＝改 token 文件后 restart。
-- **注意**：服务器**按月购买**（首期 2026-08-03 到期），需续费/开自动续费否则整套失效；Pro 订阅有**周用量上限**，重度共读可能撞限，可与付费 API 密钥并存、在工具箱随手切。
+- **注意**：服务器**按月购买**（首期 2026-08-03 到期），需续费/开自动续费否则整套失效；Pro 订阅有 **5 小时滚动限额 + 周上限**，重度共读可能撞限，可与付费 API 密钥并存、在工具箱随手切。
+- **双订阅负载均衡（2026-07-04 加）**：一个订阅额度不够 → 同一台服务器上跑**两个 CC + 两个桥**，Caddy 轮流分摊，总额度≈翻倍。**工具箱零改动**（地址、口令都没变）。
+  - **隔离靠 `CLAUDE_CONFIG_DIR`**：CC 登录信息默认存 `~/.claude`（订阅A），第二个订阅用独立"钱包"目录 `~/.claude-b`（登录：`CLAUDE_CONFIG_DIR=/home/ubuntu/.claude-b claude`，浏览器**无痕窗口**登 B 账号，否则会把 A 又登一遍）。
+  - **两个桥**：A＝`/home/ubuntu/cc-bridge`·端口 8787·服务 `cc-bridge`·默认钱包；B＝`cp -r` 出来的 `/home/ubuntu/cc-bridge-b`·端口 8788·服务 `cc-bridge-b`·`Environment=CLAUDE_CONFIG_DIR=/home/ubuntu/.claude-b`。桥的端口由 `CC_BRIDGE_PORT` 环境变量控制、**token 文件是复制过来的同一个**（所以口令一致、工具箱只填一把钥匙）。桥的 Popen 不传 `env=`，`claude` 子进程**继承** systemd 里的 `CLAUDE_CONFIG_DIR` → 各登各的订阅。
+  - **Caddy 配置**：`reverse_proxy 127.0.0.1:8787 127.0.0.1:8788` + `lb_policy round_robin` + **被动健康检查** `unhealthy_status 5xx`（某桥报错就判不健康）、`fail_duration 120s`（晾它 2 分钟、请求全给另一个）、`lb_try_duration 15s`。某桥撞限额 → 自动绕开；额度恢复 → 下次被路由到时自动回归。
+  - **已知小瑕疵**：被动健康检查是"撞坏才晾"，所以某桥限额期间**每 ~2 分钟会有 1 个请求撞上再探活而 502**（Caddy 不会把已返回的 5xx 重试到另一桥），工具箱里表现为偶尔某条消息报错、**重发即走到好桥**。想更少 502 就调大 `fail_duration`（代价：恢复后回归更慢）。另：轮流分摊使同一会话连续追问可能落到不同账号，**提示词缓存命中率略降**。
+  - **再加第三个订阅**：照 B 套路 `cp -r` 成 `cc-bridge-c`、端口 8789、`~/.claude-c` 登订阅C、建服务 `cc-bridge-c`，再往 Caddy 那行加 `127.0.0.1:8789` 后 `reload caddy`。
+  - **运维**：分别重启 `sudo systemctl restart cc-bridge` / `cc-bridge-b`；各自日志 `/home/ubuntu/cc-bridge{,-b}/service.log`；改完 Caddy 用 `sudo caddy validate ...` + `sudo systemctl reload caddy`（配置有备份 `/etc/caddy/Caddyfile.bak.*`）。
 
 ## 用户偏好（重要）
 - 用户**非技术背景**，请用**中文**回复，方案要**傻瓜式**、解释通俗，少术语。
