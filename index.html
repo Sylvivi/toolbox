@@ -1906,7 +1906,8 @@ body {
         .rd-trace-a { display: none; margin-top: 4px; font-size: 12px; color: var(--text-sub); line-height: 1.55; }
         .rd-trace-a.open { display: block; }
         .rd-trace-q { cursor: pointer; }
-        .rd-trace-qchev { display: inline-block; margin-left: 5px; font-size: 10px; color: var(--text-muted); transition: transform .15s; }
+        .rd-trace-qchev { display: inline-block; margin-left: 4px; padding: 1px 6px; font-size: 11px; color: var(--text-muted); transition: transform .15s, background .15s, color .15s; border-radius: 6px; cursor: pointer; vertical-align: middle; }
+        .rd-trace-qchev:hover { background: var(--accent-light); color: var(--accent); }
         .rd-trace-q.q-open .rd-trace-qchev { transform: rotate(180deg); }
         .rd-trace-a p { margin: 0 0 4px; }
         .rd-trace-a-empty { color: var(--text-muted); font-style: italic; }
@@ -23836,7 +23837,7 @@ body {
             return qas.map(function (x) {
                 var ans = x.a ? '<div class="rd-trace-a">' + renderText(x.a) + '</div>'
                     : '<div class="rd-trace-a rd-trace-a-empty">（答案不在当前记录里）</div>';
-                return '<div class="rd-trace-qa"><div class="rd-trace-q" data-toggle="1"><span class="rd-trace-qn">汐</span>：' + esc(x.q) + '<span class="rd-trace-qchev">▾</span></div>' + ans + '</div>';
+                return '<div class="rd-trace-qa"><div class="rd-trace-q" data-toggle="1" title="点击跳到原文位置"><span class="rd-trace-qn">汐</span>：' + esc(x.q) + '<span class="rd-trace-qchev" title="展开/收起回答">▾</span></div>' + ans + '</div>';
             }).join('');
         }
         function rdTraceItemHtml(e, i) {
@@ -23875,8 +23876,21 @@ body {
             list.querySelectorAll('.rd-trace-item').forEach(function (el) {
                 var e = _rdTraceShown[+el.getAttribute('data-i')];
                 if (!e) return;
-                // 默认只显示问题，回答全部折叠；点问题（或答案）展开/收起本条回答
-                el.querySelectorAll('.rd-trace-q[data-toggle]').forEach(function (q) { q.onclick = function (ev) { ev.stopPropagation(); var a = q.nextElementSibling; if (a && a.classList.contains('rd-trace-a')) { a.classList.toggle('open'); q.classList.toggle('q-open'); } }; });
+                // 默认只显示问题，回答全部折叠。
+                // 点问题正文 → 跳到原文（提问的那一段）；点小箭头 ▾ → 展开/收起本条回答（不跳）。
+                el.querySelectorAll('.rd-trace-q[data-toggle]').forEach(function (q) {
+                    q.onclick = function (ev) {
+                        ev.stopPropagation();
+                        var mask = document.querySelector('.rd-trace-modal-mask'); if (mask) mask.remove();
+                        if (e.type === 'hl') readingJumpHighlight(e.id, e.msgIdx, e.p); else readingJumpBookmark(e.msgIdx, e.p);
+                    };
+                    var chev = q.querySelector('.rd-trace-qchev');
+                    if (chev) chev.onclick = function (ev) {
+                        ev.stopPropagation();
+                        var a = q.nextElementSibling;
+                        if (a && a.classList.contains('rd-trace-a')) { a.classList.toggle('open'); q.classList.toggle('q-open'); }
+                    };
+                });
                 el.querySelectorAll('.rd-trace-a').forEach(function (a) { a.onclick = function (ev) { ev.stopPropagation(); a.classList.remove('open'); var q = a.previousElementSibling; if (q && q.classList.contains('rd-trace-q')) q.classList.remove('q-open'); }; });
                 var del = el.querySelector('.rd-trace-del');
                 if (del) del.onclick = function (ev) {
