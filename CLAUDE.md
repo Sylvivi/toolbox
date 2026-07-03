@@ -10,6 +10,14 @@
 - **PWA 排障经验**：装 PWA 到桌面要**挂梯子**（WebAPK 需 Google 服务器签发，国内被墙）；不挂梯子会退化成「带 Google 标识的快捷方式」，状态栏颜色被冻死、跟不上主题。装完之后日常用不需要梯子。遇到「状态栏不变色 / 图标变样」先往这个方向查。
 - **主要用途**：用户主要用「共读模式」读长篇小说（如天龙八部），其次有翻译模式、普通对话模式。
 
+## CC 订阅桥（让工具箱 AI 聊天走 Claude 订阅、省 API 钱）
+- **是什么**：2026-07-03 搭好的旁路方案。工具箱 AI 聊天默认走付费 API 密钥；这套让它改走 **Claude Pro 订阅**（不按量花钱）。前端**零改动**——因为聊天是 `baseUrl` 驱动、`getBaseUrl` 会自动补 `/v1`，所以把「桥」当成一个普通中转站密钥填进去即可。
+- **架构**：一台**海外云服务器**（腾讯云轻量·硅谷·Ubuntu 24.04·2核4G·公网 IP `43.172.66.189`）常驻跑 Claude Code（用 Pro 订阅登录），旁边一个 `bridge.py`（Python 标准库写的 OpenAI 兼容接口，内部调 `claude -p` 纯聊天、关工具、隔离目录跑），systemd 服务 `cc-bridge` 保活，Caddy 反代 + Let's Encrypt 自动 HTTPS。DNS 是 Cloudflare 上 `cc.masterofmydomain.top` A 记录 → 服务器 IP、**灰色云(DNS only)**（不是橙色，为让 Caddy 自签证书）。
+- **工具箱里怎么填**（密钥页 ➕）：API 地址 `https://cc.masterofmydomain.top/v1`、模型 `cc-subscription`、密钥＝访问口令。**口令不写进本文件**（存服务器 `/home/ubuntu/cc-bridge/token`，权限 600）。
+- **已知坑**：① `/v1/models` 不校验口令，所以「能拉到 cc-subscription 模型」只证明地址对、**不代表口令对**；只有真聊天才校验，口令错 → **401 invalid bearer token**。② 口令别用易混字符（`I`/`l`/`0`/`1`/`O`），复制时别把两侧空格一起带进去。
+- **运维**：`sudo systemctl status cc-bridge` / `restart cc-bridge`；日志 `/home/ubuntu/cc-bridge/service.log`；换口令＝改 token 文件后 restart。
+- **注意**：服务器**按月购买**（首期 2026-08-03 到期），需续费/开自动续费否则整套失效；Pro 订阅有**周用量上限**，重度共读可能撞限，可与付费 API 密钥并存、在工具箱随手切。
+
 ## 用户偏好（重要）
 - 用户**非技术背景**，请用**中文**回复，方案要**傻瓜式**、解释通俗，少术语。
 - **提交习惯：改完代码、用预览服务器验证通过后，直接 `git commit` + `git push`，不用再问「要推吗」。** 用户明确表示不想每次被问。
