@@ -18409,6 +18409,82 @@ body {
             }, 0);
         }
 
+        // 手动「补齐/重建记忆表格」（共读模式）：只用现有的分段摘要重折一遍，不重新总结正文，省钱。
+        // 中途同步丢章导致表格缺回时用它按现有摘要补齐（与现有表合并，手改过的行不丢）。
+        // 复用阅读模式的全局解析/渲染/切分函数（_readerRenderTableMd / _readerSplitThreeTables / _readerParseTableMd），
+        // 避免碰 chatCompressContext 内部作用域里的同名闭包。
+        var _chatRebuildingMt = false;
+        var _MT_SYS_PROMPT = '你是小说记忆表格维护助手。根据新章节摘要，更新下面四张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 地点表列：地点、规模/特征、关联、简介\n- 大事年表列：时间、事件\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 人物表只收主要人物，标准要严：①主角②反复出场或对剧情有持续作用的重要配角③对主线、关键事件或人物关系有实质影响的人。只露一两面的过场龙套、纯功能性角色（店小二、轿夫、随从甲、路人等）、仅被顺口提及一次名字而无戏份的人，一律不入表，宁缺毋滥\n- 已彻底退场且后续不再被提及、也不影响后文的次要人物可删除，避免人物表无限膨胀\n- 地点表只记故事的主要舞台，标准要严：①主角及重要人物长期居住/所属的地方（家、庄园、宅邸、据点等）②反复出现、承载多段重要情节的关键场所③大的城市或地区。只在某一处出现一次的过场地点、建筑内部的具体房间、只被顺口提及的地名，一律不入表，宁缺毋滥\n- 地点表「规模/特征」用通俗方式帮读者建立地理印象：城镇写人口多少/繁华程度，庄园宅邸写占地大小/气派程度，山川河流写地形，确实无从判断就留空\n- 地点表「关联」写它属于谁或关联的人物/势力；「简介」一句话点明它是什么、发生过什么关键事件\n- 大事年表只记带明确时间标记或重大时间跨度的关键节点（如「三十年前」「次年春」「三日后」对应的大事件），「时间」列写相对或绝对时间、「事件」列一句话写发生了什么；没有时间感的日常情节不入表；全表最多 30 行；满了时优先删掉近期的小事件（近期剧情在摘要里已有），奠基性的远期大事（如「三十年前…」这类全书根基性时间锚点）务必保住，宁缺毋滥\n- 主线表只记真正的伏笔（埋下但尚未揭晓的线索）和重大主线转折，普通过场、日常对话、次要细节一律不入表\n- 按事件去重：不要把同一件事拆成多条流水账；但不同的重大伏笔或转折，即使章节相同也各自成行，不要强行合并\n- 旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 已解决的伏笔如不再重要可删除，避免表格无限膨胀\n- 输出完整的四张 markdown 表格，依次为人物表、地点表、大事年表、主线表，之间用空行分隔\n- 不要输出任何其他内容';
+        async function chatRebuildMemTables(btn) {
+            if (_chatRebuildingMt) { showToast('正在重建中，请稍候…'); return; }
+            if (!chatCompressSummaries || !chatCompressSummaries.length) { showToast('还没有摘要可用'); return; }
+            var mc = chatResolveCompressModel();
+            if (!mc) { showToast('请先选择模型'); return; }
+            _chatRebuildingMt = true;
+            showToast('正在重建记忆表格…');
+            // 按钮变成实时跳秒的「重建中 Xs…」并禁用，让用户看得见它在转、转了多久
+            var _t0 = Date.now(), _timer = null, _oldTxt = '';
+            if (btn) {
+                _oldTxt = btn.textContent;
+                btn.disabled = true; btn.style.opacity = '0.7'; btn.style.cursor = 'wait';
+                var _tick = function () { btn.textContent = '重建中 ' + Math.floor((Date.now() - _t0) / 1000) + 's…'; };
+                _tick(); _timer = setInterval(_tick, 1000);
+            }
+            var tables = chatMemoryTables || { characters: [], places: [], timeline: [], plotlines: [] };
+            if (!tables.characters) tables.characters = [];
+            if (!tables.places) tables.places = [];
+            if (!tables.timeline) tables.timeline = [];
+            if (!tables.plotlines) tables.plotlines = [];
+            var ok = false, errMsg = '';
+            try {
+                var charMd = _readerRenderTableMd(_mtCharCols, tables.characters);
+                var placeMd = _readerRenderTableMd(_mtPlaceCols, tables.places);
+                var timeMd = _readerRenderTableMd(_mtTimeCols, tables.timeline);
+                var plotMd = _readerRenderTableMd(_mtPlotCols, tables.plotlines);
+                // 所有分段摘要按正序拼起来喂给模型（段 1 在前），当作「新章节摘要」整体重折一遍
+                var allSums = chatCompressSummaries.map(function (s, i) { return '【摘要段 ' + (i + 1) + '】\n' + (s || ''); }).join('\n\n');
+                var prompt = '【当前人物表】\n' + charMd + '\n\n【当前地点表】\n' + placeMd + '\n\n【当前大事年表】\n' + timeMd + '\n\n【当前主线表】\n' + plotMd + '\n\n【新章节摘要】\n' + allSums;
+                var result = await chatStreamChatBigOutput({
+                    baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 50000, purpose: '记忆表格',
+                    messages: [ { role: 'system', content: _MT_SYS_PROMPT }, { role: 'user', content: prompt } ]
+                });
+                if (!result) { errMsg = '模型无返回'; }
+                else {
+                    var _parts = _readerSplitThreeTables(result);
+                    var newChars = _readerParseTableMd(_parts.characters, _mtCharCols);
+                    var newPlaces = _readerParseTableMd(_parts.places, _mtPlaceCols);
+                    var newTime = _readerParseTableMd(_parts.timeline, _mtTimeCols);
+                    var newPlots = _readerParseTableMd(_parts.plotlines, _mtPlotCols);
+                    if (newChars.length || newPlaces.length || newTime.length || newPlots.length) {
+                        _mtDiffMark('characters', newChars, tables.characters, _mtCharCols);
+                        _mtDiffMark('places', newPlaces, tables.places, _mtPlaceCols);
+                        _mtDiffMark('timeline', newTime, tables.timeline, _mtTimeCols);
+                        _mtDiffMark('plotlines', newPlots, tables.plotlines, _mtPlotCols);
+                        chatMemoryTables = {
+                            characters: newChars.length ? newChars : tables.characters,
+                            places: newPlaces.length ? newPlaces : tables.places,
+                            timeline: newTime.length ? newTime : tables.timeline,
+                            plotlines: newPlots.length ? newPlots : tables.plotlines
+                        };
+                        chatSaveCurrentConv(true);
+                        var _addedNm = readingAutoMergeNamesFromTables(chatMemoryTables, readingNamesKey());
+                        if (_addedNm && readingNameAnyOn()) readingRehighlightNamesInPlace();
+                        ok = true;
+                        showToast('🧠 记忆表格已重建（人物 ' + chatMemoryTables.characters.length + ' · 地点 ' + chatMemoryTables.places.length + ' · 年表 ' + chatMemoryTables.timeline.length + ' · 主线 ' + chatMemoryTables.plotlines.length + '）');
+                    } else { errMsg = '解析失败'; }
+                }
+            } catch (e) { errMsg = e.message || '未知错误'; }
+            finally {
+                _chatRebuildingMt = false;
+                if (_timer) clearInterval(_timer);
+                if (btn) { btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; btn.textContent = _oldTxt || '补齐/重建'; }
+            }
+            if (!ok && errMsg) showToast('重建失败：' + errMsg);
+            if (activeSyncProvider === 'cf') syncPushData();
+            // 重开弹窗刷新表格/状态行（保持滚动位置）
+            if (document.querySelector('.chat-summary-modal-mask')) chatShowSummaryModal(_summaryModalScroll());
+        }
+
         // restoreScroll：删除段后重建弹窗时传入之前的滚动位置，保持视野不跳回顶部；不传 = 正常开/关切换
         function chatShowSummaryModal(restoreScroll) {
             var existing = document.querySelector('.chat-summary-modal-mask');
@@ -18438,6 +18514,17 @@ body {
                     + '</div>';
             }
             var body = '';
+            // 记忆表格「补齐/重建」入口（共读模式且已有分段摘要时才显示）：中途同步丢章导致表格缺回，
+            // 用它按现有摘要重折补齐——只花一次调用、不重新总结正文。
+            if (chatReadingMode && chatCompressSummaries.length) {
+                var _mt = chatMemoryTables || {};
+                var _mtCount = (_mt.characters || []).length + (_mt.places || []).length + (_mt.timeline || []).length + (_mt.plotlines || []).length;
+                var _mtStatus = _mtCount ? ('记忆表格 · 共 ' + _mtCount + ' 行') : '尚未生成记忆表格';
+                body += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;margin-bottom:12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px">'
+                    + '<div style="min-width:0;font-size:11.5px;line-height:1.5;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🧠 ' + _mtStatus + '</div>'
+                    + '<button onclick="chatRebuildMemTables(this)" title="按现有的分段摘要重新折算记忆表格（补齐同步丢失的回目，不重新总结正文）" style="flex-shrink:0;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap">补齐/重建</button>'
+                    + '</div>';
+            }
             // 结构化记忆表格（共读模式）
             if (chatMemoryTables && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length)) {
                 function _mtRowHtml(tableName, row, idx, cols) {
