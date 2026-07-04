@@ -4235,6 +4235,26 @@ body {
                     </div>
                     <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5">💡 请确保仓库已在 Settings → Pages 中启用对应分支</div>
                 </div>
+
+                <!-- 📚 书籍服务器（独立于上面的 Gist/CF，书籍正文太大单独存自己服务器） -->
+                <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--card-border)">
+                    <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">📚 书籍服务器（单独同步小说正文）</div>
+                    <div style="font-size:11px;color:var(--text-muted);line-height:1.6;margin-bottom:8px">书太大不适合上面的云同步，单独存你自己的服务器。填好后：导书自动上传；换设备书架自动出现书名，点开那本才下载正文。留空＝不启用，书只存本地。</div>
+                    <div class="form-group">
+                        <label>服务器地址</label>
+                        <input type="text" id="booksSyncUrl" placeholder="https://cc.masterofmydomain.top/books">
+                    </div>
+                    <div class="form-group">
+                        <label>口令（与聊天桥同一把）</label>
+                        <input type="password" id="booksSyncToken" placeholder="你服务器上的访问口令">
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                        <button class="btn-cancel" onclick="bkSyncSaveCfgFromUI()" style="flex:none;padding:7px 16px">保存</button>
+                        <button class="btn-cancel" onclick="bkSyncTestFromUI()" style="flex:none;padding:7px 16px">测试连接</button>
+                        <button class="btn-cancel" onclick="bkSyncPushAll()" style="flex:none;padding:7px 16px">⬆️ 立刻全上传</button>
+                        <span id="booksSyncStatus" style="font-size:12px;color:var(--text-muted)"></span>
+                    </div>
+                </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:8px">
                 <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 2px 0px;">💾 本地存储：23.13 MB / ~50 MB（46%）</div>
@@ -12989,6 +13009,8 @@ body {
             var cfCfg = cfGetConfig();
             document.getElementById('cfWorkerUrl').value = cfCfg.url;
             document.getElementById('cfToken').value = cfCfg.token;
+            // 书籍服务器配置
+            bkSyncUILoad();
             // 部署区域
             document.getElementById('deployRepo').value = localStorage.getItem('toolbox_deploy_repo') || '';
             document.getElementById('deployBranch').value = localStorage.getItem('toolbox_deploy_branch') || 'main';
@@ -20085,8 +20107,123 @@ body {
             }
             if (needSave) rbSave();
         }
-        function rbSave() { idbSet('reading_books', { books: rbBooks }); }
+        function rbSave() { idbSet('reading_books', { books: rbBooks.filter(function (b) { return !b._remote; }) }); }
         function rbGetBook(id) { for (var i = 0; i < rbBooks.length; i++) if (rbBooks[i].id === id) return rbBooks[i]; return null; }
+
+        /* ===== 书籍服务器同步（正文太大不进 CF，单独存自己服务器；全自动 + 按需下载） =====
+           书本地为主、服务器只当镜像。fileKey = 文件名|大小（与阅读进度同键，跨设备认同一本书）。
+           本地已有的书照常用；服务器独有的书只在书架放「占位」，点开那本才下正文。 */
+        function bkSyncCfg() {
+            var url = (localStorage.getItem('books_sync_url') || '').trim().replace(/\/+$/, '');
+            var token = (localStorage.getItem('books_sync_token') || '').trim();
+            if (!url || !token) return null;
+            return { url: url, token: token };
+        }
+        function bkSyncKey(b) { return (b.fileName || '') + '|' + (b.fileSize || 0); }
+        function bkSyncHeaders(cfg, json) {
+            var h = { 'Authorization': 'Bearer ' + cfg.token };
+            if (json) h['Content-Type'] = 'application/json';
+            return h;
+        }
+        // 拉清单：把「服务器有、本地没有」的书作为占位塞进 rbBooks（占位不落盘），拉到后重渲染书架
+        function bkSyncPullManifest(cb) {
+            var cfg = bkSyncCfg(); if (!cfg) { if (cb) cb(); return; }
+            fetch(cfg.url + '/manifest', { headers: bkSyncHeaders(cfg) })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (d) {
+                    if (!d || !d.items) { if (cb) cb(); return; }
+                    var localKeys = {};
+                    for (var i = 0; i < rbBooks.length; i++) if (!rbBooks[i]._remote) localKeys[bkSyncKey(rbBooks[i])] = 1;
+                    // 先清掉旧占位，避免重复
+                    rbBooks = rbBooks.filter(function (b) { return !b._remote; });
+                    var added = 0;
+                    Object.keys(d.items).forEach(function (fk) {
+                        if (localKeys[fk]) return;               // 本地已有正本，跳过
+                        var m = d.items[fk] || {};
+                        rbBooks.push({
+                            id: 'remote_' + (m.hash || Math.random().toString(36).slice(2)),
+                            fileName: m.fileName || (fk.split('|')[0]) || '未命名',
+                            fileSize: m.fileSize || 0,
+                            chapters: [], _remote: true, _fileKey: fk, _nchap: m.nchap || 0
+                        });
+                        added++;
+                    });
+                    var sv = document.getElementById('rbShelfView');
+                    if (sv && sv.style.display !== 'none' && typeof rbRenderShelf === 'function') rbRenderShelf();
+                    if (cb) cb(added);
+                })
+                .catch(function () { if (cb) cb(); });
+        }
+        // 按需下载整本：占位书点开时调，成功后用真数据替换占位并落盘。cb(fullBook|false)
+        function bkSyncDownload(book, cb) {
+            var cfg = bkSyncCfg(); if (!cfg) { if (cb) cb(false); return; }
+            var fk = book._fileKey || bkSyncKey(book);
+            fetch(cfg.url + '/get?key=' + encodeURIComponent(fk), { headers: bkSyncHeaders(cfg) })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (d) {
+                    var full = d && (d.book || d);
+                    if (!full || !full.chapters || !full.chapters.length) { if (cb) cb(false); return; }
+                    full.id = 'bk_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6); // 本地新 id
+                    delete full._remote; delete full._fileKey; delete full._nchap;
+                    var replaced = false;
+                    for (var i = 0; i < rbBooks.length; i++) {
+                        if (rbBooks[i]._remote && (rbBooks[i]._fileKey === fk)) { rbBooks[i] = full; replaced = true; break; }
+                    }
+                    if (!replaced) rbBooks.unshift(full);
+                    rbSave();
+                    if (cb) cb(full);
+                })
+                .catch(function () { if (cb) cb(false); });
+        }
+        // 上传一本（导书自动 / 手动全上传）：静默，失败重试一次
+        function bkSyncPush(book, _retry) {
+            var cfg = bkSyncCfg(); if (!cfg || !book || book._remote || !book.chapters || !book.chapters.length) return;
+            var payload = { fileKey: bkSyncKey(book), ts: Date.now(), book: book };
+            fetch(cfg.url + '/put', { method: 'POST', headers: bkSyncHeaders(cfg, true), body: JSON.stringify(payload) })
+                .then(function (r) { if (!r.ok && !_retry) setTimeout(function () { bkSyncPush(book, true); }, 2000); })
+                .catch(function () { if (!_retry) setTimeout(function () { bkSyncPush(book, true); }, 2000); });
+        }
+        // 手动把本地所有书全上传（配置 UI 里的兜底按钮）
+        function bkSyncPushAll() {
+            var cfg = bkSyncCfg(); if (!cfg) { showToast('⚠️ 请先在下方配置书籍服务器地址和口令'); return; }
+            var real = rbBooks.filter(function (b) { return !b._remote && b.chapters && b.chapters.length; });
+            if (!real.length) { showToast('本地没有可上传的书'); return; }
+            showToast('开始上传 ' + real.length + ' 本书…');
+            real.forEach(function (b, i) { setTimeout(function () { bkSyncPush(b); }, i * 300); });
+        }
+        // 云同步弹窗里的书籍服务器配置：填充/保存/测试
+        function bkSyncUILoad() {
+            var u = document.getElementById('booksSyncUrl'); if (u) u.value = localStorage.getItem('books_sync_url') || '';
+            var t = document.getElementById('booksSyncToken'); if (t) t.value = localStorage.getItem('books_sync_token') || '';
+            var s = document.getElementById('booksSyncStatus'); if (s) s.textContent = bkSyncCfg() ? '已启用' : '';
+        }
+        function bkSyncSaveCfgFromUI() {
+            var url = (document.getElementById('booksSyncUrl').value || '').trim().replace(/\/+$/, '');
+            var token = (document.getElementById('booksSyncToken').value || '').trim();
+            localStorage.setItem('books_sync_url', url);
+            localStorage.setItem('books_sync_token', token);
+            var s = document.getElementById('booksSyncStatus');
+            if (s) s.textContent = (url && token) ? '✅ 已保存' : '已清空（不启用）';
+            showToast('书籍服务器设置已保存');
+        }
+        function bkSyncTestFromUI() {
+            // 用当前输入框里的值临时测（不必先保存）
+            var url = (document.getElementById('booksSyncUrl').value || '').trim().replace(/\/+$/, '');
+            var token = (document.getElementById('booksSyncToken').value || '').trim();
+            var s = document.getElementById('booksSyncStatus');
+            if (!url || !token) { if (s) s.textContent = '⚠️ 请先填地址和口令'; return; }
+            if (s) s.textContent = '测试中…';
+            fetch(url + '/manifest', { headers: { 'Authorization': 'Bearer ' + token } })
+                .then(function (r) {
+                    if (r.status === 401) { if (s) s.textContent = '❌ 口令不对'; return; }
+                    if (!r.ok) { if (s) s.textContent = '❌ 连接失败（' + r.status + '）'; return; }
+                    return r.json().then(function (d) {
+                        var n = (d && d.items) ? Object.keys(d.items).length : 0;
+                        if (s) s.textContent = '✅ 连接成功，服务器上有 ' + n + ' 本书';
+                    });
+                })
+                .catch(function () { if (s) s.textContent = '❌ 连不上，检查地址/网络'; });
+        }
         // 记忆：当前对话上次填入的是哪本书（按对话 ID 存）
         function rbConvBookMap() { try { return JSON.parse(localStorage.getItem('reading_conv_book') || '{}'); } catch (e) { return {}; } }
         function rbGetConvBook() { if (!chatCurrentConvId) return null; return rbConvBookMap()[chatCurrentConvId] || null; }
@@ -20096,6 +20233,7 @@ body {
 
         function rbOpenShelf() {
             rbLoad();
+            bkSyncPullManifest();  // 拉服务器书单，把本地没有的书作为占位注入书架（异步，拉到再重渲染）
             // 如果当前处于阅读模式，标记书架是为阅读器选书（点章节直接跳转阅读）
             if (chatReaderMode) {
                 rbPickForReader = true;
@@ -21167,6 +21305,12 @@ body {
                 return;
             }
             box.innerHTML = rbBooks.map(function (b) {
+                // 服务器独有的占位书：点开才下载正文，不显示删除（下次拉清单还会回来）
+                if (b._remote) {
+                    return '<div class="rb-book" onclick="rbOpenBook(\'' + b.id + '\')">'
+                        + '<span class="rb-book-icon">☁️</span>'
+                        + '<div class="rb-book-info"><div class="rb-book-name">' + rbEsc(b.fileName) + '</div><div class="rb-book-meta">' + (b._nchap || 0) + ' 章 · 点击下载</div></div></div>';
+                }
                 var prog = (b.lastChapter != null && b.lastChapter >= 0) ? ('读到 ' + (b.lastChapter + 1) + '/' + b.chapters.length + ' 章') : (b.chapters.length + ' 章');
                 return '<div class="rb-book" onclick="rbOpenBook(\'' + b.id + '\')">'
                     + '<span class="rb-book-icon">' + rbFileIcon(b.fileName) + '</span>'
@@ -21179,6 +21323,22 @@ body {
             rbActiveBookId = id;
             var b = rbGetBook(id);
             if (!b) return;
+            // 占位书（服务器独有）：先把正文从服务器下载下来，再正常打开
+            if (b._remote && (!b.chapters || !b.chapters.length)) {
+                document.getElementById('rbShelfView').style.display = 'none';
+                document.getElementById('rbChapterView').style.display = '';
+                document.getElementById('rbBookTitle').textContent = b.fileName;
+                var cl = document.getElementById('rbChapterList');
+                if (cl) cl.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:34px 0">☁️ 正在从服务器下载「' + rbEsc(b.fileName) + '」…</div>';
+                bkSyncDownload(b, function (full) {
+                    if (!full) {
+                        if (cl) cl.innerHTML = '<div style="text-align:center;color:var(--red);font-size:13px;padding:34px 0;line-height:1.8">下载失败<br>请检查书籍服务器配置或网络<br><span onclick="rbBackToShelf()" style="color:var(--accent);cursor:pointer">‹ 返回书架</span></div>';
+                        return;
+                    }
+                    rbOpenBook(full.id);  // 现在是真书，正常打开
+                });
+                return;
+            }
             document.getElementById('rbShelfView').style.display = 'none';
             document.getElementById('rbChapterView').style.display = '';
             document.getElementById('rbBookTitle').textContent = b.fileName;
@@ -21441,6 +21601,7 @@ body {
             };
             rbBooks.unshift(book);
             rbSave();
+            bkSyncPush(book);  // 若配了书籍服务器，导书自动上传这一本
             rbActiveBookId = book.id;
             document.getElementById('rbShelfView').style.display = 'none';
             document.getElementById('rbChapterView').style.display = '';
