@@ -25,6 +25,8 @@
   - **已知小瑕疵**：被动健康检查是"撞坏才晾"，所以某桥限额期间**每 ~2 分钟会有 1 个请求撞上再探活而 502**（Caddy 不会把已返回的 5xx 重试到另一桥），工具箱里表现为偶尔某条消息报错、**重发即走到好桥**。想更少 502 就调大 `fail_duration`（代价：恢复后回归更慢）。另：轮流分摊使同一会话连续追问可能落到不同账号，**提示词缓存命中率略降**。
   - **再加第三个订阅**：照 B 套路 `cp -r` 成 `cc-bridge-c`、端口 8789、`~/.claude-c` 登订阅C、建服务 `cc-bridge-c`，再往 Caddy 那行加 `127.0.0.1:8789` 后 `reload caddy`。
   - **运维**：分别重启 `sudo systemctl restart cc-bridge` / `cc-bridge-b`；各自日志 `/home/ubuntu/cc-bridge{,-b}/service.log`；改完 Caddy 用 `sudo caddy validate ...` + `sudo systemctl reload caddy`（配置有备份 `/etc/caddy/Caddyfile.bak.*`）。
+  - **只转 /v1/\* + 拦扫描器（2026-07-04 修）**：公网地址被网络扫描机器人狂敲 `/.env`/`/robots.txt`/乱七八糟 `.js`，Caddy 原本把这些垃圾也转给桥，还**打乱了轮流分摊的节拍**（真聊天老堆在一个桥上）。已改 Caddy：① `@preflight method OPTIONS` 由 Caddy 直接回 204（不占轮流名额，CORS 头 `Allow-Origin *`）；② `@api path /v1/*` 才 `reverse_proxy` 到两个桥；③ 其余一律 `respond 404`（不喂给桥）。改完实测轮流均匀（连聊 6 轮 = 3:3）。**排查分配不均**：`grep 'POST /v1/chat/completions' <log> | grep -c ' 200 '` 比两个桥的成功聊天数；注意 B 的日志搭建时被清过、A 的是历史累计，比总数不公平，要先 `sudo truncate -s 0` 两个日志再实测。
+  - **凌晨"垫"额度窗口（2026-07-04 加）**：Claude 订阅 **5 小时滚动窗口**从「发第一条消息」起算，睡觉时额度白躺。脚本 `/home/ubuntu/cc-bridge/prime.sh <port>`（curl 直戳指定端口发一句 `hi`、绕过 Caddy 保证点名到某个账号），crontab 里 `CRON_TZ=Asia/Shanghai` + **每天 5:00** 同时垫 8787/8788（用户 8 点起床、起床前 3 小时垫 → 重置点约落在 10 点、用了约 2 小时时进入新窗口 → 醒后能摸到两份额度）。两个**同时**垫（因为轮流分摊是俩一起掉，窗口该一起重置，不错开）。日志 `/home/ubuntu/cc-bridge/prime.log`。**隐私**：crontab 是服务器本地文件不外发，Anthropic 只看到美国 IP + UTC 时间戳（5 点北京≈下午 2 点加州、很正常）；用 `CRON_TZ` 还能自动躲美国夏令时。
 
 ## 用户偏好（重要）
 - 用户**非技术背景**，请用**中文**回复，方案要**傻瓜式**、解释通俗，少术语。
