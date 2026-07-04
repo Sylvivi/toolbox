@@ -20225,8 +20225,12 @@ body {
                     if (r.status === 401) { if (s) s.textContent = '❌ 口令不对'; return; }
                     if (!r.ok) { if (s) s.textContent = '❌ 连接失败（' + r.status + '）'; return; }
                     return r.json().then(function (d) {
-                        var n = (d && d.items) ? Object.keys(d.items).filter(function (k) { return k.indexOf(FONT_KEY_PREFIX) !== 0; }).length : 0;
-                        if (s) s.textContent = '✅ 连接成功，服务器上有 ' + n + ' 本书';
+                        var keys = (d && d.items) ? Object.keys(d.items) : [];
+                        var nb = keys.filter(function (k) { return k.indexOf(FONT_KEY_PREFIX) !== 0; }).length;
+                        var nf = keys.filter(function (k) { return k.indexOf(FONT_KEY_PREFIX) === 0; }).length;
+                        var msg = '✅ 连接成功，服务器上有 ' + nb + ' 本书';
+                        if (nf) msg += '、' + nf + ' 个字体';
+                        if (s) s.textContent = msg;
                     });
                 })
                 .catch(function () { if (s) s.textContent = '❌ 连不上，检查地址/网络'; });
