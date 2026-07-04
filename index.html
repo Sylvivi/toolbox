@@ -20198,6 +20198,12 @@ body {
             real.forEach(function (b, i) { setTimeout(function () { bkSyncPush(b); }, i * 300); });
             fonts.forEach(function (f, i) { setTimeout(function () { bkSyncPushFont(f); }, (real.length + i) * 300); });
         }
+        // 从服务器删掉一本书（书架删书时按需调用；默认删书只删本地，这个要用户额外确认才调）
+        function bkSyncDelBook(book) {
+            var cfg = bkSyncCfg(); if (!cfg || !book) return;
+            var fk = book._fileKey || bkSyncKey(book);
+            fetch(cfg.url + '/del', { method: 'POST', headers: bkSyncHeaders(cfg, true), body: JSON.stringify({ fileKey: fk }) }).catch(function () {});
+        }
         // 云同步弹窗里的书籍服务器配置：填充/保存/测试
         function bkSyncUILoad() {
             var u = document.getElementById('booksSyncUrl'); if (u) u.value = localStorage.getItem('books_sync_url') || '';
@@ -21593,11 +21599,28 @@ body {
 
         function rbDeleteBook(id) {
             var b = rbGetBook(id); if (!b) return;
+            var cfg = bkSyncCfg();
+            // 占位书（_remote）：本地没正本、只存在于服务器 → 删它就是从云端移除
+            if (b._remote) {
+                if (!confirm('从服务器删除「' + b.fileName + '」？此操作不可撤销。')) return;
+                bkSyncDelBook(b);
+                rbBooks = rbBooks.filter(function (x) { return x.id !== id; });
+                rbRenderShelf();
+                showToast('已从服务器删除「' + b.fileName + '」');
+                return;
+            }
             if (!confirm('删除「' + b.fileName + '」？（只删本地书架，不影响已发出的对话）')) return;
             rbBooks = rbBooks.filter(function (x) { return x.id !== id; });
             if (rbActiveBookId === id) rbActiveBookId = null;
             rbSave(); rbRenderShelf();
             showToast('已删除「' + b.fileName + '」');
+            // 配了服务器：再问一句要不要把服务器那份也删掉（默认留着当云备份，换设备还能下回来）
+            if (cfg) setTimeout(function () {
+                if (confirm('服务器上那份「' + b.fileName + '」也删掉吗？\n\n点「取消」＝只删本地、服务器保留（换设备还能下回来）。')) {
+                    bkSyncDelBook(b);
+                    showToast('服务器上的「' + b.fileName + '」已删除');
+                }
+            }, 120);
         }
 
         // ===== 上传与拆分 =====
