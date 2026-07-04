@@ -35,6 +35,14 @@
   - **账号昵称**：用户给两个订阅起了昵称——**Sylvia＝订阅A**(`~/.claude`·8787·`cc-bridge`)、**Hofia＝订阅B**(`~/.claude-b`·8788·`cc-bridge-b`)。以后跟用户对话、通知文案都用昵称，别再叫 A/B。
   - **查额度 + 随叫随到机器人（2026-07-04 加）**：Claude 订阅**能查额度**！`CLAUDE_CONFIG_DIR=<钱包> claude /usage </dev/null` 会打印「当前会话 x% + 重置时间、本周 y% + 重置时间」。**关键坑：必须 `</dev/null`**，否则 `claude` 在脚本里傻等 stdin 直到 `timeout` 被掐→输出空+很慢（症状：跑很久、结果空）。`usage.sh` 查两个账号、`sed` 把英文行转中文、输出「📊 额度 / 【Sylvia】会话x%·本周y% / 【Hofia】…」。**随叫随到**：`usagebot.py`（Python stdlib，long-poll Telegram `getUpdates`、只回授权 `tg_chat_id`、60s 缓存防刷）由 systemd 服务 `cc-usagebot` 保活；用户在 Telegram 给 bot 发**任意字** → 几秒后回两个账号额度。注：`/usage` 每查一次是一次轻量 claude 调用（略耗额度，故加缓存）。日志 `usagebot.log`。
 
+## 书库同步服务（cc-books · 2026-07-04 加）
+- **是什么/为什么**：小说正文太大、存 Cloudflare 不划算，所以书籍一直只存本地（`reading_books` in IndexedDB，不进 CF/Gist）。这套让书籍单独同步到**用户自己的服务器**。定位是「**本地为主、服务器只当镜像**」——书本地有备份，服务器不续了也不丢书。**其余数据仍走 Cloudflare，别搬**（见前端记忆）。
+- **触发方式（已定）**：**全自动 + 按需下载**。换设备一打开书架，书名/清单秒同步（只传小 manifest）；每本书的**正文等真正点开那本时才下载**；本地新导入一本书就自动上传那一本。
+- **服务端**：`/home/ubuntu/cc-books/books.py`（Python 标准库 HTTP，**无第三方依赖**），端口 `8790`、**单实例**（不像聊天桥那样双实例负载均衡——书库要一个共享存储，绝不能塞进 `bridge.py`）。存储目录 `/home/ubuntu/cc-books/store/`，每本书两文件：`<sha256(fileKey)>.meta`（小清单）+ `<hash>.body`（整本 JSON）。**鉴权复用聊天桥同一把口令**（读 `/home/ubuntu/cc-bridge/token`）。systemd 服务 `cc-books`（开机自启、`Restart=always`）。接口：`GET /books/healthz`(免鉴权)、`GET /books/manifest`、`GET /books/get?key=<fileKey>`、`POST /books/put {fileKey,ts,book}`、`POST /books/del {fileKey}`。fileKey＝`文件名|大小`（与阅读进度同键、跨设备认同一本书）。**books.py 无任何密钥**，已提交进公开仓 `server/books.py`，服务器靠 `curl raw.githubusercontent.com/Sylvivi/toolbox/main/server/books.py` 拉取更新。
+- **Caddy**：在 `cc.masterofmydomain.top` 站块里加 `@books path /books/*` → `reverse_proxy 127.0.0.1:8790`（单实例、不做 lb/健康检查），放在 `/v1/*` 那条之前，其余仍 404。改前备份 Caddyfile + `caddy validate` 通过才 `reload`。
+- **前端接入**（index.html，函数前缀 `bkSync*`，在 `rbSave` 附近）：`bkSyncPullManifest`(进书架注入占位) / `bkSyncDownload`(开书按需下) / `bkSyncPush`(导书自动传) / `bkSyncPushAll`(手动全传)。占位书 `_remote:true`、**不落盘 IndexedDB**（`rbSave` 已过滤 `_remote`）。接入点：`rbOpenShelf`(拉清单)、`rbRenderShelf`(占位显示 ☁️「n章·点击下载」)、`rbOpenBook`(占位先下载再打开)、`rbAddBook`(自动上传)。配置在「☁️ 云同步」弹窗最下「📚 书籍服务器」：`books_sync_url`(默认 `https://cc.masterofmydomain.top/books`) + `books_sync_token`(localStorage，同桥口令)、测试连接、立刻全上传。删书**默认只删本地**、不碰服务器（`/del` 接口留着备用、前端未接）。
+- **运维**：`sudo systemctl status/restart cc-books`；日志 `journalctl -u cc-books`；升级脚本＝重新 curl raw 覆盖 `books.py` 再 `restart`；自检 `curl -s localhost:8790/books/healthz`（应 `ok`）、带口令打 `/books/manifest`（应 `{"ok":true,"items":{...}}`）。存储目录可直接备份/`du -sh` 看占用。
+
 ## 用户偏好（重要）
 - 用户**非技术背景**，请用**中文**回复，方案要**傻瓜式**、解释通俗，少术语。
 - **提交习惯：改完代码、用预览服务器验证通过后，直接 `git commit` + `git push`，不用再问「要推吗」。** 用户明确表示不想每次被问。
