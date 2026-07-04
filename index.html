@@ -4236,22 +4236,21 @@ body {
                     <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5">💡 请确保仓库已在 Settings → Pages 中启用对应分支</div>
                 </div>
 
-                <!-- 📚 书籍服务器（独立于上面的 Gist/CF，书籍正文太大单独存自己服务器） -->
+                <!-- 书籍服务器 -->
                 <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--card-border)">
-                    <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">📚 书籍服务器（单独同步小说正文）</div>
-                    <div style="font-size:11px;color:var(--text-muted);line-height:1.6;margin-bottom:8px">书太大不适合上面的云同步，单独存你自己的服务器。填好后：导书自动上传；换设备书架自动出现书名，点开那本才下载正文。留空＝不启用，书只存本地。</div>
+                    <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">书籍服务器</div>
                     <div class="form-group">
                         <label>服务器地址</label>
                         <input type="text" id="booksSyncUrl" placeholder="https://cc.masterofmydomain.top/books">
                     </div>
                     <div class="form-group">
-                        <label>口令（与聊天桥同一把）</label>
+                        <label>口令</label>
                         <input type="password" id="booksSyncToken" placeholder="你服务器上的访问口令">
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                         <button class="btn-cancel" onclick="bkSyncSaveCfgFromUI()" style="flex:none;padding:7px 16px">保存</button>
                         <button class="btn-cancel" onclick="bkSyncTestFromUI()" style="flex:none;padding:7px 16px">测试连接</button>
-                        <button class="btn-cancel" onclick="bkSyncPushAll()" style="flex:none;padding:7px 16px">⬆️ 立刻全上传</button>
+                        <button class="btn-cancel" onclick="bkSyncPushAll()" style="flex:none;padding:7px 16px">全部上传</button>
                         <span id="booksSyncStatus" style="font-size:12px;color:var(--text-muted)"></span>
                     </div>
                 </div>
@@ -20040,6 +20039,7 @@ body {
                 readingLocalFontsSave(arr);
                 readingRegisterLocalFonts();
                 readingApplyFonts();
+                if (bkSyncCfg()) arr.forEach(function (f) { if (added.indexOf(f.name) >= 0) bkSyncPushFont(f); }); // 配了服务器就顺手上传新字体
                 if (st && added.length) st.textContent = '已上传本地字体：' + added.join('、') + '，可在下面给某个位置选用';
             }
             for (var i = 0; i < files.length; i++) {
@@ -20065,6 +20065,7 @@ body {
         function readingDeleteFontAny(name) {
             readingFontsSave(readingFontsLoad().filter(function (f) { return f.name !== name; }));
             readingLocalFontsSave(readingLocalFontsLoad().filter(function (f) { return f.name !== name; }));
+            bkSyncDelFont(name);  // 一并从服务器删（否则换设备/刷新时又被自动拉回来、删不掉）
             if (_readingFontLinks[name]) { try { _readingFontLinks[name].remove(); } catch (e) {} delete _readingFontLinks[name]; }
             delete _readingLocalFontFaces[name];
             READING_FONT_SLOTS.forEach(function (s) { if ((localStorage.getItem(s.key) || '') === name) localStorage.removeItem(s.key); });
@@ -20138,6 +20139,7 @@ body {
                     rbBooks = rbBooks.filter(function (b) { return !b._remote; });
                     var added = 0;
                     Object.keys(d.items).forEach(function (fk) {
+                        if (fk.indexOf(FONT_KEY_PREFIX) === 0) return; // 字体条目：不当书注入书架
                         if (localKeys[fk]) return;               // 本地已有正本，跳过
                         var m = d.items[fk] || {};
                         rbBooks.push({
@@ -20218,12 +20220,86 @@ body {
                     if (r.status === 401) { if (s) s.textContent = '❌ 口令不对'; return; }
                     if (!r.ok) { if (s) s.textContent = '❌ 连接失败（' + r.status + '）'; return; }
                     return r.json().then(function (d) {
-                        var n = (d && d.items) ? Object.keys(d.items).length : 0;
+                        var n = (d && d.items) ? Object.keys(d.items).filter(function (k) { return k.indexOf(FONT_KEY_PREFIX) !== 0; }).length : 0;
                         if (s) s.textContent = '✅ 连接成功，服务器上有 ' + n + ' 本书';
                     });
                 })
                 .catch(function () { if (s) s.textContent = '❌ 连不上，检查地址/网络'; });
         }
+        // ===== 本地字体同步（复用书籍服务器，fileKey 加前缀与书区分，不污染书架） =====
+        // 本地上传的字体文件（二进制）太大不进云同步，跟书一样存自己服务器；但字体走「换设备自动全量拉回」，
+        // 不像书那样按需下载（字体得先就位下拉里才能选）。删本地字体时一并删服务器，否则下次又被拉回来。
+        var FONT_KEY_PREFIX = '__font__|';
+        function _ab2b64(buf) {
+            var bytes = new Uint8Array(buf), CH = 0x8000, parts = [];
+            for (var i = 0; i < bytes.length; i += CH) parts.push(String.fromCharCode.apply(null, bytes.subarray(i, i + CH)));
+            return btoa(parts.join(''));
+        }
+        function _b642ab(b64) {
+            var bin = atob(b64), len = bin.length, bytes = new Uint8Array(len);
+            for (var i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+            return bytes.buffer;
+        }
+        // 上传一个本地字体到服务器（静默，失败重试一次）
+        function bkSyncPushFont(f, _retry) {
+            var cfg = bkSyncCfg(); if (!cfg || !f || !f.name || !f.buf) return;
+            var b64; try { b64 = _ab2b64(f.buf); } catch (e) { return; }
+            var book = { fileName: f.name, fileSize: (f.buf.byteLength || 0), _isFont: 1, mime: f.mime || '', b64: b64, chapters: [] };
+            var payload = { fileKey: FONT_KEY_PREFIX + f.name, ts: Date.now(), book: book };
+            fetch(cfg.url + '/put', { method: 'POST', headers: bkSyncHeaders(cfg, true), body: JSON.stringify(payload) })
+                .then(function (r) { if (!r.ok && !_retry) setTimeout(function () { bkSyncPushFont(f, true); }, 2000); })
+                .catch(function () { if (!_retry) setTimeout(function () { bkSyncPushFont(f, true); }, 2000); });
+        }
+        // 把「服务器有、本地没有」的字体全部拉回来，存 IDB 并注册（换设备自动补齐）。收齐后统一落盘一次，避免并发覆盖
+        function bkSyncPullFonts(cb) {
+            var cfg = bkSyncCfg(); if (!cfg) { if (cb) cb(); return; }
+            fetch(cfg.url + '/manifest', { headers: bkSyncHeaders(cfg) })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (d) {
+                    if (!d || !d.items) { if (cb) cb(); return; }
+                    var local = {}; readingLocalFontsLoad().forEach(function (f) { local[f.name] = 1; });
+                    var need = [];
+                    Object.keys(d.items).forEach(function (fk) {
+                        if (fk.indexOf(FONT_KEY_PREFIX) !== 0) return;       // 只要字体条目
+                        var nm = fk.slice(FONT_KEY_PREFIX.length);
+                        if (nm && !local[nm]) need.push(fk);
+                    });
+                    if (!need.length) { if (cb) cb(0); return; }
+                    var left = need.length, fetched = [];
+                    function finalize() {
+                        if (fetched.length) {
+                            var arr = readingLocalFontsLoad();
+                            fetched.forEach(function (nf) {
+                                var exists = false;
+                                for (var k = 0; k < arr.length; k++) if (arr[k].name === nf.name) { exists = true; break; }
+                                if (!exists) arr.push(nf);
+                            });
+                            readingLocalFontsSave(arr);
+                        }
+                        try { readingRegisterLocalFonts(); readingApplyFonts(); } catch (e) {}
+                        if (cb) cb(fetched.length);
+                    }
+                    need.forEach(function (fk) {
+                        fetch(cfg.url + '/get?key=' + encodeURIComponent(fk), { headers: bkSyncHeaders(cfg) })
+                            .then(function (r) { return r.ok ? r.json() : null; })
+                            .then(function (dd) {
+                                var b = dd && (dd.book || dd);
+                                if (b && b.b64 && b.fileName) {
+                                    try { fetched.push({ name: b.fileName, mime: b.mime || '', buf: _b642ab(b.b64) }); } catch (e) {}
+                                }
+                                if (--left === 0) finalize();
+                            })
+                            .catch(function () { if (--left === 0) finalize(); });
+                    });
+                })
+                .catch(function () { if (cb) cb(); });
+        }
+        // 删本地字体时同步删服务器（否则下次自动全量拉回、删不掉）。删在线字体时 key 不存在，服务器无操作、无害
+        function bkSyncDelFont(name) {
+            var cfg = bkSyncCfg(); if (!cfg || !name) return;
+            fetch(cfg.url + '/del', { method: 'POST', headers: bkSyncHeaders(cfg, true), body: JSON.stringify({ fileKey: FONT_KEY_PREFIX + name }) }).catch(function () {});
+        }
+
         // 记忆：当前对话上次填入的是哪本书（按对话 ID 存）
         function rbConvBookMap() { try { return JSON.parse(localStorage.getItem('reading_conv_book') || '{}'); } catch (e) { return {}; } }
         function rbGetConvBook() { if (!chatCurrentConvId) return null; return rbConvBookMap()[chatCurrentConvId] || null; }
@@ -25866,6 +25942,7 @@ body {
             // 字体：idb 就绪后立刻注册本地字体 + 应用四/五位置选择（全局 CSS 变量），
             // 这样一进阅读界面就生效，不用先点开 clawd 设置面板才同步上。
             try { readingRegisterLocalFonts(); readingApplyFonts(); } catch (e) {}
+            try { bkSyncPullFonts(); } catch (e) {}  // 换设备/新环境：从书籍服务器自动补齐本地字体文件
 
             // 立即用本地缓存渲染（零延迟）
             renderKeyFilters();
