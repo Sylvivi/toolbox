@@ -20189,9 +20189,14 @@ body {
         function bkSyncPushAll() {
             var cfg = bkSyncCfg(); if (!cfg) { showToast('⚠️ 请先在下方配置书籍服务器地址和口令'); return; }
             var real = rbBooks.filter(function (b) { return !b._remote && b.chapters && b.chapters.length; });
-            if (!real.length) { showToast('本地没有可上传的书'); return; }
-            showToast('开始上传 ' + real.length + ' 本书…');
+            var fonts = readingLocalFontsLoad(); // 顺带把已存在的本地字体也一并镜像（自动上传只覆盖「新上传」的那次）
+            if (!real.length && !fonts.length) { showToast('本地没有可上传的书或字体'); return; }
+            var msg = [];
+            if (real.length) msg.push(real.length + ' 本书');
+            if (fonts.length) msg.push(fonts.length + ' 个字体');
+            showToast('开始上传 ' + msg.join(' + ') + '…');
             real.forEach(function (b, i) { setTimeout(function () { bkSyncPush(b); }, i * 300); });
+            fonts.forEach(function (f, i) { setTimeout(function () { bkSyncPushFont(f); }, (real.length + i) * 300); });
         }
         // 云同步弹窗里的书籍服务器配置：填充/保存/测试
         function bkSyncUILoad() {
