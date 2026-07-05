@@ -2608,14 +2608,16 @@ body {
             backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4);
             box-shadow: 0 8px 12px -10px rgba(0,0,0,0.22);
         }
-        .rb-book { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--card-border); border-radius: 10px; margin-bottom: 8px; cursor: pointer; transition: border-color 0.15s; }
+        /* 书架：阅读器风格网格，一行三本，上面书籍 emoji、下面书名，纵向滚动 */
+        #rbShelfList { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .rb-book { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 15px 8px 11px; border: 1px solid var(--card-border); border-radius: 12px; cursor: pointer; transition: border-color 0.15s, background 0.15s; min-width: 0; }
         .rb-book:hover { border-color: var(--accent); }
-        .rb-book-icon { font-size: 22px; flex-shrink: 0; }
-        .rb-book-info { flex: 1; min-width: 0; }
-        .rb-book-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .rb-book-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-        .rb-book-del { background: none; border: none; color: var(--text-muted); font-size: 15px; cursor: pointer; padding: 4px; flex-shrink: 0; }
-        .rb-book-del:hover { color: #f56565; }
+        .rb-book-icon { font-size: 34px; line-height: 1; }
+        .rb-book-info { width: 100%; min-width: 0; }
+        .rb-book-name { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+        .rb-book-meta { font-size: 10px; color: var(--text-muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .rb-book-more { position: absolute; top: 2px; right: 2px; width: 24px; height: 24px; border: none; background: transparent; color: var(--text-muted); font-size: 15px; line-height: 1; cursor: pointer; border-radius: 7px; opacity: 0.5; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
+        .rb-book-more:hover, .rb-book-more:active { opacity: 1; background: var(--card-inner); }
         .rb-chap { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--card-border); border-radius: 8px; margin-bottom: 5px; cursor: pointer; transition: all 0.15s; }
         .rb-chap:hover { border-color: var(--accent); background: var(--accent-light); }
         .rb-chap.rb-read { opacity: 0.5; }
@@ -12288,6 +12290,8 @@ body {
                 bookmarksTs: readingGetBookmarksTs(),
                 highlights: readingGetAllHl(),
                 highlightsTs: readingGetHlTs(),
+                bookTitles: rbTitlesLoad(),
+                bookTitlesTs: rbTitlesTs(),
                 favModels: (function () { try { return JSON.parse(localStorage.getItem('chat_fav_models') || '[]'); } catch (e) { return []; } })(),
                 favModelsTs: localStorage.getItem('chat_fav_models_ts') || '',
                 modelPrices: (function () { try { return JSON.parse(localStorage.getItem('toolbox_model_prices') || '{}'); } catch (e) { return {}; } })(),
@@ -12542,6 +12546,15 @@ body {
                     if (cloudHlTs > localHlTs) {
                         localStorage.setItem('reading_highlights', JSON.stringify(manifest.highlights));
                         localStorage.setItem('reading_highlights_ts', cloudHlTs);
+                    }
+                }
+
+                // 书籍显示名(改名): 整块按时间戳后写覆盖，跨设备传播改名/清空
+                if (manifest.bookTitles) {
+                    var cloudBtTs = manifest.bookTitlesTs || '';
+                    if (cloudBtTs > rbTitlesTs()) {
+                        localStorage.setItem('reading_book_titles', JSON.stringify(manifest.bookTitles));
+                        localStorage.setItem('reading_book_titles_ts', cloudBtTs);
                     }
                 }
 
@@ -12895,6 +12908,7 @@ body {
                 if (manifest.checkinTasks) { idbSet(CHECKIN_TASKS_KEY, manifest.checkinTasks); if (manifest.checkinTasksTs) idbSet(CHECKIN_TASKS_TS_KEY, manifest.checkinTasksTs); }
                 if (manifest.bookmarks) { localStorage.setItem('reading_bookmarks', JSON.stringify(manifest.bookmarks)); if (manifest.bookmarksTs) localStorage.setItem('reading_bookmarks_ts', manifest.bookmarksTs); }
                 if (manifest.highlights) { localStorage.setItem('reading_highlights', JSON.stringify(manifest.highlights)); if (manifest.highlightsTs) localStorage.setItem('reading_highlights_ts', manifest.highlightsTs); }
+                if (manifest.bookTitles) { localStorage.setItem('reading_book_titles', JSON.stringify(manifest.bookTitles)); if (manifest.bookTitlesTs) localStorage.setItem('reading_book_titles_ts', manifest.bookTitlesTs); }
                 if (manifest.favModels) { try { localStorage.setItem('chat_fav_models', JSON.stringify(manifest.favModels)); localStorage.setItem('chat_fav_models_ts', manifest.favModelsTs || new Date().toISOString()); chatFavModels = manifest.favModels; if (typeof chatUpdateFavHeader === 'function') chatUpdateFavHeader(); } catch (e) {} }
                 if (manifest.modelPrices) { try { localStorage.setItem('toolbox_model_prices', JSON.stringify(manifest.modelPrices)); localStorage.setItem('toolbox_model_prices_ts', manifest.modelPricesTs || new Date().toISOString()); } catch (e) {} }
                 readingApplyFontSync(manifest); // 字体库+五个位置选择，带时间戳护栏（修复开机被云端旧值冲掉的问题）
@@ -20081,6 +20095,41 @@ body {
         function rbSave() { idbSet('reading_books', { books: rbBooks.filter(function (b) { return !b._remote; }) }); }
         function rbGetBook(id) { for (var i = 0; i < rbBooks.length; i++) if (rbBooks[i].id === id) return rbBooks[i]; return null; }
 
+        /* ===== 书籍显示名（改名） =====
+           改名只改「显示名」，绝不碰 fileName/fileSize —— 那俩是同步身份证（云同步、阅读进度、人名名单、划线都靠它认书）。
+           显示名单独存一张小表 reading_book_titles = { "文件名|大小": "显示名" }，跟着 CF 云同步走(整块按时间戳覆盖)，
+           所以一台设备改名、所有设备都变；连还没下载正文的云端占位书也能显示新名（名字跟正文分开走）。没起过名就用原文件名。 */
+        function rbBookFileKey(b) { return (b.fileName || '') + '|' + (b.fileSize || 0); }
+        function rbTitlesLoad() { try { var o = JSON.parse(localStorage.getItem('reading_book_titles') || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }
+        function rbTitlesTs() { return localStorage.getItem('reading_book_titles_ts') || ''; }
+        function rbBookDisplayName(b) {
+            if (!b) return '';
+            var t = rbTitlesLoad()[rbBookFileKey(b)];
+            return (t && String(t).trim()) ? String(t).trim() : (b.fileName || '未命名');
+        }
+        function rbSetBookTitle(fileKey, name) {
+            var map = rbTitlesLoad();
+            name = (name || '').trim();
+            if (name) map[fileKey] = name; else delete map[fileKey];   // 清空=恢复原文件名，别在表里留冗余
+            try {
+                localStorage.setItem('reading_book_titles', JSON.stringify(map));
+                localStorage.setItem('reading_book_titles_ts', new Date().toISOString());
+            } catch (e) {}
+            if (typeof activeSyncProvider !== 'undefined' && activeSyncProvider === 'cf' && typeof syncPushData === 'function') {
+                clearTimeout(rbSetBookTitle._t); rbSetBookTitle._t = setTimeout(syncPushData, 1500);
+            }
+        }
+        function rbRenameBook(id) {
+            var b = rbGetBook(id); if (!b) return;
+            var cur = rbBookDisplayName(b);
+            var nv = prompt('给这本书改个显示名（留空＝恢复原文件名）\n只改显示名，不影响同步、阅读进度、人名和划线。', cur);
+            if (nv === null) return;
+            nv = nv.trim();
+            rbSetBookTitle(rbBookFileKey(b), (nv && nv !== (b.fileName || '')) ? nv : '');
+            rbRenderShelf();
+            showToast(nv ? ('已改名为「' + nv + '」') : '已恢复原文件名');
+        }
+
         /* ===== 书籍服务器同步（正文太大不进 CF，单独存自己服务器；全自动 + 按需下载） =====
            书本地为主、服务器只当镜像。fileKey = 文件名|大小（与阅读进度同键，跨设备认同一本书）。
            本地已有的书照常用；服务器独有的书只在书架放「占位」，点开那本才下正文。 */
@@ -21366,18 +21415,55 @@ body {
                 return;
             }
             box.innerHTML = rbBooks.map(function (b) {
-                // 服务器独有的占位书：点开才下载正文，不显示删除（下次拉清单还会回来）
+                var name = rbEsc(rbBookDisplayName(b));
+                var more = '<button class="rb-book-more" onclick="event.stopPropagation();rbBookMenuOpen(\'' + b.id + '\',event)" title="更多">⋯</button>';
+                // 服务器独有的占位书：点开才下载正文；☁️ 图标提示未下载，菜单里只给「改名」（删除下次拉清单还会回来，走原删除逻辑）
                 if (b._remote) {
-                    return '<div class="rb-book" onclick="rbOpenBook(\'' + b.id + '\')">'
+                    return '<div class="rb-book" onclick="rbOpenBook(\'' + b.id + '\')">' + more
                         + '<span class="rb-book-icon">☁️</span>'
-                        + '<div class="rb-book-info"><div class="rb-book-name">' + rbEsc(b.fileName) + '</div><div class="rb-book-meta">' + (b._nchap || 0) + ' 章 · 点击下载</div></div></div>';
+                        + '<div class="rb-book-info"><div class="rb-book-name">' + name + '</div><div class="rb-book-meta">' + (b._nchap || 0) + ' 章 · 点击下载</div></div></div>';
                 }
                 var prog = (b.lastChapter != null && b.lastChapter >= 0) ? ('读到 ' + (b.lastChapter + 1) + '/' + b.chapters.length + ' 章') : (b.chapters.length + ' 章');
-                return '<div class="rb-book" onclick="rbOpenBook(\'' + b.id + '\')">'
-                    + '<span class="rb-book-icon">' + rbFileIcon(b.fileName) + '</span>'
-                    + '<div class="rb-book-info"><div class="rb-book-name">' + rbEsc(b.fileName) + '</div><div class="rb-book-meta">' + prog + ' · ' + (b.fileSize / 1024).toFixed(0) + ' KB</div></div>'
-                    + '<button class="rb-book-del" onclick="event.stopPropagation();rbDeleteBook(\'' + b.id + '\')" title="删除">✕</button></div>';
+                return '<div class="rb-book" onclick="rbOpenBook(\'' + b.id + '\')">' + more
+                    + '<span class="rb-book-icon">' + rbBookEmoji(b) + '</span>'
+                    + '<div class="rb-book-info"><div class="rb-book-name">' + name + '</div><div class="rb-book-meta">' + prog + '</div></div></div>';
             }).join('');
+        }
+        // 给每本书分一个固定的书本 emoji（按文件键哈希定死，同一本永远同一个，摆出来像一排彩色书脊）
+        var RB_BOOK_EMOJIS = ['📕', '📗', '📘', '📙', '📓', '📔', '📒'];
+        function rbBookEmoji(b) {
+            var k = rbBookFileKey(b), h = 0;
+            for (var i = 0; i < k.length; i++) { h = (h * 31 + k.charCodeAt(i)) & 0x7fffffff; }
+            return RB_BOOK_EMOJIS[h % RB_BOOK_EMOJIS.length];
+        }
+        // 书本右上角 ⋯ 菜单：改名 / 删除（占位云端书只给改名）。动态建一个小浮层，点外面自动关。
+        function rbBookMenuOpen(id, e) {
+            e.stopPropagation(); e.preventDefault();
+            var old = document.getElementById('rbBookMenu'); if (old) old.remove();
+            var b = rbGetBook(id); if (!b) return;
+            var menu = document.createElement('div');
+            menu.id = 'rbBookMenu';
+            menu.className = 'chat-hist-menu';
+            menu.style.display = 'block';
+            var items = '<div onclick="rbBookMenuAction(\'rename\')">✏️ 改名</div>';
+            if (!b._remote) items += '<div class="danger" onclick="rbBookMenuAction(\'delete\')">🗑️ 删除</div>';
+            else items += '<div class="danger" onclick="rbBookMenuAction(\'delete\')">🗑️ 从云端删除</div>';
+            menu.innerHTML = items;
+            document.body.appendChild(menu);
+            rbBookMenuId = id;
+            var rect = e.currentTarget.getBoundingClientRect();
+            menu.style.top = Math.min(rect.bottom + 4, window.innerHeight - menu.offsetHeight - 8) + 'px';
+            menu.style.right = (window.innerWidth - rect.right) + 'px';
+            menu.style.left = '';
+            setTimeout(function () { document.addEventListener('click', rbBookMenuClose, { once: true }); }, 0);
+        }
+        var rbBookMenuId = null;
+        function rbBookMenuClose() { var m = document.getElementById('rbBookMenu'); if (m) m.remove(); rbBookMenuId = null; }
+        function rbBookMenuAction(action) {
+            var id = rbBookMenuId; rbBookMenuClose();
+            if (!id) return;
+            if (action === 'rename') rbRenameBook(id);
+            else if (action === 'delete') rbDeleteBook(id);
         }
 
         function rbOpenBook(id) {
@@ -21388,7 +21474,7 @@ body {
             if (b._remote && (!b.chapters || !b.chapters.length)) {
                 document.getElementById('rbShelfView').style.display = 'none';
                 document.getElementById('rbChapterView').style.display = '';
-                document.getElementById('rbBookTitle').textContent = b.fileName;
+                document.getElementById('rbBookTitle').textContent = rbBookDisplayName(b);
                 var cl = document.getElementById('rbChapterList');
                 if (cl) cl.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:34px 0">☁️ 正在从服务器下载「' + rbEsc(b.fileName) + '」…</div>';
                 bkSyncDownload(b, function (full) {
@@ -21402,7 +21488,7 @@ body {
             }
             document.getElementById('rbShelfView').style.display = 'none';
             document.getElementById('rbChapterView').style.display = '';
-            document.getElementById('rbBookTitle').textContent = b.fileName;
+            document.getElementById('rbBookTitle').textContent = rbBookDisplayName(b);
             var ps = document.getElementById('rbPresetSelect'); if (ps) ps.value = b.preset || 'auto';
             var cs = document.getElementById('rbChapterSearch'); if (cs) cs.value = '';
             // 阅读模式下「发下一章」是共读专用，隐藏掉
@@ -21683,7 +21769,7 @@ body {
             rbActiveBookId = book.id;
             document.getElementById('rbShelfView').style.display = 'none';
             document.getElementById('rbChapterView').style.display = '';
-            document.getElementById('rbBookTitle').textContent = fileName;
+            document.getElementById('rbBookTitle').textContent = rbBookDisplayName(book);
             document.getElementById('rbPresetSelect').value = 'auto';
             document.getElementById('rbChapterSearch').value = '';
             rbRenderChapters();
