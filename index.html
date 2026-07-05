@@ -1855,24 +1855,6 @@ body {
         }
         .code-copy:hover { opacity: 1; }
         .code-copy.copied { background: rgba(34,197,94,0.15); color: #16a34a; border-color: rgba(34,197,94,0.3); opacity: 1; }
-        /* 阅读统计：月历热力图 */
-        .rd-cal { margin-top: 2px; }
-        .rd-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: var(--text); }
-        .rd-cal-head button { width: 30px; height: 30px; border: none; background: var(--accent-light); color: var(--accent); border-radius: 8px; font-size: 16px; cursor: pointer; line-height: 1; }
-        .rd-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-        .rd-cal-w { text-align: center; font-size: 11px; color: var(--text-muted); padding: 2px 0; }
-        .rd-cal-cell { position: relative; aspect-ratio: 1 / 1; border-radius: 7px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; color: var(--text-sub); background: rgba(127,127,127,0.10); cursor: pointer; }
-        .rd-cal-empty { background: transparent; cursor: default; }
-        .rd-cal-num { line-height: 1; }
-        .rd-cal-min { font-size: 9px; color: var(--accent); margin-top: 1px; line-height: 1; }
-        .rd-cal-l1 { background: var(--accent-light); }
-        .rd-cal-l2 { background: color-mix(in srgb, var(--accent) 32%, transparent); }
-        .rd-cal-l3 { background: color-mix(in srgb, var(--accent) 56%, transparent); }
-        .rd-cal-l4 { background: color-mix(in srgb, var(--accent) 82%, transparent); color: #fff; }
-        .rd-cal-l4 .rd-cal-min { color: #fff; }
-        .rd-cal-today { box-shadow: 0 0 0 2px var(--accent); }
-        .rd-cal-legend { display: flex; align-items: center; gap: 4px; justify-content: flex-end; margin-top: 10px; font-size: 10px; color: var(--text-muted); }
-        .rd-cal-legend i { width: 13px; height: 13px; border-radius: 3px; display: inline-block; }
         /* 双击提问流式回答的打字光标 / 占位 / 停止按钮 */
         .rd-stream-cursor { display: inline-block; margin-left: 1px; color: var(--accent); animation: rdStreamBlink 1s steps(1) infinite; font-weight: 600; }
         @keyframes rdStreamBlink { 50% { opacity: 0; } }
@@ -4858,7 +4840,6 @@ body {
                         <button class="chat-topmenu-item" id="chatNavBtn" onclick="chatHideTopMenu();chatToggleNavPanel()">🧭 目录</button>
                         <button class="chat-topmenu-item" id="chatSummaryBtn" onclick="chatHideTopMenu();chatShowSummaryModal()" style="display:none">📋 摘要</button>
                         <button class="chat-topmenu-item" id="chatUsageBtn" onclick="chatHideTopMenu();apiLogShowPanel()" style="display:none">💰 用量</button>
-                        <button class="chat-topmenu-item" id="chatStatBtn" onclick="chatHideTopMenu();rdStatShowPanel()" style="">📊 统计</button>
                         <button class="chat-topmenu-item" id="chatGenImgBtn" onclick="chatHideTopMenu();genImageOpenDialog()" style="display:none">🎨 生图</button>
                     </div>
                 </div>
@@ -7220,7 +7201,6 @@ body {
                         <button onclick="clawdMenuAct('shelf')">📚 目录</button>
                         <button onclick="clawdMenuAct('summary')">📋 摘要</button>
                         <button onclick="clawdMenuAct('usage')">💰 用量</button>
-                        <button onclick="clawdMenuAct('stats')">📊 统计</button>
                         <button onclick="clawdMenuAct('nextchap')">⏭️ 下一章</button>
                         <button onclick="clawdMenuAct('model')">🦀 clawd</button>
                     </div>
@@ -11269,7 +11249,6 @@ body {
             readingApplyNames();
             readingRegisterLocalFonts();
             readingApplyFonts();
-            rdStatInitTracking();   // 阅读时长统计：开始心跳计时 + 监听活跃/可见
         });
 
         /* =========================================================================
@@ -12305,8 +12284,6 @@ body {
                 bookmarksTs: readingGetBookmarksTs(),
                 highlights: readingGetAllHl(),
                 highlightsTs: readingGetHlTs(),
-                readingStats: rdStatLoad(),
-                readingStatsTs: rdStatTs(),
                 favModels: (function () { try { return JSON.parse(localStorage.getItem('chat_fav_models') || '[]'); } catch (e) { return []; } })(),
                 favModelsTs: localStorage.getItem('chat_fav_models_ts') || '',
                 modelPrices: (function () { try { return JSON.parse(localStorage.getItem('toolbox_model_prices') || '{}'); } catch (e) { return {}; } })(),
@@ -12561,14 +12538,6 @@ body {
                     if (cloudHlTs > localHlTs) {
                         localStorage.setItem('reading_highlights', JSON.stringify(manifest.highlights));
                         localStorage.setItem('reading_highlights_ts', cloudHlTs);
-                    }
-                }
-
-                // readingStats(阅读统计): 整块按时间戳后写覆盖
-                if (manifest.readingStats) {
-                    var cloudStTs = manifest.readingStatsTs || '';
-                    if (cloudStTs > rdStatTs()) {
-                        localStorage.setItem('reading_stats', JSON.stringify(manifest.readingStats));
                     }
                 }
 
@@ -12922,7 +12891,6 @@ body {
                 if (manifest.checkinTasks) { idbSet(CHECKIN_TASKS_KEY, manifest.checkinTasks); if (manifest.checkinTasksTs) idbSet(CHECKIN_TASKS_TS_KEY, manifest.checkinTasksTs); }
                 if (manifest.bookmarks) { localStorage.setItem('reading_bookmarks', JSON.stringify(manifest.bookmarks)); if (manifest.bookmarksTs) localStorage.setItem('reading_bookmarks_ts', manifest.bookmarksTs); }
                 if (manifest.highlights) { localStorage.setItem('reading_highlights', JSON.stringify(manifest.highlights)); if (manifest.highlightsTs) localStorage.setItem('reading_highlights_ts', manifest.highlightsTs); }
-                if (manifest.readingStats) { localStorage.setItem('reading_stats', JSON.stringify(manifest.readingStats)); }
                 if (manifest.favModels) { try { localStorage.setItem('chat_fav_models', JSON.stringify(manifest.favModels)); localStorage.setItem('chat_fav_models_ts', manifest.favModelsTs || new Date().toISOString()); chatFavModels = manifest.favModels; if (typeof chatUpdateFavHeader === 'function') chatUpdateFavHeader(); } catch (e) {} }
                 if (manifest.modelPrices) { try { localStorage.setItem('toolbox_model_prices', JSON.stringify(manifest.modelPrices)); localStorage.setItem('toolbox_model_prices_ts', manifest.modelPricesTs || new Date().toISOString()); } catch (e) {} }
                 readingApplyFontSync(manifest); // 字体库+五个位置选择，带时间戳护栏（修复开机被云端旧值冲掉的问题）
@@ -18044,7 +18012,6 @@ body {
             if (what === 'shelf') { rbOpenShelf(); return; }
             if (what === 'nextchap') { clawdNextChapter(); return; }
             if (what === 'usage') { apiLogShowPanel(); return; }
-            if (what === 'stats') { rdStatShowPanel(); return; }
             if (what === 'model') { chatOpenModelSheet(); return; }
             if (what === 'summary') { if (chatReaderMode) readerShowSummaryModal(); else chatShowSummaryModal(); return; }
             // 阅读/翻译模式下，书签/搜索/导航不再依赖横栏——直接浮出来，横栏始终不露面
@@ -22089,444 +22056,6 @@ body {
             return false;
         }
 
-        /* ===================== 阅读统计（每本书 · 每天阅读时长 + 月历热力图） =====================
-           只在「共读 / 纯阅读」里、屏幕亮着且最近有动作时计时；切后台或 2 分钟没动作自动暂停，
-           避免「挂着没看」被算进去。存账（reading_stats，走 CF 同步）：
-             { books: { <bookKey>: { title, firstDay, lastDay, totalSec, finishedDay, days:{ 'YYYY-MM-DD': 秒 } } }, ts }
-           bookKey 用 chatCurrentConvId（共读=会话id，纯阅读=reader_<id>），与划线同键，便于统计本书划线数。 */
-        var RD_STAT_IDLE_MS = 120000;   // 2 分钟无动作 → 判为没在看，暂停计时
-        var RD_STAT_TICK_MS = 5000;     // 每 5 秒心跳一次
-        var _rdStatLastActive = Date.now();
-        var _rdStatPending = 0;         // 攒着还没落盘的秒数（减少写盘次数）
-        var _rdStatPushTimer = null;
-
-        function rdStatPad(n) { return n < 10 ? '0' + n : '' + n; }
-        function rdStatTodayStr() {
-            var d = new Date();
-            return d.getFullYear() + '-' + rdStatPad(d.getMonth() + 1) + '-' + rdStatPad(d.getDate());
-        }
-        function rdStatLoad() {
-            try { var o = JSON.parse(localStorage.getItem('reading_stats')); if (o && o.books) return o; } catch (e) {}
-            return { books: {}, ts: '' };
-        }
-        function rdStatSave(obj, push) {
-            obj.ts = new Date().toISOString();
-            localStorage.setItem('reading_stats', JSON.stringify(obj));
-            if (push !== false && typeof activeSyncProvider !== 'undefined' && activeSyncProvider === 'cf') {
-                if (_rdStatPushTimer) clearTimeout(_rdStatPushTimer);
-                _rdStatPushTimer = setTimeout(syncPushData, 4000);
-            }
-        }
-        function rdStatTs() { return rdStatLoad().ts || ''; }
-        // 当前在读的书：返回 { key, title } 或 null
-        // 统一书键：同一本书的「共读」和「纯阅读」按【文件名|大小】合到一处统计；
-        // 没关联书架书的共读（直接贴文）退回会话 id。文件键与书删除无关，删书后记录照留、重导同一文件还能接上。
-        function rdStatCurBook() {
-            if (!(chatReadingMode || chatReaderMode) || !chatCurrentConvId) return null;
-            // 纯阅读：固定按「书文件键」记（同一本书跨设备/重导入都稳定）
-            if (chatReaderMode && readerBookId) {
-                if (typeof rbLoad === 'function' && (!rbBooks || !rbBooks.length)) { try { rbLoad(); } catch (e) {} }
-                var rb = (typeof rbGetBook === 'function') ? rbGetBook(readerBookId) : null;
-                var rtitle = rb ? (rb.title || rb.name || '') : '';
-                return { key: 'book:' + readerBookKey(readerBookId), title: rtitle || '未命名' };
-            }
-            // 共读：永远按「对话 id」记一条 —— 一个对话 = 一条记录，绝不因「那天有没有绑书 / 书有没有加载好 / 书是否被删」
-            //       而把 key 在 conv: 和 book: 之间来回翻面、裂成多条。是否跟同一本书的纯阅读合并，留到统计面板展示时再分组。
-            var title = '';
-            try { var list = chatGetHistory(); for (var i = 0; i < list.length; i++) { if (list[i].id === chatCurrentConvId) { title = list[i].title || ''; break; } } } catch (e) {}
-            return { key: 'conv:' + chatCurrentConvId, title: title || '未命名' };
-        }
-        // 单条存储键对应的所有会话 id（共读会话 + 纯阅读会话），用于跨模式统计划线数
-        function rdStatConvIdsForStorageKey(key) {
-            if (key.indexOf('conv:') === 0) return [key.slice(5)];
-            if (key.indexOf('book:') !== 0) return [key];   // 兜底：旧裸键
-            var x = key.slice(5), ids = [], bookIds = {};
-            try {
-                if (x.indexOf('|') >= 0) {   // 文件键：名|大小
-                    for (var i = 0; i < rbBooks.length; i++) { var b = rbBooks[i]; if (((b.fileName || '') + '|' + (b.fileSize || 0)) === x) bookIds[b.id] = true; }
-                } else {                      // 旧的「book:<bookId>」退回形态
-                    bookIds[x] = true;
-                }
-                Object.keys(bookIds).forEach(function (bid) { ids.push('reader_' + bid); });
-                var map = rbConvBookMap();
-                Object.keys(map).forEach(function (cid) { if (bookIds[map[cid]]) ids.push(cid); });
-            } catch (e) {}
-            return ids;
-        }
-        // 把一条存储键归到「分组键」：能定位到书文件就按文件(f:)，否则按标题(t:)，再兜底用原键(k:)。
-        // 这样同一本书的「共读(conv:)＋纯阅读(book:)」会并到一组，历史上裂开的同名记录也会自动合并。
-        function rdStatGroupKey(storageKey, bk) {
-            var fileKey = null;
-            try {
-                if (storageKey.indexOf('book:') === 0) {
-                    var x = storageKey.slice(5);
-                    if (x.indexOf('|') >= 0) fileKey = x;
-                    else { var b = rbGetBook(x); if (b && b.fileName != null) fileKey = b.fileName + '|' + (b.fileSize || 0); }
-                } else if (storageKey.indexOf('conv:') === 0) {
-                    var bid = rbConvBookMap()[storageKey.slice(5)] || null;
-                    if (bid) { var b2 = rbGetBook(bid); if (b2 && b2.fileName != null) fileKey = b2.fileName + '|' + (b2.fileSize || 0); }
-                }
-            } catch (e) {}
-            if (fileKey) return 'f:' + fileKey;
-            var t = ((bk && bk.title) || '').trim();
-            if (t) return 't:' + t;
-            return 'k:' + storageKey;
-        }
-        // 把一条记录 / 一个组的数值折进目标组
-        function _rdStatFold(dst, src, srcKeys) {
-            (srcKeys || [src._sk]).forEach(function (k) { if (k != null) dst.keys.push(k); });
-            dst.totalSec += src.totalSec || 0;
-            if (src.firstDay && (!dst.firstDay || src.firstDay < dst.firstDay)) dst.firstDay = src.firstDay;
-            if (src.lastDay && (!dst.lastDay || src.lastDay > dst.lastDay)) dst.lastDay = src.lastDay;
-            if (src.finishedDay && (!dst.finishedDay || src.finishedDay < dst.finishedDay)) dst.finishedDay = src.finishedDay;
-            var dd = src.days || {}, dks = Object.keys(dd);
-            for (var j = 0; j < dks.length; j++) dst.days[dks[j]] = (dst.days[dks[j]] || 0) + dd[dks[j]];
-        }
-        // 把所有存储记录分组合并。两趟：①按分组键(文件/标题/原键) ②再把「显示标题相同」的组并起来
-        //（覆盖共读 conv: 与文件 book: 同名、跨修复边界裂开、书名即讨论名等导致的同名分裂）。
-        // 返回 { order:[canon gid...], map:{canon gid:组}, alias:{任一 gid → canon gid} }
-        // 一条存储键当前对应的「对话列表标题」（共读记录用，跟着重命名实时变）；取不到返回空串
-        function rdStatLiveTitle(storageKey) {
-            try {
-                if (storageKey.indexOf('conv:') === 0) {
-                    var cid = storageKey.slice(5), list = chatGetHistory();
-                    for (var i = 0; i < list.length; i++) { if (list[i].id === cid && list[i].title) return list[i].title; }
-                }
-            } catch (e) {}
-            return '';
-        }
-        // 自动归拢标题：把每条共读(conv:)记录的标题刷成「对话列表当前标题」（跟着重命名走，跨设备也行）；
-        // 凡是原本和它同名的兄弟记录（旧名相同 → 之前就合在一起的），一并改成新名，避免改一个名字把一本书拆成两条。
-        function rdStatHealTitles(push) {
-            try {
-                var st = rdStatLoad(), books = st.books || {}, keys = Object.keys(books), dirty = false, renames = [];
-                // ① 先按对话列表把 conv: 记录的标题刷新，记下「旧名 → 新名」
-                keys.forEach(function (k) {
-                    if (k.indexOf('conv:') !== 0) return;
-                    var rec = books[k]; if (!rec) return;
-                    var live = rdStatLiveTitle(k);
-                    if (live && rec.title !== live) { renames.push({ old: rec.title, neu: live }); rec.title = live; dirty = true; }
-                });
-                // ② 把和「旧名」相同的兄弟记录一起改成新名（保持原本的合并关系）
-                renames.forEach(function (r) {
-                    if (!r.old || r.old === r.neu) return;
-                    keys.forEach(function (k) { var rec = books[k]; if (rec && rec.title === r.old) { rec.title = r.neu; dirty = true; } });
-                });
-                if (dirty) rdStatSave(st, push);
-                return dirty;
-            } catch (e) { return false; }
-        }
-        function rdStatBuildGroups(st) {
-            var raw = {}, rawOrder = [];
-            var ks = Object.keys(st.books || {});
-            for (var i = 0; i < ks.length; i++) {
-                var sk = ks[i], bk = st.books[sk];
-                var gid = rdStatGroupKey(sk, bk);
-                var g = raw[gid];
-                if (!g) { g = raw[gid] = { gid: gid, keys: [], title: '', firstDay: '', lastDay: '', totalSec: 0, finishedDay: '', days: {} }; rawOrder.push(gid); }
-                _rdStatFold(g, bk, [sk]);
-            }
-            // 定标题：文件组优先用书名，否则用任一成员记录的标题（共读记录的标题已由 rdStatHealTitles 刷成对话当前名）
-            rawOrder.forEach(function (gid) {
-                var g = raw[gid], t = '';
-                if (gid.indexOf('f:') === 0 && typeof readerBookByKey === 'function') { var b = readerBookByKey(gid.slice(2)); if (b) t = b.title || b.name || ''; }
-                if (!t) { for (var i = 0; i < g.keys.length; i++) { var bb = st.books[g.keys[i]]; if (bb && bb.title) { t = bb.title; break; } } }
-                g.title = t || '未命名';
-            });
-            // 第二趟：同名归一
-            var map = {}, order = [], byTitle = {}, alias = {};
-            rawOrder.forEach(function (gid) {
-                var g = raw[gid];
-                var tkey = (g.title && g.title !== '未命名') ? ('T:' + g.title) : null;
-                var canon = tkey ? byTitle[tkey] : null;
-                if (canon) { _rdStatFold(map[canon], g, g.keys); alias[gid] = canon; }
-                else { map[gid] = g; order.push(gid); alias[gid] = gid; if (tkey) byTitle[tkey] = gid; }
-            });
-            order.sort(function (a, b) { return (map[b].lastDay || '').localeCompare(map[a].lastDay || ''); });
-            return { order: order, map: map, alias: alias };
-        }
-        // 分组维度的会话 id 汇总（合并组内每条存储键的会话）
-        function rdStatConvIdsForKey(gid) {
-            var st = rdStatLoad();
-            var g = rdStatBuildGroups(st).map[gid];
-            if (!g) return [];
-            var seen = {}, out = [];
-            for (var i = 0; i < g.keys.length; i++) {
-                rdStatConvIdsForStorageKey(g.keys[i]).forEach(function (id) { if (!seen[id]) { seen[id] = 1; out.push(id); } });
-            }
-            return out;
-        }
-        // 旧版（用会话 id 当键）一次性迁移到新「书文件键」，并把同一本书的多条合并。幂等。
-        function _rdStatMergeBook(books, key, src) {
-            var dst = books[key];
-            if (!dst) { books[key] = src; return; }
-            dst.totalSec = (dst.totalSec || 0) + (src.totalSec || 0);
-            if (src.firstDay && (!dst.firstDay || src.firstDay < dst.firstDay)) dst.firstDay = src.firstDay;
-            if (src.lastDay && (!dst.lastDay || src.lastDay > dst.lastDay)) dst.lastDay = src.lastDay;
-            if (src.finishedDay && !dst.finishedDay) dst.finishedDay = src.finishedDay;
-            if (!dst.title && src.title) dst.title = src.title;
-            var sd = src.days || {}; if (!dst.days) dst.days = {};
-            Object.keys(sd).forEach(function (d) { dst.days[d] = (dst.days[d] || 0) + sd[d]; });
-        }
-        function rdStatMigrate() {
-            var st = rdStatLoad();
-            if (st._mig2) return;
-            if (typeof rbLoad === 'function' && (!rbBooks || !rbBooks.length)) { try { rbLoad(); } catch (e) {} }
-            var keys = Object.keys(st.books), moved = false;
-            for (var i = 0; i < keys.length; i++) {
-                var k = keys[i];
-                if (k.indexOf('book:') === 0 || k.indexOf('conv:') === 0) continue;  // 已是新键
-                var bookId = null;
-                if (k.indexOf('reader_') === 0) bookId = k.slice(7);
-                else { try { bookId = rbConvBookMap()[k] || null; } catch (e) {} }
-                var nk = (bookId && typeof rbGetBook === 'function' && rbGetBook(bookId)) ? ('book:' + readerBookKey(bookId)) : ('conv:' + k);
-                _rdStatMergeBook(st.books, nk, st.books[k]);
-                delete st.books[k];
-                moved = true;
-            }
-            st._mig2 = true;
-            localStorage.setItem('reading_stats', JSON.stringify(st));  // 本地静默迁移，不动 ts、不触发推送
-        }
-        // 记一笔阅读秒数进「今天」
-        function rdStatAdd(sec) {
-            var cur = rdStatCurBook();
-            if (!cur || sec <= 0) return;
-            var st = rdStatLoad();
-            var bk = st.books[cur.key] || { title: cur.title, firstDay: '', lastDay: '', totalSec: 0, finishedDay: '', days: {} };
-            bk.title = cur.title || bk.title;           // 跟随改名
-            if (!bk.days) bk.days = {};
-            var today = rdStatTodayStr();
-            bk.days[today] = (bk.days[today] || 0) + sec;
-            bk.totalSec = (bk.totalSec || 0) + sec;
-            if (!bk.firstDay || today < bk.firstDay) bk.firstDay = today;
-            if (!bk.lastDay || today > bk.lastDay) bk.lastDay = today;
-            st.books[cur.key] = bk;
-            rdStatSave(st);
-        }
-        function rdStatFlushPending() {
-            if (_rdStatPending > 0) { var s = _rdStatPending; _rdStatPending = 0; rdStatAdd(s); }
-        }
-        function _rdStatTick() {
-            if (!(chatReadingMode || chatReaderMode)) return;
-            if (document.hidden) return;
-            if (Date.now() - _rdStatLastActive > RD_STAT_IDLE_MS) return;
-            _rdStatPending += RD_STAT_TICK_MS / 1000;
-            if (_rdStatPending >= 15) rdStatFlushPending();
-        }
-        function _rdStatMarkActive() { _rdStatLastActive = Date.now(); }
-        function rdStatInitTracking() {
-            setInterval(_rdStatTick, RD_STAT_TICK_MS);
-            ['touchstart', 'pointerdown', 'keydown', 'wheel'].forEach(function (ev) {
-                document.addEventListener(ev, _rdStatMarkActive, { passive: true, capture: true });
-            });
-            var cm = document.getElementById('chatMessages');
-            if (cm) cm.addEventListener('scroll', _rdStatMarkActive, { passive: true });
-            document.addEventListener('visibilitychange', function () { if (document.hidden) rdStatFlushPending(); });
-            window.addEventListener('pagehide', rdStatFlushPending);
-        }
-
-        /* ---- 统计面板（点 ⋮ / clawd 菜单「📊 统计」打开）---- */
-        var _rdStatViewKey = null;      // 当前查看的书 key；'__all__' = 全部合并
-        var _rdStatViewMonth = null;    // { y, m } 当前查看的月份
-        function rdStatFmtDur(sec) {
-            sec = Math.round(sec || 0);
-            var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
-            if (h > 0) return h + ' 小时 ' + m + ' 分';
-            if (m > 0) return m + ' 分钟';
-            return sec + ' 秒';
-        }
-        function rdStatFmtDate(s) { if (!s) return ''; var p = s.split('-'); return (+p[1]) + '月' + (+p[2]) + '日'; }
-        function rdStatDaysBetween(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
-        // 取统计；gid='__all__' 把所有书合并，否则取该分组的合并结果
-        function rdStatAggBook(st, gid) {
-            if (gid !== '__all__') {
-                var g = rdStatBuildGroups(st).map[gid];
-                return g ? { title: g.title, firstDay: g.firstDay, lastDay: g.lastDay, totalSec: g.totalSec, finishedDay: g.finishedDay, days: g.days } : null;
-            }
-            var ks = Object.keys(st.books);
-            if (!ks.length) return null;
-            var agg = { title: '全部书', firstDay: '', lastDay: '', totalSec: 0, finishedDay: '', days: {} };
-            for (var i = 0; i < ks.length; i++) {
-                var b = st.books[ks[i]];
-                agg.totalSec += b.totalSec || 0;
-                if (b.firstDay && (!agg.firstDay || b.firstDay < agg.firstDay)) agg.firstDay = b.firstDay;
-                if (b.lastDay && (!agg.lastDay || b.lastDay > agg.lastDay)) agg.lastDay = b.lastDay;
-                var dk = Object.keys(b.days || {});
-                for (var j = 0; j < dk.length; j++) agg.days[dk[j]] = (agg.days[dk[j]] || 0) + b.days[dk[j]];
-            }
-            return agg;
-        }
-        function rdStatShowPanel() {
-            var existing = document.querySelector('.rd-stat-modal-mask');
-            if (existing) { existing.remove(); return; }
-            rdStatMigrate();   // 旧「会话键」并到新「书文件键」，让同一本书的共读/纯阅读合并
-            var st = rdStatLoad();
-            var groups = rdStatBuildGroups(st);
-            var cur = rdStatCurBook();
-            var curGid = cur ? (groups.alias[rdStatGroupKey(cur.key, { title: cur.title })] || rdStatGroupKey(cur.key, { title: cur.title })) : null;
-            if (curGid && groups.map[curGid]) _rdStatViewKey = curGid;
-            else if (!_rdStatViewKey || (_rdStatViewKey !== '__all__' && !groups.map[_rdStatViewKey])) {
-                _rdStatViewKey = groups.order[0] || null;
-            }
-            _rdStatViewMonth = null;
-            var mask = document.createElement('div');
-            mask.className = 'chat-summary-modal-mask rd-stat-modal-mask';
-            var modal = document.createElement('div');
-            modal.className = 'chat-summary-modal';
-            modal.innerHTML = '<div class="chat-summary-modal-header"><span>阅读统计</span><button onclick="this.closest(\'.rd-stat-modal-mask\').remove()">✕</button></div><div class="chat-summary-modal-body" id="rdStatBody"></div>';
-            mask.appendChild(modal);
-            mask.addEventListener('click', function (ev) { if (ev.target === mask) mask.remove(); });
-            document.body.appendChild(mask);
-            rdStatRenderBody();
-        }
-        function rdStatRenderBody() {
-            var body = document.getElementById('rdStatBody');
-            if (!body) return;
-            rdStatHealTitles();   // 先按对话当前标题归拢，避免改名把一本书拆成两条
-            var st = rdStatLoad();
-            var groups = rdStatBuildGroups(st);
-            var gids = groups.order;
-            if (!gids.length) {
-                body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">还没有阅读记录<br><span style="font-size:11px">进共读 / 纯阅读看书，时长会自动记在这里<br>（只从现在开始记，以前的找不回来）</span></div>';
-                return;
-            }
-            if (_rdStatViewKey !== '__all__' && !groups.map[_rdStatViewKey]) _rdStatViewKey = gids[0];
-            var bk = rdStatAggBook(st, _rdStatViewKey);
-            if (!bk) { _rdStatViewKey = gids[0]; bk = rdStatAggBook(st, gids[0]); }
-            var sel = '<select id="rdStatBookSel" onchange="rdStatPickBook(this.value)" style="width:100%;padding:8px 10px;border-radius:10px;border:1px solid var(--card-border);background:var(--card-bg,#fff);color:var(--text);font-size:13px">';
-            sel += '<option value="__all__"' + (_rdStatViewKey === '__all__' ? ' selected' : '') + '>📚 全部（' + gids.length + ' 本合计）</option>';
-            for (var i = 0; i < gids.length; i++) {
-                var t = groups.map[gids[i]].title || '未命名';
-                sel += '<option value="' + escAttr(gids[i]) + '"' + (_rdStatViewKey === gids[i] ? ' selected' : '') + '>' + esc(t.length > 20 ? t.slice(0, 20) + '…' : t) + '</option>';
-            }
-            sel += '</select>';
-            var dayKeys = Object.keys(bk.days || {});
-            var readDays = dayKeys.length;
-            var maxDay = '', maxSec = 0;
-            for (var d = 0; d < dayKeys.length; d++) { if (bk.days[dayKeys[d]] > maxSec) { maxSec = bk.days[dayKeys[d]]; maxDay = dayKeys[d]; } }
-            var hlCount = 0;
-            var allHl = readingGetAllHl();
-            if (_rdStatViewKey === '__all__') { var hk = Object.keys(allHl); for (var h = 0; h < hk.length; h++) hlCount += (allHl[hk[h]] || []).length; }
-            else { var cids = rdStatConvIdsForKey(_rdStatViewKey); for (var ci = 0; ci < cids.length; ci++) hlCount += (allHl[cids[ci]] || []).length; }
-            // 提问数：书签里 type==='ask' 的条数，按本书涉及的所有会话 id 累加（共读+纯阅读）
-            var askCount = 0;
-            var allBm = readingGetAllBookmarks();
-            function _cntAsk(arr) { var n = 0; (arr || []).forEach(function (b) { if (b.type === 'ask') n++; }); return n; }
-            if (_rdStatViewKey === '__all__') { var bmk = Object.keys(allBm); for (var bi = 0; bi < bmk.length; bi++) askCount += _cntAsk(allBm[bmk[bi]]); }
-            else { var cids2 = rdStatConvIdsForKey(_rdStatViewKey); for (var ci2 = 0; ci2 < cids2.length; ci2++) askCount += _cntAsk(allBm[cids2[ci2]]); }
-            function card(label, big, sub) {
-                return '<div style="flex:1;min-width:0;background:var(--accent-light);border-radius:10px;padding:10px;text-align:center">'
-                    + '<div style="font-size:11px;color:var(--text-muted)">' + label + '</div>'
-                    + '<div style="font-size:15px;font-weight:700;color:var(--accent);margin:2px 0;white-space:nowrap">' + big + '</div>'
-                    + '<div style="font-size:10px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (sub || '&nbsp;') + '</div></div>';
-            }
-            var html = '';
-            html += '<div style="margin-bottom:12px">' + sel + '</div>';
-            if (bk.finishedDay && bk.firstDay) {
-                var spanDays = rdStatDaysBetween(bk.firstDay, bk.finishedDay) + 1;
-                html += '<div style="background:var(--accent-light);border-radius:10px;padding:8px 12px;margin-bottom:10px;text-align:center;font-size:13px;color:var(--accent);font-weight:600">🎉 ' + rdStatFmtDate(bk.finishedDay) + ' 读完 · 历时 ' + spanDays + ' 天</div>';
-            }
-            html += '<div style="display:flex;gap:8px;margin-bottom:8px">'
-                + card('累计时长', rdStatFmtDur(bk.totalSec), bk.firstDay ? (rdStatFmtDate(bk.firstDay) + ' 起') : '')
-                + card('阅读天数', readDays + ' 天', bk.lastDay ? ('上次 ' + rdStatFmtDate(bk.lastDay)) : '')
-                + '</div>';
-            html += '<div style="display:flex;gap:8px;margin-bottom:14px">'
-                + card('单日最久', maxSec ? rdStatFmtDur(maxSec) : '—', maxDay ? rdStatFmtDate(maxDay) : '')
-                + card('提问', askCount + ' 次', askCount ? '常问常新' : '')
-                + '</div>';
-            html += rdStatCalendarHtml(bk);
-            if (_rdStatViewKey !== '__all__') {
-                html += '<div style="text-align:center;margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">'
-                    + '<button onclick="rdStatRenameBook()" style="padding:7px 18px;border-radius:18px;border:1px solid var(--card-border);background:var(--card-bg,#fff);color:var(--text-sub);font-size:13px;cursor:pointer">✏️ 改名 / 合并</button>'
-                    + '<button onclick="rdStatToggleFinish()" style="padding:7px 18px;border-radius:18px;border:1px solid var(--card-border);background:var(--card-bg,#fff);color:var(--text-sub);font-size:13px;cursor:pointer">'
-                    + (bk.finishedDay ? '取消「读完」标记' : '✓ 标记为读完') + '</button></div>';
-            }
-            body.innerHTML = html;
-        }
-        function rdStatCalendarHtml(bk) {
-            var days = bk.days || {};
-            if (!_rdStatViewMonth) {
-                var base = bk.lastDay || rdStatTodayStr();
-                _rdStatViewMonth = { y: parseInt(base.slice(0, 4), 10), m: parseInt(base.slice(5, 7), 10) };
-            }
-            var y = _rdStatViewMonth.y, m = _rdStatViewMonth.m;
-            var startW = new Date(y, m - 1, 1).getDay();
-            var daysInMonth = new Date(y, m, 0).getDate();
-            var maxV = 0;
-            for (var dd = 1; dd <= daysInMonth; dd++) { var v = days[y + '-' + rdStatPad(m) + '-' + rdStatPad(dd)] || 0; if (v > maxV) maxV = v; }
-            function lvl(sec) { if (!sec) return 0; if (maxV <= 0) return 1; var r = sec / maxV; return r > 0.75 ? 4 : r > 0.5 ? 3 : r > 0.25 ? 2 : 1; }
-            var todayS = rdStatTodayStr();
-            var html = '<div class="rd-cal"><div class="rd-cal-head"><button onclick="rdStatNavMonth(-1)">‹</button><span>' + y + ' 年 ' + m + ' 月</span><button onclick="rdStatNavMonth(1)">›</button></div><div class="rd-cal-grid">';
-            ['日', '一', '二', '三', '四', '五', '六'].forEach(function (w) { html += '<div class="rd-cal-w">' + w + '</div>'; });
-            for (var b = 0; b < startW; b++) html += '<div class="rd-cal-cell rd-cal-empty"></div>';
-            for (var dn = 1; dn <= daysInMonth; dn++) {
-                var dstr = y + '-' + rdStatPad(m) + '-' + rdStatPad(dn);
-                var sec = days[dstr] || 0;
-                var mins = sec ? Math.max(1, Math.round(sec / 60)) : 0;
-                var cls = 'rd-cal-cell rd-cal-l' + lvl(sec) + (dstr === todayS ? ' rd-cal-today' : '');
-                html += '<div class="' + cls + '" data-d="' + dstr + '" data-sec="' + sec + '" onclick="rdStatDayTap(this)"><span class="rd-cal-num">' + dn + '</span>' + (sec ? '<span class="rd-cal-min">' + mins + '′</span>' : '') + '</div>';
-            }
-            html += '</div><div class="rd-cal-legend"><span>少</span><i class="rd-cal-l1"></i><i class="rd-cal-l2"></i><i class="rd-cal-l3"></i><i class="rd-cal-l4"></i><span>多</span></div></div>';
-            return html;
-        }
-        function rdStatPickBook(k) { _rdStatViewKey = k; _rdStatViewMonth = null; rdStatRenderBody(); }
-        function rdStatNavMonth(delta) {
-            if (!_rdStatViewMonth) return;
-            var m = _rdStatViewMonth.m + delta, y = _rdStatViewMonth.y;
-            if (m < 1) { m = 12; y--; } else if (m > 12) { m = 1; y++; }
-            _rdStatViewMonth = { y: y, m: m };
-            rdStatRenderBody();
-        }
-        function rdStatDayTap(el) {
-            var sec = +el.getAttribute('data-sec') || 0;
-            var dstr = el.getAttribute('data-d');
-            if (typeof showToast !== 'function') return;
-            showToast(sec ? (rdStatFmtDate(dstr) + ' 读了 ' + rdStatFmtDur(sec)) : (rdStatFmtDate(dstr) + ' 没有阅读记录'));
-        }
-        function rdStatToggleFinish() {
-            if (_rdStatViewKey === '__all__') return;
-            var st = rdStatLoad();
-            var g = rdStatBuildGroups(st).map[_rdStatViewKey];
-            if (!g) return;
-            var newVal = g.finishedDay ? '' : rdStatTodayStr();
-            for (var i = 0; i < g.keys.length; i++) { if (st.books[g.keys[i]]) st.books[g.keys[i]].finishedDay = newVal; }
-            rdStatSave(st);
-            rdStatRenderBody();
-            if (typeof showToast === 'function') showToast(newVal ? '🎉 标记为读完' : '已取消读完标记');
-        }
-        // 给这本书改名：把它名下所有记录（含底层共读对话）都改成新名字。
-        // 改成和另一本一模一样的名字，下次渲染就会自动合并成一本——这是用户手动合并两本书的入口。
-        function rdStatRenameBook() {
-            if (_rdStatViewKey === '__all__') return;
-            var st = rdStatLoad();
-            var groups = rdStatBuildGroups(st);
-            var g = groups.map[_rdStatViewKey];
-            if (!g) return;
-            var cur = (g.title && g.title !== '未命名') ? g.title : '';
-            var nv = prompt('给这本书改名（想合并两本？把名字改成跟另一本一模一样即可）', cur);
-            if (nv === null) return;
-            nv = nv.trim();
-            if (!nv || nv === cur) return;
-            // ① 底层共读对话也跟着改名，保证书名 = 对话名，自动归拢也认这个名
-            var list = chatGetHistory(), listDirty = false;
-            g.keys.forEach(function (k) {
-                if (k.indexOf('conv:') !== 0) return;
-                var cid = k.slice(5);
-                for (var i = 0; i < list.length; i++) { if (list[i].id === cid) { list[i].title = nv; list[i].aiTitle = true; list[i].updated = Date.now(); list[i]._dirty = true; listDirty = true; break; } }
-            });
-            if (listDirty) { chatSetHistory(list); if (chatView === 'list') chatRenderHistoryList(); if (typeof chatScheduleSyncPush === 'function') chatScheduleSyncPush(); }
-            // ② 这组所有存储记录的标题也写成新名（含没绑对话的旧键 / 纯阅读记录）
-            g.keys.forEach(function (k) { if (st.books[k]) st.books[k].title = nv; });
-            rdStatSave(st);
-            // ③ 跳到改名（可能已合并）后的那本书
-            var g2 = rdStatBuildGroups(rdStatLoad()), pick = '__all__';
-            for (var j = 0; j < g2.order.length; j++) { if (g2.map[g2.order[j]].title === nv) { pick = g2.order[j]; break; } }
-            _rdStatViewKey = pick;
-            _rdStatViewMonth = null;
-            rdStatRenderBody();
-            if (typeof showToast === 'function') showToast('已改名为「' + nv + '」');
-        }
-
         // 共读/翻译：更新本章阅读进度小标志
         function readingUpdateProgress() {
             var badge = document.getElementById('readingProgressInline');
@@ -23973,7 +23502,11 @@ body {
         var _rdTraceShown = [];       // 当前列表显示的条目（按 data-i 取回）
         function rdTraceTime(ts) { if (!ts) return ''; var d = new Date(ts); if (isNaN(d.getTime())) return ''; return (d.getMonth() + 1) + '月' + d.getDate() + '日'; }
         function rdTraceBookTitle() {
-            try { var c = rdStatCurBook(); if (c && c.title) return c.title; } catch (e) {}
+            try {
+                if (chatReaderMode && readerBookId && typeof rbGetBook === 'function') {
+                    var rb = rbGetBook(readerBookId); if (rb && (rb.title || rb.name)) return rb.title || rb.name;
+                }
+            } catch (e) {}
             try { var list = chatGetHistory(); for (var i = 0; i < list.length; i++) { if (list[i].id === chatCurrentConvId) return list[i].title || '未命名'; } } catch (e) {}
             return '未命名';
         }
