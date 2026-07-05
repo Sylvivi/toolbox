@@ -3356,6 +3356,9 @@ body {
         }
         .chat-hist-item:last-child { border-bottom: none; }
         @media (hover: hover) { .chat-hist-item:hover { background: var(--card-inner); } }
+        /* 会话分类左色条：共读=主题色，翻译=更浅的主题色，普通对话不加（inset 阴影不占布局） */
+        .chat-hist-item.chat-hist-reading { box-shadow: inset 4px 0 0 var(--accent); }
+        .chat-hist-item.chat-hist-translate { box-shadow: inset 4px 0 0 color-mix(in srgb, var(--accent) 38%, transparent); }
         .chat-hist-info { flex: 1; min-width: 0; }
         .chat-hist-title {
             font-size: 15px; font-weight: 500; color: var(--text);
@@ -14861,7 +14864,8 @@ body {
             for (var i = 0; i < list.length; i++) {
                 var c = list[i];
                 var msgCount = c.messages ? c.messages.length : 0;
-                h += '<div class="chat-hist-item" onclick="chatLoadConv(\'' + c.id + '\')">';
+                var _catCls = c.readingMode ? ' chat-hist-reading' : (c.translateMode ? ' chat-hist-translate' : '');
+                h += '<div class="chat-hist-item' + _catCls + '" onclick="chatLoadConv(\'' + c.id + '\')">';
                 h += '<div class="chat-hist-info">';
                 h += '<div class="chat-hist-title">' + (c.pinned ? '📌 ' : '') + esc(c.title || '新对话') + '</div>';
                 h += '<div class="chat-hist-meta">';
