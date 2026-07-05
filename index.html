@@ -11249,6 +11249,7 @@ body {
             readingApplyNames();
             readingRegisterLocalFonts();
             readingApplyFonts();
+            try { localStorage.removeItem('reading_stats'); } catch (e) {}   // 阅读时长统计已移除，顺手清掉各端残留的旧数据
         });
 
         /* =========================================================================
@@ -23510,6 +23511,20 @@ body {
             try { var list = chatGetHistory(); for (var i = 0; i < list.length; i++) { if (list[i].id === chatCurrentConvId) return list[i].title || '未命名'; } } catch (e) {}
             return '未命名';
         }
+        // 读痕条目所在章节标题：取该消息原文里、从这一段往上最近的一行「第X章…」标题（识别不出就留空）
+        function rdTraceChapterTitle(e) {
+            try {
+                if (!e || typeof e.msgIdx !== 'number') return '';
+                var orig = readingModeStripParaNums(readingModeGetOriginalText(e.msgIdx) || '');
+                if (!orig) return '';
+                var lines = orig.split('\n'), paras = [];
+                for (var i = 0; i < lines.length; i++) { var ln = lines[i].trim(); if (ln) paras.push(ln); }
+                var p = e.p || 0;
+                for (var j = Math.min(p, paras.length) - 1; j >= 0; j--) { if (READING_TITLE_RE.test(paras[j])) return paras[j].trim(); }
+                for (var k = 0; k < paras.length; k++) { if (READING_TITLE_RE.test(paras[k])) return paras[k].trim(); }
+            } catch (err) {}
+            return '';
+        }
         // 提问书签的答案不存在书签里，得回正文 msg.content 按 [Pn] 汐：问题 匹配捞出来
         function rdTraceAnswerFor(msgIdx, p, q) {
             try {
@@ -23636,7 +23651,8 @@ body {
         }
         function rdTraceItemHtml(e, i) {
             var del = '<button class="rd-trace-del" title="删除">✕</button>';
-            var meta = '第 ' + e.p + ' 段' + (rdTraceTime(e.sortTs) ? ' · ' + rdTraceTime(e.sortTs) : '');
+            var _chap = rdTraceChapterTitle(e);
+            var meta = (_chap ? esc(_chap) + ' · ' : '') + '第 ' + e.p + ' 段' + (rdTraceTime(e.sortTs) ? ' · ' + rdTraceTime(e.sortTs) : '');
             if (e.type === 'hl') {
                 return '<div class="rd-trace-item" data-i="' + i + '">' + del
                     + '<div class="rd-trace-hl"><span class="rd-trace-cdot" style="background:' + (RD_HL_SW[e.color] || '#f5c842') + '"></span>「' + esc(e.preview) + '」</div>'
