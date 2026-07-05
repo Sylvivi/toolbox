@@ -15149,6 +15149,15 @@ body {
                 readerChapterIdx = readerLastLoadedChapter();
                 if (typeof readerSchedulePrefetch === 'function' && readerChapterIdx >= 0) readerSchedulePrefetch(readerChapterIdx); // 进会话也后台备好前文摘要
             }
+            // 进会话就把本书记忆表格里的人名/地名自动并入高亮名单（只增不删），省得每次手动去「名单」里挑。
+            // 首次并入且还没开任何高亮样式时，默认打开「着色」，跟手动保存名单的行为一致。
+            if (chatReadingMode || chatReaderMode) {
+                try {
+                    var _nmAuto = readingAutoMergeNamesFromTables(readingContextMemTables(), readingNamesKey());
+                    if (_nmAuto && !readingNameAnyOn()) localStorage.setItem('reading_name_color', '1');
+                    if (_nmAuto) readingApplyNames();
+                } catch (e) {}
+            }
             if (chatReadingMode || chatTranslateMode) readingCollapseInput(); else readingExpandInput(false);
             setTimeout(readingUpdateProgress, 120);
             chatContextMax = conv.contextMax || 0;
