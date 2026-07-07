@@ -19360,10 +19360,12 @@ body {
                     folderTs[f] = mx;
                 });
                 rbFolderNames = Object.keys(groups).sort(function (a, b) {
-                    if (a === '' && b !== '') return 1;            // 未分类永远排最后
+                    // 有阅读记录的按最近时间(新→旧)排——未分类若读过也一起参与、会往上浮
+                    if (folderTs[a] !== folderTs[b]) return folderTs[b] - folderTs[a];
+                    // 时间相同(多为都没读过=0)：未分类垫底，其余按书数、再按名字
+                    if (a === '' && b !== '') return 1;
                     if (b === '' && a !== '') return -1;
-                    // 先按最近阅读时间(新→旧)，都没读过的退回按书数，再按名字
-                    return (folderTs[b] - folderTs[a]) || (groups[b].length - groups[a].length) || a.localeCompare(b, 'zh');
+                    return (groups[b].length - groups[a].length) || a.localeCompare(b, 'zh');
                 });
                 box.innerHTML = rbFolderNames.map(function (f, idx) {
                     var label = f === '' ? '未分类' : rbEsc(f);
