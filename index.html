@@ -17951,6 +17951,7 @@ body {
             if (typeof activeSyncProvider !== 'undefined' && activeSyncProvider === 'cf' && typeof syncPushData === 'function') {
                 clearTimeout(rbSetBookFolder._t); rbSetBookFolder._t = setTimeout(syncPushData, 1500);
             }
+            if (typeof bkSyncSetFolder === 'function') bkSyncSetFolder(fileKey, map[fileKey]);  // 顺手写回服务器，表里如一
         }
         function rbMoveBookFolder(id) {
             var b = rbGetBook(id); if (!b) return;
@@ -18057,6 +18058,14 @@ body {
             var cfg = bkSyncCfg(); if (!cfg || !book) return;
             var fk = book._fileKey || bkSyncKey(book);
             fetch(cfg.url + '/del', { method: 'POST', headers: bkSyncHeaders(cfg, true), body: JSON.stringify({ fileKey: fk }) }).catch(function () {});
+        }
+        // 把「移动到文件夹」写回服务器（更新那本书 meta 的 folder），让服务器和本地表里如一。静默、失败重试一次。
+        // 纯本地书（服务器没有）会 404，无害忽略。
+        function bkSyncSetFolder(fileKey, folder, _retry) {
+            var cfg = bkSyncCfg(); if (!cfg || !fileKey) return;
+            fetch(cfg.url + '/setfolder', { method: 'POST', headers: bkSyncHeaders(cfg, true), body: JSON.stringify({ fileKey: fileKey, folder: folder || '' }) })
+                .then(function (r) { if (!r.ok && r.status !== 404 && !_retry) setTimeout(function () { bkSyncSetFolder(fileKey, folder, true); }, 2000); })
+                .catch(function () { if (!_retry) setTimeout(function () { bkSyncSetFolder(fileKey, folder, true); }, 2000); });
         }
         // 云同步弹窗里的书籍服务器配置：填充/保存/测试
         function bkSyncUILoad() {
