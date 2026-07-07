@@ -16335,7 +16335,7 @@ body {
             var panesHtml = panes.map(function(p) { return '<div class="sm-pane' + (p.key === _activeKey ? ' active' : '') + '" data-pane="' + p.key + '">' + p.html + '</div>'; }).join('');
             modal.classList.toggle('has-tabs', panes.length > 1);   // 多标签时定高，避免切标签外框跳动
             modal.innerHTML = header + tabsBar + '<div class="chat-summary-modal-body">' + panesHtml + '</div>';
-            if (panes.length > 1) chatSummaryBindSwipe(modal.querySelector('.chat-summary-modal-body'));   // 多标签才绑左右滑切换
+            if (panes.length > 1) chatSummaryBindSwipe(modal);   // 多标签才绑左右滑切换（整个弹窗都能滑，更好滑）
             mask.appendChild(modal);
             mask.addEventListener('click', function(ev) { if (ev.target === mask) mask.remove(); });
             document.body.appendChild(mask);
@@ -16371,7 +16371,7 @@ body {
             chatSummarySwitchTab(keys[ni]);
             if (tabs[ni].scrollIntoView) tabs[ni].scrollIntoView({ inline: 'nearest', block: 'nearest' });
         }
-        // 给摘要弹窗正文区绑左右滑手势：向左滑→下一个 Tab、向右滑→上一个。
+        // 给摘要弹窗绑左右滑手势：向左滑→下一个 Tab、向右滑→上一个。整个弹窗都能滑。
         // 只认「明显横向」的滑动，竖向滚动/点按钮/编辑框选字都不触发。每次重建弹窗后调用一次。
         function chatSummaryBindSwipe(bodyEl) {
             if (!bodyEl) return;
