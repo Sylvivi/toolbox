@@ -18013,35 +18013,43 @@ body {
             if (json) h['Content-Type'] = 'application/json';
             return h;
         }
-        // 拉清单：把「服务器有、本地没有」的书作为占位塞进 rbBooks（占位不落盘），拉到后重渲染书架
+        // 把一份清单(items)注入书架：清掉旧占位，把「服务器有、本地没有」的书作为占位塞进 rbBooks（占位不落盘）
+        function bkSyncInjectManifest(items) {
+            var localKeys = {};
+            for (var i = 0; i < rbBooks.length; i++) if (!rbBooks[i]._remote) localKeys[bkSyncKey(rbBooks[i])] = 1;
+            rbBooks = rbBooks.filter(function (b) { return !b._remote; });   // 先清掉旧占位，避免重复
+            var added = 0;
+            Object.keys(items).forEach(function (fk) {
+                if (fk.indexOf(FONT_KEY_PREFIX) === 0) return; // 字体条目：不当书注入书架
+                if (localKeys[fk]) return;                     // 本地已有正本，跳过
+                var m = items[fk] || {};
+                rbBooks.push({
+                    id: 'remote_' + (m.hash || Math.random().toString(36).slice(2)),
+                    fileName: m.fileName || (fk.split('|')[0]) || '未命名',
+                    fileSize: m.fileSize || 0,
+                    chapters: [], _remote: true, _fileKey: fk, _nchap: m.nchap || 0, _folder: m.folder || ''
+                });
+                added++;
+            });
+            var sv = document.getElementById('rbShelfView');
+            if (sv && sv.style.display !== 'none' && typeof rbRenderShelf === 'function') rbRenderShelf();
+            return added;
+        }
+        function bkSyncManifestCacheLoad() { try { var o = JSON.parse(localStorage.getItem('books_manifest_cache') || 'null'); return (o && typeof o === 'object') ? o : null; } catch (e) { return null; } }
+        // 拉清单：先用「上次缓存的清单」秒出书架，再联网刷新对账（stale-while-revalidate），避免每次打开都干等网络
         function bkSyncPullManifest(cb) {
             var cfg = bkSyncCfg(); if (!cfg) { if (cb) cb(); return; }
+            var cached = bkSyncManifestCacheLoad();
+            if (cached) bkSyncInjectManifest(cached);   // 先拿缓存瞬间铺满书架
             fetch(cfg.url + '/manifest', { headers: bkSyncHeaders(cfg) })
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (d) {
                     if (!d || !d.items) { if (cb) cb(); return; }
-                    var localKeys = {};
-                    for (var i = 0; i < rbBooks.length; i++) if (!rbBooks[i]._remote) localKeys[bkSyncKey(rbBooks[i])] = 1;
-                    // 先清掉旧占位，避免重复
-                    rbBooks = rbBooks.filter(function (b) { return !b._remote; });
-                    var added = 0;
-                    Object.keys(d.items).forEach(function (fk) {
-                        if (fk.indexOf(FONT_KEY_PREFIX) === 0) return; // 字体条目：不当书注入书架
-                        if (localKeys[fk]) return;               // 本地已有正本，跳过
-                        var m = d.items[fk] || {};
-                        rbBooks.push({
-                            id: 'remote_' + (m.hash || Math.random().toString(36).slice(2)),
-                            fileName: m.fileName || (fk.split('|')[0]) || '未命名',
-                            fileSize: m.fileSize || 0,
-                            chapters: [], _remote: true, _fileKey: fk, _nchap: m.nchap || 0, _folder: m.folder || ''
-                        });
-                        added++;
-                    });
-                    var sv = document.getElementById('rbShelfView');
-                    if (sv && sv.style.display !== 'none' && typeof rbRenderShelf === 'function') rbRenderShelf();
+                    try { localStorage.setItem('books_manifest_cache', JSON.stringify(d.items)); } catch (e) {}
+                    var added = bkSyncInjectManifest(d.items);   // 联网结果再刷新一遍（有增删就更新）
                     if (cb) cb(added);
                 })
-                .catch(function () { if (cb) cb(); });
+                .catch(function () { if (cb) cb(); });   // 联网失败也没关系，缓存那份还在
         }
         // 按需下载整本：占位书点开时调，成功后用真数据替换占位并落盘。cb(fullBook|false)
         function bkSyncDownload(book, cb) {
