@@ -19971,6 +19971,7 @@ body {
             var open = p.style.display !== 'none';
             p.style.display = open ? 'none' : 'flex';
             if (arrow) arrow.style.transform = open ? '' : 'rotate(90deg)';
+            if (!open) { try { bkSyncPullFonts(); } catch (e) {} }  // 展开字体面板时同步一次（拉服务器新字体 + 补传本地独有）
         }
         // 「＋ 添加字体」：默认收起，点击才展开
         function readingToggleAddFont() {
@@ -20316,20 +20317,32 @@ body {
                 .then(function (r) { if (!r.ok && !_retry) setTimeout(function () { bkSyncPushFont(f, true); }, 2000); })
                 .catch(function () { if (!_retry) setTimeout(function () { bkSyncPushFont(f, true); }, 2000); });
         }
-        // 把「服务器有、本地没有」的字体全部拉回来，存 IDB 并注册（换设备自动补齐）。收齐后统一落盘一次，避免并发覆盖
+        // 字体双向同步：把「服务器有、本地没有」的拉回本地并注册；同时把「本地有、服务器没有」的补传上去
+        // （换设备自动补齐 + 修掉「配服务器前就已存在的字体从没上传」的盲区）。收齐后统一落盘一次，避免并发覆盖。
+        // 4 秒轻节流：这函数现在挂在冷启动 + 打开书架 + 展开字体面板三处，防短时间内被反复触发狂拉 manifest。
+        var _bkFontSyncAt = 0;
         function bkSyncPullFonts(cb) {
             var cfg = bkSyncCfg(); if (!cfg) { if (cb) cb(); return; }
+            var _now = Date.now();
+            if (_now - _bkFontSyncAt < 4000) { if (cb) cb(); return; }
+            _bkFontSyncAt = _now;
             fetch(cfg.url + '/manifest', { headers: bkSyncHeaders(cfg) })
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (d) {
                     if (!d || !d.items) { if (cb) cb(); return; }
-                    var local = {}; readingLocalFontsLoad().forEach(function (f) { local[f.name] = 1; });
-                    var need = [];
+                    var localArr = readingLocalFontsLoad();
+                    var local = {}; localArr.forEach(function (f) { local[f.name] = 1; });
+                    var serverNames = {}, need = [];
                     Object.keys(d.items).forEach(function (fk) {
                         if (fk.indexOf(FONT_KEY_PREFIX) !== 0) return;       // 只要字体条目
                         var nm = fk.slice(FONT_KEY_PREFIX.length);
-                        if (nm && !local[nm]) need.push(fk);
+                        if (!nm) return;
+                        serverNames[nm] = 1;
+                        if (!local[nm]) need.push(fk);
                     });
+                    // 本地有、服务器没有的 → 补传（错开发送，别一次性挤爆）。修掉「只有新选文件那刻才上传」的盲区。
+                    localArr.filter(function (f) { return f && f.name && f.buf && !serverNames[f.name]; })
+                            .forEach(function (f, i) { setTimeout(function () { bkSyncPushFont(f); }, i * 300); });
                     if (!need.length) { if (cb) cb(0); return; }
                     var left = need.length, fetched = [];
                     function finalize() {
@@ -20376,6 +20389,7 @@ body {
         function rbOpenShelf() {
             rbLoad();
             bkSyncPullManifest();  // 拉服务器书单，把本地没有的书作为占位注入书架（异步，拉到再重渲染）
+            try { bkSyncPullFonts(); } catch (e) {}  // 字体也顺手双向同步（拉服务器新字体 + 补传本地独有），不再只靠冷启动
             // 如果当前处于阅读模式，标记书架是为阅读器选书（点章节直接跳转阅读）
             if (chatReaderMode) {
                 rbPickForReader = true;
