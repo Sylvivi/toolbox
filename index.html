@@ -5863,11 +5863,10 @@ body {
             purplepink: '#0c0c0e',
             iceblue: '#0c0c0e'
         };
-        // 白底遮罩的几种白：点「白底」chip 按 off→pure→soft→warm→concrete→off 循环。
+        // 白底遮罩的几种白：点「白底」chip 按 off→soft→warm→concrete→off 循环。（纯白已下线）
         // cls 对应 CSS 里的 body.xxx-mask-on，color 是不透明同色（状态栏 / iPad 底边补色用）。
-        var MASK_TINTS = ['off', 'pure', 'soft', 'warm', 'concrete'];
+        var MASK_TINTS = ['off', 'soft', 'warm', 'concrete'];
         var MASK_TINT_INFO = {
-            pure:  { cls: 'pure-mask-on',  label: '纯白', color: '#FFFFFF' },
             soft:  { cls: 'soft-mask-on',  label: '柔白', color: '#FFFFFF' },
             warm:  { cls: 'warm-mask-on',  label: '暖白', color: '#FFF8F0' },
             concrete: { cls: 'concrete-mask-on', label: '水泥白', color: '#f1efe9' }
@@ -17233,6 +17232,10 @@ body {
             if (localStorage.getItem('reading_mask_tint') === null) {
                 localStorage.setItem('reading_mask_tint', localStorage.getItem('reading_warm_mask') === '1' ? 'warm' : 'off');
             }
+            // 迁移3：纯白已下线 → 落到最接近的柔白（选过纯白的老用户不至于突然没了遮罩）
+            if (localStorage.getItem('reading_mask_tint') === 'pure') {
+                localStorage.setItem('reading_mask_tint', 'soft');
+            }
             var t = localStorage.getItem('reading_mask_tint');
             return MASK_TINT_INFO[t] ? t : 'off';
         }
@@ -17249,7 +17252,7 @@ body {
             }
             updateStatusBarColor();
         }
-        // 点「白底」chip：按 关→纯白→柔白→暖白→水泥白→关 循环
+        // 点「白底」chip：按 关→柔白→暖白→水泥白→关 循环（纯白已下线）
         function readingToggleWarmMask() {
             var cur = readingGetMaskTint();
             var next = MASK_TINTS[(MASK_TINTS.indexOf(cur) + 1) % MASK_TINTS.length];
