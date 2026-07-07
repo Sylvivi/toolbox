@@ -10005,6 +10005,8 @@ body {
                 bookTitlesTs: rbTitlesTs(),
                 bookFolders: rbFoldersLoad(),
                 bookFoldersTs: rbFoldersTs(),
+                bookOpened: rbOpenedLoad(),
+                bookOpenedTs: rbOpenedTs(),
                 favModels: (function () { try { return JSON.parse(localStorage.getItem('chat_fav_models') || '[]'); } catch (e) { return []; } })(),
                 favModelsTs: localStorage.getItem('chat_fav_models_ts') || '',
                 modelPrices: (function () { try { return JSON.parse(localStorage.getItem('toolbox_model_prices') || '{}'); } catch (e) { return {}; } })(),
@@ -10277,6 +10279,15 @@ body {
                     if (cloudBfTs > rbFoldersTs()) {
                         localStorage.setItem('reading_book_folders', JSON.stringify(manifest.bookFolders));
                         localStorage.setItem('reading_book_folders_ts', cloudBfTs);
+                    }
+                }
+
+                // 书籍「最近打开」时间: 整块按时间戳后写覆盖（书架文件夹排序用）
+                if (manifest.bookOpened) {
+                    var cloudBoTs = manifest.bookOpenedTs || '';
+                    if (cloudBoTs > rbOpenedTs()) {
+                        localStorage.setItem('reading_book_opened', JSON.stringify(manifest.bookOpened));
+                        localStorage.setItem('reading_book_opened_ts', cloudBoTs);
                     }
                 }
 
@@ -10632,6 +10643,7 @@ body {
                 if (manifest.highlights) { localStorage.setItem('reading_highlights', JSON.stringify(manifest.highlights)); if (manifest.highlightsTs) localStorage.setItem('reading_highlights_ts', manifest.highlightsTs); }
                 if (manifest.bookTitles) { localStorage.setItem('reading_book_titles', JSON.stringify(manifest.bookTitles)); if (manifest.bookTitlesTs) localStorage.setItem('reading_book_titles_ts', manifest.bookTitlesTs); }
                 if (manifest.bookFolders) { localStorage.setItem('reading_book_folders', JSON.stringify(manifest.bookFolders)); if (manifest.bookFoldersTs) localStorage.setItem('reading_book_folders_ts', manifest.bookFoldersTs); }
+                if (manifest.bookOpened) { localStorage.setItem('reading_book_opened', JSON.stringify(manifest.bookOpened)); if (manifest.bookOpenedTs) localStorage.setItem('reading_book_opened_ts', manifest.bookOpenedTs); }
                 if (manifest.favModels) { try { localStorage.setItem('chat_fav_models', JSON.stringify(manifest.favModels)); localStorage.setItem('chat_fav_models_ts', manifest.favModelsTs || new Date().toISOString()); chatFavModels = manifest.favModels; if (typeof chatUpdateFavHeader === 'function') chatUpdateFavHeader(); } catch (e) {} }
                 if (manifest.modelPrices) { try { localStorage.setItem('toolbox_model_prices', JSON.stringify(manifest.modelPrices)); localStorage.setItem('toolbox_model_prices_ts', manifest.modelPricesTs || new Date().toISOString()); } catch (e) {} }
                 readingApplyFontSync(manifest); // 字体库+五个位置选择，带时间戳护栏（修复开机被云端旧值冲掉的问题）
@@ -17968,6 +17980,24 @@ body {
             showToast(nv.trim() ? ('已移到「' + nv.trim() + '」') : '已移到未分类');
         }
 
+        /* ===== 书籍「最近打开」时间 =====
+           每次打开一本书（共读/阅读器都走 rbOpenBook）就记个时间戳，reading_book_opened = { "文件名|大小": 毫秒时间 }。
+           书架文件夹按它排序（最近读的文件夹排前面），跟着 CF 云同步跨设备。比只认阅读器进度更准。 */
+        function rbOpenedLoad() { try { var o = JSON.parse(localStorage.getItem('reading_book_opened') || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }
+        function rbOpenedTs() { return localStorage.getItem('reading_book_opened_ts') || ''; }
+        function rbMarkOpened(fileKey) {
+            if (!fileKey) return;
+            var map = rbOpenedLoad();
+            map[fileKey] = Date.now();
+            try {
+                localStorage.setItem('reading_book_opened', JSON.stringify(map));
+                localStorage.setItem('reading_book_opened_ts', new Date().toISOString());
+            } catch (e) {}
+            if (typeof activeSyncProvider !== 'undefined' && activeSyncProvider === 'cf' && typeof syncPushData === 'function') {
+                clearTimeout(rbMarkOpened._t); rbMarkOpened._t = setTimeout(syncPushData, 2500);
+            }
+        }
+
         /* ===== 书籍服务器同步（正文太大不进 CF，单独存自己服务器；全自动 + 按需下载） =====
            书本地为主、服务器只当镜像。fileKey = 文件名|大小（与阅读进度同键，跨设备认同一本书）。
            本地已有的书照常用；服务器独有的书只在书架放「占位」，点开那本才下正文。 */
@@ -19315,12 +19345,18 @@ body {
             if (rbCurrentFolder === null) {
                 // —— 文件夹列表视图 ——
                 setTitle('📚 书架', null);
-                // 每个文件夹取「里面所有书里最近一次阅读时间」，用来把最近读过的文件夹排前面
+                // 每个文件夹取「里面所有书里最近一次阅读/打开时间」，用来把最近读过的文件夹排前面
+                // 信号取两者较新的：rbMarkOpened 记的「打开时间」(共读+阅读器都算) 和 reader_pos 的阅读器进度时间
                 var rp = (typeof readerPosAll === 'function') ? readerPosAll() : {};
+                var op = rbOpenedLoad();
                 var folderTs = {};
                 Object.keys(groups).forEach(function (f) {
                     var mx = 0;
-                    groups[f].forEach(function (b) { var t = (rp[rbBookEffKey(b)] || {}).ts || 0; if (t > mx) mx = t; });
+                    groups[f].forEach(function (b) {
+                        var k = rbBookEffKey(b);
+                        var t = Math.max((rp[k] || {}).ts || 0, op[k] || 0);
+                        if (t > mx) mx = t;
+                    });
                     folderTs[f] = mx;
                 });
                 rbFolderNames = Object.keys(groups).sort(function (a, b) {
@@ -19410,6 +19446,7 @@ body {
             document.getElementById('rbShelfView').style.display = 'none';
             document.getElementById('rbChapterView').style.display = '';
             document.getElementById('rbBookTitle').textContent = rbBookDisplayName(b);
+            rbMarkOpened(rbBookEffKey(b));   // 记「最近打开」时间，供书架文件夹按最近阅读排序
             var ps = document.getElementById('rbPresetSelect'); if (ps) ps.value = b.preset || 'auto';
             var cs = document.getElementById('rbChapterSearch'); if (cs) cs.value = '';
             // 阅读模式下「发下一章」是共读专用，隐藏掉
