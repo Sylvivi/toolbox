@@ -16335,6 +16335,7 @@ body {
             var panesHtml = panes.map(function(p) { return '<div class="sm-pane' + (p.key === _activeKey ? ' active' : '') + '" data-pane="' + p.key + '">' + p.html + '</div>'; }).join('');
             modal.classList.toggle('has-tabs', panes.length > 1);   // 多标签时定高，避免切标签外框跳动
             modal.innerHTML = header + tabsBar + '<div class="chat-summary-modal-body">' + panesHtml + '</div>';
+            if (panes.length > 1) chatSummaryBindSwipe(modal.querySelector('.chat-summary-modal-body'));   // 多标签才绑左右滑切换
             mask.appendChild(modal);
             mask.addEventListener('click', function(ev) { if (ev.target === mask) mask.remove(); });
             document.body.appendChild(mask);
@@ -16355,6 +16356,42 @@ body {
             for (var j = 0; j < tabs.length; j++) tabs[j].classList.toggle('active', tabs[j].getAttribute('data-tab') === key);
             var b = modal.querySelector('.chat-summary-modal-body');
             if (b) b.scrollTop = 0;   // 换页回到顶部
+        }
+        // 切到相邻 Tab：dir=+1 下一个 / -1 上一个（到头不循环）。给左右滑手势和键盘用。
+        function chatSummaryStepTab(dir) {
+            var modal = document.querySelector('.chat-summary-modal');
+            if (!modal) return;
+            var tabs = [].slice.call(modal.querySelectorAll('.sm-tab'));
+            if (tabs.length < 2) return;
+            var keys = tabs.map(function(t) { return t.getAttribute('data-tab'); });
+            var cur = keys.indexOf(_chatSummaryActiveTab);
+            if (cur < 0) cur = 0;
+            var ni = cur + dir;
+            if (ni < 0 || ni >= keys.length) return;
+            chatSummarySwitchTab(keys[ni]);
+            if (tabs[ni].scrollIntoView) tabs[ni].scrollIntoView({ inline: 'nearest', block: 'nearest' });
+        }
+        // 给摘要弹窗正文区绑左右滑手势：向左滑→下一个 Tab、向右滑→上一个。
+        // 只认「明显横向」的滑动，竖向滚动/点按钮/编辑框选字都不触发。每次重建弹窗后调用一次。
+        function chatSummaryBindSwipe(bodyEl) {
+            if (!bodyEl) return;
+            var sx = 0, sy = 0, tracking = false;
+            bodyEl.addEventListener('touchstart', function(e) {
+                if (e.touches.length !== 1) { tracking = false; return; }
+                var tg = e.target;
+                // 落在编辑框/按钮/输入框上时不抢手势（留给选字、点按钮）
+                if (tg && tg.closest && (tg.closest('textarea') || tg.closest('input') || tg.closest('button'))) { tracking = false; return; }
+                sx = e.touches[0].clientX; sy = e.touches[0].clientY; tracking = true;
+            }, { passive: true });
+            bodyEl.addEventListener('touchend', function(e) {
+                if (!tracking) return; tracking = false;
+                var t = e.changedTouches[0];
+                var dx = t.clientX - sx, dy = t.clientY - sy;
+                // 横移够大(>55px)且明显比竖移长，才当成切标签，避免和上下滚动打架
+                if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+                    chatSummaryStepTab(dx < 0 ? 1 : -1);
+                }
+            }, { passive: true });
         }
         // 记忆表格列定义（全局，供压缩函数和弹窗共用）
         var _mtCharCols = ['人物', '身份', '关系', '当前状态', '备注'];
