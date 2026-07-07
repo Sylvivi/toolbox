@@ -4951,8 +4951,8 @@ body {
         <div class="chat-settings-body">
             <div id="rbShelfView">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin:6px 0 14px">
-                    <div style="font-size:15px;font-weight:700;color:var(--text)">📚 书架</div>
-                    <button class="rb-btn rb-btn-primary" onclick="document.getElementById('rbFileInput').click()">＋ 添加书</button>
+                    <div id="rbShelfTitle" style="font-size:15px;font-weight:700;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📚 书架</div>
+                    <button class="rb-btn rb-btn-primary" style="flex-shrink:0" onclick="document.getElementById('rbFileInput').click()">＋ 添加书</button>
                 </div>
                 <input type="file" id="rbFileInput" accept=".txt,.md,.markdown,.text,.epub,.mobi,.azw,.azw3" style="display:none" onchange="rbOnFilePick(this)">
                 <div id="rbShelfList"></div>
@@ -10002,6 +10002,8 @@ body {
                 highlightsTs: readingGetHlTs(),
                 bookTitles: rbTitlesLoad(),
                 bookTitlesTs: rbTitlesTs(),
+                bookFolders: rbFoldersLoad(),
+                bookFoldersTs: rbFoldersTs(),
                 favModels: (function () { try { return JSON.parse(localStorage.getItem('chat_fav_models') || '[]'); } catch (e) { return []; } })(),
                 favModelsTs: localStorage.getItem('chat_fav_models_ts') || '',
                 modelPrices: (function () { try { return JSON.parse(localStorage.getItem('toolbox_model_prices') || '{}'); } catch (e) { return {}; } })(),
@@ -10265,6 +10267,15 @@ body {
                     if (cloudBtTs > rbTitlesTs()) {
                         localStorage.setItem('reading_book_titles', JSON.stringify(manifest.bookTitles));
                         localStorage.setItem('reading_book_titles_ts', cloudBtTs);
+                    }
+                }
+
+                // 书籍文件夹(移动): 整块按时间戳后写覆盖，跨设备传播移动/归类
+                if (manifest.bookFolders) {
+                    var cloudBfTs = manifest.bookFoldersTs || '';
+                    if (cloudBfTs > rbFoldersTs()) {
+                        localStorage.setItem('reading_book_folders', JSON.stringify(manifest.bookFolders));
+                        localStorage.setItem('reading_book_folders_ts', cloudBfTs);
                     }
                 }
 
@@ -10619,6 +10630,7 @@ body {
                 if (manifest.bookmarks) { localStorage.setItem('reading_bookmarks', JSON.stringify(manifest.bookmarks)); if (manifest.bookmarksTs) localStorage.setItem('reading_bookmarks_ts', manifest.bookmarksTs); }
                 if (manifest.highlights) { localStorage.setItem('reading_highlights', JSON.stringify(manifest.highlights)); if (manifest.highlightsTs) localStorage.setItem('reading_highlights_ts', manifest.highlightsTs); }
                 if (manifest.bookTitles) { localStorage.setItem('reading_book_titles', JSON.stringify(manifest.bookTitles)); if (manifest.bookTitlesTs) localStorage.setItem('reading_book_titles_ts', manifest.bookTitlesTs); }
+                if (manifest.bookFolders) { localStorage.setItem('reading_book_folders', JSON.stringify(manifest.bookFolders)); if (manifest.bookFoldersTs) localStorage.setItem('reading_book_folders_ts', manifest.bookFoldersTs); }
                 if (manifest.favModels) { try { localStorage.setItem('chat_fav_models', JSON.stringify(manifest.favModels)); localStorage.setItem('chat_fav_models_ts', manifest.favModelsTs || new Date().toISOString()); chatFavModels = manifest.favModels; if (typeof chatUpdateFavHeader === 'function') chatUpdateFavHeader(); } catch (e) {} }
                 if (manifest.modelPrices) { try { localStorage.setItem('toolbox_model_prices', JSON.stringify(manifest.modelPrices)); localStorage.setItem('toolbox_model_prices_ts', manifest.modelPricesTs || new Date().toISOString()); } catch (e) {} }
                 readingApplyFontSync(manifest); // 字体库+五个位置选择，带时间戳护栏（修复开机被云端旧值冲掉的问题）
@@ -17916,6 +17928,42 @@ body {
             showToast(nv ? ('已改名为「' + nv + '」') : '已恢复原文件名');
         }
 
+        /* ===== 书籍文件夹（作者分类）=====
+           每本书归到一个文件夹。来源两处：服务器 manifest 带的 _folder（我按你 Readingo 分类填好），
+           和本地「移动到文件夹」的覆盖表 reading_book_folders = { "文件名|大小": "文件夹名" }（''=未分类）。
+           本地覆盖优先，跟着 CF 云同步(整块按时间戳覆盖)，一台设备移动、所有设备都变。 */
+        function rbBookEffKey(b) { return (b && b._fileKey) ? b._fileKey : rbBookFileKey(b); }
+        function rbFoldersLoad() { try { var o = JSON.parse(localStorage.getItem('reading_book_folders') || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }
+        function rbFoldersTs() { return localStorage.getItem('reading_book_folders_ts') || ''; }
+        function rbBookFolder(b) {
+            if (!b) return '';
+            var ov = rbFoldersLoad()[rbBookEffKey(b)];
+            if (ov != null) return ov;          // 本地移动过：以本地为准（''=未分类，能盖过服务器分类）
+            return b._folder || '';             // 否则用服务器给的分类
+        }
+        function rbSetBookFolder(fileKey, folder) {
+            var map = rbFoldersLoad();
+            map[fileKey] = (folder || '').trim();   // 显式记（含空串），才能盖过服务器分类
+            try {
+                localStorage.setItem('reading_book_folders', JSON.stringify(map));
+                localStorage.setItem('reading_book_folders_ts', new Date().toISOString());
+            } catch (e) {}
+            if (typeof activeSyncProvider !== 'undefined' && activeSyncProvider === 'cf' && typeof syncPushData === 'function') {
+                clearTimeout(rbSetBookFolder._t); rbSetBookFolder._t = setTimeout(syncPushData, 1500);
+            }
+        }
+        function rbMoveBookFolder(id) {
+            var b = rbGetBook(id); if (!b) return;
+            var cur = rbBookFolder(b);
+            var set = {}; rbBooks.forEach(function (x) { var f = rbBookFolder(x); if (f) set[f] = 1; });
+            var names = Object.keys(set).sort(function (a, b) { return a.localeCompare(b, 'zh'); });
+            var nv = prompt('把《' + rbBookDisplayName(b) + '》移到哪个文件夹？\n（直接输入文件夹名；留空 = 未分类）\n现有文件夹：' + (names.join('、') || '（暂无）'), cur);
+            if (nv === null) return;
+            rbSetBookFolder(rbBookEffKey(b), nv);
+            rbRenderShelf();
+            showToast(nv.trim() ? ('已移到「' + nv.trim() + '」') : '已移到未分类');
+        }
+
         /* ===== 书籍服务器同步（正文太大不进 CF，单独存自己服务器；全自动 + 按需下载） =====
            书本地为主、服务器只当镜像。fileKey = 文件名|大小（与阅读进度同键，跨设备认同一本书）。
            本地已有的书照常用；服务器独有的书只在书架放「占位」，点开那本才下正文。 */
@@ -17951,7 +17999,7 @@ body {
                             id: 'remote_' + (m.hash || Math.random().toString(36).slice(2)),
                             fileName: m.fileName || (fk.split('|')[0]) || '未命名',
                             fileSize: m.fileSize || 0,
-                            chapters: [], _remote: true, _fileKey: fk, _nchap: m.nchap || 0
+                            chapters: [], _remote: true, _fileKey: fk, _nchap: m.nchap || 0, _folder: m.folder || ''
                         });
                         added++;
                     });
@@ -17972,6 +18020,7 @@ body {
                     if (!full || !full.chapters || !full.chapters.length) { if (cb) cb(false); return; }
                     full.id = 'bk_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6); // 本地新 id
                     delete full._remote; delete full._fileKey; delete full._nchap;
+                    if (book && book._folder) full._folder = book._folder;   // 下载后保住服务器给的文件夹，别掉进未分类
                     var replaced = false;
                     for (var i = 0; i < rbBooks.length; i++) {
                         if (rbBooks[i]._remote && (rbBooks[i]._fileKey === fk)) { rbBooks[i] = full; replaced = true; break; }
@@ -18141,6 +18190,7 @@ body {
 
         function rbOpenShelf() {
             rbLoad();
+            rbCurrentFolder = null;   // 每次打开书架先回到「文件夹列表」这一层
             bkSyncPullManifest();  // 拉服务器书单，把本地没有的书作为占位注入书架（异步，拉到再重渲染）
             try { bkSyncPullFonts(); } catch (e) {}  // 字体也顺手双向同步（拉服务器新字体 + 补传本地独有），不再只靠冷启动
             // 如果当前处于阅读模式，标记书架是为阅读器选书（点章节直接跳转阅读）
@@ -19212,27 +19262,71 @@ body {
             return true;
         }
 
+        // 单本书的一行 HTML（文件夹内视图 + 兼容无文件夹时用）
+        function rbBookItemHtml(b) {
+            var name = rbEsc(rbBookDisplayName(b));
+            var more = '<button class="rb-book-more" onclick="event.stopPropagation();rbBookMenuOpen(\'' + b.id + '\',event)" title="更多">⋯</button>';
+            if (b._remote) {
+                return '<div class="rb-book" onclick="rbOpenBook(\'' + b.id + '\')">' + more
+                    + '<span class="rb-book-icon">☁️</span>'
+                    + '<div class="rb-book-info"><div class="rb-book-name">' + name + '</div><div class="rb-book-meta">' + (b._nchap || 0) + ' 章 · 点击下载</div></div></div>';
+            }
+            var prog = (b.lastChapter != null && b.lastChapter >= 0) ? ('读到 ' + (b.lastChapter + 1) + '/' + b.chapters.length + ' 章') : (b.chapters.length + ' 章');
+            return '<div class="rb-book" onclick="rbOpenBook(\'' + b.id + '\')">' + more
+                + '<span class="rb-book-icon">' + rbBookEmoji(b) + '</span>'
+                + '<div class="rb-book-info"><div class="rb-book-name">' + name + '</div><div class="rb-book-meta">' + prog + '</div></div></div>';
+        }
+        // 书架当前所在层：null=文件夹列表；字符串=某文件夹内（''=未分类）
+        var rbCurrentFolder = null;
+        var rbFolderNames = [];   // 文件夹列表视图记下的名字，供 rbOpenFolder 按序号取（避免 onclick 传中文名转义问题）
         function rbRenderShelf() {
             var box = document.getElementById('rbShelfList');
+            var titleEl = document.getElementById('rbShelfTitle');
+            function setTitle(html, back) {
+                if (!titleEl) return;
+                titleEl.innerHTML = html;
+                titleEl.onclick = back || null;
+                titleEl.style.cursor = back ? 'pointer' : 'default';
+            }
             if (!rbBooks.length) {
+                setTitle('📚 书架', null);
+                rbCurrentFolder = null;
                 box.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:34px 0;line-height:1.7">书架还是空的<br>点右上角「＋ 添加书」上传 txt / md / epub / mobi</div>';
                 return;
             }
-            box.innerHTML = rbBooks.map(function (b) {
-                var name = rbEsc(rbBookDisplayName(b));
-                var more = '<button class="rb-book-more" onclick="event.stopPropagation();rbBookMenuOpen(\'' + b.id + '\',event)" title="更多">⋯</button>';
-                // 服务器独有的占位书：点开才下载正文；☁️ 图标提示未下载，菜单里只给「改名」（删除下次拉清单还会回来，走原删除逻辑）
-                if (b._remote) {
-                    return '<div class="rb-book" onclick="rbOpenBook(\'' + b.id + '\')">' + more
-                        + '<span class="rb-book-icon">☁️</span>'
-                        + '<div class="rb-book-info"><div class="rb-book-name">' + name + '</div><div class="rb-book-meta">' + (b._nchap || 0) + ' 章 · 点击下载</div></div></div>';
-                }
-                var prog = (b.lastChapter != null && b.lastChapter >= 0) ? ('读到 ' + (b.lastChapter + 1) + '/' + b.chapters.length + ' 章') : (b.chapters.length + ' 章');
-                return '<div class="rb-book" onclick="rbOpenBook(\'' + b.id + '\')">' + more
-                    + '<span class="rb-book-icon">' + rbBookEmoji(b) + '</span>'
-                    + '<div class="rb-book-info"><div class="rb-book-name">' + name + '</div><div class="rb-book-meta">' + prog + '</div></div></div>';
-            }).join('');
+            // 按文件夹分组
+            var groups = {};
+            for (var i = 0; i < rbBooks.length; i++) {
+                var f = rbBookFolder(rbBooks[i]) || '';
+                (groups[f] = groups[f] || []).push(rbBooks[i]);
+            }
+            if (rbCurrentFolder === null) {
+                // —— 文件夹列表视图 ——
+                setTitle('📚 书架', null);
+                rbFolderNames = Object.keys(groups).sort(function (a, b) {
+                    if (a === '' && b !== '') return 1;            // 未分类永远排最后
+                    if (b === '' && a !== '') return -1;
+                    return groups[b].length - groups[a].length || a.localeCompare(b, 'zh');
+                });
+                box.innerHTML = rbFolderNames.map(function (f, idx) {
+                    var label = f === '' ? '未分类' : rbEsc(f);
+                    return '<div class="rb-book" onclick="rbOpenFolder(' + idx + ')">'
+                        + '<span class="rb-book-icon">📁</span>'
+                        + '<div class="rb-book-info"><div class="rb-book-name">' + label + '</div><div class="rb-book-meta">' + groups[f].length + ' 本</div></div>'
+                        + '<span style="flex-shrink:0;color:var(--text-muted);font-size:17px;margin-left:6px">›</span></div>';
+                }).join('');
+            } else {
+                // —— 某文件夹内 ——
+                var cur = rbCurrentFolder;
+                var list = groups[cur] || [];
+                setTitle('‹ 📁 ' + (cur === '' ? '未分类' : rbEsc(cur)), rbFolderBack);
+                box.innerHTML = list.length
+                    ? list.map(rbBookItemHtml).join('')
+                    : '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:34px 0">这个文件夹空了<br><span onclick="rbFolderBack()" style="color:var(--accent);cursor:pointer">‹ 返回文件夹</span></div>';
+            }
         }
+        function rbOpenFolder(idx) { rbCurrentFolder = rbFolderNames[idx] != null ? rbFolderNames[idx] : null; rbRenderShelf(); }
+        function rbFolderBack() { rbCurrentFolder = null; rbRenderShelf(); }
         // 给每本书分一个固定的书本 emoji（按文件键哈希定死，同一本永远同一个，摆出来像一排彩色书脊）
         var RB_BOOK_EMOJIS = ['📕', '📗', '📘', '📙', '📓', '📔', '📒'];
         function rbBookEmoji(b) {
@@ -19250,6 +19344,7 @@ body {
             menu.className = 'chat-hist-menu';
             menu.style.display = 'block';
             var items = '<div onclick="rbBookMenuAction(\'rename\')">✏️ 改名</div>';
+            items += '<div onclick="rbBookMenuAction(\'move\')">📁 移动到文件夹</div>';
             if (!b._remote) items += '<div class="danger" onclick="rbBookMenuAction(\'delete\')">🗑️ 删除</div>';
             else items += '<div class="danger" onclick="rbBookMenuAction(\'delete\')">🗑️ 从云端删除</div>';
             menu.innerHTML = items;
@@ -19267,6 +19362,7 @@ body {
             var id = rbBookMenuId; rbBookMenuClose();
             if (!id) return;
             if (action === 'rename') rbRenameBook(id);
+            else if (action === 'move') rbMoveBookFolder(id);
             else if (action === 'delete') rbDeleteBook(id);
         }
 

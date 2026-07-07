@@ -1,4 +1,4 @@
-var CACHE = 'toolbox-v5';
+var CACHE = 'toolbox-v6';
 var PRECACHE = ['./', 'index.html', 'manifest.json'];
 
 self.addEventListener('install', function(e) {
