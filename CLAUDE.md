@@ -4,7 +4,8 @@
 > 服务器/运维（订阅桥、书库服务、Caddy、cron 等）的敏感拓扑**不在这里**——见服务器本地私有文件 `SERVER-OPS.md`（已 gitignore、不入公开仓）。
 
 ## 项目概况
-- **单文件 HTML PWA**：核心就是 `index.html`（约 2.6 万行 / 约 2.6MB，JS/CSS 全部内联）。**不要拆成多文件**，用户要求保持单文件。
+- **单文件 HTML PWA**：核心就是 `index.html`（约 2.4 万行 / 约 1.4MB，JS/CSS 全部内联）。**不要拆成多文件**，用户要求保持单文件。
+- **⚠️ `#chatMessages` 容器必须保持空**（源码里应是 `<div class="chat-messages" id="chatMessages"></div>`）。它是运行时消息/阅读内容的渲染区，app 启动会清空重渲染——**绝不能让渲染后的正文/点评被冻进源码**。曾有一整段《傲慢与偏见》阅读快照误存进去，白白撑大文件 1.2MB（2026-07-07 已清）。多半是**从运行中的网页整页保存/导出**导致的，改动后留意别把 DOM 快照写回源码；发现文件异常变大先 grep 书中人名/`class="chat-msg"` 排查这里。
 - **部署**：GitHub Pages，仓库 `Sylvivi/toolbox`、分支 `main`。线上 https://sylvivi.github.io/toolbox/ ，**自定义域**（免梯子）`https://tool.masterofmydomain.top`（Cloudflare CNAME → sylvivi.github.io）。
 - **更新机制**：network-first 的 service worker，推送后过一两分钟刷新页面即生效。
 - **主要用途**：用户主要用「共读模式」读长篇小说（如天龙八部），其次翻译模式、普通对话模式。
