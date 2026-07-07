@@ -2371,6 +2371,17 @@ body {
         .sheet-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
         .sheet-tab-body { display: none; }
         .sheet-tab-body.active { display: block; }
+        /* 摘要弹窗顶部 Tab（人物/地点/年表/主线/摘要）：pill 风格，5 个标签手机上可左右滑 */
+        .sm-tabs { display: flex; gap: 6px; padding: 10px 16px 0; overflow-x: auto; scrollbar-width: none; }
+        .sm-tabs::-webkit-scrollbar { display: none; }
+        .sm-tab {
+            flex-shrink: 0; padding: 6px 13px; font-size: 12.5px; font-weight: 600; white-space: nowrap;
+            color: var(--text-muted); background: var(--input-bg); border: 1px solid var(--card-border);
+            border-radius: 9px; cursor: pointer; transition: all 0.2s;
+        }
+        .sm-tab.active { color: #fff; background: var(--accent); border-color: var(--accent); }
+        .sm-pane { display: none; }
+        .sm-pane.active { display: block; }
         /* 设置面板内的小子tab（主题 / clawd皮肤 / 气泡装饰） */
         .opt-subtabs { display: flex; gap: 6px; margin-bottom: 12px; }
         .opt-subtab {
@@ -16225,20 +16236,22 @@ body {
                     + '<div class="seg-collapse" onclick="chatToggleSummarySeg(this)" style="display:none;text-align:center;font-size:11px;color:var(--accent);padding:7px 0 2px;cursor:pointer">▴ 收起</div>'
                     + '</div>';
             }
-            var body = '';
+            var panes = [];   // 每个 Tab 一块内容：{key,label,html}
             // 记忆表格「补齐/重建」入口（共读模式且已有分段摘要时才显示）：中途同步丢章导致表格缺回，
-            // 用它按现有摘要重折补齐——只花一次调用、不重新总结正文。
+            // 用它按现有摘要重折补齐——只花一次调用、不重新总结正文。挂在每张记忆表 Tab 顶部。
+            var rebuildBar = '';
             if (chatReadingMode && chatCompressSummaries.length) {
                 var _mt = chatMemoryTables || {};
                 var _mtCount = (_mt.characters || []).length + (_mt.places || []).length + (_mt.timeline || []).length + (_mt.plotlines || []).length;
                 var _mtStatus = _mtCount ? ('记忆表格 · 共 ' + _mtCount + ' 行') : '尚未生成记忆表格';
-                body += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;margin-bottom:12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px">'
+                rebuildBar = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;margin-bottom:12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px">'
                     + '<div style="min-width:0;font-size:11.5px;line-height:1.5;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🧠 ' + _mtStatus + '</div>'
                     + '<button onclick="chatRebuildMemTables(this)" title="按现有的分段摘要重新折算记忆表格（补齐同步丢失的回目，不重新总结正文）" style="flex-shrink:0;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap">补齐/重建</button>'
                     + '</div>';
             }
-            // 结构化记忆表格（共读模式）
-            if (chatMemoryTables && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length)) {
+            // 结构化记忆表格（共读模式）——每张表各成一个 Tab
+            var _hasMem = chatMemoryTables && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length);
+            if (_hasMem) {
                 function _mtRowHtml(tableName, row, idx, cols) {
                     var esc = function(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
                     var preview = cols.map(function(c) { return esc(row[c]||''); }).join(' · ');
@@ -16266,76 +16279,79 @@ body {
                         }).join('')
                         + '</div></div>';
                 }
-                // 人物表（即使为空也显示标题和添加按钮，方便手动加回）
-                body += '<div class="seg" style="padding-bottom:6px">'
-                    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
-                    + '<span class="seg-label" style="margin:0">👤 人物表 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + chatMemoryTables.characters.length + ' 人</span></span>'
-                    + '<button onclick="chatAddMtRow(\'characters\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
-                    + '</div>';
-                for (var ci = 0; ci < chatMemoryTables.characters.length; ci++) {
-                    body += _mtRowHtml('characters', chatMemoryTables.characters[ci], ci, _mtCharCols);
+                // 一张表 → 一个 Tab：表头（数量 + 添加）+ 各行 + 空态，顶部带「补齐/重建」条
+                function _mtTablePane(icon, title, unit, tableName, rows, cols) {
+                    var h = rebuildBar
+                        + '<div class="seg" style="padding-bottom:6px">'
+                        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
+                        + '<span class="seg-label" style="margin:0">' + icon + ' ' + title + ' <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + rows.length + ' ' + unit + '</span></span>'
+                        + '<button onclick="chatAddMtRow(\'' + tableName + '\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
+                        + '</div>';
+                    for (var i = 0; i < rows.length; i++) h += _mtRowHtml(tableName, rows[i], i, cols);
+                    if (!rows.length) h += '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">暂无数据，下次生成摘要时自动填充</div>';
+                    return h + '</div>';
                 }
-                if (!chatMemoryTables.characters.length) body += '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">暂无数据，下次生成摘要时自动填充</div>';
-                body += '</div>';
-                // 地点表
-                var _places = chatMemoryTables.places || [];
-                body += '<div class="seg" style="padding-bottom:6px">'
-                    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
-                    + '<span class="seg-label" style="margin:0">📍 地点表 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + _places.length + ' 处</span></span>'
-                    + '<button onclick="chatAddMtRow(\'places\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
-                    + '</div>';
-                for (var li = 0; li < _places.length; li++) {
-                    body += _mtRowHtml('places', _places[li], li, _mtPlaceCols);
-                }
-                if (!_places.length) body += '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">暂无数据，下次生成摘要时自动填充</div>';
-                body += '</div>';
-                // 大事年表
-                var _timeline = chatMemoryTables.timeline || [];
-                body += '<div class="seg" style="padding-bottom:6px">'
-                    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
-                    + '<span class="seg-label" style="margin:0">🕰️ 大事年表 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + _timeline.length + ' 条</span></span>'
-                    + '<button onclick="chatAddMtRow(\'timeline\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
-                    + '</div>';
-                for (var ti = 0; ti < _timeline.length; ti++) {
-                    body += _mtRowHtml('timeline', _timeline[ti], ti, _mtTimeCols);
-                }
-                if (!_timeline.length) body += '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">暂无数据，下次生成摘要时自动填充</div>';
-                body += '</div>';
-                // 主线表
-                body += '<div class="seg" style="padding-bottom:6px">'
-                    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
-                    + '<span class="seg-label" style="margin:0">📖 主线/伏笔 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + chatMemoryTables.plotlines.length + ' 条</span></span>'
-                    + '<button onclick="chatAddMtRow(\'plotlines\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
-                    + '</div>';
-                for (var pi = 0; pi < chatMemoryTables.plotlines.length; pi++) {
-                    body += _mtRowHtml('plotlines', chatMemoryTables.plotlines[pi], pi, _mtPlotCols);
-                }
-                if (!chatMemoryTables.plotlines.length) body += '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">暂无数据，下次生成摘要时自动填充</div>';
-                body += '</div>';
+                panes.push({ key: 'characters', label: '👤 人物', html: _mtTablePane('👤', '人物表', '人', 'characters', chatMemoryTables.characters, _mtCharCols) });
+                panes.push({ key: 'places', label: '📍 地点', html: _mtTablePane('📍', '地点表', '处', 'places', chatMemoryTables.places || [], _mtPlaceCols) });
+                panes.push({ key: 'timeline', label: '🕰️ 年表', html: _mtTablePane('🕰️', '大事年表', '条', 'timeline', chatMemoryTables.timeline || [], _mtTimeCols) });
+                panes.push({ key: 'plotlines', label: '📖 主线', html: _mtTablePane('📖', '主线/伏笔', '条', 'plotlines', chatMemoryTables.plotlines, _mtPlotCols) });
             }
-            // 旧的自由文本大纲（兼容旧对话）
-            else if (chatCompressOutline) {
-                body += _segHtml('📜 全程大纲（已折入前 ' + (chatOutlineCovers || 0) + ' 段）', 'chatDeleteOutline()', 'data-outline="1"', 'chatEditOutline(this)', chatCompressOutline);
+            // 分段摘要（+ 兼容旧的自由文本大纲）——单独一个 Tab
+            var _sumHtml = '';
+            if (!_hasMem && rebuildBar) _sumHtml += rebuildBar;   // 没有记忆表格时，补齐入口挂到摘要页顶部
+            if (!_hasMem && chatCompressOutline) {
+                _sumHtml += _segHtml('📜 全程大纲（已折入前 ' + (chatOutlineCovers || 0) + ' 段）', 'chatDeleteOutline()', 'data-outline="1"', 'chatEditOutline(this)', chatCompressOutline);
             }
-            if (!chatCompressSummaries.length && !chatCompressOutline && !(chatMemoryTables && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length))) {
-                body = '<div class="empty">' + (chatCompressEnabled ? '压缩已开启，尚无摘要' : '压缩未开启') + '</div>';
-            } else {
+            if (chatCompressSummaries.length) {
                 // 倒序显示：最新生成的段在最上面，方便查看（发送给 AI 时仍按正序，不受影响）
                 var _segHtmls = [];
                 for (var i = chatCompressSummaries.length - 1; i >= 0; i--) {
                     _segHtmls.push(_segHtml('段 ' + (i + 1), 'chatDeleteSummaryseg(' + i + ')', 'data-seg-idx="' + i + '"', 'chatEditSummaryseg(this)', chatCompressSummaries[i], 'chatRegenerateSummarySeg(' + i + ')'));
                 }
                 // 段多了列表太长：前 7 段直接显示，其余收进「展开剩余 N 项」
-                body += _apiCollapseRows(_segHtmls, 7);
-                if (chatCompressSummaries.length) body += '<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:8px">共 ' + chatCompressedCount + ' 条消息已压缩为 ' + chatCompressSummaries.length + ' 段（最新在上）</div>';
+                _sumHtml += _apiCollapseRows(_segHtmls, 7);
+                _sumHtml += '<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:8px">共 ' + chatCompressedCount + ' 条消息已压缩为 ' + chatCompressSummaries.length + ' 段（最新在上）</div>';
             }
-            modal.innerHTML = header + '<div class="chat-summary-modal-body">' + body + '</div>';
+            if (_sumHtml) panes.push({ key: 'summary', label: '📝 摘要', html: _sumHtml });
+            // 空态：一块内容都没有（跟以前一样显示提示、不出 Tab 栏）
+            if (!panes.length) {
+                modal.innerHTML = header + '<div class="chat-summary-modal-body"><div class="empty">' + (chatCompressEnabled ? '压缩已开启，尚无摘要' : '压缩未开启') + '</div></div>';
+                mask.appendChild(modal);
+                mask.addEventListener('click', function(ev) { if (ev.target === mask) mask.remove(); });
+                document.body.appendChild(mask);
+                return;
+            }
+            // 选定当前 Tab：新打开(restoreScroll 未传)默认第一个；内部重建(传了滚动位置)时保持上次所在 Tab
+            if (restoreScroll === undefined) _chatSummaryActiveTab = null;
+            var _activeKey = _chatSummaryActiveTab;
+            if (!panes.some(function(p) { return p.key === _activeKey; })) _activeKey = panes[0].key;
+            _chatSummaryActiveTab = _activeKey;
+            // 只有一块内容就不出 Tab 栏（普通对话只有分段摘要时，界面跟以前一致）
+            var tabsBar = panes.length > 1
+                ? '<div class="sm-tabs">' + panes.map(function(p) { return '<button class="sm-tab' + (p.key === _activeKey ? ' active' : '') + '" data-tab="' + p.key + '" onclick="chatSummarySwitchTab(\'' + p.key + '\')">' + p.label + '</button>'; }).join('') + '</div>'
+                : '';
+            var panesHtml = panes.map(function(p) { return '<div class="sm-pane' + (p.key === _activeKey ? ' active' : '') + '" data-pane="' + p.key + '">' + p.html + '</div>'; }).join('');
+            modal.innerHTML = header + tabsBar + '<div class="chat-summary-modal-body">' + panesHtml + '</div>';
             mask.appendChild(modal);
             mask.addEventListener('click', function(ev) { if (ev.target === mask) mask.remove(); });
             document.body.appendChild(mask);
             // 打开默认在顶部（记忆表格在上面，先看表）；删除重建时恢复到删除前的位置
             var bodyEl = modal.querySelector('.chat-summary-modal-body');
             if (bodyEl && typeof restoreScroll === 'number') bodyEl.scrollTop = restoreScroll;
+        }
+        // 摘要弹窗当前所在 Tab（人物/地点/年表/主线/摘要）：记住它，删/加行重建弹窗后停在同一页、不跳回第一页
+        var _chatSummaryActiveTab = null;
+        // 切 Tab：纯显示切换（藏/露对应内容块），不触发任何生成/请求
+        function chatSummarySwitchTab(key) {
+            var modal = document.querySelector('.chat-summary-modal');
+            if (!modal) return;
+            _chatSummaryActiveTab = key;
+            var panes = modal.querySelectorAll('.sm-pane');
+            for (var i = 0; i < panes.length; i++) panes[i].classList.toggle('active', panes[i].getAttribute('data-pane') === key);
+            var tabs = modal.querySelectorAll('.sm-tab');
+            for (var j = 0; j < tabs.length; j++) tabs[j].classList.toggle('active', tabs[j].getAttribute('data-tab') === key);
+            var b = modal.querySelector('.chat-summary-modal-body');
+            if (b) b.scrollTop = 0;   // 换页回到顶部
         }
         // 记忆表格列定义（全局，供压缩函数和弹窗共用）
         var _mtCharCols = ['人物', '身份', '关系', '当前状态', '备注'];
