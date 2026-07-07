@@ -2344,6 +2344,8 @@ body {
         .theme-clay .chat-summary-modal { background: rgba(245,248,255,0.7); }
         .theme-blueorange .chat-summary-modal { background: rgba(237,242,252,0.7); }
         .theme-tealblue .chat-summary-modal { background: rgba(240,248,248,0.7); }
+        /* 分标签页时给弹窗定高：切标签只在内部滚动，外框不再随内容多少一高一低地跳 */
+        .chat-summary-modal.has-tabs { height: 82vh; }
         .chat-summary-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--card-border); }
         .chat-summary-modal-header span { font-size: 14px; font-weight: 600; color: var(--text); }
         .chat-summary-modal-header button { background: none; border: none; font-size: 18px; color: var(--text-muted); cursor: pointer; padding: 0 4px; }
@@ -16331,6 +16333,7 @@ body {
                 ? '<div class="sm-tabs">' + panes.map(function(p) { return '<button class="sm-tab' + (p.key === _activeKey ? ' active' : '') + '" data-tab="' + p.key + '" onclick="chatSummarySwitchTab(\'' + p.key + '\')">' + p.label + '</button>'; }).join('') + '</div>'
                 : '';
             var panesHtml = panes.map(function(p) { return '<div class="sm-pane' + (p.key === _activeKey ? ' active' : '') + '" data-pane="' + p.key + '">' + p.html + '</div>'; }).join('');
+            modal.classList.toggle('has-tabs', panes.length > 1);   // 多标签时定高，避免切标签外框跳动
             modal.innerHTML = header + tabsBar + '<div class="chat-summary-modal-body">' + panesHtml + '</div>';
             mask.appendChild(modal);
             mask.addEventListener('click', function(ev) { if (ev.target === mask) mask.remove(); });
