@@ -18447,8 +18447,10 @@ body {
                 + '<button onclick="readerToggleSummaryEnabled()" style="flex-shrink:0;width:46px;height:26px;border:none;border-radius:13px;cursor:pointer;position:relative;transition:background 0.2s;background:' + (enabled ? 'var(--accent)' : 'var(--card-border)') + '">'
                 + '<span style="position:absolute;top:3px;left:' + (enabled ? '23px' : '3px') + ';width:20px;height:20px;border-radius:50%;background:#fff;transition:left 0.2s"></span></button>'
                 + '</div>';
-            var body = toggle;
-            // 记忆表格状态行 + 手动「补齐/重建」按钮（有摘要可用时才显示，让用户看得见它活没活、卡没卡）
+            // 「自动总结前情」总开关是全局控件——放在标签栏上方常驻，切标签都看得见
+            var toggleBar = '<div style="padding:12px 16px 0">' + toggle + '</div>';
+            // 记忆表格状态 + 「补齐/重建」条（有摘要可用时才显示）——挂在每张记忆表 Tab 顶部
+            var rebuildBar = '';
             if (chaps.length) {
                 var _rawMt = (readerSummariesAll()[fileKey] || {}).memTables;
                 var _covered = (_rawMt && _rawMt.upTo >= 0) ? ('已覆盖至第 ' + readerChapterNo(_bSum, _rawMt.upTo) + ' 章') : '尚未生成';
@@ -18457,12 +18459,13 @@ body {
                 var _statusLine = _err
                     ? '<span style="color:#e5484d">⚠ 上次更新失败：' + (_err.msg || '未知错误').replace(/</g, '&lt;') + ' · 点右侧重试</span>'
                     : '<span style="color:var(--text-muted)">🧠 记忆表格 · ' + _covered + _when + '</span>';
-                body += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;margin-bottom:10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px">'
+                rebuildBar = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;margin-bottom:10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px">'
                     + '<div style="min-width:0;font-size:11.5px;line-height:1.5;overflow:hidden;text-overflow:ellipsis">' + _statusLine + '</div>'
                     + '<button onclick="readerRebuildMemTables(this)" style="flex-shrink:0;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap">补齐/重建</button>'
                     + '</div>';
             }
-            // 记忆表格（优先显示）
+            var panes = [];   // 每个 Tab 一块内容：{key,label,html}
+            // 记忆表格——每张表各成一个 Tab
             var _rmt = readerMemTablesGet(fileKey);
             if (_rmt) {
                 var esc = function(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
@@ -18492,49 +18495,29 @@ body {
                         }).join('')
                         + '</div></div>';
                 }
-                // 人物表
-                body += '<div class="seg" style="padding-bottom:6px">'
-                    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
-                    + '<span class="seg-label" style="margin:0">👤 人物表 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + _rmt.characters.length + ' 人</span></span>'
-                    + '<button onclick="readerAddMtRow(\'characters\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
-                    + '</div>';
-                for (var rci = 0; rci < _rmt.characters.length; rci++) body += _rmtRowHtml('characters', _rmt.characters[rci], rci, _mtCharCols);
-                if (!_rmt.characters.length) body += '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">暂无数据，开启自动总结后自动填充</div>';
-                body += '</div>';
-                // 地点表
-                var _rplaces = _rmt.places || [];
-                body += '<div class="seg" style="padding-bottom:6px">'
-                    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
-                    + '<span class="seg-label" style="margin:0">📍 地点表 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + _rplaces.length + ' 处</span></span>'
-                    + '<button onclick="readerAddMtRow(\'places\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
-                    + '</div>';
-                for (var rli = 0; rli < _rplaces.length; rli++) body += _rmtRowHtml('places', _rplaces[rli], rli, _mtPlaceCols);
-                if (!_rplaces.length) body += '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">暂无数据，开启自动总结后自动填充</div>';
-                body += '</div>';
-                // 大事年表
-                var _rtimeline = _rmt.timeline || [];
-                body += '<div class="seg" style="padding-bottom:6px">'
-                    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
-                    + '<span class="seg-label" style="margin:0">🕰️ 大事年表 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + _rtimeline.length + ' 条</span></span>'
-                    + '<button onclick="readerAddMtRow(\'timeline\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
-                    + '</div>';
-                for (var rti = 0; rti < _rtimeline.length; rti++) body += _rmtRowHtml('timeline', _rtimeline[rti], rti, _mtTimeCols);
-                if (!_rtimeline.length) body += '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">暂无数据，开启自动总结后自动填充</div>';
-                body += '</div>';
-                // 主线表
-                body += '<div class="seg" style="padding-bottom:6px">'
-                    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
-                    + '<span class="seg-label" style="margin:0">📖 主线/伏笔 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + _rmt.plotlines.length + ' 条</span></span>'
-                    + '<button onclick="readerAddMtRow(\'plotlines\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
-                    + '</div>';
-                for (var rpi = 0; rpi < _rmt.plotlines.length; rpi++) body += _rmtRowHtml('plotlines', _rmt.plotlines[rpi], rpi, _mtPlotCols);
-                if (!_rmt.plotlines.length) body += '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">暂无数据，开启自动总结后自动填充</div>';
-                body += '</div>';
+                // 一张表 → 一个 Tab：顶部「补齐/重建」条 + 表头（数量 + 添加）+ 各行 + 空态
+                function _rmtTablePane(icon, title, unit, tableName, rows, cols) {
+                    var h = rebuildBar
+                        + '<div class="seg" style="padding-bottom:6px">'
+                        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
+                        + '<span class="seg-label" style="margin:0">' + icon + ' ' + title + ' <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + rows.length + ' ' + unit + '</span></span>'
+                        + '<button onclick="readerAddMtRow(\'' + tableName + '\')" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer">+ 添加</button>'
+                        + '</div>';
+                    for (var i = 0; i < rows.length; i++) h += _rmtRowHtml(tableName, rows[i], i, cols);
+                    if (!rows.length) h += '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">暂无数据，开启自动总结后自动填充</div>';
+                    return h + '</div>';
+                }
+                panes.push({ key: 'characters', label: '人物', html: _rmtTablePane('👤', '人物表', '人', 'characters', _rmt.characters, _mtCharCols) });
+                panes.push({ key: 'places', label: '地点', html: _rmtTablePane('📍', '地点表', '处', 'places', _rmt.places || [], _mtPlaceCols) });
+                panes.push({ key: 'timeline', label: '年表', html: _rmtTablePane('🕰️', '大事年表', '条', 'timeline', _rmt.timeline || [], _mtTimeCols) });
+                panes.push({ key: 'plotlines', label: '主线', html: _rmtTablePane('📖', '主线/伏笔', '条', 'plotlines', _rmt.plotlines, _mtPlotCols) });
             }
-            // 旧大纲（兼容：有表格时不显示，只有老书没表格才显示）
+            // 摘要 Tab：兼容旧大纲 + 章节摘要（默认露前 7 章、其余折叠进「展开剩余」）
+            var _sumHtml = '';
+            if (!_rmt && rebuildBar) _sumHtml += rebuildBar;   // 没有记忆表格时，补齐入口挂到摘要页顶部
             var _ol = readerOutlineGet(fileKey);
             if (_ol && !_rmt) {
-                body += '<div class="seg">'
+                _sumHtml += '<div class="seg">'
                     + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
                     + '<span class="seg-label" style="margin-bottom:0">📜 全书大纲（至第 ' + readerChapterNo(_bSum, _ol.upTo) + ' 章）</span>'
                     + '<button onclick="readerDeleteOutline()" style="background:none;border:none;font-size:12px;color:var(--text-muted);cursor:pointer;padding:2px 6px;border-radius:6px;transition:color 0.2s" onmouseover="this.style.color=\'#e55\'" onmouseout="this.style.color=\'var(--text-muted)\'">🗑 删除</button>'
@@ -18542,18 +18525,15 @@ body {
                     + '<textarea data-rsum-outline="1" oninput="readerEditOutline(this);this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'" style="width:100%;min-height:90px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:var(--text);resize:none;font-family:inherit;outline:none;overflow:hidden">' + _ol.sum.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>'
                     + '</div>';
             }
-            if (!chaps.length && !_ol && !_rmt) {
-                body += enabled
-                    ? '<div class="empty">还没有摘要。<br>继续往下读，后台会悄悄把前面章节总结好存这里；提问时也会自动补上。</div>'
-                    : '<div class="empty">自动总结已关闭。<br>打开上面的开关，读这本书时就会在后台把前面章节总结好，供提问时给 AI 当前情。</div>';
-            } else {
+            if (chaps.length) {
                 // 章节摘要：默认折叠，只露两行预览，点标题/预览展开成编辑框（复用共读的 chatToggleSummarySeg）
                 // 倒序显示：最新章节在最上面，方便查看（提问时仍按章节正序发给 AI，不受影响）
+                var _segHtmls = [];
                 for (var i = chaps.length - 1; i >= 0; i--) {
                     var ch = chaps[i];
                     var sum = (cell[ch] && cell[ch].sum) || '';
                     var escSum = sum.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                    body += '<div class="seg" data-rsum-chap="' + ch + '">'
+                    _segHtmls.push('<div class="seg" data-rsum-chap="' + ch + '">'
                         + '<div onclick="chatToggleSummarySeg(this)" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;cursor:pointer">'
                         + '<span class="seg-label" style="margin-bottom:0">第 ' + readerChapterNo(_bSum, ch) + ' 章 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + sum.length + ' 字</span></span>'
                         + '<span style="display:flex;align-items:center;gap:6px">'
@@ -18563,18 +18543,43 @@ body {
                         + '<div class="seg-preview" onclick="chatToggleSummarySeg(this)" style="font-size:12.5px;line-height:1.6;color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer">' + escSum + '</div>'
                         + '<textarea data-rsum-chap="' + ch + '" oninput="readerEditSummary(this);this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'" style="display:none;width:100%;min-height:90px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:var(--text);resize:none;font-family:inherit;outline:none;overflow:hidden">' + escSum + '</textarea>'
                         + '<div class="seg-collapse" onclick="chatToggleSummarySeg(this)" style="display:none;text-align:center;font-size:11px;color:var(--accent);padding:7px 0 2px;cursor:pointer">▴ 收起</div>'
-                        + '</div>';
+                        + '</div>');
                 }
-                body += '<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:8px">共 ' + chaps.length + ' 章已生成摘要' + (enabled ? ' · 删除后会重新生成' : ' · 已关闭自动总结，不再新增（已有的提问仍会带上）') + '</div>';
+                _sumHtml += _apiCollapseRows(_segHtmls, 7);
+                _sumHtml += '<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:8px">共 ' + chaps.length + ' 章已生成摘要' + (enabled ? ' · 删除后会重新生成' : ' · 已关闭自动总结，不再新增（已有的提问仍会带上）') + '</div>';
             }
-            modal.innerHTML = header + '<div class="chat-summary-modal-body">' + body + '</div>';
+            if (_sumHtml) panes.push({ key: 'summary', label: '摘要', html: _sumHtml });
+            // 空态：一块内容都没有——只出总开关和提示，不出 Tab 栏
+            if (!panes.length) {
+                var _emptyMsg = enabled
+                    ? '还没有摘要。<br>继续往下读，后台会悄悄把前面章节总结好存这里；提问时也会自动补上。'
+                    : '自动总结已关闭。<br>打开上面的开关，读这本书时就会在后台把前面章节总结好，供提问时给 AI 当前情。';
+                modal.innerHTML = header + toggleBar + '<div class="chat-summary-modal-body"><div class="empty">' + _emptyMsg + '</div></div>';
+                mask.appendChild(modal);
+                mask.addEventListener('click', function (ev) { if (ev.target === mask) mask.remove(); });
+                document.body.appendChild(mask);
+                return;
+            }
+            // 选定当前 Tab：新打开(restoreScroll 未传)默认第一个；内部重建(传了滚动位置)时保持上次所在 Tab
+            if (restoreScroll === undefined) _chatSummaryActiveTab = null;
+            var _activeKey = _chatSummaryActiveTab;
+            if (!panes.some(function(p) { return p.key === _activeKey; })) _activeKey = panes[0].key;
+            _chatSummaryActiveTab = _activeKey;
+            // 只有一块内容（没记忆表格、只有章节摘要）就不出 Tab 栏，界面跟以前一致
+            var tabsBar = panes.length > 1
+                ? '<div class="sm-tabs">' + panes.map(function(p) { return '<button class="sm-tab' + (p.key === _activeKey ? ' active' : '') + '" data-tab="' + p.key + '" onclick="chatSummarySwitchTab(\'' + p.key + '\')">' + p.label + '</button>'; }).join('') + '</div>'
+                : '';
+            var panesHtml = panes.map(function(p) { return '<div class="sm-pane' + (p.key === _activeKey ? ' active' : '') + '" data-pane="' + p.key + '">' + p.html + '</div>'; }).join('');
+            modal.classList.toggle('has-tabs', panes.length > 1);   // 多标签时定高，避免切标签外框跳动
+            modal.innerHTML = header + toggleBar + tabsBar + '<div class="chat-summary-modal-body">' + panesHtml + '</div>';
+            if (panes.length > 1) chatSummaryBindSwipe(modal);   // 多标签才绑左右滑（整个弹窗都能滑，循环切换）
             mask.appendChild(modal);
             mask.addEventListener('click', function (ev) { if (ev.target === mask) mask.remove(); });
             document.body.appendChild(mask);
-            // 只给「当前可见」的编辑框撑高（折叠起来的章节摘要展开时再算高度）；旧大纲那条始终可见
+            // 只给「当前可见」的编辑框撑高（折叠/未激活的展开时再算高度）
             var tas = mask.querySelectorAll('textarea');
             for (var j = 0; j < tas.length; j++) { if (tas[j].style.display !== 'none') { tas[j].style.height = 'auto'; tas[j].style.height = tas[j].scrollHeight + 'px'; } }
-            // 打开默认在顶部（先看上面的记忆表格）；删除重建时恢复到删除前的位置
+            // 打开默认在顶部（先看记忆表格）；删除重建时恢复到删除前的位置
             var bodyEl = modal.querySelector('.chat-summary-modal-body');
             if (bodyEl && typeof restoreScroll === 'number') bodyEl.scrollTop = restoreScroll;
         }
