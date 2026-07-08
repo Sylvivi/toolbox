@@ -13218,7 +13218,11 @@ body {
             if (newEnd < chatMessages.length) container.appendChild(chatMakeLaterSentinel());
         }
         // 确保第 idx 条消息已在 DOM 中（可能在窗口上方或下方还没渲染），供任意位置跳转前调用。
+        // ⚠️阅读模式(chatReaderMode)的 DOM 由它自己那套(readerOpenChapter 非窗口化 + readerAppend/Prepend)管，
+        // 不维护 chatRenderStartIdx/EndIdx；这里若介入会误判「后面没渲染」而把已在页面里的章节重复补一遍、
+        // 撑出重复 DOM 导致定位错乱（读痕定位不到出处的根因）。故阅读模式下直接不介入，交给它自己的加载。
         function chatEnsureRenderedIdx(idx) {
+            if (chatReaderMode) return;
             if (idx < chatRenderStartIdx) chatRenderUpTo(idx);
             else if (idx >= chatRenderEndIdx) chatRenderDownTo(idx);
         }
