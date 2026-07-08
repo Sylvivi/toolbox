@@ -2861,13 +2861,12 @@ body {
         .rfont-select:focus { outline: none; border-color: var(--accent-mid); }
 
         /* ===== 共读：点段评价 ===== */
-        /* 长篇共读防卡/防烫：屏外整章交给浏览器「跳过排版+绘制」(content-visibility:auto)，
-           只画眼前这一两章——哪怕页面里挂着二十万字，滚动也只付「可见那一章」的成本，手机不再发热。
-           contain-intrinsic-size 用 auto 让浏览器记住每章渲染过的真实高度，屏外收起后 scrollHeight 不跳、
-           阅读定位不漂。⚠️ 只加在「整章」级别（.reading-chapter），绝不加在段落(.reading-merged p)上——
-           段落级会让章内偏移变估算、把「记忆阅读位置」搞不准，那是 2026-07 之前退回过的老坑。
-           「恢复阅读位置」的逐帧校正循环(readingRestoreScrollPos)本就是为这机制写的，屏外章滚近后复测收敛。 */
-        .reading-chapter { content-visibility: auto; contain-intrinsic-size: auto 1200px; }
+        /* ⚠️别再给整章加 content-visibility！2026-07-08 试过 `.reading-chapter { content-visibility:auto }`
+           防卡/防烫，但屏外整章高度变成估算值，让「记住/回到上次阅读位置」（靠精确量每段真实位置的
+           readingSaveScrollPos/readingRestoreScrollPos）定位跳歪——和更早在「段落」上试 content-visibility
+           因「记忆阅读位置对不准」退回是同一个坑（见下方 3224 注释）。已彻底移除。
+           长篇流畅度改由「窗口化」保证：页面里始终只留眼前约 20 条真实排版的消息（≤READING_RENDER_MAX），
+           真实排版=定位天然精准。 */
         /* 共读正文字号（按设备调节，作用于整段正文与问答，不影响操作栏） */
         .reading-merged { font-size: var(--reading-fs, 1em); font-family: var(--reading-font, inherit); }
         /* 分位置字体：引号 / 章节标题 / 人名 各自可选字体（未选时 inherit=跟随正文）。
@@ -13381,8 +13380,6 @@ body {
                     h += text ? renderText(text) : '';
                 }
                 bubble.innerHTML = h;
-                // 整章正文（共读带批注 / 翻译对照）挂 reading-chapter，屏外交给 content-visibility 跳过绘制，防卡防烫
-                if ((_isReadingMsg && (text || _isReaderChap)) || _isTranslateMsg) div.classList.add('reading-chapter');
                 if (_isReadingMsg && (text || _isReaderChap)) { readingMarkBookmarks(bubble, msgIdx); readingApplyHighlights(bubble, msgIdx); }
                 if (typeof genImgHydrate === 'function') genImgHydrate(bubble); // 共读内联插图：异步从本机 IDB 填图
             }
