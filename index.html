@@ -18409,6 +18409,7 @@ body {
                 document.getElementById('rbShelfView').style.display = '';
                 document.getElementById('rbChapterView').style.display = 'none';
                 rbRenderShelf();
+                rbScrollShelfTop();
             }
             document.getElementById('rbBg').classList.add('show');
             document.getElementById('rbModal').classList.add('show');
@@ -19480,6 +19481,14 @@ body {
         // 书架当前所在层：null=文件夹列表；字符串=某文件夹内（''=未分类）
         var rbCurrentFolder = null;
         var rbFolderNames = [];   // 文件夹列表视图记下的名字，供 rbOpenFolder 按序号取（避免 onclick 传中文名转义问题）
+        // 书架列表和章节目录共用同一个滚动区(.chat-settings-body)。进目录时它会被滚到底(定位在读章)，
+        // 切回书架/进出文件夹时若不归零，书架就会残留在底部——这里显式滚回顶部。
+        function rbScrollShelfTop() {
+            requestAnimationFrame(function () {
+                var s = document.querySelector('#rbModal .chat-settings-body');
+                if (s) s.scrollTop = 0;
+            });
+        }
         function rbRenderShelf() {
             var box = document.getElementById('rbShelfList');
             var titleEl = document.getElementById('rbShelfTitle');
@@ -19543,7 +19552,7 @@ body {
                     : '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:34px 0">这个文件夹空了<br><span onclick="rbFolderBack()" style="color:var(--accent);cursor:pointer">‹ 返回文件夹</span></div>';
             }
         }
-        function rbOpenFolder(idx) { rbCurrentFolder = rbFolderNames[idx] != null ? rbFolderNames[idx] : null; rbRenderShelf(); }
+        function rbOpenFolder(idx) { rbCurrentFolder = rbFolderNames[idx] != null ? rbFolderNames[idx] : null; rbRenderShelf(); rbScrollShelfTop(); }
         function rbFolderBack() { rbCurrentFolder = null; rbRenderShelf(); }
         // 给每本书分一个固定的书本 emoji（按文件键哈希定死，同一本永远同一个，摆出来像一排彩色书脊）
         var RB_BOOK_EMOJIS = ['📕', '📗', '📘', '📙', '📓', '📔', '📒'];
@@ -19633,6 +19642,7 @@ body {
             document.getElementById('rbShelfView').style.display = '';
             document.getElementById('rbChapterView').style.display = 'none';
             rbRenderShelf();
+            rbScrollShelfTop();
         }
 
         function rbRenderChapters() {
