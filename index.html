@@ -11299,6 +11299,13 @@ body {
         var READING_RENDER_FWD_BATCH = 8; // 「阅读位置→末尾」剩余内容：后台每批补这么多条（都接在末尾，不影响已定位的阅读位置）
         var _chatRenderToken = 0;        // 渲染代次：会话切换/重渲时自增，作废在途的后台补渲染
         var _chatLoadingEarlier = false; // 补渲染进行中的防重入标记
+        // 向下窗口化：chatRenderEndIdx = 已渲染的「末条消息下标+1」；== chatMessages.length 表示已渲染到真正末尾。
+        // 早先只封了「窗口起点以上」，起点以下一直渲染到全书末尾——于是「提前发十几章再滑到最顶」时整本书都堆进 DOM，
+        // 滑动卡、手机烫。现在起点以下也只保留一小段，滑到底再补、窗口过大就从远端裁掉，DOM 恒定精简。
+        var chatRenderEndIdx = 0;
+        var READING_RENDER_FORWARD = 12; // 进会话/跳转时，窗口起点往下最多先渲染这么多条（其余滑到底再补）
+        var READING_RENDER_MAX = 24;     // 渲染窗口最多保留这么多条消息，超了就从远离视口的一端裁掉，控制 DOM 体量
+        var _chatLoadingLater = false;   // 向下补渲染进行中的防重入标记
         var _readingModeOrigText = '';  // 流式渲染用：当前原文
         var READING_MODE_INSTRUCTION = '【共读模式格式要求】当用户发送带有 [P1] [P2] 等段落编号的小说原文时，你只需要输出你的评论，不要重复原文。每条评论格式为：[P段落号] 评论内容。例如：\n[P3] 这段描写太细腻了\n[P7] 这里有个伏笔\n\n最重要的一条：每一轮你只评论【用户本次最新发来的这一条带 [P] 编号的章节原文】。之前已经读过、已经评过的章节，不要再补评论、不要再引用它们的段落编号。段落编号 [P1] [P2]… 每一章都是从头重新计数的，所以你输出的 [Px] 必须严格对应本章原文里的那一段，绝不能拿来指代上一章的内容。\n\n严格格式：每条评论开头只写一个 [Px] 标记，不要写成 [P25] [P26] 或 [P25-26] 这种合并格式。如果要同时评论多段，请分开写：\n[P25] 评论内容\n[P26] 评论内容\n\n重要：请模拟顺序阅读的视角写评论，评论某段时只基于该段及其之前的内容，不要引用或暗示后文还没出现的信息。你可以运用对作品已读部分（当前文本之前的剧情）的了解来丰富评论，但绝不剧透当前阅读位置之后的情节发展。像一个读过前文、但还没翻到下一页的读友一样。\n\n评论密度自己把握，有感觉的地方就评，没感觉的不要硬评。不需要每段都评。评论结束后可以简短聊两句整体感受。\n如果用户没发原文而是在聊天讨论，就正常回复，不用加 [P] 标记。';
         // 共读模式：模型没按 [Px] 格式输出时，自动重试一次用的强化纠正提示
@@ -11850,6 +11857,7 @@ body {
         // 把生成好的图作为一条「生图消息」追加到当前对话末尾（图字节已在本机 IDB，消息只放轻量引用）。
         // 单条 append 而非整体重渲，长篇共读才不卡。
         function chatInsertGenImage(imgId, caption, prompt) {
+            if (typeof chatEnsureRenderedToEnd === 'function') chatEnsureRenderedToEnd(); // 接末尾前先补齐窗口，防串位
             chatMessages.push({ role: 'assistant', genImage: true, imgId: imgId, caption: caption || '', prompt: prompt || '', ts: Date.now() });
             chatSaveCurrentConv(true);
             var container = document.getElementById('chatMessages');
@@ -11857,6 +11865,7 @@ body {
                 var empty = container.querySelector('.chat-empty');
                 if (empty) container.innerHTML = '';
                 container.appendChild(chatBuildMsgEl('ai', '', null, chatMessages.length - 1, false));
+                chatRenderEndIdx = chatMessages.length; // 同步窗口末界
                 if (typeof chatScrollBottom === 'function') chatScrollBottom();
             }
         }
@@ -13110,9 +13119,116 @@ body {
                 if (newStart > 0) container.insertBefore(chatMakeEarlierSentinel(), container.firstChild);
                 // 高度增量补到 scrollTop 上，视图保持原地
                 container.scrollTop = oldTop + (container.scrollHeight - oldH);
+                // 窗口过大 → 把远离视口的底部一批裁掉，保持 DOM 精简（底部在视口下方，裁掉不影响当前视图）
+                chatTrimBottomIfNeeded(container);
             } finally {
                 _chatLoadingEarlier = false;
             }
+        }
+        // 底部「载入后面章节」哨兵：滑到接近底部会自动补，也可点它手动补
+        function chatMakeLaterSentinel() {
+            var d = document.createElement('div');
+            d.id = 'chatLaterSentinel';
+            d.style.cssText = 'text-align:center;padding:14px 0;font-size:12px;color:var(--text-muted);cursor:pointer;user-select:none';
+            d.textContent = '↓ 载入后面章节';
+            d.onclick = chatLoadLater;
+            return d;
+        }
+        // 往下补渲染一段更后面的消息（对称于 chatLoadEarlier）。接在底部哨兵位置、当前视图下方，不动 scrollTop。
+        function chatLoadLater() {
+            if (_chatLoadingLater || chatRenderEndIdx >= chatMessages.length) return;
+            _chatLoadingLater = true;
+            try {
+                var container = document.getElementById('chatMessages');
+                if (!container) return;
+                var oldEnd = chatRenderEndIdx;
+                var newEnd = Math.min(chatMessages.length, oldEnd + READING_RENDER_CHUNK);
+                var lastAiIdx = -1;
+                for (var k = chatMessages.length - 1; k >= 0; k--) { if (chatMessages[k].role === 'assistant') { lastAiIdx = k; break; } }
+                var oldSentinel = document.getElementById('chatLaterSentinel');
+                if (oldSentinel) oldSentinel.remove();
+                var frag = document.createDocumentFragment();
+                var seed = oldEnd > 0 ? ((chatMessages[oldEnd - 1] && chatMessages[oldEnd - 1].ts) || 0) : 0;
+                chatAppendMsgRange(frag, oldEnd, newEnd, seed, lastAiIdx, false);
+                container.appendChild(frag);
+                chatRenderEndIdx = newEnd;
+                if (newEnd < chatMessages.length) container.appendChild(chatMakeLaterSentinel());
+                // 窗口过大 → 把远离视口的顶部一批裁掉（顶部在视口上方，需按高度差补偿 scrollTop 防跳动）
+                chatTrimTopIfNeeded(container);
+            } finally {
+                _chatLoadingLater = false;
+            }
+        }
+        // 窗口过大时，从顶部裁掉若干条（远离视口），并用高度差补偿 scrollTop 保持视图不跳。
+        // 至少保留末尾 READING_RENDER_FORWARD 条不裁，免得把正在读/刚发的内容裁掉。
+        function chatTrimTopIfNeeded(container) {
+            if (!(chatReadingMode || chatTranslateMode)) return;
+            while ((chatRenderEndIdx - chatRenderStartIdx) > READING_RENDER_MAX) {
+                var trimTo = Math.min(chatRenderStartIdx + READING_RENDER_CHUNK, chatRenderEndIdx - READING_RENDER_FORWARD);
+                if (trimTo <= chatRenderStartIdx) break;
+                var target = container.querySelector('.chat-msg[data-idx="' + trimTo + '"]');
+                if (!target) break;
+                var oldH = container.scrollHeight, oldTop = container.scrollTop;
+                // 删掉 target 之前的一切（含旧顶部哨兵、时间分隔线、被裁的消息）
+                while (container.firstChild && container.firstChild !== target) container.removeChild(container.firstChild);
+                chatRenderStartIdx = trimTo;
+                container.insertBefore(chatMakeEarlierSentinel(), container.firstChild);
+                container.scrollTop = oldTop - (oldH - container.scrollHeight);
+            }
+        }
+        // 窗口过大时，从底部裁掉若干条（远离视口，视图下方，无需补偿 scrollTop）。至少保留起点后 FORWARD 条。
+        function chatTrimBottomIfNeeded(container) {
+            if (!(chatReadingMode || chatTranslateMode)) return;
+            while ((chatRenderEndIdx - chatRenderStartIdx) > READING_RENDER_MAX) {
+                var trimFrom = Math.max(chatRenderEndIdx - READING_RENDER_CHUNK, chatRenderStartIdx + READING_RENDER_FORWARD);
+                if (trimFrom >= chatRenderEndIdx) break;
+                var first = container.querySelector('.chat-msg[data-idx="' + trimFrom + '"]');
+                if (!first) break;
+                var oldSentinel = document.getElementById('chatLaterSentinel');
+                if (oldSentinel) oldSentinel.remove();
+                while (first.nextSibling) container.removeChild(first.nextSibling);
+                container.removeChild(first);
+                chatRenderEndIdx = trimFrom;
+                container.appendChild(chatMakeLaterSentinel());
+            }
+        }
+        // 往下补渲染直到 targetIdx 进入 DOM（对称于 chatRenderUpTo），供跳转/书签/划线定位到窗口下方的内容。
+        function chatRenderDownTo(targetIdx) {
+            var container = document.getElementById('chatMessages');
+            if (!container || chatRenderEndIdx >= chatMessages.length) return;
+            var newEnd = Math.min(chatMessages.length, Math.max(targetIdx + 1, chatRenderEndIdx) + READING_RENDER_BUFFER);
+            if (newEnd <= chatRenderEndIdx) return;
+            var oldEnd = chatRenderEndIdx;
+            var lastAiIdx = -1;
+            for (var k = chatMessages.length - 1; k >= 0; k--) { if (chatMessages[k].role === 'assistant') { lastAiIdx = k; break; } }
+            var oldSentinel = document.getElementById('chatLaterSentinel');
+            if (oldSentinel) oldSentinel.remove();
+            var frag = document.createDocumentFragment();
+            var seed = oldEnd > 0 ? ((chatMessages[oldEnd - 1] && chatMessages[oldEnd - 1].ts) || 0) : 0;
+            chatAppendMsgRange(frag, oldEnd, newEnd, seed, lastAiIdx, false);
+            container.appendChild(frag);
+            chatRenderEndIdx = newEnd;
+            if (newEnd < chatMessages.length) container.appendChild(chatMakeLaterSentinel());
+        }
+        // 确保第 idx 条消息已在 DOM 中（可能在窗口上方或下方还没渲染），供任意位置跳转前调用。
+        function chatEnsureRenderedIdx(idx) {
+            if (idx < chatRenderStartIdx) chatRenderUpTo(idx);
+            else if (idx >= chatRenderEndIdx) chatRenderDownTo(idx);
+        }
+        // 把窗口补渲染到真正的末尾，并移除底部哨兵——发新消息/流式追加前调用，保证新节点接得上、不串位。
+        function chatEnsureRenderedToEnd() {
+            var container = document.getElementById('chatMessages');
+            if (!container) return;
+            if (chatRenderEndIdx >= chatMessages.length) { chatRenderEndIdx = chatMessages.length; return; }
+            var oldSentinel = document.getElementById('chatLaterSentinel');
+            if (oldSentinel) oldSentinel.remove();
+            var lastAiIdx = -1;
+            for (var k = chatMessages.length - 1; k >= 0; k--) { if (chatMessages[k].role === 'assistant') { lastAiIdx = k; break; } }
+            var frag = document.createDocumentFragment();
+            var seed = chatRenderEndIdx > 0 ? ((chatMessages[chatRenderEndIdx - 1] && chatMessages[chatRenderEndIdx - 1].ts) || 0) : 0;
+            chatAppendMsgRange(frag, chatRenderEndIdx, chatMessages.length, seed, lastAiIdx, false);
+            container.appendChild(frag);
+            chatRenderEndIdx = chatMessages.length;
         }
         // windowed=true（仅进入会话时传）：共读/翻译模式下只渲染「存档位置→末尾」，避免一次性重排整本书。
         // 其余调用（编辑/重生成/截断等）保持全量渲染，行为不变。
@@ -13122,38 +13238,48 @@ body {
             if (chatMessages.length === 0) {
                 container.innerHTML = '<div class="chat-empty">选择模型，开始对话</div>';
                 chatRenderStartIdx = 0;
+                chatRenderEndIdx = 0;
                 return;
             }
             var lastAiIdx = -1;
             for (var k = chatMessages.length - 1; k >= 0; k--) {
                 if (chatMessages[k].role === 'assistant') { lastAiIdx = k; break; }
             }
-            var startIdx = 0;
-            if (windowed && (chatReadingMode || chatTranslateMode)) startIdx = chatComputeRenderStart();
+            var total = chatMessages.length;
+            var reading = windowed && (chatReadingMode || chatTranslateMode);
+            var startIdx = reading ? chatComputeRenderStart() : 0;
             chatRenderStartIdx = startIdx;
+            // 起点以下也只先渲染一小段（renderEnd）；其余滑到底再补。非窗口化（编辑/重生成等）仍全量到末尾。
+            var renderEnd = reading ? Math.min(total, startIdx + READING_RENDER_FORWARD) : total;
+            chatRenderEndIdx = renderEnd;
             if (startIdx > 0) container.appendChild(chatMakeEarlierSentinel());
             var seed = startIdx > 0 ? ((chatMessages[startIdx - 1] && chatMessages[startIdx - 1].ts) || 0) : 0;
-            var total = chatMessages.length;
             var myToken = ++_chatRenderToken; // 作废上一轮在途的后台补渲染（会话切换/重渲时）
 
-            // 共读/翻译且「阅读位置→末尾」很长时：先同步画一小批让界面秒出，其余在后台逐帧补。
+            // 「窗口起点→renderEnd」很长时：先同步画一小批让界面秒出，其余在后台逐帧补。
             // 后台补的内容全部接在末尾（锚点下方），不会移动已定位的阅读位置，所以定位/上滑补章都不受影响。
-            var progressive = windowed && (chatReadingMode || chatTranslateMode)
-                && (total - startIdx) > (READING_RENDER_FIRST + READING_RENDER_FWD_BATCH);
-            var firstEnd = progressive ? Math.min(total, startIdx + READING_RENDER_FIRST) : total;
+            var progressive = reading
+                && (renderEnd - startIdx) > (READING_RENDER_FIRST + READING_RENDER_FWD_BATCH);
+            var firstEnd = progressive ? Math.min(renderEnd, startIdx + READING_RENDER_FIRST) : renderEnd;
             var lastTs = chatAppendMsgRange(container, startIdx, firstEnd, seed, lastAiIdx, true);
+            if (renderEnd < total) container.appendChild(chatMakeLaterSentinel());
             chatScrollBottom();
 
-            if (progressive && firstEnd < total) {
+            if (progressive && firstEnd < renderEnd) {
                 var _pos = firstEnd, _prevTs = lastTs;
+                var _laterSent = document.getElementById('chatLaterSentinel');
                 // 用 setTimeout 而非 rAF：页面不可见（切到别的 app）时 rAF 会暂停，setTimeout 仍会把后台补渲染跑完
                 var _step = function () {
                     if (myToken !== _chatRenderToken) return;            // 会话已切换/重渲 → 放弃这一轮
                     if (!document.body.contains(container)) return;       // 容器已不在文档里
-                    var next = Math.min(total, _pos + READING_RENDER_FWD_BATCH);
-                    _prevTs = chatAppendMsgRange(container, _pos, next, _prevTs, lastAiIdx, false);
+                    var next = Math.min(renderEnd, _pos + READING_RENDER_FWD_BATCH);
+                    // 后台补的这批要插在底部哨兵之前，别接到哨兵后头
+                    var frag = document.createDocumentFragment();
+                    _prevTs = chatAppendMsgRange(frag, _pos, next, _prevTs, lastAiIdx, false);
+                    if (_laterSent && _laterSent.parentNode === container) container.insertBefore(frag, _laterSent);
+                    else container.appendChild(frag);
                     _pos = next;
-                    if (_pos < total) setTimeout(_step, 0);
+                    if (_pos < renderEnd) setTimeout(_step, 0);
                 };
                 setTimeout(_step, 0);
             }
@@ -14387,6 +14513,9 @@ body {
             if (emptyEl) emptyEl.remove();
             var oldReroll = document.getElementById('chatRerollBtn');
             if (oldReroll) oldReroll.remove();
+            // 窗口化下若之前滑上去看早章、底部还挂着「载入后面章节」哨兵，发新章前先补渲染到真末尾，
+            // 否则新消息会接到哨兵后头、和未渲染的中间几条串位。
+            chatEnsureRenderedToEnd();
 
             // 文件内容拼接到文本
             if (hasFiles) {
@@ -14442,6 +14571,7 @@ body {
             var userEl = chatBuildMsgEl('user', msgContent, null, chatMessages.length - 1);
             userEl.classList.add('chat-appear');
             container.appendChild(userEl);
+            chatRenderEndIdx = chatMessages.length; // 新消息已接到末尾，同步窗口末界
             chatScrollBottom();
             chatUpdateCtxIndicator();
 
@@ -14452,6 +14582,7 @@ body {
                 var hostEl = chatBuildMsgEl('ai', '', null, chatMessages.length - 1, true);
                 hostEl.classList.add('chat-appear');
                 container.appendChild(hostEl);
+                chatRenderEndIdx = chatMessages.length; // 承载消息已接末尾，同步窗口末界
                 chatScrollBottom();
                 chatSaveCurrentConv(true);
                 // 翻译模式不请求 AI 正文，所以不会走到流式完成时的自动起标题逻辑。
@@ -14801,6 +14932,9 @@ body {
             chatAbortCtrl = null;
             if (chatThinkInterval) { clearInterval(chatThinkInterval); chatThinkInterval = null; }
             chatSetStopMode(false);
+            chatRenderEndIdx = chatMessages.length; // AI 回复已接末尾，同步窗口末界
+            // 窗口过大就把最早的几条从顶部裁掉（远离视口、带 scrollTop 补偿），长会话/连发多章时 DOM 恒定精简
+            chatTrimTopIfNeeded(container);
             // 添加底部工具栏（替代旧的悬浮复制+重roll按钮）
             if (fullContent) {
                 var newIdx = chatMessages.length - 1;
@@ -15108,6 +15242,10 @@ body {
                 }
             }
             for (var r = 0; r < toRemove.length; r++) toRemove[r].remove();
+            var _ls = document.getElementById('chatLaterSentinel'); // 截断后底部哨兵可能残留，清掉
+            if (_ls) _ls.remove();
+            chatRenderStartIdx = Math.min(chatRenderStartIdx, chatMessages.length);
+            chatRenderEndIdx = chatMessages.length; // 已截断到 idx，窗口末界回退到新长度
             chatSaveCurrentConv();
             chatUpdateCtxIndicator();
             showToast('✂️ 已截断');
@@ -15127,6 +15265,9 @@ body {
                 var di = parseInt(msgs[m].getAttribute('data-idx'));
                 if (di > idx) msgs[m].setAttribute('data-idx', di - 1);
             }
+            // 删掉一条后，按当前实际在 DOM 的消息条数校正窗口末界
+            chatRenderStartIdx = Math.min(chatRenderStartIdx, chatMessages.length);
+            chatRenderEndIdx = chatRenderStartIdx + container.querySelectorAll('.chat-msg[data-idx]').length;
             chatSaveCurrentConv();
             chatUpdateCtxIndicator();
             showToast('🗑️ 已删除');
@@ -15911,8 +16052,8 @@ body {
         }
         function chatNavJump(idx) {
             var container = document.getElementById('chatMessages');
-            // 靠前的消息可能因窗口化渲染还没进 DOM，先补渲染到目标位置再定位
-            if (idx < chatRenderStartIdx) chatRenderUpTo(idx);
+            // 窗口化渲染下，目标消息可能在窗口上方或下方还没进 DOM，先补渲染到位再定位
+            chatEnsureRenderedIdx(idx);
             var target = container.querySelector('.chat-msg[data-idx="' + idx + '"]');
             if (!target) return;
             target.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -20208,6 +20349,11 @@ body {
                 if ((chatReadingMode || chatTranslateMode) && chatRenderStartIdx > 0 && !_chatLoadingEarlier && el.scrollTop < 600) {
                     chatLoadEarlier();
                 }
+                // 下滑接近底部且后面还有没渲染的章节 → 自动补渲染（窗口化的「按需向下加载」）
+                if ((chatReadingMode || chatTranslateMode) && chatRenderEndIdx < chatMessages.length && !_chatLoadingLater
+                    && (el.scrollHeight - el.scrollTop - el.clientHeight) < 800) {
+                    chatLoadLater();
+                }
                 // 开章静默窗口内不自动补章（防止压回章首时被误判为上滑到顶、连锁补到别的章）
                 var _autoLoadOk = Date.now() > _readerAutoLoadSuppressUntil;
                 // 阅读模式：翻到接近底部，自动续下一章
@@ -21814,6 +21960,7 @@ body {
         }
         // 跳到某条划线：滚到其所在段落并让划线闪一下
         function readingJumpHighlight(id, msgIdx, p) {
+            chatEnsureRenderedIdx(msgIdx | 0); // 目标可能在窗口外，先补渲染到位
             var pEl = document.querySelector('.chat-msg.ai[data-idx="' + msgIdx + '"] p[data-p="' + p + '"]');
             if (!pEl) { showToast('未找到该段落'); return; }
             var mark = document.querySelector('mark.rd-hl[data-hlid="' + id + '"]') || pEl;
@@ -21822,6 +21969,7 @@ body {
             setTimeout(function() { pEl.classList.remove('rp-flash'); }, 1200);
         }
         function readingJumpBookmark(msgIdx, p) {
+            chatEnsureRenderedIdx(msgIdx | 0); // 目标可能在窗口外，先补渲染到位
             var pEl = document.querySelector('.chat-msg.ai[data-idx="' + msgIdx + '"] p[data-p="' + p + '"]');
             if (!pEl) { showToast('未找到该段落'); return; }
             pEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
