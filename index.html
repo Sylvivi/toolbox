@@ -19233,22 +19233,27 @@ body {
         // 把一段素材（追问 Q&A / 用户手动指定的一段）提取成结构化干货，增量并进四张翻译表。
         // 手动「记住」与「追问后自动」共用此函数，出口只有一个：结构化进表，绝不存游离原始便签。
         var chatTransHarvesting = false;
-        // 按四张表的表头行把模型输出切成四段（人物/译名/案件/设定），顺序无关
+        // 把模型输出切成四段（人物/译名/案件/设定），顺序无关。
+        // 优先按【表名】标题行切（标题唯一、只出现一次，绝不会和数据行撞）；缺标题才退回按列名检测。
+        // 之前只按列名扫描：术语「说明」里出现「案件」二字就被误判成案件表表头，导致整表错位——故改此法。
         function _transSplitTables(result) {
             var lines = result.split('\n');
-            function hdr(test) { for (var i = 0; i < lines.length; i++) { if (lines[i].indexOf('|') >= 0 && test(lines[i])) return i; } return -1; }
-            var marks = [
-                { type: 'characters', idx: hdr(function(l){ return l.indexOf('角色') >= 0 && l.indexOf('性别') >= 0; }) },
-                { type: 'terms', idx: hdr(function(l){ return l.indexOf('原文') >= 0 && l.indexOf('译名') >= 0; }) },
-                { type: 'cases', idx: hdr(function(l){ return l.indexOf('案件') >= 0 || (l.indexOf('进展') >= 0 && l.indexOf('状态') >= 0); }) },
-                { type: 'settings', idx: hdr(function(l){ return l.indexOf('设定') >= 0 && l.indexOf('译名') < 0; }) }
-            ].filter(function(m){ return m.idx >= 0; }).sort(function(a, b){ return a.idx - b.idx; });
+            function titleIdx(kw) { for (var i = 0; i < lines.length; i++) { var l = lines[i]; if (l.indexOf('|') < 0 && l.indexOf('【') >= 0 && l.indexOf(kw) >= 0) return i; } return -1; }
+            function hdrIdx(test) { for (var i = 0; i < lines.length; i++) { if (lines[i].indexOf('|') >= 0 && test(lines[i])) return i; } return -1; }
+            var specs = [
+                { type: 'characters', t: titleIdx('人物'), h: hdrIdx(function(l){ return l.indexOf('角色') >= 0 && l.indexOf('性别') >= 0; }) },
+                { type: 'terms', t: titleIdx('译名'), h: hdrIdx(function(l){ return l.indexOf('原文') >= 0 && l.indexOf('译名') >= 0; }) },
+                { type: 'cases', t: titleIdx('案件'), h: hdrIdx(function(l){ return l.indexOf('进展') >= 0 && l.indexOf('状态') >= 0; }) },
+                { type: 'settings', t: titleIdx('设定'), h: hdrIdx(function(l){ return l.indexOf('设定') >= 0 && l.indexOf('说明') >= 0 && l.indexOf('译名') < 0 && l.indexOf('原文') < 0; }) }
+            ];
+            var marks = specs.map(function(s){ return { type: s.type, idx: (s.t >= 0 ? s.t : s.h) }; })
+                             .filter(function(m){ return m.idx >= 0; })
+                             .sort(function(a, b){ return a.idx - b.idx; });
             var out = { characters: '', terms: '', cases: '', settings: '' };
-            if (!marks.length) return out;
             for (var k = 0; k < marks.length; k++) {
                 var start = marks[k].idx;
-                if (start > 0 && lines[start - 1].indexOf('|') < 0 && lines[start - 1].trim() !== '') start--;
                 var end = k + 1 < marks.length ? marks[k + 1].idx : lines.length;
+                if (end <= start) continue;
                 out[marks[k].type] = lines.slice(start, end).join('\n');
             }
             return out;
