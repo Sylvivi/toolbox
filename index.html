@@ -16461,6 +16461,15 @@ body {
                     + '<div style="min-width:0;font-size:11.5px;line-height:1.5;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🧠 ' + _mtStatus + '</div>'
                     + '<button onclick="chatRebuildMemTables(this)" title="按现有的分段摘要重新折算记忆表格（补齐同步丢失的回目，不重新总结正文）" style="flex-shrink:0;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap">补齐/重建</button>'
                     + '</div>';
+            } else if (chatTranslateMode && chatMemoryTables) {
+                // 翻译模式：剧集记忆没有「按摘要重折」的重建（它靠追问增量攒），但给一个「清空重来」——
+                // 修表格串行 bug 前攒的乱数据可一键清掉、用修好的引擎重头攒。
+                var _tmt = chatMemoryTables;
+                var _tmtCount = (_tmt.characters || []).length + (_tmt.terms || []).length + (_tmt.cases || []).length + (_tmt.settings || []).length;
+                rebuildBar = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;margin-bottom:12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px">'
+                    + '<div style="min-width:0;font-size:11.5px;line-height:1.5;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🧠 剧集记忆 · 共 ' + _tmtCount + ' 行</div>'
+                    + '<button onclick="chatClearTransMem()" title="清空这部剧的全部记忆表格，之后靠追问从头重新积累（修表格串行 bug 前的乱数据可以这样一键清掉）" style="flex-shrink:0;background:none;color:var(--text-muted);border:1px solid var(--input-border);border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap">🧹 清空重来</button>'
+                    + '</div>';
             }
             // 结构化记忆表格——每张表各成一个 Tab。共读四表（人物/地点/年表/主线）与翻译四表（人物/译名/案件/设定）
             // 结构不同，按当前模式各显各的（一个对话只属于一种模式，chatMemoryTables 的形状随之而定）。
@@ -16690,6 +16699,15 @@ body {
             var sc = _summaryModalScroll();
             chatSaveCurrentConv(true);
             chatShowSummaryModal(sc);
+        }
+        // 清空翻译模式的「剧集记忆」四张表，靠后续追问从头重新积累（修串行 bug 前的乱数据一键清掉）
+        function chatClearTransMem() {
+            if (!confirm('确定清空这部剧的全部剧集记忆（人物/译名/案件/设定）吗？\n之后靠追问从头重新积累。')) return;
+            chatMemoryTables = { characters: [], terms: [], cases: [], settings: [] };
+            chatSaveCurrentConv(true);
+            var mask = document.querySelector('.chat-summary-modal-mask');
+            if (mask) mask.remove();
+            showToast('🧹 剧集记忆已清空，之后追问会重新积累');
         }
         // 摘要段折叠/展开：展开时把编辑框撑到内容高度并露出底部「▴ 收起」条；收起时把编辑过的最新内容同步回预览
         function chatToggleSummarySeg(el) {
