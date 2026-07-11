@@ -16462,8 +16462,11 @@ body {
                     + '<button onclick="chatRebuildMemTables(this)" title="按现有的分段摘要重新折算记忆表格（补齐同步丢失的回目，不重新总结正文）" style="flex-shrink:0;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap">补齐/重建</button>'
                     + '</div>';
             }
-            // 结构化记忆表格（共读模式）——每张表各成一个 Tab
-            var _hasMem = chatMemoryTables && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length);
+            // 结构化记忆表格——每张表各成一个 Tab。共读四表（人物/地点/年表/主线）与翻译四表（人物/译名/案件/设定）
+            // 结构不同，按当前模式各显各的（一个对话只属于一种模式，chatMemoryTables 的形状随之而定）。
+            var _hasReadingMem = chatMemoryTables && chatReadingMode && ((chatMemoryTables.characters || []).length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || (chatMemoryTables.plotlines || []).length);
+            var _hasTransMem = chatMemoryTables && chatTranslateMode && ((chatMemoryTables.characters || []).length || (chatMemoryTables.terms || []).length || (chatMemoryTables.cases || []).length || (chatMemoryTables.settings || []).length);
+            var _hasMem = _hasReadingMem || _hasTransMem;
             if (_hasMem) {
                 function _mtRowHtml(tableName, row, idx, cols) {
                     var esc = function(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
@@ -16504,10 +16507,19 @@ body {
                     if (!rows.length) h += '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">暂无数据，下次生成摘要时自动填充</div>';
                     return h + '</div>';
                 }
-                panes.push({ key: 'characters', label: '人物', html: _mtTablePane('👤', '人物表', '人', 'characters', chatMemoryTables.characters, _mtCharCols) });
-                panes.push({ key: 'places', label: '地点', html: _mtTablePane('📍', '地点表', '处', 'places', chatMemoryTables.places || [], _mtPlaceCols) });
-                panes.push({ key: 'timeline', label: '年表', html: _mtTablePane('🕰️', '大事年表', '条', 'timeline', chatMemoryTables.timeline || [], _mtTimeCols) });
-                panes.push({ key: 'plotlines', label: '主线', html: _mtTablePane('📖', '主线/伏笔', '条', 'plotlines', chatMemoryTables.plotlines, _mtPlotCols) });
+                if (_hasTransMem) {
+                    // 翻译模式：剧集记忆四表
+                    panes.push({ key: 'characters', label: '人物', html: _mtTablePane('👤', '人物表', '人', 'characters', chatMemoryTables.characters || [], _mtTransCharCols) });
+                    panes.push({ key: 'terms', label: '译名', html: _mtTablePane('📒', '译名·术语', '条', 'terms', chatMemoryTables.terms || [], _mtTransTermCols) });
+                    panes.push({ key: 'cases', label: '案件', html: _mtTablePane('⚖️', '案件·剧情线', '条', 'cases', chatMemoryTables.cases || [], _mtTransCaseCols) });
+                    panes.push({ key: 'settings', label: '设定', html: _mtTablePane('🌍', '设定·背景', '条', 'settings', chatMemoryTables.settings || [], _mtTransSetCols) });
+                } else {
+                    // 共读模式：原四表
+                    panes.push({ key: 'characters', label: '人物', html: _mtTablePane('👤', '人物表', '人', 'characters', chatMemoryTables.characters, _mtCharCols) });
+                    panes.push({ key: 'places', label: '地点', html: _mtTablePane('📍', '地点表', '处', 'places', chatMemoryTables.places || [], _mtPlaceCols) });
+                    panes.push({ key: 'timeline', label: '年表', html: _mtTablePane('🕰️', '大事年表', '条', 'timeline', chatMemoryTables.timeline || [], _mtTimeCols) });
+                    panes.push({ key: 'plotlines', label: '主线', html: _mtTablePane('📖', '主线/伏笔', '条', 'plotlines', chatMemoryTables.plotlines, _mtPlotCols) });
+                }
             }
             // 分段摘要（+ 兼容旧的自由文本大纲）——单独一个 Tab
             var _sumHtml = '';
@@ -16664,13 +16676,16 @@ body {
             chatShowSummaryModal(sc);
         }
         function chatAddMtRow(tableName) {
-            if (!chatMemoryTables) chatMemoryTables = { characters: [], places: [], timeline: [], plotlines: [] };
-            if (!chatMemoryTables.places) chatMemoryTables.places = [];
-            if (!chatMemoryTables.timeline) chatMemoryTables.timeline = [];
-            var cols = tableName === 'characters' ? _mtCharCols : (tableName === 'places' ? _mtPlaceCols : (tableName === 'timeline' ? _mtTimeCols : _mtPlotCols));
+            var _trans = chatTranslateMode;
+            if (!chatMemoryTables) chatMemoryTables = _trans ? { characters: [], terms: [], cases: [], settings: [] } : { characters: [], places: [], timeline: [], plotlines: [] };
+            if (!chatMemoryTables[tableName]) chatMemoryTables[tableName] = [];
+            if (!_trans) { if (!chatMemoryTables.places) chatMemoryTables.places = []; if (!chatMemoryTables.timeline) chatMemoryTables.timeline = []; }
+            var cols = _trans
+                ? (tableName === 'characters' ? _mtTransCharCols : tableName === 'terms' ? _mtTransTermCols : tableName === 'cases' ? _mtTransCaseCols : _mtTransSetCols)
+                : (tableName === 'characters' ? _mtCharCols : (tableName === 'places' ? _mtPlaceCols : (tableName === 'timeline' ? _mtTimeCols : _mtPlotCols)));
             var row = {};
             for (var c = 0; c < cols.length; c++) row[cols[c]] = '';
-            if (tableName === 'plotlines') row['已解决'] = '否';
+            if (!_trans && tableName === 'plotlines') row['已解决'] = '否';
             chatMemoryTables[tableName].push(row);
             var sc = _summaryModalScroll();
             chatSaveCurrentConv(true);
