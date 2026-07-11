@@ -3185,6 +3185,7 @@ body {
             font-size: 12px; padding: 5px 12px; border-radius: 8px; cursor: pointer;
         }
         .translate-askbar button:disabled { opacity: 0.6; cursor: default; }
+        .translate-askbar button.ta-remember { background: var(--card-bg); color: var(--accent); border: 1px solid var(--accent-mid); }
         #translateActBar {
             position: fixed; left: 0; top: 0;
             display: flex; align-items: center; gap: 10px;
@@ -21321,10 +21322,13 @@ body {
             var bar = document.createElement('div');
             bar.className = 'translate-askbar';
             bar.innerHTML = '<input class="ta-ask" type="text" placeholder="这段没看懂？问问看…（如：这里的双关是什么意思？）">' +
-                '<button class="ta-ask-send">提问</button>';
+                '<button class="ta-ask-send">提问</button>' +
+                '<button class="ta-remember" title="把这段的译文与问答提炼进「剧集记忆」（人物/译名/案件/设定）">🧠 记住</button>';
             block.appendChild(bar);
             var input = bar.querySelector('.ta-ask');
             var send = bar.querySelector('.ta-ask-send');
+            var rem = bar.querySelector('.ta-remember');
+            if (rem) rem.onclick = function() { translateRememberBlock(msgIdx, s, e, bar); };
             function go() { translateAskRun(msgIdx, s, e, input.value, bar); }
             send.onclick = go;
             input.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); go(); } });
@@ -21339,6 +21343,26 @@ body {
                 if (done) return m; done = true;
                 return bodyPart + '\n[[QA]]' + q + '[[ANS]]' + a + '[[/QA]]' + close;
             });
+        }
+
+        // 手动「记住这段」：把该译文块的原文 + 译文注释 + 已有问答，提炼进「剧集记忆」四张表。
+        // 与「追问后自动」共用同一台提取引擎（chatTransHarvestMemory），出口只有一个：结构化进表。
+        function translateRememberBlock(msgIdx, s, e, bar) {
+            if (!chatTranslateMode) { if (bar) bar.remove(); return; }
+            var msg = chatMessages[msgIdx];
+            if (!msg || typeof msg.content !== 'string') { if (bar) bar.remove(); return; }
+            var orig = readingModeStripParaNums(readingModeGetOriginalText(msgIdx));
+            var paras = translateModeSplitParas(orig);
+            var lo = Math.min(s, e), hi = Math.max(s, e);
+            var segment = (lo >= 1 && hi <= paras.length) ? paras.slice(lo - 1, hi).join('\n') : '';
+            var blocks = translateModeParseBlocks(msg.content);
+            var curBlock = null;
+            for (var b = 0; b < blocks.length; b++) { if (blocks[b].s === s && blocks[b].e === e) { curBlock = blocks[b]; break; } }
+            var parsed = curBlock ? translateBlockSplitQA(curBlock.text) : { main: '', qas: [] };
+            var qaText = parsed.qas.length ? '\n\n就这段的问答：\n' + parsed.qas.map(function(p) { return '问：' + p.q + '\n答：' + p.a; }).join('\n') : '';
+            var src = (segment ? '【原文】\n' + segment + '\n\n' : '') + '【译文与注释】\n' + (parsed.main || '') + qaText;
+            if (bar) bar.remove();
+            if (typeof chatTransHarvestMemory === 'function') chatTransHarvestMemory(src, true);
         }
 
         async function translateAskRun(msgIdx, s, e, question, bar) {
