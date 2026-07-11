@@ -16528,12 +16528,17 @@ body {
                     // 前情梳理 Tab：滚动剧情梗概，可看/改 + 手动「压缩本集」
                     var _rcp = (chatMemoryTables.recap || '');
                     var _rcpEsc = _rcp.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    // 前情梳理默认折叠（跟共读摘要段一样：2 行预览，点开才展开成可编辑框）——复用 chatToggleSummarySeg
                     var _rcpPane = '<div class="seg" style="padding-bottom:8px">'
-                        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+                        + '<div onclick="chatToggleSummarySeg(this)" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;cursor:pointer">'
                         + '<span class="seg-label" style="margin:0">📖 前情梳理 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + (_rcp ? _rcp.length + ' 字' : '暂无') + '</span></span>'
-                        + '<button onclick="chatTransRecapCurrent()" title="把当前这一集的剧情压进前情梳理" style="background:none;border:1px solid var(--input-border);border-radius:8px;padding:4px 10px;font-size:11px;color:var(--accent);cursor:pointer">📖 压缩本集</button>'
-                        + '</div>'
-                        + '<textarea oninput="chatEditTransRecap(this.value);this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'" placeholder="发下一集时会自动把上一集压进来；也可点『压缩本集』手动更新。追问时这段会带给 AI 帮它理解剧情。" style="width:100%;box-sizing:border-box;min-height:120px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:var(--text);resize:none;font-family:inherit;outline:none;overflow:hidden">' + _rcpEsc + '</textarea>'
+                        + '<span style="display:flex;align-items:center;gap:6px">'
+                        + '<button onclick="event.stopPropagation();chatTransRecapCurrent()" title="把当前这一集的剧情压进前情梳理" style="background:none;border:1px solid var(--input-border);border-radius:8px;padding:4px 10px;font-size:11px;color:var(--accent);cursor:pointer">📖 压缩本集</button>'
+                        + '<span class="seg-arrow" style="font-size:10px;color:var(--text-muted)">▸</span>'
+                        + '</span></div>'
+                        + '<div class="seg-preview" onclick="chatToggleSummarySeg(this)" style="font-size:12.5px;line-height:1.6;color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer">' + (_rcp ? _rcpEsc : '（还没有前情梳理，发下一集会自动压上一集，或点右上角「压缩本集」）') + '</div>'
+                        + '<textarea oninput="chatEditTransRecap(this.value);this.style.height=\'auto\';this.style.height=this.scrollHeight+\'px\'" placeholder="发下一集时会自动把上一集压进来；也可点『压缩本集』手动更新。追问时这段会带给 AI 帮它理解剧情。" style="display:none;width:100%;box-sizing:border-box;min-height:120px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:var(--text);resize:none;font-family:inherit;outline:none;overflow:hidden">' + _rcpEsc + '</textarea>'
+                        + '<div class="seg-collapse" onclick="chatToggleSummarySeg(this)" style="display:none;text-align:center;font-size:11px;color:var(--accent);padding:7px 0 2px;cursor:pointer">▴ 收起</div>'
                         + '</div>';
                     panes.push({ key: 'recap', label: '前情', html: _rcpPane });
                 } else {
