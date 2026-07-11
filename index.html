@@ -16608,6 +16608,11 @@ body {
         var _mtPlotCols = ['章节', '事件', '细节', '已解决'];
         var _mtPlaceCols = ['地点', '规模/特征', '关联', '简介'];
         var _mtTimeCols = ['时间', '事件'];   // 大事年表：只记有明确时间标记/重大跨度的关键节点，全表限量
+        // 翻译模式「剧集记忆」四张表列定义（结构区别于共读：多一张译名·术语对照表，用于跨集统一译法+回喂说话人推断）
+        var _mtTransCharCols = ['角色', '性别', '身份', '关系/所属', '备注'];
+        var _mtTransTermCols = ['原文', '译名', '类型', '说明'];        // 类型=人名/地名/机构/术语…；跨集固定译法
+        var _mtTransCaseCols = ['案件/线索', '进展', '关键点', '状态'];  // 正在进行的案子、伏笔、剧情线
+        var _mtTransSetCols = ['设定', '说明'];                          // 反复出现的世界规则/行业背景（如英国律政体系）
         // 给新表打「本次变更」标记：对比旧表，新增行 _chg='new'；已有行字段有变 _chg='upd' 并把旧值存进 _prev。
         // 按首要标识列匹配（人物名/地点名/时间+事件/伏笔事件）。_chg/_prev 是附加字段，渲染表格 markdown 时会被忽略，不会发给模型。
         function _mtRowKey(tableName, r) {
@@ -19209,6 +19214,102 @@ body {
             }
             return rows;
         }
+        // ===== 翻译模式「剧集记忆」沉淀引擎（Phase 1）=====
+        // 把一段素材（追问 Q&A / 用户手动指定的一段）提取成结构化干货，增量并进四张翻译表。
+        // 手动「记住」与「追问后自动」共用此函数，出口只有一个：结构化进表，绝不存游离原始便签。
+        var chatTransHarvesting = false;
+        // 按四张表的表头行把模型输出切成四段（人物/译名/案件/设定），顺序无关
+        function _transSplitTables(result) {
+            var lines = result.split('\n');
+            function hdr(test) { for (var i = 0; i < lines.length; i++) { if (lines[i].indexOf('|') >= 0 && test(lines[i])) return i; } return -1; }
+            var marks = [
+                { type: 'characters', idx: hdr(function(l){ return l.indexOf('角色') >= 0 && l.indexOf('性别') >= 0; }) },
+                { type: 'terms', idx: hdr(function(l){ return l.indexOf('原文') >= 0 && l.indexOf('译名') >= 0; }) },
+                { type: 'cases', idx: hdr(function(l){ return l.indexOf('案件') >= 0 || (l.indexOf('进展') >= 0 && l.indexOf('状态') >= 0); }) },
+                { type: 'settings', idx: hdr(function(l){ return l.indexOf('设定') >= 0 && l.indexOf('译名') < 0; }) }
+            ].filter(function(m){ return m.idx >= 0; }).sort(function(a, b){ return a.idx - b.idx; });
+            var out = { characters: '', terms: '', cases: '', settings: '' };
+            if (!marks.length) return out;
+            for (var k = 0; k < marks.length; k++) {
+                var start = marks[k].idx;
+                if (start > 0 && lines[start - 1].indexOf('|') < 0 && lines[start - 1].trim() !== '') start--;
+                var end = k + 1 < marks.length ? marks[k + 1].idx : lines.length;
+                out[marks[k].type] = lines.slice(start, end).join('\n');
+            }
+            return out;
+        }
+        async function chatTransHarvestMemory(sourceText, manual) {
+            if (!sourceText || !sourceText.trim()) { if (manual) showToast('没有可提取的内容'); return; }
+            if (chatTransHarvesting) { if (manual) showToast('记忆正在更新中，稍等…'); return; }
+            var mc = chatResolveCompressModel();
+            if (!mc) { if (manual) showToast('没有可用模型，无法更新记忆'); return; }
+            var convId = chatCurrentConvId;
+            var t = chatMemoryTables || {};
+            var tables = { characters: t.characters || [], terms: t.terms || [], cases: t.cases || [], settings: t.settings || [] };
+            var charMd = _readerRenderTableMd(_mtTransCharCols, tables.characters);
+            var termMd = _readerRenderTableMd(_mtTransTermCols, tables.terms);
+            var caseMd = _readerRenderTableMd(_mtTransCaseCols, tables.cases);
+            var setMd = _readerRenderTableMd(_mtTransSetCols, tables.settings);
+            var prompt = '【当前人物表】\n' + charMd + '\n\n【当前译名·术语表】\n' + termMd + '\n\n【当前案件·剧情线表】\n' + caseMd + '\n\n【当前设定·背景表】\n' + setMd + '\n\n【本次新素材】\n' + sourceText;
+            chatTransHarvesting = true;
+            if (manual) showToast('🧠 正在提取并记入剧集记忆…');
+            try {
+                var result = await chatStreamChatBigOutput({
+                    baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 16000, purpose: '剧集记忆',
+                    messages: [
+                        { role: 'system', content: '你是「剧集翻译记忆」维护助手。根据本次新素材（多为用户对译文的追问 + 你之前的解答，也可能是用户指定的一段原文/译文），增量更新下面四张表格，帮读者跨集积累这部剧/影视的关键信息。\n规则：\n- 人物表列：角色、性别、身份、关系/所属；备注（角色=原名或通用称呼，性别填 男/女/不明，身份=职业或剧中定位，关系/所属=与谁的关系或所属阵营/机构）。只收有名有姓或反复出场的角色，一次性路人不入表。\n- 译名·术语表列：原文、译名、类型、说明（类型填 人名/地名/机构/军事/法律/其他；这张表的作用是让同一个词每集译法统一，所以人名、专有名词、专业术语的固定中文译名务必收进来；说明用一句话点明含义）。\n- 案件·剧情线表列：案件/线索、进展、关键点、状态（记正在进行的案子、伏笔、跨集剧情线；状态填 进行中/已了结/悬而未决）。\n- 设定·背景表列：设定、说明（记这部剧反复出现的世界规则、行业背景，如英国律政体系、某机构运作方式等；一次性的背景不入表）。\n- 增量更新：新信息加行；已有行只改变化了的字段，没变的原样保留；同一条目不要重复建行。\n- 若某张表本次没有新增或变化，就原样输出它当前的内容。\n- 宁缺毋滥：拿不准、太琐碎、只出现一次且无持续作用的信息不要入表。\n- 依次输出完整的四张 markdown 表格：人物表、译名·术语表、案件·剧情线表、设定·背景表，之间空行分隔，每张表前保留【表名】小标题。不要输出任何其他解释文字。' },
+                        { role: 'user', content: prompt }
+                    ]
+                });
+                if (!result || chatCurrentConvId !== convId || !chatTranslateMode) return;
+                var parts = _transSplitTables(result);
+                var newChars = _readerParseTableMd(parts.characters, _mtTransCharCols);
+                var newTerms = _readerParseTableMd(parts.terms, _mtTransTermCols);
+                var newCases = _readerParseTableMd(parts.cases, _mtTransCaseCols);
+                var newSets = _readerParseTableMd(parts.settings, _mtTransSetCols);
+                if (newChars.length || newTerms.length || newCases.length || newSets.length) {
+                    // 「本次变更」高亮标记留到 Phase 3 建弹窗时再按模式扩 _mtRowKey（翻译人物列是「角色」不是「人物」），此处先不打标
+                    chatMemoryTables = {
+                        characters: newChars.length ? newChars : tables.characters,
+                        terms: newTerms.length ? newTerms : tables.terms,
+                        cases: newCases.length ? newCases : tables.cases,
+                        settings: newSets.length ? newSets : tables.settings
+                    };
+                    chatSaveCurrentConv(true);
+                    if (typeof chatUpdateCtxIndicator === 'function') chatUpdateCtxIndicator();
+                    console.log('[剧集记忆] 人物 ' + chatMemoryTables.characters.length + ' · 译名 ' + chatMemoryTables.terms.length + ' · 案件 ' + chatMemoryTables.cases.length + ' · 设定 ' + chatMemoryTables.settings.length);
+                    showToast('🧠 剧集记忆已更新（人物 ' + chatMemoryTables.characters.length + ' · 译名 ' + chatMemoryTables.terms.length + ' · 案件 ' + chatMemoryTables.cases.length + ' · 设定 ' + chatMemoryTables.settings.length + '）');
+                } else if (manual) {
+                    showToast('这段没提取到值得入表的新信息');
+                }
+            } catch (e) {
+                console.warn('[剧集记忆] 更新失败:', e.message);
+                if (manual) showToast('⚠️ 记忆更新失败：' + (e.message || ''));
+            } finally {
+                chatTransHarvesting = false;
+            }
+        }
+
+        // 把当前「剧集记忆」四张表拼成一段系统提示，回喂给翻译/追问（Phase 2）——
+        // 让说话人照人物表标真名、专有名词按译名表统一译法。没有记忆时返回空串（不塞冗余）。
+        function chatTransMemoryPromptBlock() {
+            if (!chatTranslateMode) return '';
+            var t = chatMemoryTables;
+            if (!t) return '';
+            var chars = t.characters || [], terms = t.terms || [], cases = t.cases || [], sets = t.settings || [];
+            if (!chars.length && !terms.length && !cases.length && !sets.length) return '';
+            var parts = [];
+            if (chars.length) parts.push('【已知人物表】\n' + _readerRenderTableMd(_mtTransCharCols, chars));
+            if (terms.length) parts.push('【已知译名·术语表（固定译法，务必沿用）】\n' + _readerRenderTableMd(_mtTransTermCols, terms));
+            if (cases.length) parts.push('【案件·剧情线】\n' + _readerRenderTableMd(_mtTransCaseCols, cases));
+            if (sets.length) parts.push('【设定·背景】\n' + _readerRenderTableMd(_mtTransSetCols, sets));
+            return '以下是这部剧到目前为止积累的「剧集记忆」，翻译/解答时请充分利用：\n'
+                + '· 标注说话人时，优先用人物表里的真实角色名与性别，而不是笼统的 A/B；\n'
+                + '· 人名、地名、专有名词、术语请严格沿用译名表里的固定中文译法，保证跨集统一；\n'
+                + '· 结合案件线与设定理解剧情，但不要在译文里额外复述这些背景。\n\n'
+                + parts.join('\n\n');
+        }
+
         // 后台预生成的轻量触发：进章/续章后延后一点再跑，别和正文渲染抢资源。
         function readerSchedulePrefetch(curChap) {
             setTimeout(function () { readerPrefetchSummaries(curChap); }, 1200);
@@ -21131,13 +21232,14 @@ body {
                 var baseUrl = getBaseUrl(item.url);
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
                 var _tlast = 0;
+                var _memBlk = (typeof chatTransMemoryPromptBlock === 'function') ? chatTransMemoryPromptBlock() : '';
+                var _trMsgs = [{ role: 'system', content: TRANSLATE_MODE_INSTRUCTION }];
+                if (_memBlk) _trMsgs.push({ role: 'system', content: _memBlk });  // 回喂剧集记忆：说话人标真名、译名统一
+                _trMsgs.push({ role: 'user', content: segment });
                 var answer = (await chatStreamChat({
                     baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel, markUsed: true,
                     purpose: '翻译',
-                    messages: [
-                        { role: 'system', content: TRANSLATE_MODE_INSTRUCTION },
-                        { role: 'user', content: segment }
-                    ],
+                    messages: _trMsgs,
                     signal: ctl.signal,
                     onDelta: function (full) {
                         pendObj.partial = full;            // 存一份，并发重渲时不会被「翻译中…」占位冲掉
@@ -21257,13 +21359,14 @@ body {
             try {
                 var baseUrl = getBaseUrl(item.url);
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
+                var _memBlk = (typeof chatTransMemoryPromptBlock === 'function') ? chatTransMemoryPromptBlock() : '';
+                var _askMsgs = [{ role: 'system', content: sysPrompt }];
+                if (_memBlk) _askMsgs.push({ role: 'system', content: _memBlk });  // 回喂剧集记忆：结合已知人物/译名/案件作答
+                _askMsgs.push({ role: 'user', content: userMsg });
                 var answer = (await chatStreamChat({
                     baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel, markUsed: true,
                     purpose: '翻译追问',
-                    messages: [
-                        { role: 'system', content: sysPrompt },
-                        { role: 'user', content: userMsg }
-                    ],
+                    messages: _askMsgs,
                     signal: translateAbortCtl.signal
                 })).trim();
                 answer = answer.replace(/\[\[\/?(?:TR|QA|ANS)[^\]]*\]\]/g, '').trim();
@@ -21272,6 +21375,11 @@ body {
                 chatSaveCurrentConv(true);
                 readingAddQuestionBookmark(msgIdx, hi, question, { trS: lo, trE: hi }); // 收进读痕（按译文块末段归位，答案存在 [[TR]] 块里）
                 readingRerenderMsg(msgIdx, hi);
+                // 沉淀：把这轮追问 Q&A 的干货并进「剧集记忆」四张表（追问后自动，Phase 1 触发的真正落点）
+                if (typeof chatTransHarvestMemory === 'function') {
+                    var _hsrc = '【我的追问】' + question + '\n\n【解答】' + answer;
+                    setTimeout(function() { chatTransHarvestMemory(_hsrc, false); }, 400);
+                }
             } catch (err) {
                 if (send) { send.disabled = false; send.textContent = err.name === 'AbortError' ? '提问' : '重试'; }
                 if (input) input.disabled = false;
