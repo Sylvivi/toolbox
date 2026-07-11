@@ -9511,6 +9511,7 @@ body {
                     // 导入预设数据
                     if (imported.chat_sp_presets && Array.isArray(imported.chat_sp_presets)) {
                         localStorage.setItem(CHAT_SP_KEY, JSON.stringify(imported.chat_sp_presets));
+                        localStorage.setItem('chat_sp_presets_ts', imported.chat_sp_presets_ts || new Date().toISOString());
                     }
                     if (imported.chat_fav_models && Array.isArray(imported.chat_fav_models)) {
                         localStorage.setItem('chat_fav_models', JSON.stringify(imported.chat_fav_models));
@@ -10017,6 +10018,8 @@ body {
                 favModelsTs: localStorage.getItem('chat_fav_models_ts') || '',
                 modelPrices: (function () { try { return JSON.parse(localStorage.getItem('toolbox_model_prices') || '{}'); } catch (e) { return {}; } })(),
                 modelPricesTs: localStorage.getItem('toolbox_model_prices_ts') || '',
+                presets: (function () { try { return JSON.parse(localStorage.getItem('chat_sp_presets') || '[]'); } catch (e) { return []; } })(),
+                presetsTs: localStorage.getItem('chat_sp_presets_ts') || '',
                 fonts: readingFontsLoad(),
                 fontsTs: readingGetFontsTs(),
                 fontName: localStorage.getItem('reading_font_name') || '',
@@ -10315,6 +10318,16 @@ body {
                     if (cloudMpTs > localMpTs) {
                         localStorage.setItem('toolbox_model_prices', JSON.stringify(manifest.modelPrices));
                         localStorage.setItem('toolbox_model_prices_ts', cloudMpTs);
+                    }
+                }
+                // 系统提示词预设（clawd「预设」标签页里加的人设）：整块按时间戳后写覆盖
+                if (manifest.presets) {
+                    var cloudSpTs = manifest.presetsTs || '';
+                    var localSpTs = localStorage.getItem('chat_sp_presets_ts') || '';
+                    if (cloudSpTs > localSpTs) {
+                        localStorage.setItem('chat_sp_presets', JSON.stringify(manifest.presets));
+                        localStorage.setItem('chat_sp_presets_ts', cloudSpTs);
+                        if (typeof chatRenderSpPresets === 'function') chatRenderSpPresets();
                     }
                 }
 
@@ -10652,6 +10665,7 @@ body {
                 if (manifest.bookOpened) { localStorage.setItem('reading_book_opened', JSON.stringify(manifest.bookOpened)); if (manifest.bookOpenedTs) localStorage.setItem('reading_book_opened_ts', manifest.bookOpenedTs); }
                 if (manifest.favModels) { try { localStorage.setItem('chat_fav_models', JSON.stringify(manifest.favModels)); localStorage.setItem('chat_fav_models_ts', manifest.favModelsTs || new Date().toISOString()); chatFavModels = manifest.favModels; if (typeof chatUpdateFavHeader === 'function') chatUpdateFavHeader(); } catch (e) {} }
                 if (manifest.modelPrices) { try { localStorage.setItem('toolbox_model_prices', JSON.stringify(manifest.modelPrices)); localStorage.setItem('toolbox_model_prices_ts', manifest.modelPricesTs || new Date().toISOString()); } catch (e) {} }
+                if (manifest.presets) { try { localStorage.setItem('chat_sp_presets', JSON.stringify(manifest.presets)); localStorage.setItem('chat_sp_presets_ts', manifest.presetsTs || new Date().toISOString()); if (typeof chatRenderSpPresets === 'function') chatRenderSpPresets(); } catch (e) {} }
                 readingApplyFontSync(manifest); // 字体库+五个位置选择，带时间戳护栏（修复开机被云端旧值冲掉的问题）
                 if (manifest.readerPos) { try { localStorage.setItem('reader_pos', JSON.stringify(manifest.readerPos)); } catch (e) {} }
                 if (manifest.readerQA) { try { localStorage.setItem('reader_qa', JSON.stringify(manifest.readerQA)); } catch (e) {} }
@@ -10828,6 +10842,8 @@ body {
                 chat_fav_models_ts: localStorage.getItem('chat_fav_models_ts') || '',
                 model_prices: (function () { try { return JSON.parse(localStorage.getItem('toolbox_model_prices') || '{}'); } catch (e) { return {}; } })(),
                 model_prices_ts: localStorage.getItem('toolbox_model_prices_ts') || '',
+                chat_sp_presets: (function () { try { return JSON.parse(localStorage.getItem('chat_sp_presets') || '[]'); } catch (e) { return []; } })(),
+                chat_sp_presets_ts: localStorage.getItem('chat_sp_presets_ts') || '',
                 tombstones: getTombstones(),
                 checkin: getCheckinData(),
                 checkinTasks: getCheckinTasks(),
@@ -11139,6 +11155,16 @@ body {
             localStorage.setItem('toolbox_model_prices', JSON.stringify(remote.model_prices));
             if (rTs) localStorage.setItem('toolbox_model_prices_ts', rTs);
         }
+        // 系统提示词预设（Gist 整包路径）：远端有更新的时间戳才覆盖
+        function applyRemotePresets(remote) {
+            if (!remote || !remote.chat_sp_presets) return;
+            var rTs = remote.chat_sp_presets_ts || remote.lastModified || '';
+            var lTs = localStorage.getItem('chat_sp_presets_ts') || '';
+            if (remote.chat_sp_presets_ts && rTs <= lTs) return;
+            localStorage.setItem('chat_sp_presets', JSON.stringify(remote.chat_sp_presets));
+            if (rTs) localStorage.setItem('chat_sp_presets_ts', rTs);
+            if (typeof chatRenderSpPresets === 'function') chatRenderSpPresets();
+        }
 
         /* ---- 通用合并逻辑（Gist / CF 共用） ---- */
         function applySyncData(remote, manual) {
@@ -11158,6 +11184,7 @@ body {
 
                 applyRemoteFavModels(remote);
                 applyRemoteModelPrices(remote);
+                applyRemotePresets(remote);
                 if (remote.tombstones) setTombstones(remote.tombstones);
             } else {
                 var localTombs = getTombstones();
@@ -11251,6 +11278,7 @@ body {
 
                 applyRemoteFavModels(remote);
                 applyRemoteModelPrices(remote);
+                applyRemotePresets(remote);
 
                 var totalChanges = kCount + sCount + kUpdated + sUpdated;
                 if (manual && totalChanges > 0) {
@@ -14238,7 +14266,15 @@ body {
         function chatGetSpPresets() {
             try { return JSON.parse(localStorage.getItem(CHAT_SP_KEY) || '[]'); } catch(e) { return []; }
         }
-        function chatSaveSpPresets(presets) { localStorage.setItem(CHAT_SP_KEY, JSON.stringify(presets)); }
+        var _chatSpPushTimer = null;
+        function chatSaveSpPresets(presets) {
+            localStorage.setItem(CHAT_SP_KEY, JSON.stringify(presets));
+            localStorage.setItem('chat_sp_presets_ts', new Date().toISOString());  // 打时间戳，云同步据此「谁新用谁」
+            if (typeof syncPushData === 'function') {
+                if (_chatSpPushTimer) clearTimeout(_chatSpPushTimer);
+                _chatSpPushTimer = setTimeout(syncPushData, 3000);  // 防抖后台推送
+            }
+        }
 
         // 顶部 chips：点一下=套用开聊；末尾「＋新建」「⚙管理」
         function chatRenderSpPresets() {
