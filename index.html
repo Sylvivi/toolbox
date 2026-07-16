@@ -16527,10 +16527,14 @@ body {
                     panes.push({ key: 'settings', label: '设定', html: _mtTablePane('🌍', '设定·背景', '条', 'settings', chatMemoryTables.settings || [], _mtTransSetCols) });
                     // 前情梳理 Tab：分集列出，每集单独一段（折叠+字数+🗑删除+♻️重做，复用摘要段 _segHtml）
                     var _rcpSegs = chatTransRecapSegs();
+                    var _rcpMiss = (typeof chatTransRecapMissing === 'function') ? chatTransRecapMissing().length : 0;
                     var _rcpPane = '<div style="padding-bottom:8px">'
                         + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">'
                         + '<span class="seg-label" style="margin:0">📖 前情梳理 <span style="font-weight:400;color:var(--text-muted);font-size:10px">' + (_rcpSegs.length ? _rcpSegs.length + ' 集' : '暂无') + '</span></span>'
+                        + '<span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+                        + (_rcpMiss > 0 ? '<button onclick="chatTransRecapAll()" title="把前面还没压过的集逐集压成前情" style="background:var(--accent);border:none;border-radius:8px;padding:5px 12px;font-size:12px;color:#fff;cursor:pointer;white-space:nowrap">📖 补齐前 ' + _rcpMiss + ' 集</button>' : '')
                         + '<button onclick="chatTransRecapCurrent()" title="把当前这一集的剧情压成一段前情" style="background:none;border:1px solid var(--input-border);border-radius:8px;padding:5px 12px;font-size:12px;color:var(--accent);cursor:pointer;white-space:nowrap">📖 压缩本集</button>'
+                        + '</span>'
                         + '</div>';
                     if (!_rcpSegs.length) {
                         _rcpPane += '<div style="text-align:center;color:var(--text-muted);font-size:12.5px;line-height:1.7;padding:18px 8px">（还没有前情梳理，发下一集会自动把上一集压成一段，也可点上面「压缩本集」手动加。追问时这些前情会带给 AI 帮它理解剧情。）</div>';
@@ -16816,6 +16820,45 @@ body {
             if (!src) { showToast('这一集还没有实质内容'); return; }
             if (chatMessages[lastUserIdx]) chatMessages[lastUserIdx]._recapped = true; // 手动压过，避免发下一集又自动压一遍
             chatTransUpdateRecap(src, true, lastUserIdx);
+        }
+        // 收集还没压过前情的集（有实质原文、且尚无对应段）
+        function chatTransRecapMissing() {
+            var segs = chatTransRecapSegs();
+            var have = {};
+            for (var s = 0; s < segs.length; s++) { if (segs[s].srcIdx != null) have[segs[s].srcIdx] = 1; }
+            var todo = [];
+            for (var i = 0; i < chatMessages.length; i++) {
+                if (chatMessages[i].role !== 'user' || have[i]) continue;
+                if (chatTransEpisodeSource(i)) todo.push(i);
+            }
+            return todo;
+        }
+        // 一键补齐：把前面还没压过的集逐集压成前情（顺序排好）
+        var chatTransRecapAllBusy = false;
+        async function chatTransRecapAll() {
+            if (!chatTranslateMode || chatTransRecapAllBusy) return;
+            var todo = chatTransRecapMissing();
+            if (!todo.length) { showToast('每一集都已经压过啦'); return; }
+            if (!confirm('有 ' + todo.length + ' 集还没压缩，现在逐集压？会调用模型 ' + todo.length + ' 次（约花点额度）。')) return;
+            var convId = chatCurrentConvId;
+            chatTransRecapAllBusy = true;
+            var done = 0, fail = 0;
+            try {
+                for (var t = 0; t < todo.length; t++) {
+                    if (chatCurrentConvId !== convId || !chatTranslateMode) break; // 切走会话就停
+                    showToast('📖 压缩中… ' + (t + 1) + '/' + todo.length, true);
+                    var before = chatTransRecapSegs().length;
+                    var src = chatTransEpisodeSource(todo[t]);
+                    if (!src) { continue; }
+                    await chatTransUpdateRecap(src, false, todo[t]);
+                    if (chatMessages[todo[t]]) chatMessages[todo[t]]._recapped = true; // 压过就标记，避免以后自动重压
+                    if (chatTransRecapSegs().length > before) done++; else fail++;
+                }
+            } finally {
+                chatTransRecapAllBusy = false;
+            }
+            showToast('📖 完成：新压 ' + done + ' 集' + (fail ? ('，' + fail + ' 集失败可再点一次重试') : ''));
+            if (document.querySelector('.chat-summary-modal-mask')) chatShowSummaryModal(_summaryModalScroll());
         }
         // 摘要段折叠/展开：展开时把编辑框撑到内容高度并露出底部「▴ 收起」条；收起时把编辑过的最新内容同步回预览
         function chatToggleSummarySeg(el) {
@@ -19485,6 +19528,8 @@ body {
                 if (srcIdx != null) { for (var i = 0; i < segs.length; i++) { if (segs[i].srcIdx === srcIdx) { pos = i; break; } } }
                 if (pos >= 0) segs[pos] = { text: result, srcIdx: srcIdx };   // 重做/重压同一集：替换，不新增
                 else segs.push({ text: result, srcIdx: (srcIdx == null ? null : srcIdx) });
+                // 按集号排序，补齐旧集时也能插到正确位置（旧版无 srcIdx 的排最前）
+                segs.sort(function (a, b) { var ai = a.srcIdx == null ? -1 : a.srcIdx, bi = b.srcIdx == null ? -1 : b.srcIdx; return ai - bi; });
                 chatSaveCurrentConv(true);
                 if (document.querySelector('.chat-summary-modal-mask')) chatShowSummaryModal(_summaryModalScroll()); // 弹窗开着就即时刷新
                 if (manual) showToast('📖 前情梳理已更新（' + result.length + ' 字）');
