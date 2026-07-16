@@ -16786,20 +16786,13 @@ body {
             for (var i = 0; i <= srcIdx; i++) { if (chatMessages[i] && chatMessages[i].role === 'user') n++; }
             return n || null;
         }
-        // 取某一集(user 消息)的原文+译文问答，组成压缩素材（current/prev/regen 共用）
+        // 取某一集(user 消息)的原文，作为前情压缩素材（current/prev/regen 共用）。
+        // 只用原文：前情是剧情、剧情全在原文里；译文只是同一段的中文，压它纯属多花 token。问答另走「文化背景」表。
         function chatTransEpisodeSource(userIdx) {
             if (userIdx == null || userIdx < 0 || userIdx >= chatMessages.length) return '';
             var orig = readingModeStripParaNums(readingModeGetOriginalText(userIdx) || '');
             if (!orig || orig.length < 40) return '';
-            var end = chatMessages.length;
-            for (var k = userIdx + 1; k < chatMessages.length; k++) { if (chatMessages[k].role === 'user') { end = k; break; } }
-            var carrier = '';
-            for (var j = userIdx + 1; j < end; j++) {
-                if (chatMessages[j].role === 'assistant' && typeof chatMessages[j].content === 'string') carrier += chatMessages[j].content + '\n';
-            }
-            carrier = carrier.replace(/\[\[\/?(?:TR|QA|ANS)[^\]]*\]\]/g, ' ').replace(/\s+\n/g, '\n').trim();
-            return '【本集原文】\n' + (orig.length > 16000 ? orig.slice(0, 16000) + '…' : orig)
-                + (carrier ? '\n\n【译文与问答】\n' + (carrier.length > 6000 ? carrier.slice(0, 6000) + '…' : carrier) : '');
+            return '【本集原文】\n' + (orig.length > 16000 ? orig.slice(0, 16000) + '…' : orig);
         }
         // 编辑某一段前情
         function chatEditTransRecapSeg(el) {
