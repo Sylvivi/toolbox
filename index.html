@@ -21730,9 +21730,9 @@ body {
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
                 var _memBlk = (typeof chatTransMemoryPromptBlock === 'function') ? chatTransMemoryPromptBlock() : '';
                 var _askMsgs = [{ role: 'system', content: sysPrompt }];
-                if (_memBlk) _askMsgs.push({ role: 'system', content: _memBlk });  // 回喂剧集记忆：结合已知人物/剧情作答
-                var _recap = (typeof chatTransRecapJoin === 'function') ? chatTransRecapJoin() : '';
-                if (_recap) _askMsgs.push({ role: 'system', content: '【前情梳理（到目前为止各集的剧情，帮你理解语境，不要复述）】\n' + _recap });  // 追问才带前情
+                if (_memBlk) _askMsgs.push({ role: 'system', content: _memBlk });  // 回喂剧集记忆：结合已知人物/地点/文化背景作答
+                // 前情梳理不再喂给 AI（省额度，用户选择）：跨集信息靠上面三张记忆表传达；
+                // 前情现在只作「给人读的记忆」+「提取人物/地点的来源」。本集内语境靠 userMsg 里的「本集前文」。
                 _askMsgs.push({ role: 'user', content: userMsg });
                 var answer = (await chatStreamChat({
                     baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel, markUsed: true,
