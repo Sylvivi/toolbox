@@ -16474,16 +16474,16 @@ body {
                 // 翻译模式：剧集记忆没有「按摘要重折」的重建（它靠追问增量攒），但给一个「清空重来」——
                 // 修表格串行 bug 前攒的乱数据可一键清掉、用修好的引擎重头攒。
                 var _tmt = chatMemoryTables;
-                var _tmtCount = (_tmt.characters || []).length + (_tmt.cases || []).length;
+                var _tmtCount = (_tmt.characters || []).length + (_tmt.places || []).length + (_tmt.cases || []).length;
                 rebuildBar = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;margin-bottom:12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px">'
                     + '<div style="min-width:0;font-size:11.5px;line-height:1.5;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🧠 剧集记忆 · 共 ' + _tmtCount + ' 行</div>'
                     + '<button onclick="chatClearTransMem()" title="清空这部剧的全部记忆表格，之后靠追问从头重新积累（修表格串行 bug 前的乱数据可以这样一键清掉）" style="flex-shrink:0;background:none;color:var(--text-muted);border:1px solid var(--input-border);border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap">🧹 清空重来</button>'
                     + '</div>';
             }
-            // 结构化记忆表格——每张表各成一个 Tab。共读四表（人物/地点/年表/主线）与翻译两表（人物/剧情）
+            // 结构化记忆表格——每张表各成一个 Tab。共读四表（人物/地点/年表/主线）与翻译三表（人物/地点/文化背景）
             // 结构不同，按当前模式各显各的（一个对话只属于一种模式，chatMemoryTables 的形状随之而定）。
             var _hasReadingMem = chatMemoryTables && chatReadingMode && ((chatMemoryTables.characters || []).length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || (chatMemoryTables.plotlines || []).length);
-            var _hasTransMem = chatMemoryTables && chatTranslateMode && ((chatMemoryTables.characters || []).length || (chatMemoryTables.cases || []).length || (chatMemoryTables.recap || '').length);
+            var _hasTransMem = chatMemoryTables && chatTranslateMode && ((chatMemoryTables.characters || []).length || (chatMemoryTables.places || []).length || (chatMemoryTables.cases || []).length || (chatMemoryTables.recap || '').length);
             var _hasMem = _hasReadingMem || _hasTransMem;
             if (_hasMem) {
                 function _mtRowHtml(tableName, row, idx, cols) {
@@ -16526,9 +16526,18 @@ body {
                     return h + '</div>';
                 }
                 if (_hasTransMem) {
-                    // 翻译模式：剧集记忆四表
-                    panes.push({ key: 'characters', label: '人物', html: _mtTablePane('👤', '人物表', '人', 'characters', chatMemoryTables.characters || [], _mtTransCharCols) });
-                    panes.push({ key: 'cases', label: '剧情', html: _mtTablePane('🧩', '剧情线', '条', 'cases', chatMemoryTables.cases || [], _mtTransCaseCols) });
+                    // 翻译模式：剧集记忆三表——人物/地点（来自前情，自动提取）+ 文化背景（原「剧情」表，来自追问）
+                    // 人物/地点的「兜底」：有前情段还没提取过就显示「🔄 从前情补齐」，防止哪集漏生成
+                    var _mineMiss = (typeof chatTransMineMissing === 'function') ? chatTransMineMissing().length : 0;
+                    var _mineBar = _mineMiss > 0
+                        ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;margin-bottom:12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px">'
+                            + '<div style="min-width:0;font-size:11.5px;line-height:1.5;color:var(--text-muted)">📖 有 ' + _mineMiss + ' 集前情还没提取人物/地点</div>'
+                            + '<button onclick="chatTransMineAll()" title="扫描前情梳理各集，把还没提取的人物/地点补上" style="flex-shrink:0;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap">🔄 从前情补齐</button>'
+                            + '</div>'
+                        : '';
+                    panes.push({ key: 'characters', label: '人物', html: _mineBar + _mtTablePane('👤', '人物表', '人', 'characters', chatMemoryTables.characters || [], _mtTransCharCols) });
+                    panes.push({ key: 'places', label: '地点', html: _mineBar + _mtTablePane('📍', '地点', '处', 'places', chatMemoryTables.places || [], _mtTransPlaceCols) });
+                    panes.push({ key: 'cases', label: '文化背景', html: _mtTablePane('🌍', '文化背景', '条', 'cases', chatMemoryTables.cases || [], _mtTransCaseCols) });
                     // 前情梳理 Tab：分集列出，每集单独一段（折叠+字数+🗑删除+♻️重做，复用摘要段 _segHtml）
                     var _rcpSegs = chatTransRecapSegs();
                     var _rcpMiss = (typeof chatTransRecapMissing === 'function') ? chatTransRecapMissing().length : 0;
@@ -16659,10 +16668,13 @@ body {
         var _mtPlotCols = ['章节', '事件', '细节', '已解决'];
         var _mtPlaceCols = ['地点', '规模/特征', '关联', '简介'];
         var _mtTimeCols = ['时间', '事件'];   // 大事年表：只记有明确时间标记/重大跨度的关键节点，全表限量
-        // 翻译模式「剧集记忆」表列定义（现为人物/剧情两张；译名表、设定表已移除，_mtTransTermCols/_mtTransSetCols 仅留作旧数据兼容、不再展示/提取）
+        // 翻译模式「剧集记忆」表列定义（现为 人物/地点/文化背景 三张）：
+        //   人物、地点 ← 前情梳理自动提取；文化背景（原「剧情」表，就是改个名，key 仍是 cases）← 追问沉淀。
+        //   译名表/设定表已移除，_mtTransTermCols/_mtTransSetCols 仅留作旧数据兼容、不再展示/提取。
         var _mtTransCharCols = ['角色', '性别', '身份', '关系/所属', '备注'];
+        var _mtTransPlaceCols = ['地点', '说明'];                        // 地点表：场所/城市/机构等（来自前情）
         var _mtTransTermCols = ['原文', '译名', '类型', '说明'];        // 类型=人名/地名/机构/术语…；跨集固定译法
-        var _mtTransCaseCols = ['线索/事件', '进展', '关键点', '状态'];  // 跨集剧情线：案子/悬疑/伏笔/喜剧支线/关系发展等（原「案件」表，改名剧情线，兼容各类剧）
+        var _mtTransCaseCols = ['线索/事件', '进展', '关键点', '状态'];  // 「文化背景」表（原剧情/案件，只改了名，来自追问）
         var _mtTransSetCols = ['设定', '说明'];                          // 反复出现的世界规则/行业背景（如英国律政体系）
         // 给新表打「本次变更」标记：对比旧表，新增行 _chg='new'；已有行字段有变 _chg='upd' 并把旧值存进 _prev。
         // 按首要标识列匹配（人物名/地点名/时间+事件/伏笔事件）。_chg/_prev 是附加字段，渲染表格 markdown 时会被忽略，不会发给模型。
@@ -16716,11 +16728,11 @@ body {
         }
         function chatAddMtRow(tableName) {
             var _trans = chatTranslateMode;
-            if (!chatMemoryTables) chatMemoryTables = _trans ? { characters: [], terms: [], cases: [], settings: [] } : { characters: [], places: [], timeline: [], plotlines: [] };
+            if (!chatMemoryTables) chatMemoryTables = _trans ? { characters: [], places: [], cases: [] } : { characters: [], places: [], timeline: [], plotlines: [] };
             if (!chatMemoryTables[tableName]) chatMemoryTables[tableName] = [];
             if (!_trans) { if (!chatMemoryTables.places) chatMemoryTables.places = []; if (!chatMemoryTables.timeline) chatMemoryTables.timeline = []; }
             var cols = _trans
-                ? (tableName === 'characters' ? _mtTransCharCols : tableName === 'terms' ? _mtTransTermCols : tableName === 'cases' ? _mtTransCaseCols : _mtTransSetCols)
+                ? (tableName === 'characters' ? _mtTransCharCols : tableName === 'places' ? _mtTransPlaceCols : tableName === 'terms' ? _mtTransTermCols : tableName === 'cases' ? _mtTransCaseCols : _mtTransSetCols)
                 : (tableName === 'characters' ? _mtCharCols : (tableName === 'places' ? _mtPlaceCols : (tableName === 'timeline' ? _mtTimeCols : _mtPlotCols)));
             var row = {};
             for (var c = 0; c < cols.length; c++) row[cols[c]] = '';
@@ -16732,12 +16744,15 @@ body {
         }
         // 清空翻译模式的「剧集记忆」四张表，靠后续追问从头重新积累（修串行 bug 前的乱数据一键清掉）
         function chatClearTransMem() {
-            if (!confirm('确定清空这部剧的全部剧集记忆（人物/剧情）吗？\n之后靠追问从头重新积累。')) return;
-            chatMemoryTables = { characters: [], terms: [], cases: [], settings: [] };
+            if (!confirm('确定清空这部剧的全部记忆表格（人物/地点/文化背景）吗？\n前情梳理会保留；之后可用「🔄 从前情补齐」重建人物/地点，文化背景靠追问重新积累。')) return;
+            // 保留前情梳理（recap），只清表格；顺便清掉前情各集的「已挖」标记，方便重新提取人物/地点
+            var _recap = (chatMemoryTables && chatMemoryTables.recap) || [];
+            if (Array.isArray(_recap)) _recap.forEach(function (s) { if (s) delete s._mined; });
+            chatMemoryTables = { characters: [], places: [], cases: [], recap: _recap };
             chatSaveCurrentConv(true);
             var mask = document.querySelector('.chat-summary-modal-mask');
             if (mask) mask.remove();
-            showToast('🧹 剧集记忆已清空，之后追问会重新积累');
+            showToast('🧹 记忆表格已清空（前情保留），可用「🔄 从前情补齐」重建人物/地点');
         }
         // ===== 前情梳理：分集存储（每集一段），跟摘要段同款交互 =====
         // 存在 chatMemoryTables.recap；新版是数组 [{text, srcIdx}]，旧版单块字符串按需迁移成一段。
@@ -19406,7 +19421,7 @@ body {
         // 把一段素材（追问 Q&A / 用户手动指定的一段）提取成结构化干货，增量并进四张翻译表。
         // 手动「记住」与「追问后自动」共用此函数，出口只有一个：结构化进表，绝不存游离原始便签。
         var chatTransHarvesting = false;
-        // 把模型输出切成两段（人物/剧情），顺序无关。
+        // 把模型输出切成两段（人物/文化背景），顺序无关。（追问引擎现只用 cases=文化背景 那段）
         // 优先按【表名】标题行切（标题唯一、只出现一次，绝不会和数据行撞）；缺标题才退回按列名检测。
         // 之前只按列名扫描：术语「说明」里出现「案件」二字就被误判成案件表表头，导致整表错位——故改此法。
         function _transSplitTables(result) {
@@ -19415,7 +19430,7 @@ body {
             function hdrIdx(test) { for (var i = 0; i < lines.length; i++) { if (lines[i].indexOf('|') >= 0 && test(lines[i])) return i; } return -1; }
             var specs = [
                 { type: 'characters', t: titleIdx('人物'), h: hdrIdx(function(l){ return l.indexOf('角色') >= 0 && l.indexOf('性别') >= 0; }) },
-                { type: 'cases', t: (titleIdx('剧情') >= 0 ? titleIdx('剧情') : titleIdx('案件')), h: hdrIdx(function(l){ return l.indexOf('进展') >= 0 && l.indexOf('状态') >= 0; }) }  // 表名改「剧情线」，兼容旧「案件」输出
+                { type: 'cases', t: (titleIdx('文化') >= 0 ? titleIdx('文化') : (titleIdx('剧情') >= 0 ? titleIdx('剧情') : titleIdx('案件'))), h: hdrIdx(function(l){ return l.indexOf('进展') >= 0 && l.indexOf('状态') >= 0; }) }  // 表名「文化背景」，兼容旧「剧情线/案件」输出
             ];
             var marks = specs.map(function(s){ return { type: s.type, idx: (s.t >= 0 ? s.t : s.h) }; })
                              .filter(function(m){ return m.idx >= 0; })
@@ -19429,6 +19444,7 @@ body {
             }
             return out;
         }
+        // 追问/记住 → 只更新「文化背景」表（原剧情表，就是改了名，key 仍 cases）。人物/地点归前情提取管，这里不碰。
         async function chatTransHarvestMemory(sourceText, manual) {
             if (!sourceText || !sourceText.trim()) { if (manual) showToast('没有可提取的内容'); return; }
             if (chatTransHarvesting) { if (manual) showToast('记忆正在更新中，稍等…'); return; }
@@ -19436,66 +19452,145 @@ body {
             if (!mc) { if (manual) showToast('没有可用模型，无法更新记忆'); return; }
             var convId = chatCurrentConvId;
             var t = chatMemoryTables || {};
-            var tables = { characters: t.characters || [], terms: t.terms || [], cases: t.cases || [], settings: t.settings || [] };
-            var charMd = _readerRenderTableMd(_mtTransCharCols, tables.characters);
-            var caseMd = _readerRenderTableMd(_mtTransCaseCols, tables.cases);
-            var prompt = '【当前人物表】\n' + charMd + '\n\n【当前剧情线表】\n' + caseMd + '\n\n【本次新素材】\n' + sourceText;
+            var caseMd = _readerRenderTableMd(_mtTransCaseCols, t.cases || []);
+            var prompt = '【当前文化背景表】\n' + caseMd + '\n\n【本次新素材】\n' + sourceText;
             chatTransHarvesting = true;
-            if (manual) showToast('🧠 正在提取并记入剧集记忆…');
+            if (manual) showToast('🧠 正在提取并记入文化背景…');
             try {
                 var result = await chatStreamChatBigOutput({
-                    baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 16000, purpose: '剧集记忆',
+                    baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 16000, purpose: '文化背景',
                     messages: [
-                        { role: 'system', content: '你是「剧集翻译记忆」维护助手。根据本次新素材（多为用户对译文的追问 + 你之前的解答，也可能是用户指定的一段原文/译文），增量更新下面两张表格，帮读者跨集积累这部剧/影视的关键信息。\n规则：\n- 人物表列：角色、性别、身份、关系/所属；备注（角色=原名或通用称呼，性别填 男/女/不明，身份=职业或剧中定位，关系/所属=与谁的关系或所属阵营/机构）。只收有名有姓或反复出场的角色，一次性路人不入表。\n- 剧情线表列：线索/事件、进展、关键点、状态（记跨集的剧情线，不限剧种——律政剧的案子、悬疑的谜团、伏笔、喜剧的支线笑点走向、人物关系发展都算；状态填 进行中/已了结/悬而未决）。\n- 增量更新：新信息加行；已有行只改变化了的字段，没变的原样保留；同一条目不要重复建行。\n- 若某张表本次没有新增或变化，就原样输出它当前的内容。\n- 宁缺毋滥：拿不准、太琐碎、只出现一次且无持续作用的信息不要入表。\n- 依次输出完整的两张 markdown 表格：人物表、剧情线表，之间空行分隔，每张表前保留【表名】小标题。不要输出任何其他解释文字。' },
+                        { role: 'system', content: '你是「剧集翻译记忆」维护助手。根据本次新素材（多为用户对译文的追问 + 你之前的解答，也可能是用户指定的一段原文/译文），增量更新下面这张「文化背景」表——收看懂这部剧需要的跨集背景：文化梗、习俗、行业/机构制度、俚语典故、专有设定、以及贯穿的线索走向等。\n规则：\n- 表列：线索/事件、进展、关键点、状态（线索/事件=这条背景或线索是什么；进展/关键点=补充说明或最新进展；状态填 进行中/已了结/悬而未决，纯背景知识可填「—」）。\n- 增量更新：新信息加行；已有行只改变化了的字段，没变的原样保留；同一条目不要重复建行。\n- 若本次没有新增或变化，就原样输出当前表内容。\n- 宁缺毋滥：拿不准、太琐碎、只出现一次且无持续作用的信息不要入表。\n- 只输出这一张 markdown 表格，表前保留【文化背景表】小标题。不要输出任何其他解释文字。' },
                         { role: 'user', content: prompt }
                     ]
                 });
                 if (!result || chatCurrentConvId !== convId || !chatTranslateMode) return;
                 var parts = _transSplitTables(result);
-                var newChars = _readerParseTableMd(parts.characters, _mtTransCharCols);
                 var newCases = _readerParseTableMd(parts.cases, _mtTransCaseCols);
-                if (newChars.length || newCases.length) {
-                    // 「本次变更」高亮标记留到 Phase 3 建弹窗时再按模式扩 _mtRowKey（翻译人物列是「角色」不是「人物」），此处先不打标
-                    chatMemoryTables = {
-                        characters: newChars.length ? newChars : tables.characters,
-                        // 译名表、设定表已移除、不再提取/展示；旧对话里若还存着就原样带着（不销毁数据、可反悔），只是不用了
-                        terms: tables.terms,
-                        cases: newCases.length ? newCases : tables.cases,
-                        settings: tables.settings,
-                        // 前情梳理（recap）跟表格同存在 chatMemoryTables 里，重建时必须原样带回，
-                        // 否则一提取记忆就把积累的前情抹空、下次发新集又从零生成（不积累）。
-                        recap: (chatMemoryTables && chatMemoryTables.recap) || ''
-                    };
+                if (newCases.length) {
+                    // 只就地更新 cases（文化背景），人物/地点/前情等原样不动（避免又把别的表抹空）
+                    if (!chatMemoryTables) chatMemoryTables = { characters: [], places: [], cases: [] };
+                    chatMemoryTables.cases = newCases;
                     chatSaveCurrentConv(true);
                     if (typeof chatUpdateCtxIndicator === 'function') chatUpdateCtxIndicator();
-                    console.log('[剧集记忆] 人物 ' + chatMemoryTables.characters.length + ' · 剧情 ' + chatMemoryTables.cases.length);
-                    showToast('🧠 剧集记忆已更新（人物 ' + chatMemoryTables.characters.length + ' · 剧情 ' + chatMemoryTables.cases.length + '）');
+                    console.log('[文化背景] ' + chatMemoryTables.cases.length + ' 条');
+                    showToast('🧠 文化背景已更新（' + chatMemoryTables.cases.length + ' 条）');
+                    if (document.querySelector('.chat-summary-modal-mask')) chatShowSummaryModal(_summaryModalScroll());
                 } else if (manual) {
                     showToast('这段没提取到值得入表的新信息');
                 }
             } catch (e) {
-                console.warn('[剧集记忆] 更新失败:', e.message);
+                console.warn('[文化背景] 更新失败:', e.message);
                 if (manual) showToast('⚠️ 记忆更新失败：' + (e.message || ''));
             } finally {
                 chatTransHarvesting = false;
             }
         }
+        // ===== 人物/地点：从「前情梳理」各集梗概里提取（自动 + 兜底）=====
+        // 把模型输出切成 人物/地点 两段
+        function _transSplitCharPlace(result) {
+            var lines = result.split('\n');
+            function titleIdx(kw) { for (var i = 0; i < lines.length; i++) { var l = lines[i]; if (l.indexOf('|') < 0 && l.indexOf('【') >= 0 && l.indexOf(kw) >= 0) return i; } return -1; }
+            function hdrIdx(test) { for (var i = 0; i < lines.length; i++) { if (lines[i].indexOf('|') >= 0 && test(lines[i])) return i; } return -1; }
+            var specs = [
+                { type: 'characters', t: titleIdx('人物'), h: hdrIdx(function (l) { return l.indexOf('角色') >= 0 && l.indexOf('性别') >= 0; }) },
+                { type: 'places', t: titleIdx('地点'), h: hdrIdx(function (l) { return l.indexOf('地点') >= 0 && l.indexOf('说明') >= 0; }) }
+            ];
+            var marks = specs.map(function (s) { return { type: s.type, idx: (s.t >= 0 ? s.t : s.h) }; })
+                             .filter(function (m) { return m.idx >= 0; }).sort(function (a, b) { return a.idx - b.idx; });
+            var out = { characters: '', places: '' };
+            for (var k = 0; k < marks.length; k++) {
+                var start = marks[k].idx, end = k + 1 < marks.length ? marks[k + 1].idx : lines.length;
+                if (end <= start) continue;
+                out[marks[k].type] = lines.slice(start, end).join('\n');
+            }
+            return out;
+        }
+        var chatTransMining = false;
+        // 从一段前情梗概里增量提取人物+地点（只碰 characters/places，别的表原样不动）。成功返回 true。
+        async function chatTransMineCharPlace(recapText) {
+            if (!recapText || !recapText.trim()) return false;
+            var mc = chatResolveCompressModel();
+            if (!mc) return false;
+            var convId = chatCurrentConvId;
+            var t = chatMemoryTables || {};
+            var charMd = _readerRenderTableMd(_mtTransCharCols, t.characters || []);
+            var placeMd = _readerRenderTableMd(_mtTransPlaceCols, t.places || []);
+            var prompt = '【当前人物表】\n' + charMd + '\n\n【当前地点表】\n' + placeMd + '\n\n【本集前情梗概】\n' + recapText;
+            var result = await chatStreamChatBigOutput({
+                baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 8000, purpose: '前情→人物地点',
+                messages: [
+                    { role: 'system', content: '你是「剧集记忆」维护助手。根据给到的这一集前情梗概，增量更新下面两张表。\n规则：\n- 人物表列：角色、性别、身份、关系/所属、备注（角色=原名或通用称呼，性别填 男/女/不明，身份=职业或剧中定位，关系/所属=与谁的关系或所属阵营/机构）。只收有名有姓或反复出场的角色，一次性路人不入表。\n- 地点表列：地点、说明（记反复出现或重要的场所/城市/机构等；说明用一句话点明它是什么、在剧中的作用）。\n- 增量更新：新信息加行；已有行只改变化了的字段，没变的原样保留；同一条目不要重复建行。\n- 本集梗概里没提到的，就原样保留当前表内容，别硬造。\n- 依次输出两张 markdown 表格：人物表、地点表，之间空行分隔，每张表前保留【表名】小标题。不要输出任何其他解释文字。' },
+                    { role: 'user', content: prompt }
+                ]
+            });
+            if (!result || chatCurrentConvId !== convId || !chatTranslateMode) return false;
+            var parts = _transSplitCharPlace(result);
+            var newChars = _readerParseTableMd(parts.characters, _mtTransCharCols);
+            var newPlaces = _readerParseTableMd(parts.places, _mtTransPlaceCols);
+            if (newChars.length || newPlaces.length) {
+                if (!chatMemoryTables) chatMemoryTables = { characters: [], places: [], cases: [] };
+                if (newChars.length) chatMemoryTables.characters = newChars;
+                if (newPlaces.length) chatMemoryTables.places = newPlaces;
+                chatSaveCurrentConv(true);
+                return true;
+            }
+            return false;
+        }
+        // 前情各集里还没提取过人物/地点的（seg._mined 未标记且有正文）
+        function chatTransMineMissing() {
+            var segs = chatTransRecapSegs();
+            var todo = [];
+            for (var i = 0; i < segs.length; i++) { if (segs[i] && (segs[i].text || '').trim() && !segs[i]._mined) todo.push(i); }
+            return todo;
+        }
+        // 兜底：扫描前情各集，把还没提取的人物/地点补上（防漏）
+        var chatTransMineAllBusy = false;
+        async function chatTransMineAll() {
+            if (!chatTranslateMode || chatTransMineAllBusy) return;
+            var todo = chatTransMineMissing();
+            if (!todo.length) { showToast('前情里的人物/地点都提取过啦'); return; }
+            if (!confirm('有 ' + todo.length + ' 集前情还没提取人物/地点，现在逐集补？会调用模型 ' + todo.length + ' 次。')) return;
+            var convId = chatCurrentConvId;
+            chatTransMineAllBusy = true;
+            var done = 0, fail = 0;
+            try {
+                for (var n = 0; n < todo.length; n++) {
+                    if (chatCurrentConvId !== convId || !chatTranslateMode) break;
+                    var segs = chatTransRecapSegs();
+                    var seg = segs[todo[n]];
+                    if (!seg || !(seg.text || '').trim()) continue;
+                    showToast('🔄 提取人物/地点… ' + (n + 1) + '/' + todo.length, true);
+                    var ok = false;
+                    try { ok = await chatTransMineCharPlace(seg.text); } catch (e) { console.warn('[前情→人物地点] 失败', e.message); }
+                    if (chatCurrentConvId !== convId) break;
+                    seg._mined = true;               // 标记「这一集处理过」，就算没提到人物/地点也别反复重扫
+                    chatSaveCurrentConv(true);
+                    if (ok) done++; else fail++;
+                }
+            } finally {
+                chatTransMineAllBusy = false;
+            }
+            showToast('🔄 完成：处理 ' + (done + fail) + ' 集');
+            if (document.querySelector('.chat-summary-modal-mask')) chatShowSummaryModal(_summaryModalScroll());
+        }
 
-        // 把当前「剧集记忆」两张表拼成一段系统提示，回喂给翻译/追问（Phase 2）——
-        // 让说话人照人物表标真名、结合剧情线理解语境。没有记忆时返回空串（不塞冗余）。
+        // 把当前「剧集记忆」三张表（人物/地点/文化背景）拼成一段系统提示，回喂给翻译/追问（Phase 2）。
+        // 没有记忆时返回空串（不塞冗余）。
         function chatTransMemoryPromptBlock() {
             if (!chatTranslateMode) return '';
             var t = chatMemoryTables;
             if (!t) return '';
-            var chars = t.characters || [], cases = t.cases || [];
-            if (!chars.length && !cases.length) return '';
+            var chars = t.characters || [], places = t.places || [], cases = t.cases || [];
+            if (!chars.length && !places.length && !cases.length) return '';
             var parts = [];
             if (chars.length) parts.push('【已知人物表】\n' + _readerRenderTableMd(_mtTransCharCols, chars));
-            if (cases.length) parts.push('【剧情线】\n' + _readerRenderTableMd(_mtTransCaseCols, cases));
+            if (places.length) parts.push('【已知地点表】\n' + _readerRenderTableMd(_mtTransPlaceCols, places));
+            if (cases.length) parts.push('【文化背景】\n' + _readerRenderTableMd(_mtTransCaseCols, cases));
             return '以下是这部剧到目前为止积累的「剧集记忆」，翻译/解答时请充分利用：\n'
                 + '· 标注说话人时，优先用人物表里的真实角色名与性别，而不是笼统的 A/B；\n'
-                + '· 同一人名/专有名词在各集里保持中文译法统一；\n'
-                + '· 结合剧情线理解剧情，但不要在译文里额外复述这些背景。\n\n'
+                + '· 同一人名/地名/专有名词在各集里保持中文译法统一；\n'
+                + '· 结合文化背景理解剧情、把梗和典故解释到位，但不要在译文里额外复述这些背景。\n\n'
                 + parts.join('\n\n');
         }
 
@@ -19521,16 +19616,23 @@ body {
                 }) || '').trim();
                 if (!result || chatCurrentConvId !== convId || !chatTranslateMode) return;
                 var segs = chatTransRecapEnsureArr();
-                var pos = -1;
+                var pos = -1, newSeg;
                 if (srcIdx != null) { for (var i = 0; i < segs.length; i++) { if (segs[i].srcIdx === srcIdx) { pos = i; break; } } }
-                if (pos >= 0) segs[pos] = { text: result, srcIdx: srcIdx };   // 重做/重压同一集：替换，不新增
-                else segs.push({ text: result, srcIdx: (srcIdx == null ? null : srcIdx) });
+                if (pos >= 0) { newSeg = { text: result, srcIdx: srcIdx }; segs[pos] = newSeg; }   // 重做/重压同一集：替换，不新增
+                else { newSeg = { text: result, srcIdx: (srcIdx == null ? null : srcIdx) }; segs.push(newSeg); }
                 // 按集号排序，补齐旧集时也能插到正确位置（旧版无 srcIdx 的排最前）
                 segs.sort(function (a, b) { var ai = a.srcIdx == null ? -1 : a.srcIdx, bi = b.srcIdx == null ? -1 : b.srcIdx; return ai - bi; });
                 chatSaveCurrentConv(true);
                 if (document.querySelector('.chat-summary-modal-mask')) chatShowSummaryModal(_summaryModalScroll()); // 弹窗开着就即时刷新
                 if (manual) showToast('📖 前情梳理已更新（' + result.length + ' 字）');
                 else console.log('[前情梳理] 已加一段，' + result.length + ' 字');
+                // 自动从这一集梗概里提取人物/地点，并标记这一集「已挖过」（兜底按钮据此找漏；失败不标记，留给兜底补）
+                try {
+                    await chatTransMineCharPlace(newSeg.text);
+                    newSeg._mined = true;
+                    chatSaveCurrentConv(true);
+                    if (document.querySelector('.chat-summary-modal-mask')) chatShowSummaryModal(_summaryModalScroll());
+                } catch (e) { console.warn('[前情→人物地点] 失败:', e.message); }
             } catch (e) {
                 console.warn('[前情梳理] 失败:', e.message);
                 if (manual) showToast('⚠️ 剧情压缩失败：' + (e.message || ''));
@@ -21528,7 +21630,7 @@ body {
             bar.className = 'translate-askbar';
             bar.innerHTML = '<input class="ta-ask" type="text" placeholder="这段没看懂？问问看…（如：这里的双关是什么意思？）">' +
                 '<button class="ta-ask-send">提问</button>' +
-                '<button class="ta-remember" title="把这段的译文与问答提炼进「剧集记忆」（人物/剧情）">🧠 记住</button>';
+                '<button class="ta-remember" title="把这段的译文与问答提炼进「文化背景」表">🧠 记住</button>';
             block.appendChild(bar);
             var input = bar.querySelector('.ta-ask');
             var send = bar.querySelector('.ta-ask-send');
