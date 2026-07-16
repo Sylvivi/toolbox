@@ -14631,7 +14631,7 @@ body {
             // 剧本翻译模式：发送剧本不请求 AI，而是建一条空的承载消息，
             // 用户随后点选段落，按需逐段翻译并原位累加。
             if (chatTranslateMode) {
-                // Phase4：发新一集时，先把「上一集」压进滚动前情梳理（有上一集才做，后台异步不挡贴入）
+                // 发一集就自动把「这一集」压进前情梳理（从剧本原文，后台异步不挡贴入；压完顺带挖人物/地点）
                 if (typeof chatTransUpdateRecapFromPrev === 'function') chatTransUpdateRecapFromPrev();
                 chatMessages.push({ role: 'assistant', content: '', translateMode: true, ts: Date.now() });
                 var hostEl = chatBuildMsgEl('ai', '', null, chatMessages.length - 1, true);
@@ -19640,20 +19640,19 @@ body {
                 chatTransRecapping = false;
             }
         }
-        // 发新一集时自动把「上一集」压成一段前情：上一集 = 刚发的这条 user 原文之前的那条 user 原文
+        // 发一集就自动把「这一集」压成一段前情（从剧本原文，后台异步不挡贴入）。
+        // 剧本原文一发就齐、就是前情的主料，所以压当前集、不必等下一集；压完 chatTransUpdateRecap 会顺带挖人物/地点。
+        // 万一在途被别的压缩挤掉（chatTransRecapping 忙），这集没生成段，「补齐前 N 集」按钮仍会兜住。
         function chatTransUpdateRecapFromPrev() {
             if (!chatTranslateMode) return;
             var lastUserIdx = -1;
             for (var i = chatMessages.length - 1; i >= 0; i--) { if (chatMessages[i].role === 'user') { lastUserIdx = i; break; } }
-            if (lastUserIdx < 1) return;
-            var prevUserIdx = -1;
-            for (var j = lastUserIdx - 1; j >= 0; j--) { if (chatMessages[j].role === 'user') { prevUserIdx = j; break; } }
-            if (prevUserIdx < 0) return; // 没有上一集
-            if (chatMessages[prevUserIdx]._recapped) return; // 这一集已压过，别重复烧额度
-            var src = chatTransEpisodeSource(prevUserIdx);
-            if (!src) return; // 上一集没实质内容就不压
-            chatMessages[prevUserIdx]._recapped = true;
-            setTimeout(function() { chatTransUpdateRecap(src, false, prevUserIdx); }, 600);
+            if (lastUserIdx < 0) return;
+            if (chatMessages[lastUserIdx]._recapped) return; // 这一集已压过，别重复烧额度
+            var src = chatTransEpisodeSource(lastUserIdx);
+            if (!src) return; // 这一集没实质原文就不压
+            chatMessages[lastUserIdx]._recapped = true;
+            setTimeout(function() { chatTransUpdateRecap(src, false, lastUserIdx); }, 600);
         }
 
         // 后台预生成的轻量触发：进章/续章后延后一点再跑，别和正文渲染抢资源。
