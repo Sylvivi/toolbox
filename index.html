@@ -3175,10 +3175,12 @@ body {
             margin: 0 12px 10px; padding: 6px; border-radius: 10px; background: var(--accent-light);
             animation: readingCommentIn 0.18s ease;
         }
-        .translate-askbar input.ta-ask {
+        .translate-askbar textarea.ta-ask {
             flex: 1 1 140px; min-width: 0; border: 1px solid var(--accent-mid);
             background: var(--card-bg); color: var(--text); border-radius: 8px;
             padding: 5px 10px; font-size: 12px; outline: none;
+            resize: none; overflow-y: hidden; line-height: 1.5;
+            font-family: inherit; max-height: 40vh;
         }
         .translate-askbar button {
             border: none; background: var(--accent); color: #fff;
@@ -21620,17 +21622,18 @@ body {
             var e = parseInt(block.getAttribute('data-e'));
             var bar = document.createElement('div');
             bar.className = 'translate-askbar';
-            bar.innerHTML = '<input class="ta-ask" type="text" placeholder="这段没看懂？问问看…（如：这里的双关是什么意思？）">' +
-                '<button class="ta-ask-send">提问</button>' +
-                '<button class="ta-remember" title="把这段的译文与问答提炼进「文化背景」表">🧠 记住</button>';
+            bar.innerHTML = '<textarea class="ta-ask" rows="1" placeholder="这段没看懂？问问看…（如：这里的双关是什么意思？）"></textarea>' +
+                '<button class="ta-ask-send">提问</button>';
             block.appendChild(bar);
             var input = bar.querySelector('.ta-ask');
             var send = bar.querySelector('.ta-ask-send');
-            var rem = bar.querySelector('.ta-remember');
-            if (rem) rem.onclick = function() { translateRememberBlock(msgIdx, s, e, bar); };
+            // 随内容自增高：按屏宽自动换行、行数变了跟着长高
+            function autoGrow() { input.style.height = 'auto'; input.style.height = input.scrollHeight + 'px'; }
+            input.addEventListener('input', autoGrow);
             function go() { translateAskRun(msgIdx, s, e, input.value, bar); }
             send.onclick = go;
-            input.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); go(); } });
+            // 回车发送，Shift+回车换行
+            input.addEventListener('keydown', function(ev) { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); go(); } });
             // 不自动聚焦弹键盘，等用户点输入框再唤起
         }
 
@@ -21644,25 +21647,7 @@ body {
             });
         }
 
-        // 手动「记住这段」：把该译文块的原文 + 译文注释 + 已有问答，提炼进「剧集记忆」四张表。
-        // 与「追问后自动」共用同一台提取引擎（chatTransHarvestMemory），出口只有一个：结构化进表。
-        function translateRememberBlock(msgIdx, s, e, bar) {
-            if (!chatTranslateMode) { if (bar) bar.remove(); return; }
-            var msg = chatMessages[msgIdx];
-            if (!msg || typeof msg.content !== 'string') { if (bar) bar.remove(); return; }
-            var orig = readingModeStripParaNums(readingModeGetOriginalText(msgIdx));
-            var paras = translateModeSplitParas(orig);
-            var lo = Math.min(s, e), hi = Math.max(s, e);
-            var segment = (lo >= 1 && hi <= paras.length) ? paras.slice(lo - 1, hi).join('\n') : '';
-            var blocks = translateModeParseBlocks(msg.content);
-            var curBlock = null;
-            for (var b = 0; b < blocks.length; b++) { if (blocks[b].s === s && blocks[b].e === e) { curBlock = blocks[b]; break; } }
-            var parsed = curBlock ? translateBlockSplitQA(curBlock.text) : { main: '', qas: [] };
-            var qaText = parsed.qas.length ? '\n\n就这段的问答：\n' + parsed.qas.map(function(p) { return '问：' + p.q + '\n答：' + p.a; }).join('\n') : '';
-            var src = (segment ? '【原文】\n' + segment + '\n\n' : '') + '【译文与注释】\n' + (parsed.main || '') + qaText;
-            if (bar) bar.remove();
-            if (typeof chatTransHarvestMemory === 'function') chatTransHarvestMemory(src, true);
-        }
+        // （原「🧠 记住」手动沉淀按钮已移除——追问后 translateAskRun 会自动 harvest 文化背景，无需手动。）
 
         async function translateAskRun(msgIdx, s, e, question, bar) {
             if (translateBusy) { if (translateAbortCtl) translateAbortCtl.abort(); return; }
