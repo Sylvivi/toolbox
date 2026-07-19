@@ -13142,6 +13142,7 @@ body {
         }
         // 往上补渲染一段更早的消息，并用高度差修正 scrollTop，保证视觉位置不跳动
         function chatLoadEarlier() {
+            if (chatReaderMode) return;   // 阅读模式自管 DOM（readerPrependPrevChapter），不走窗口化，否则会和接章逻辑打架、重复渲染章节
             if (_chatLoadingEarlier || chatRenderStartIdx <= 0) return;
             _chatLoadingEarlier = true;
             try {
@@ -13180,6 +13181,7 @@ body {
         }
         // 往下补渲染一段更后面的消息（对称于 chatLoadEarlier）。接在底部哨兵位置、当前视图下方，不动 scrollTop。
         function chatLoadLater() {
+            if (chatReaderMode) return;   // 阅读模式自管 DOM（readerAppendNextChapter），不走窗口化，否则会把刚接的下一章又渲染一遍→「下一章还是本章」
             if (_chatLoadingLater || chatRenderEndIdx >= chatMessages.length) return;
             _chatLoadingLater = true;
             try {
