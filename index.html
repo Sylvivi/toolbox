@@ -12496,6 +12496,7 @@ body {
             try {
                 return await chatStreamChat(opts);
             } catch (e) {
+                if (e && e.name === 'AbortError') throw e;   // 用户中止：直接抛，别降档重试
                 var lower = Object.assign({}, opts, { max_tokens: 16000 });
                 console.warn('[大输出] max_tokens=' + opts.max_tokens + ' 调用失败，降到 16000 重试：' + (e && e.message));
                 return await chatStreamChat(lower);
@@ -16531,12 +16532,19 @@ body {
                     // 翻译模式：剧集记忆三表——人物/地点（来自前情，自动提取）+ 文化背景（原「剧情」表，来自追问）
                     // 人物/地点的「兜底」：有前情段还没提取过就显示「🔄 从前情补齐」，防止哪集漏生成
                     var _mineMiss = (typeof chatTransMineMissing === 'function') ? chatTransMineMissing().length : 0;
-                    var _mineBar = _mineMiss > 0
-                        ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;margin-bottom:12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px">'
+                    var _mineBusy = (typeof chatTransMineAllBusy !== 'undefined' && chatTransMineAllBusy);
+                    var _mineBar = '';
+                    if (_mineBusy) {
+                        _mineBar = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;margin-bottom:12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px">'
+                            + '<div style="min-width:0;font-size:11.5px;line-height:1.5;color:var(--text-muted)">🔄 正在从前情逐集提取人物/地点…</div>'
+                            + '<button onclick="chatTransMineStop()" title="停止逐集提取（会掐断当前在途请求）" style="flex-shrink:0;background:var(--danger,#e5484d);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap">⏹ 停止</button>'
+                            + '</div>';
+                    } else if (_mineMiss > 0) {
+                        _mineBar = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;margin-bottom:12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px">'
                             + '<div style="min-width:0;font-size:11.5px;line-height:1.5;color:var(--text-muted)">📖 有 ' + _mineMiss + ' 集前情还没提取人物/地点</div>'
                             + '<button onclick="chatTransMineAll()" title="扫描前情梳理各集，把还没提取的人物/地点补上" style="flex-shrink:0;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap">🔄 从前情补齐</button>'
-                            + '</div>'
-                        : '';
+                            + '</div>';
+                    }
                     panes.push({ key: 'characters', label: '人物', html: _mineBar + _mtTablePane('👤', '人物表', '人', 'characters', chatMemoryTables.characters || [], _mtTransCharCols) });
                     panes.push({ key: 'places', label: '地点', html: _mineBar + _mtTablePane('📍', '地点', '处', 'places', chatMemoryTables.places || [], _mtTransPlaceCols) });
                     panes.push({ key: 'cases', label: '文化背景', html: _mtTablePane('🌍', '文化背景', '条', 'cases', chatMemoryTables.cases || [], _mtTransCaseCols) });
@@ -19503,7 +19511,7 @@ body {
         }
         var chatTransMining = false;
         // 从一段前情梗概里增量提取人物+地点（只碰 characters/places，别的表原样不动）。成功返回 true。
-        async function chatTransMineCharPlace(recapText) {
+        async function chatTransMineCharPlace(recapText, signal) {
             if (!recapText || !recapText.trim()) return false;
             var mc = chatResolveCompressModel();
             if (!mc) return false;
@@ -19513,7 +19521,7 @@ body {
             var placeMd = _readerRenderTableMd(_mtTransPlaceCols, t.places || []);
             var prompt = '【当前人物表】\n' + charMd + '\n\n【当前地点表】\n' + placeMd + '\n\n【本集前情梗概】\n' + recapText;
             var result = await chatStreamChatBigOutput({
-                baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 8000, purpose: '前情→人物地点',
+                baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 8000, purpose: '前情→人物地点', signal: signal,
                 messages: [
                     { role: 'system', content: '你是「剧集记忆」维护助手。根据给到的这一集前情梗概，增量更新下面两张表。\n规则：\n- 人物表列：角色、性别、身份、关系/所属、备注（角色=原名或通用称呼，性别填 男/女/不明，身份=职业或剧中定位，关系/所属=与谁的关系或所属阵营/机构）。只收有名有姓或反复出场的角色，一次性路人不入表。\n- 地点表列：地点、说明（记反复出现或重要的场所/城市/机构等；说明用一句话点明它是什么、在剧中的作用）。\n- 增量更新：新信息加行；已有行只改变化了的字段，没变的原样保留；同一条目不要重复建行。\n- 本集梗概里没提到的，就原样保留当前表内容，别硬造。\n- 依次输出两张 markdown 表格：人物表、地点表，之间空行分隔，每张表前保留【表名】小标题。不要输出任何其他解释文字。' },
                     { role: 'user', content: prompt }
@@ -19541,6 +19549,15 @@ body {
         }
         // 兜底：扫描前情各集，把还没提取的人物/地点补上（防漏）
         var chatTransMineAllBusy = false;
+        var chatTransMineAbort = false;   // 用户点「停止」置真
+        var chatTransMineCtl = null;      // 掐断当前在途那次请求
+        // 停止逐集补齐：既不再往下一集，也中止当前在途请求
+        function chatTransMineStop() {
+            if (!chatTransMineAllBusy) return;
+            chatTransMineAbort = true;
+            if (chatTransMineCtl) { try { chatTransMineCtl.abort(); } catch (e) {} }
+            showToast('⏹ 正在停止…');
+        }
         async function chatTransMineAll() {
             if (!chatTranslateMode || chatTransMineAllBusy) return;
             var todo = chatTransMineMissing();
@@ -19548,16 +19565,21 @@ body {
             if (!confirm('有 ' + todo.length + ' 集前情还没提取人物/地点，现在逐集补？会调用模型 ' + todo.length + ' 次。')) return;
             var convId = chatCurrentConvId;
             chatTransMineAllBusy = true;
-            var done = 0, fail = 0;
+            chatTransMineAbort = false;
+            if (document.querySelector('.chat-summary-modal-mask')) chatShowSummaryModal(_summaryModalScroll()); // 让按钮变「停止」
+            var done = 0, fail = 0, stopped = false;
             try {
                 for (var n = 0; n < todo.length; n++) {
-                    if (chatCurrentConvId !== convId || !chatTranslateMode) break;
+                    if (chatTransMineAbort || chatCurrentConvId !== convId || !chatTranslateMode) { stopped = chatTransMineAbort; break; }
                     var segs = chatTransRecapSegs();
                     var seg = segs[todo[n]];
                     if (!seg || !(seg.text || '').trim()) continue;
                     showToast('🔄 提取人物/地点… ' + (n + 1) + '/' + todo.length, true);
                     var ok = false;
-                    try { ok = await chatTransMineCharPlace(seg.text); } catch (e) { console.warn('[前情→人物地点] 失败', e.message); }
+                    chatTransMineCtl = new AbortController();
+                    try { ok = await chatTransMineCharPlace(seg.text, chatTransMineCtl.signal); }
+                    catch (e) { if (e && e.name === 'AbortError') { stopped = true; break; } console.warn('[前情→人物地点] 失败', e.message); }
+                    finally { chatTransMineCtl = null; }
                     if (chatCurrentConvId !== convId) break;
                     seg._mined = true;               // 标记「这一集处理过」，就算没提到人物/地点也别反复重扫
                     chatSaveCurrentConv(true);
@@ -19565,8 +19587,9 @@ body {
                 }
             } finally {
                 chatTransMineAllBusy = false;
+                chatTransMineCtl = null;
             }
-            showToast('🔄 完成：处理 ' + (done + fail) + ' 集');
+            showToast(stopped ? ('⏹ 已停止（已处理 ' + (done + fail) + ' 集）') : ('🔄 完成：处理 ' + (done + fail) + ' 集'));
             if (document.querySelector('.chat-summary-modal-mask')) chatShowSummaryModal(_summaryModalScroll());
         }
 
