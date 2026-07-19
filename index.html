@@ -16708,6 +16708,88 @@ body {
             }
             return newRows;
         }
+        // ===== 记忆表格「增量+删除」引擎（共读/阅读的自动更新共用，省输出 token）=====
+        // 模型不再重吐整张表，只吐「新增/改动行」+「删除清单」；这里就地并进四张表、打「本次变更」小点。
+        // 删除必须显式（增量里"省略"= 没变，不再等于删除）。重建(rebuild)仍走整表 _MT_SYS_PROMPT，此处只服务自动增量。
+        var _MT_SYS_PROMPT_DELTA = '你是小说记忆表格维护助手。下面给你四张【当前表】和【新章节摘要】。请只输出【需要变动的部分】，已有且没变化的行一律不要再输出（省流量）。\n四张表列定义：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 地点表列：地点、规模/特征、关联、简介\n- 大事年表列：时间、事件\n- 主线表列：章节、事件、细节、已解决\n【入表标准，宁缺毋滥】\n- 人物表只收主要人物：①主角②反复出场或对剧情有持续作用的重要配角③对主线、关键事件或人物关系有实质影响的人。只露一两面的过场龙套、纯功能性角色（店小二、轿夫、随从甲、路人等）、仅被顺口提及一次名字而无戏份的人，一律不入表。\n- 地点表只记主要舞台：①主角及重要人物长期居住/所属的地方②反复出现、承载多段重要情节的关键场所③大的城市或地区。过场地点、房间、顺口提及的地名不入表。「规模/特征」用通俗方式帮读者建立地理印象（城镇写繁华程度、庄园写气派、山川写地形，无从判断留空）；「关联」写它属于谁/关联势力；「简介」一句话点明它是什么、发生过什么关键事件。\n- 大事年表只记带明确时间标记或重大时间跨度的关键节点（如「三十年前」「次年春」「三日后」对应的大事件）；没有时间感的日常情节不入表；全表最多 30 行，满了优先删近期小事件、保住奠基性的远期大事。\n- 主线表只记真正的伏笔（埋下未揭晓的线索）和重大主线转折；普通过场、日常对话、次要细节不入表。按事件去重，不要把同一件事拆成多条。\n【输出格式，严格遵守】\n一、增改：对有【新增行】或【已有行需要更新】的表，用下面的小标题输出该表的 markdown 表格（含表头），表里只放新增行和有变化的行；有变化的行请输出【整行】、把已知字段尽量填全，我会按主键整行覆盖旧行。某张表这次没有任何增改就写「（无更新）」，不要把没变的旧行再抄一遍。\n【人物·增改】\n（这里放人物表的 markdown 表格，或"（无更新）"）\n【地点·增改】\n（同上）\n【年表·增改】\n（同上）\n【主线·增改】\n（同上）\n主键匹配：人物按「人物」名、地点按「地点」名、年表按「时间+事件」、主线按「事件」认定是不是同一条；更新已有行时务必用与当前表里完全一致的主键文字，避免重复建行。把已解决的伏笔标为已解决，就在【主线·增改】里输出该行、已解决列填「是」（用相同事件主键）。\n二、删除：需要删掉的行（彻底退场且不再影响后文的人物、该精简的地点、年表满30行要删的近期小事件、已解决且不再重要的伏笔），在【删除】里按表列出它们的主键，用「、」分隔；某张表没有要删的就写「（无）」。\n【删除】\n人物：（无）\n地点：（无）\n年表：（无）\n主线：（无）\n不要输出任何其他解释文字。';
+        // 按主键把 deltas upsert 进 existing：同名存在→非空字段覆盖、空字段留旧值（打橙点 _chg=upd + _prev）；不存在→追加（打绿点 _chg=new）。返回是否真改了
+        function _mtUpsertRows(tableName, existing, deltas, cols) {
+            var changed = false;
+            for (var d = 0; d < deltas.length; d++) {
+                var row = deltas[d];
+                var key = _mtRowKey(tableName, row);
+                if (!key || !(key + '').trim()) continue;
+                var fi = -1;
+                for (var i = 0; i < existing.length; i++) { if (_mtRowKey(tableName, existing[i]) === key) { fi = i; break; } }
+                if (fi < 0) { row._chg = 'new'; existing.push(row); changed = true; continue; }
+                var er = existing[fi], prev = {}, upd = false;
+                for (var c = 0; c < cols.length; c++) {
+                    var col = cols[c], nv = ((row[col] || '') + '').trim();
+                    if (nv && nv !== ((er[col] || '') + '').trim()) { prev[col] = er[col] || ''; er[col] = row[col]; upd = true; }
+                }
+                if (upd) { er._chg = 'upd'; er._prev = prev; changed = true; }
+            }
+            return changed;
+        }
+        // 按删除清单里的主键文字删行（人物按名、地点按名、年表/主线按事件）。返回是否删了
+        function _mtDeleteByKeys(tableName, existing, delKeys) {
+            var col = tableName === 'characters' ? '人物' : tableName === 'places' ? '地点' : '事件';
+            var set = {};
+            for (var i = 0; i < delKeys.length; i++) { var k = (delKeys[i] || '').trim(); if (k) set[k] = true; }
+            var changed = false;
+            for (var j = existing.length - 1; j >= 0; j--) {
+                var v = ((existing[j][col] || '') + '').trim();
+                if (v && set[v]) { existing.splice(j, 1); changed = true; }
+            }
+            return changed;
+        }
+        // 解析【删除】小节，返回 { characters:[主键...], places, timeline, plotlines }
+        function _mtParseDeletions(result) {
+            var out = { characters: [], places: [], timeline: [], plotlines: [] };
+            var lines = (result || '').split('\n');
+            var labelMap = { '人物': 'characters', '地点': 'places', '年表': 'timeline', '主线': 'plotlines' };
+            var inDel = false;
+            for (var i = 0; i < lines.length; i++) {
+                var ln = lines[i].trim();
+                if (!ln) continue;
+                if (ln.indexOf('【删除】') >= 0) { inDel = true; continue; }
+                if (!inDel) continue;
+                if (ln.indexOf('【') >= 0) break;   // 到下一个小节，删除段结束
+                var m = ln.match(/^[-•*\s]*([^：:]+)[：:]\s*(.*)$/);
+                if (!m) continue;
+                var key = labelMap[m[1].trim()]; if (!key) continue;
+                var rest = m[2].trim();
+                if (!rest || /^[（(]?\s*无\s*[)）]?$/.test(rest)) continue;
+                rest.split(/[、,，;；]/).forEach(function (x) { x = x.trim().replace(/^[「『"']+|["'」』]+$/g, ''); if (x) out[key].push(x); });
+            }
+            return out;
+        }
+        // 把模型的「增量+删除」输出就地并进 tables 四张表，打变更小点。返回是否有改动。
+        function _mtApplyDelta(result, tables) {
+            if (!result || !tables) return false;
+            tables.characters = tables.characters || []; tables.places = tables.places || [];
+            tables.timeline = tables.timeline || []; tables.plotlines = tables.plotlines || [];
+            var specs = [
+                { key: 'characters', cols: _mtCharCols }, { key: 'places', cols: _mtPlaceCols },
+                { key: 'timeline', cols: _mtTimeCols }, { key: 'plotlines', cols: _mtPlotCols }
+            ];
+            specs.forEach(function (sp) { tables[sp.key].forEach(function (r) { delete r._chg; delete r._prev; }); }); // 清上批标记
+            var parts = _readerSplitThreeTables(result);
+            var changed = false;
+            specs.forEach(function (sp) {
+                var rows = _readerParseTableMd(parts[sp.key] || '', sp.cols);
+                if (_mtUpsertRows(sp.key, tables[sp.key], rows, sp.cols)) changed = true;
+            });
+            var dels = _mtParseDeletions(result);
+            specs.forEach(function (sp) {
+                if (dels[sp.key] && dels[sp.key].length && _mtDeleteByKeys(sp.key, tables[sp.key], dels[sp.key])) changed = true;
+            });
+            return changed;
+        }
+        // 模型回应是否「像」增量格式（用来区分"本批无更新"（正常，推进水位）和真·空/乱码（不推进、下轮重试））
+        function _mtDeltaLooksValid(result) {
+            return !!result && (/增改|【删除】|无更新/.test(result) || result.indexOf('|') >= 0);
+        }
         // 记忆表格交互
         function chatToggleMtRow(el) {
             var row = el.closest('.mt-row'); if (!row) return;
@@ -17201,40 +17283,26 @@ body {
                     // 记忆表格与摘要共用一个模型（摘要模型，留空则当前模型）
                     var _memMc = chatResolveCompressModel() || { model: _useModel, baseUrl: _useBaseUrl, apiKey: _useApiKey };
                     var result = await chatStreamChatBigOutput({
-                        baseUrl: _memMc.baseUrl, apiKey: _memMc.apiKey, model: _memMc.model, max_tokens: 50000, purpose: '记忆表格',
+                        baseUrl: _memMc.baseUrl, apiKey: _memMc.apiKey, model: _memMc.model, max_tokens: 8000, purpose: '记忆表格',
                         messages: [
-                            { role: 'system', content: '你是小说记忆表格维护助手。根据新章节摘要，更新下面四张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 地点表列：地点、规模/特征、关联、简介\n- 大事年表列：时间、事件\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 人物表只收主要人物，标准要严：①主角②反复出场或对剧情有持续作用的重要配角③对主线、关键事件或人物关系有实质影响的人。只露一两面的过场龙套、纯功能性角色（店小二、轿夫、随从甲、路人等）、仅被顺口提及一次名字而无戏份的人，一律不入表，宁缺毋滥\n- 已彻底退场且后续不再被提及、也不影响后文的次要人物可删除，避免人物表无限膨胀\n- 地点表只记故事的主要舞台，标准要严：①主角及重要人物长期居住/所属的地方（家、庄园、宅邸、据点等）②反复出现、承载多段重要情节的关键场所③大的城市或地区。只在某一处出现一次的过场地点、建筑内部的具体房间、只被顺口提及的地名，一律不入表，宁缺毋滥\n- 地点表「规模/特征」用通俗方式帮读者建立地理印象：城镇写人口多少/繁华程度，庄园宅邸写占地大小/气派程度，山川河流写地形，确实无从判断就留空\n- 地点表「关联」写它属于谁或关联的人物/势力；「简介」一句话点明它是什么、发生过什么关键事件\n- 大事年表只记带明确时间标记或重大时间跨度的关键节点（如「三十年前」「次年春」「三日后」对应的大事件），「时间」列写相对或绝对时间、「事件」列一句话写发生了什么；没有时间感的日常情节不入表；全表最多 30 行；满了时优先删掉近期的小事件（近期剧情在摘要里已有），奠基性的远期大事（如「三十年前…」这类全书根基性时间锚点）务必保住，宁缺毋滥\n- 主线表只记真正的伏笔（埋下但尚未揭晓的线索）和重大主线转折，普通过场、日常对话、次要细节一律不入表\n- 按事件去重：不要把同一件事拆成多条流水账；但不同的重大伏笔或转折，即使章节相同也各自成行，不要强行合并\n- 旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 已解决的伏笔如不再重要可删除，避免表格无限膨胀\n- 输出完整的四张 markdown 表格，依次为人物表、地点表、大事年表、主线表，之间用空行分隔\n- 不要输出任何其他内容' },
+                            { role: 'system', content: _MT_SYS_PROMPT_DELTA },
                             { role: 'user', content: prompt }
                         ]
                     });
                     if (!result || chatCurrentConvId !== convId) return;
-                    var _parts = _splitThreeTables(result);
-                    var newChars = _parseTableMd(_parts.characters, _charCols);
-                    var newPlaces = _parseTableMd(_parts.places, _placeCols);
-                    var newTime = _parseTableMd(_parts.timeline, _timeCols);
-                    var newPlots = _parseTableMd(_parts.plotlines, _plotCols);
-                    if (newChars.length || newPlaces.length || newTime.length || newPlots.length) {
-                        // 替换前先对比旧表，给行打「新增 / 内容更新」标记
-                        _mtDiffMark('characters', newChars, tables.characters, _charCols);
-                        _mtDiffMark('places', newPlaces, tables.places, _placeCols);
-                        _mtDiffMark('timeline', newTime, tables.timeline, _timeCols);
-                        _mtDiffMark('plotlines', newPlots, tables.plotlines, _plotCols);
-                        chatMemoryTables = {
-                            characters: newChars.length ? newChars : tables.characters,
-                            places: newPlaces.length ? newPlaces : tables.places,
-                            timeline: newTime.length ? newTime : tables.timeline,
-                            plotlines: newPlots.length ? newPlots : tables.plotlines
-                        };
-                        // 更新成功 → 推进水位到最新（在保存前设好，随对话一起持久化）
-                        if (typeof _targetCount === 'number') chatMemTableCount = _targetCount;
-                        chatSaveCurrentConv(true);
-                        console.log('[记忆表格] 人物 ' + chatMemoryTables.characters.length + ' 行，地点 ' + chatMemoryTables.places.length + ' 行，年表 ' + chatMemoryTables.timeline.length + ' 行，主线 ' + chatMemoryTables.plotlines.length + ' 行（水位→' + chatMemTableCount + '）');
+                    if (!_mtDeltaLooksValid(result)) { console.warn('[记忆表格] 回应不像增量格式，保留旧表、不推进水位（下轮重试）'); return; }
+                    // 就地把「增量+删除」并进当前表（模型只吐变动行，省 token）
+                    if (!chatMemoryTables) chatMemoryTables = { characters: [], places: [], timeline: [], plotlines: [] };
+                    var _mtChanged = _mtApplyDelta(result, chatMemoryTables);
+                    // 只要模型给了合规回应就推进水位（"本批无更新"是正常情况，不能卡在原地反复重喂）
+                    if (typeof _targetCount === 'number') chatMemTableCount = _targetCount;
+                    chatSaveCurrentConv(true);
+                    console.log('[记忆表格] ' + (_mtChanged ? '已增量更新' : '本批无增改') + ' — 人物 ' + chatMemoryTables.characters.length + ' 行，地点 ' + chatMemoryTables.places.length + ' 行，年表 ' + chatMemoryTables.timeline.length + ' 行，主线 ' + chatMemoryTables.plotlines.length + ' 行（水位→' + chatMemTableCount + '）');
+                    if (_mtChanged) {
                         // 自动把新人名/地名并入本书高亮名单，省去手动「从人物表/地点表」提取
                         var _addedNm = readingAutoMergeNamesFromTables(chatMemoryTables, readingNamesKey());
                         if (_addedNm) { console.log('[名单] 自动并入 ' + _addedNm + ' 个名词'); if (readingNameAnyOn()) readingRehighlightNamesInPlace(); }
                         showToast('🧠 记忆表格已更新（人物 ' + chatMemoryTables.characters.length + ' · 地点 ' + chatMemoryTables.places.length + ' · 年表 ' + chatMemoryTables.timeline.length + ' · 主线 ' + chatMemoryTables.plotlines.length + '）');
-                    } else {
-                        console.warn('[记忆表格] 解析失败，保留旧表格');
                     }
                 } catch(e) {
                     console.warn('[记忆表格] 更新失败:', e.message);
@@ -19334,14 +19402,31 @@ body {
                 var plotMd = _readerRenderTableMd(_mtPlotCols, tables.plotlines);
                 var prompt = '【当前人物表】\n' + charMd + '\n\n【当前地点表】\n' + placeMd + '\n\n【当前大事年表】\n' + timeMd + '\n\n【当前主线表】\n' + plotMd + '\n\n【新章节摘要】\n' + newSums.join('\n');
                 var _memMc = chatResolveCompressModel() || mc;
+                // 重建（rebuild=权威重折全书）走整表输出；日常自动增量走「增量+删除」省 token
+                var _useDelta = !rebuild;
                 var result = await chatStreamChatBigOutput({
-                    baseUrl: _memMc.baseUrl, apiKey: _memMc.apiKey, model: _memMc.model, max_tokens: 50000, purpose: '阅读记忆表格',
+                    baseUrl: _memMc.baseUrl, apiKey: _memMc.apiKey, model: _memMc.model, max_tokens: _useDelta ? 8000 : 50000, purpose: '阅读记忆表格',
                     messages: [
-                        { role: 'system', content: '你是小说记忆表格维护助手。根据新章节摘要，更新下面四张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 地点表列：地点、规模/特征、关联、简介\n- 大事年表列：时间、事件\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 人物表只收主要人物，标准要严：①主角②反复出场或对剧情有持续作用的重要配角③对主线、关键事件或人物关系有实质影响的人。只露一两面的过场龙套、纯功能性角色（店小二、轿夫、随从甲、路人等）、仅被顺口提及一次名字而无戏份的人，一律不入表，宁缺毋滥\n- 已彻底退场且后续不再被提及、也不影响后文的次要人物可删除，避免人物表无限膨胀\n- 地点表只记故事的主要舞台，标准要严：①主角及重要人物长期居住/所属的地方（家、庄园、宅邸、据点等）②反复出现、承载多段重要情节的关键场所③大的城市或地区。只在某一处出现一次的过场地点、建筑内部的具体房间、只被顺口提及的地名，一律不入表，宁缺毋滥\n- 地点表「规模/特征」用通俗方式帮读者建立地理印象：城镇写人口多少/繁华程度，庄园宅邸写占地大小/气派程度，山川河流写地形，确实无从判断就留空\n- 地点表「关联」写它属于谁或关联的人物/势力；「简介」一句话点明它是什么、发生过什么关键事件\n- 大事年表只记带明确时间标记或重大时间跨度的关键节点（如「三十年前」「次年春」「三日后」对应的大事件），「时间」列写相对或绝对时间、「事件」列一句话写发生了什么；没有时间感的日常情节不入表；全表最多 30 行；满了时优先删掉近期的小事件（近期剧情在摘要里已有），奠基性的远期大事（如「三十年前…」这类全书根基性时间锚点）务必保住，宁缺毋滥\n- 主线表只记真正的伏笔（埋下但尚未揭晓的线索）和重大主线转折，普通过场、日常对话、次要细节一律不入表\n- 按事件去重：不要把同一件事拆成多条流水账；但不同的重大伏笔或转折，即使章节相同也各自成行，不要强行合并\n- 旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 已解决的伏笔如不再重要可删除，避免表格无限膨胀\n- 输出完整的四张 markdown 表格，依次为人物表、地点表、大事年表、主线表，之间用空行分隔\n- 不要输出任何其他内容' },
+                        { role: 'system', content: _useDelta ? _MT_SYS_PROMPT_DELTA : _MT_SYS_PROMPT },
                         { role: 'user', content: prompt }
                     ]
                 });
                 if (!result) return false;
+                if (_useDelta) {
+                    if (!_mtDeltaLooksValid(result)) { console.warn('[阅读记忆表格] 回应不像增量格式，保留旧表、不推进（下轮重试）'); return false; }
+                    var _changed = _mtApplyDelta(result, tables);
+                    readerMemTablesSet(fileKey, tables, curChap);   // 只要合规就推进 upTo（"本批无更新"也算处理过）
+                    readerMemTblErrSet(fileKey, null);
+                    console.log('[阅读记忆表格] ' + (_changed ? '已增量更新' : '本批无增改') + ' — 人物 ' + tables.characters.length + ' · 地点 ' + tables.places.length + ' · 年表 ' + tables.timeline.length + ' · 主线 ' + tables.plotlines.length);
+                    if (_changed) {
+                        if (chatReaderMode && typeof readerBookId !== 'undefined' && readerBookKey(readerBookId) === fileKey) {
+                            var _addedNmD = readingAutoMergeNamesFromTables(readerMemTablesGet(fileKey), readingNamesKey());
+                            if (_addedNmD) { console.log('[名单] 自动并入 ' + _addedNmD + ' 个名词'); if (readingNameAnyOn()) readingRehighlightNamesInPlace(); }
+                        }
+                        showToast('🧠 记忆表格已更新（人物 ' + tables.characters.length + ' · 地点 ' + tables.places.length + ' · 年表 ' + tables.timeline.length + ' · 主线 ' + tables.plotlines.length + '）');
+                    }
+                    return true;
+                }
                 var _parts = _readerSplitThreeTables(result);
                 var newChars = _readerParseTableMd(_parts.characters, _mtCharCols);
                 var newPlaces = _readerParseTableMd(_parts.places, _mtPlaceCols);
