@@ -17283,7 +17283,7 @@ body {
                     // 记忆表格与摘要共用一个模型（摘要模型，留空则当前模型）
                     var _memMc = chatResolveCompressModel() || { model: _useModel, baseUrl: _useBaseUrl, apiKey: _useApiKey };
                     var result = await chatStreamChatBigOutput({
-                        baseUrl: _memMc.baseUrl, apiKey: _memMc.apiKey, model: _memMc.model, max_tokens: 8000, purpose: '记忆表格',
+                        baseUrl: _memMc.baseUrl, apiKey: _memMc.apiKey, model: _memMc.model, max_tokens: 50000, purpose: '记忆表格',
                         messages: [
                             { role: 'system', content: _MT_SYS_PROMPT_DELTA },
                             { role: 'user', content: prompt }
@@ -19401,6 +19401,26 @@ body {
                 var timeMd = _readerRenderTableMd(_mtTimeCols, tables.timeline);
                 var plotMd = _readerRenderTableMd(_mtPlotCols, tables.plotlines);
                 var prompt = '【当前人物表】\n' + charMd + '\n\n【当前地点表】\n' + placeMd + '\n\n【当前大事年表】\n' + timeMd + '\n\n【当前主线表】\n' + plotMd + '\n\n【新章节摘要】\n' + newSums.join('\n');
+                // 自动增量：模型只吐「变动行 + 删除清单」，就地并入（省 token）。重建(rebuild)仍走下面整表权威重算（可清理增量漂移）。
+                if (!rebuild) {
+                    var _dMc = chatResolveCompressModel() || mc;
+                    var _dRes = await chatStreamChatBigOutput({
+                        baseUrl: _dMc.baseUrl, apiKey: _dMc.apiKey, model: _dMc.model, max_tokens: 50000, purpose: '阅读记忆表格',
+                        messages: [ { role: 'system', content: _MT_SYS_PROMPT_DELTA }, { role: 'user', content: prompt } ]
+                    });
+                    if (!_dRes) return false;
+                    if (!_mtDeltaLooksValid(_dRes)) { console.warn('[阅读记忆表格] 回应不像增量格式，保留旧表、下轮重试'); return false; }
+                    _mtApplyDelta(_dRes, tables);                  // 就地改四表（含删除）；本批无增改也算成功，推进水位免得反复重喂
+                    readerMemTablesSet(fileKey, tables, curChap);
+                    readerMemTblErrSet(fileKey, null);
+                    console.log('[阅读记忆表格·增量] 人物 ' + tables.characters.length + ' · 地点 ' + tables.places.length + ' · 年表 ' + tables.timeline.length + ' · 主线 ' + tables.plotlines.length);
+                    if (chatReaderMode && typeof readerBookId !== 'undefined' && readerBookKey(readerBookId) === fileKey) {
+                        var _dAdd = readingAutoMergeNamesFromTables(readerMemTablesGet(fileKey), readingNamesKey());
+                        if (_dAdd) { console.log('[名单] 自动并入 ' + _dAdd + ' 个名词'); if (readingNameAnyOn()) readingRehighlightNamesInPlace(); }
+                    }
+                    showToast('🧠 记忆表格已更新（人物 ' + tables.characters.length + ' · 地点 ' + tables.places.length + ' · 年表 ' + tables.timeline.length + ' · 主线 ' + tables.plotlines.length + '）');
+                    return true;
+                }
                 var _memMc = chatResolveCompressModel() || mc;
                 // 重建（rebuild=权威重折全书）走整表输出；日常自动增量走「增量+删除」省 token
                 var _useDelta = !rebuild;
