@@ -21919,7 +21919,8 @@ body {
         }
         function readingIsBookmarked(msgIdx, p) {
             var list = readingGetConvBookmarks();
-            for (var i = 0; i < list.length; i++) { if (list[i].msgIdx === msgIdx && list[i].p === p && list[i].type !== 'ask') return true; }
+            var chap = _readerChapOf(msgIdx);
+            for (var i = 0; i < list.length; i++) { if (_markMatchesMsg(list[i], msgIdx, chap) && list[i].p === p && list[i].type !== 'ask') return true; }
             return false;
         }
         function readingParaPreview(msgIdx, p) {
@@ -22004,12 +22005,23 @@ body {
             }
         }
         // 渲染一条共读气泡后，把这条消息上的所有划线描回去（挂在 readingMarkBookmarks 同一处）
+        // 阅读模式(chatReaderMode)会话是每次开章临时重建的，msgIdx 不绑定具体章节（同一 msgIdx 会对上不同章）→
+        // 书签/划线必须按「章节号」匹配，否则历史某 msgIdx 的标记会漏到每一章的相同段号上。共读模式会话单调增长、msgIdx 稳定，仍按 msgIdx。
+        function _readerChapOf(msgIdx) {
+            return (chatReaderMode && chatMessages[msgIdx] && chatMessages[msgIdx].readerChapter != null) ? chatMessages[msgIdx].readerChapter : null;
+        }
+        // 一条标记(书签/划线)是否属于当前要渲染的这条消息：阅读模式按 chap、共读按 msgIdx
+        function _markMatchesMsg(mark, msgIdx, chap) {
+            if (chatReaderMode) return chap != null && mark.chap === chap;
+            return mark.msgIdx === msgIdx;
+        }
         function readingApplyHighlights(bubble, msgIdx) {
             if (!bubble) return;
             var list = readingGetConvHl();
+            var chap = _readerChapOf(msgIdx);
             for (var i = 0; i < list.length; i++) {
                 var hl = list[i];
-                if (hl.msgIdx !== msgIdx) continue;
+                if (!_markMatchesMsg(hl, msgIdx, chap)) continue;
                 var p = bubble.querySelector('.reading-merged p[data-p="' + hl.p + '"]');
                 if (!p || p.closest('.translate-merged')) continue;
                 rdHlWrapRange(p, hl.start, hl.end, hl.color, hl.id, !!(hl.note && hl.note.trim()));
@@ -22112,7 +22124,7 @@ body {
             var pend = _rdHlPending; if (!pend) return;
             var id = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
             var full = pend.text || '';
-            var hl = { id: id, msgIdx: pend.msgIdx, p: pend.pNum, start: pend.start, end: pend.end,
+            var hl = { id: id, msgIdx: pend.msgIdx, chap: _readerChapOf(pend.msgIdx), p: pend.pNum, start: pend.start, end: pend.end,
                 color: color, note: '', text: full, preview: full.length > 60 ? full.slice(0, 60) + '…' : full, ts: Date.now() };
             var list = readingGetConvHl(); list.push(hl); readingSaveConvHl(list);
             try { window.getSelection().removeAllRanges(); } catch (e) {}
@@ -22231,11 +22243,12 @@ body {
             if (!chatCurrentConvId) return false;
             var all = readingGetAllBookmarks();
             var list = all[chatCurrentConvId] || [];
+            var _chap = _readerChapOf(msgIdx);
             var found = -1;
-            for (var i = 0; i < list.length; i++) { if (list[i].msgIdx === msgIdx && list[i].p === p && list[i].type !== 'ask') { found = i; break; } }
+            for (var i = 0; i < list.length; i++) { if (_markMatchesMsg(list[i], msgIdx, _chap) && list[i].p === p && list[i].type !== 'ask') { found = i; break; } }
             var nowOn;
             if (found >= 0) { list.splice(found, 1); nowOn = false; }
-            else { list.push({ msgIdx: msgIdx, p: p, preview: readingParaPreview(msgIdx, p), type: 'para', ts: Date.now() }); nowOn = true; }
+            else { list.push({ msgIdx: msgIdx, chap: _chap, p: p, preview: readingParaPreview(msgIdx, p), type: 'para', ts: Date.now() }); nowOn = true; }
             all[chatCurrentConvId] = list;
             readingSaveAllBookmarks(all);
             return nowOn;
@@ -22247,11 +22260,12 @@ body {
             if (!question) return;
             var all = readingGetAllBookmarks();
             var list = all[chatCurrentConvId] || [];
+            var _chap = _readerChapOf(msgIdx);
             for (var i = 0; i < list.length; i++) {
-                if (list[i].type === 'ask' && list[i].msgIdx === msgIdx && list[i].p === p && list[i].q === question) return;
+                if (list[i].type === 'ask' && _markMatchesMsg(list[i], msgIdx, _chap) && list[i].p === p && list[i].q === question) return;
             }
             var prev = question.length > 60 ? question.slice(0, 60) + '…' : question;
-            var bm = { msgIdx: msgIdx, p: p, q: question, preview: prev, type: 'ask', ts: Date.now() };
+            var bm = { msgIdx: msgIdx, chap: _chap, p: p, q: question, preview: prev, type: 'ask', ts: Date.now() };
             if (meta) { for (var mk in meta) { if (meta.hasOwnProperty(mk)) bm[mk] = meta[mk]; } } // 翻译追问带 trS/trE，回取答案时认这个
             list.push(bm);
             all[chatCurrentConvId] = list;
@@ -22286,8 +22300,9 @@ body {
         function readingMarkBookmarks(bubble, msgIdx) {
             if (!bubble) return;
             var list = readingGetConvBookmarks();
+            var chap = _readerChapOf(msgIdx);
             for (var i = 0; i < list.length; i++) {
-                if (list[i].msgIdx !== msgIdx) continue;
+                if (!_markMatchesMsg(list[i], msgIdx, chap)) continue;
                 var pEl = bubble.querySelector('p[data-p="' + list[i].p + '"]');
                 if (pEl) pEl.classList.add('rp-marked');
             }
@@ -22296,14 +22311,19 @@ body {
         function readingRefreshBookmarkUI() {
             if ((!chatReadingMode && !chatReaderMode) || !chatCurrentConvId) return;
             var set = {};
-            readingGetConvBookmarks().forEach(function(b) { set[b.msgIdx + ':' + b.p] = true; });
+            // 阅读模式按「章号:段号」建索引（msgIdx 不稳定）；共读按「msgIdx:段号」
+            readingGetConvBookmarks().forEach(function(b) {
+                var key = chatReaderMode ? (b.chap + ':' + b.p) : (b.msgIdx + ':' + b.p);
+                set[key] = true;
+            });
             var ps = document.querySelectorAll('#chatMessages .chat-msg.ai p[data-p]');
             for (var i = 0; i < ps.length; i++) {
                 var p = ps[i];
                 var msg = p.closest ? p.closest('.chat-msg.ai') : null;
                 var idx = msg ? parseInt(msg.getAttribute('data-idx')) : NaN;
                 var pn = parseInt(p.getAttribute('data-p'));
-                p.classList.toggle('rp-marked', !!set[idx + ':' + pn]);
+                var k = chatReaderMode ? (_readerChapOf(idx) + ':' + pn) : (idx + ':' + pn);
+                p.classList.toggle('rp-marked', !!set[k]);
             }
             var panel = document.getElementById('chatBookmarkPanel');
             if (panel && panel.classList.contains('show')) chatBuildBookmarkPanel();
@@ -22337,7 +22357,7 @@ body {
             // 书签（段落 / 提问）+ 划线，合并进同一条读痕流
             var list = readingGetConvBookmarks().slice();
             readingGetConvHl().forEach(function(h) {
-                list.push({ type: 'hl', msgIdx: h.msgIdx, p: h.p, id: h.id, color: h.color, note: h.note || '',
+                list.push({ type: 'hl', msgIdx: h.msgIdx, chap: h.chap, p: h.p, id: h.id, color: h.color, note: h.note || '',
                     preview: h.preview || ('第 ' + h.p + ' 段'), ts: h.ts || 0 });
             });
             if (list.length === 0) {
@@ -22360,7 +22380,7 @@ body {
                         '<div class="chat-nav-text">' + esc(bm.preview || ('第 ' + bm.p + ' 段')) + noteHtml + '</div>' +
                         '<button class="chat-nav-idx" style="border:none;background:transparent;color:var(--text-muted);cursor:pointer;font-size:14px" title="删除">✕</button>';
                     item.onclick = function() {
-                        if (isHl) readingJumpHighlight(bm.id, bm.msgIdx, bm.p); else readingJumpBookmark(bm.msgIdx, bm.p);
+                        if (isHl) readingJumpHighlight(bm.id, bm.msgIdx, bm.p, bm.chap); else readingJumpBookmark(bm.msgIdx, bm.p, bm.chap);
                         chatCloseBookmarkPanel();
                     };
                     var delBtn = item.querySelector('button');
@@ -22448,7 +22468,7 @@ body {
                 if (b.type !== 'ask') return;   // 书签(段落 bookmark)已从面板移除
                 var k = b.msgIdx + '#' + b.p;
                 if (!groups[k]) { groups[k] = []; order.push(k); }
-                groups[k].push({ msgIdx: b.msgIdx, p: b.p, q: b.q || '', ts: b.ts || 0, raw: b });
+                groups[k].push({ msgIdx: b.msgIdx, chap: b.chap, p: b.p, q: b.q || '', ts: b.ts || 0, raw: b });
             });
             var entries = [];
             order.forEach(function (k) {
@@ -22460,10 +22480,10 @@ body {
                     return { q: a.q, a: ans, ts: a.ts, raw: a.raw };
                 });
                 var lastTs = g.reduce(function (m, a) { return Math.max(m, a.ts || 0); }, 0);
-                entries.push({ type: g.length >= 2 ? 'thread' : 'single', msgIdx: g[0].msgIdx, p: g[0].p, qas: qas, count: g.length, sortTs: lastTs });
+                entries.push({ type: g.length >= 2 ? 'thread' : 'single', msgIdx: g[0].msgIdx, chap: g[0].chap, p: g[0].p, qas: qas, count: g.length, sortTs: lastTs });
             });
             readingGetConvHl().forEach(function (h) {
-                entries.push({ type: 'hl', msgIdx: h.msgIdx, p: h.p, id: h.id, color: h.color, note: h.note || '', preview: h.preview || ('第 ' + h.p + ' 段'), sortTs: h.ts || 0 });
+                entries.push({ type: 'hl', msgIdx: h.msgIdx, chap: h.chap, p: h.p, id: h.id, color: h.color, note: h.note || '', preview: h.preview || ('第 ' + h.p + ' 段'), sortTs: h.ts || 0 });
             });
             return entries;
         }
@@ -22574,7 +22594,7 @@ body {
                     q.onclick = function (ev) {
                         ev.stopPropagation();
                         var mask = document.querySelector('.rd-trace-modal-mask'); if (mask) mask.remove();
-                        if (e.type === 'hl') readingJumpHighlight(e.id, e.msgIdx, e.p); else readingJumpBookmark(e.msgIdx, e.p);
+                        if (e.type === 'hl') readingJumpHighlight(e.id, e.msgIdx, e.p, e.chap); else readingJumpBookmark(e.msgIdx, e.p, e.chap);
                     };
                     var chev = q.querySelector('.rd-trace-qchev');
                     if (chev) chev.onclick = function (ev) {
@@ -22594,7 +22614,7 @@ body {
                 };
                 el.onclick = function () {
                     var mask = document.querySelector('.rd-trace-modal-mask'); if (mask) mask.remove();
-                    if (e.type === 'hl') readingJumpHighlight(e.id, e.msgIdx, e.p); else readingJumpBookmark(e.msgIdx, e.p);
+                    if (e.type === 'hl') readingJumpHighlight(e.id, e.msgIdx, e.p, e.chap); else readingJumpBookmark(e.msgIdx, e.p, e.chap);
                 };
             });
         }
@@ -22627,24 +22647,51 @@ body {
             } catch (e) { if (typeof showToast === 'function') showToast('导出失败：' + (e.message || e)); }
         }
         // 跳到某条划线：滚到其所在段落并让划线闪一下
-        function readingJumpHighlight(id, msgIdx, p) {
+        function _rpFlashScroll(pEl, scrollTarget) {
+            (scrollTarget || pEl).scrollIntoView({ behavior: 'smooth', block: 'center' });
+            pEl.classList.remove('rp-flash'); void pEl.offsetWidth; pEl.classList.add('rp-flash');
+            setTimeout(function() { pEl.classList.remove('rp-flash'); }, 1200);
+        }
+        // 阅读模式：在已渲染的各章里找「章 chap 第 p 段」的 <p>
+        function _readerFindParaEl(chap, p) {
+            var msgs = document.querySelectorAll('#chatMessages .chat-msg.ai[data-idx]');
+            for (var i = 0; i < msgs.length; i++) {
+                var idx = parseInt(msgs[i].getAttribute('data-idx'));
+                if (_readerChapOf(idx) === chap) { var pe = msgs[i].querySelector('p[data-p="' + p + '"]'); if (pe) return pe; }
+            }
+            return null;
+        }
+        // 阅读模式跳转：目标章没载入就开章，再滚到该段闪一下。返回 true=已按阅读模式处理（调用方不再走共读逻辑）
+        function _readerJumpTo(chap, p, markSel) {
+            if (!chatReaderMode) return false;
+            if (chap == null) { showToast('这条是旧版书签、缺章节信息，无法精确跳转'); return true; }
+            function go() {
+                var pEl = _readerFindParaEl(chap, p);
+                if (!pEl) return false;
+                _rpFlashScroll(pEl, (markSel && document.querySelector(markSel)) || pEl);
+                return true;
+            }
+            if (go()) return true;
+            if (readerBookId != null) {
+                readerOpenChapter(readerBookId, chap);   // 重建成只含该章，渲染后轮询到位再滚
+                var tries = 0, timer = setInterval(function() { tries++; if (go() || tries > 25) clearInterval(timer); }, 60);
+            }
+            return true;
+        }
+        function readingJumpHighlight(id, msgIdx, p, chap) {
+            if (_readerJumpTo(chap, p, 'mark.rd-hl[data-hlid="' + id + '"]')) return;
             chatEnsureRenderedIdx(msgIdx | 0); // 目标可能在窗口外，先补渲染到位
             var pEl = document.querySelector('.chat-msg.ai[data-idx="' + msgIdx + '"] p[data-p="' + p + '"]');
             if (!pEl) { showToast('未找到该段落'); return; }
             var mark = document.querySelector('mark.rd-hl[data-hlid="' + id + '"]') || pEl;
-            mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            pEl.classList.remove('rp-flash'); void pEl.offsetWidth; pEl.classList.add('rp-flash');
-            setTimeout(function() { pEl.classList.remove('rp-flash'); }, 1200);
+            _rpFlashScroll(pEl, mark);
         }
-        function readingJumpBookmark(msgIdx, p) {
+        function readingJumpBookmark(msgIdx, p, chap) {
+            if (_readerJumpTo(chap, p, null)) return;
             chatEnsureRenderedIdx(msgIdx | 0); // 目标可能在窗口外，先补渲染到位
             var pEl = document.querySelector('.chat-msg.ai[data-idx="' + msgIdx + '"] p[data-p="' + p + '"]');
             if (!pEl) { showToast('未找到该段落'); return; }
-            pEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            pEl.classList.remove('rp-flash');
-            void pEl.offsetWidth;
-            pEl.classList.add('rp-flash');
-            setTimeout(function() { pEl.classList.remove('rp-flash'); }, 1200);
+            _rpFlashScroll(pEl, pEl);
         }
         // 点击其他区域关闭书签面板
         document.addEventListener('click', function(e) {
