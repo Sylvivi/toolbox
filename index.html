@@ -19521,9 +19521,9 @@ body {
             var placeMd = _readerRenderTableMd(_mtTransPlaceCols, t.places || []);
             var prompt = '【当前人物表】\n' + charMd + '\n\n【当前地点表】\n' + placeMd + '\n\n【本集前情梗概】\n' + recapText;
             var result = await chatStreamChatBigOutput({
-                baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 8000, purpose: '前情→人物地点', signal: signal,
+                baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 2000, purpose: '前情→人物地点', signal: signal,
                 messages: [
-                    { role: 'system', content: '你是「剧集记忆」维护助手。根据给到的这一集前情梗概，增量更新下面两张表。\n规则：\n- 人物表列：角色、性别、身份、关系/所属、备注（角色=原名或通用称呼，性别填 男/女/不明，身份=职业或剧中定位，关系/所属=与谁的关系或所属阵营/机构）。只收有名有姓或反复出场的角色，一次性路人不入表。\n- 地点表列：地点、说明（记反复出现或重要的场所/城市/机构等；说明用一句话点明它是什么、在剧中的作用）。\n- 增量更新：新信息加行；已有行只改变化了的字段，没变的原样保留；同一条目不要重复建行。\n- 本集梗概里没提到的，就原样保留当前表内容，别硬造。\n- 依次输出两张 markdown 表格：人物表、地点表，之间空行分隔，每张表前保留【表名】小标题。不要输出任何其他解释文字。' },
+                    { role: 'system', content: '你是「剧集记忆」维护助手。对照下面已有的人物表/地点表，从这一集前情梗概里，只挑出【本集新出现、还没记过的条目】以及【已有条目这集出现了新信息、需要补充或修正的】，把这些"增量"行输出出来；已经记过、且本集没有新变化的条目，一律不要再输出（省得重复）。\n规则：\n- 人物表列：角色、性别、身份、关系/所属、备注（角色=原名或通用称呼，性别填 男/女/不明，身份=职业或剧中定位，关系/所属=与谁的关系或所属阵营/机构）。只收有名有姓或反复出场的角色，一次性路人不入表。\n- 地点表列：地点、说明（反复出现或重要的场所/城市/机构；说明一句话点明它是什么、在剧中的作用）。\n- 对要新增或更新的条目，请输出【整行】、把该条目当前已知的各字段尽量填全（在旧信息基础上补上本集新增的），我会拿它整行去覆盖同名旧行。\n- 某张表这集既没新增也没更新，就在该表标题下只写一行“（无更新）”，绝不要把旧条目再抄一遍、也别硬造。\n- 依次输出两张 markdown 表格：人物表、地点表，之间空行分隔，每张表前保留【表名】小标题。不要输出任何其他解释文字。' },
                     { role: 'user', content: prompt }
                 ]
             });
@@ -19531,14 +19531,32 @@ body {
             var parts = _transSplitCharPlace(result);
             var newChars = _readerParseTableMd(parts.characters, _mtTransCharCols);
             var newPlaces = _readerParseTableMd(parts.places, _mtTransPlaceCols);
-            if (newChars.length || newPlaces.length) {
-                if (!chatMemoryTables) chatMemoryTables = { characters: [], places: [], cases: [] };
-                if (newChars.length) chatMemoryTables.characters = newChars;
-                if (newPlaces.length) chatMemoryTables.places = newPlaces;
-                chatSaveCurrentConv(true);
-                return true;
-            }
+            if (!chatMemoryTables) chatMemoryTables = { characters: [], places: [], cases: [] };
+            if (!chatMemoryTables.characters) chatMemoryTables.characters = [];
+            if (!chatMemoryTables.places) chatMemoryTables.places = [];
+            // 增量合并：模型只吐新增/有变化的行，按名字 upsert 进现有表（旧行没提到的原样留着）
+            var ch1 = _transUpsertRows(chatMemoryTables.characters, newChars, '角色', _mtTransCharCols);
+            var ch2 = _transUpsertRows(chatMemoryTables.places, newPlaces, '地点', _mtTransPlaceCols);
+            if (ch1 || ch2) { chatSaveCurrentConv(true); return true; }
             return false;
+        }
+        // 按 keyCol（名字）把 deltas 合并进 existing：同名存在→非空字段覆盖旧值、空字段保留；不存在→追加。返回是否真的改了
+        function _transUpsertRows(existing, deltas, keyCol, cols) {
+            var changed = false;
+            for (var d = 0; d < deltas.length; d++) {
+                var row = deltas[d];
+                var key = ((row[keyCol] || '') + '').trim();
+                if (!key) continue;
+                var fi = -1;
+                for (var i = 0; i < existing.length; i++) { if (((existing[i][keyCol] || '') + '').trim() === key) { fi = i; break; } }
+                if (fi < 0) { existing.push(row); changed = true; continue; }
+                for (var c = 0; c < cols.length; c++) {
+                    var col = cols[c];
+                    var nv = ((row[col] || '') + '').trim();
+                    if (nv && nv !== ((existing[fi][col] || '') + '').trim()) { existing[fi][col] = row[col]; changed = true; }
+                }
+            }
+            return changed;
         }
         // 前情各集里还没提取过人物/地点的（seg._mined 未标记且有正文）
         function chatTransMineMissing() {
