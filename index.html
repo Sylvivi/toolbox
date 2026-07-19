@@ -19534,13 +19534,19 @@ body {
             if (!chatMemoryTables) chatMemoryTables = { characters: [], places: [], cases: [] };
             if (!chatMemoryTables.characters) chatMemoryTables.characters = [];
             if (!chatMemoryTables.places) chatMemoryTables.places = [];
+            // 有增量才动：先清掉上一集留下的「本次变更」标记，让这一集新增(绿)/更新(橙)的小点只标当前这批
+            if (newChars.length || newPlaces.length) {
+                chatMemoryTables.characters.forEach(function (r) { delete r._chg; delete r._prev; });
+                chatMemoryTables.places.forEach(function (r) { delete r._chg; delete r._prev; });
+            }
             // 增量合并：模型只吐新增/有变化的行，按名字 upsert 进现有表（旧行没提到的原样留着）
             var ch1 = _transUpsertRows(chatMemoryTables.characters, newChars, '角色', _mtTransCharCols);
             var ch2 = _transUpsertRows(chatMemoryTables.places, newPlaces, '地点', _mtTransPlaceCols);
             if (ch1 || ch2) { chatSaveCurrentConv(true); return true; }
             return false;
         }
-        // 按 keyCol（名字）把 deltas 合并进 existing：同名存在→非空字段覆盖旧值、空字段保留；不存在→追加。返回是否真的改了
+        // 按 keyCol（名字）把 deltas 合并进 existing：同名存在→非空字段覆盖旧值、空字段保留；不存在→追加。
+        // 顺带打「本次变更」标记：新增行 _chg='new'（绿点）、更新行 _chg='upd' 并把旧值存进 _prev（橙点+「原：」）。返回是否真的改了
         function _transUpsertRows(existing, deltas, keyCol, cols) {
             var changed = false;
             for (var d = 0; d < deltas.length; d++) {
@@ -19549,12 +19555,14 @@ body {
                 if (!key) continue;
                 var fi = -1;
                 for (var i = 0; i < existing.length; i++) { if (((existing[i][keyCol] || '') + '').trim() === key) { fi = i; break; } }
-                if (fi < 0) { existing.push(row); changed = true; continue; }
+                if (fi < 0) { row._chg = 'new'; existing.push(row); changed = true; continue; }
+                var er = existing[fi], prev = {}, upd = false;
                 for (var c = 0; c < cols.length; c++) {
                     var col = cols[c];
                     var nv = ((row[col] || '') + '').trim();
-                    if (nv && nv !== ((existing[fi][col] || '') + '').trim()) { existing[fi][col] = row[col]; changed = true; }
+                    if (nv && nv !== ((er[col] || '') + '').trim()) { prev[col] = er[col] || ''; er[col] = row[col]; upd = true; }
                 }
+                if (upd) { er._chg = 'upd'; er._prev = prev; changed = true; }
             }
             return changed;
         }
