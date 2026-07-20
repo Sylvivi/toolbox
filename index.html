@@ -23815,31 +23815,42 @@ body {
             return d || ['❤️空闲', '💡睡够7小时', '🥚吃早饭', '💧喝1L水', '🏃‍♂️运动', '🛀洗澡洗头', '🍎吃水果', '📺看美剧', '💰成1单', '🧠背诵', '📕阅读', '🎨绘画'];
         }
 
-        // 一次性迁移：把旧任务名「🧠背单词」改成「🧠背诵」（任务列表 + 历史打卡记录 + 时间戳表）。
-        // 幂等：没有旧数据就完全不动、也不触发同步；有旧数据被云端拉回时下次启动会再自愈。
+        // 迁移+去重：把旧任务名「🧠背单词」改成「🧠背诵」，并去掉任务列表/每天记录里的重复项
+        //（比如既有背单词又有背诵、改名后重复）。幂等：没变化就不写、不触发同步；每次启动都跑，
+        // 云端拉回旧数据也能下次启动自愈。
         var _CHECKIN_RENAME_OLD = '🧠背单词', _CHECKIN_RENAME_NEW = '🧠背诵';
+        function _dedupeKeepOrder(arr) {
+            var seen = {}, out = [];
+            arr.forEach(function(t){ if (!seen[t]) { seen[t] = 1; out.push(t); } });
+            return out;
+        }
         function migrateCheckinReciteName() {
             try {
                 var changed = false;
-                // 1) 任务列表
+                // 1) 任务列表：改名 + 去重
                 var tasks = idbGet(CHECKIN_TASKS_KEY);
-                if (tasks && tasks.indexOf(_CHECKIN_RENAME_OLD) !== -1) {
-                    setCheckinTasks(tasks.map(function(t){ return t === _CHECKIN_RENAME_OLD ? _CHECKIN_RENAME_NEW : t; }));
-                    changed = true;
+                if (tasks) {
+                    var renamed = tasks.map(function(t){ return t === _CHECKIN_RENAME_OLD ? _CHECKIN_RENAME_NEW : t; });
+                    var deduped = _dedupeKeepOrder(renamed);
+                    if (deduped.length !== tasks.length || deduped.some(function(t,i){ return t !== tasks[i]; })) {
+                        setCheckinTasks(deduped);
+                        changed = true;
+                    }
                 }
-                // 2) 历史每天的记录数组 + _tmap 键
+                // 2) 历史每天的记录数组（改名+去重） + _tmap 键改名
                 var data = idbGet(CHECKIN_STORE);
                 if (data) {
                     var dataChanged = false;
                     Object.keys(data).forEach(function(k) {
                         var v = data[k];
                         if (Array.isArray(v)) {
-                            if (v.indexOf(_CHECKIN_RENAME_OLD) !== -1) {
-                                data[k] = v.map(function(t){ return t === _CHECKIN_RENAME_OLD ? _CHECKIN_RENAME_NEW : t; });
+                            var nv = _dedupeKeepOrder(v.map(function(t){ return t === _CHECKIN_RENAME_OLD ? _CHECKIN_RENAME_NEW : t; }));
+                            if (nv.length !== v.length || nv.some(function(t,i){ return t !== v[i]; })) {
+                                data[k] = nv;
                                 dataChanged = true;
                             }
                         } else if (v && typeof v === 'object' && k.slice(-5) === '_tmap' && (_CHECKIN_RENAME_OLD in v)) {
-                            v[_CHECKIN_RENAME_NEW] = v[_CHECKIN_RENAME_OLD];
+                            if (!(_CHECKIN_RENAME_NEW in v)) v[_CHECKIN_RENAME_NEW] = v[_CHECKIN_RENAME_OLD];
                             delete v[_CHECKIN_RENAME_OLD];
                             dataChanged = true;
                         }
