@@ -23812,7 +23812,42 @@ body {
 
         function getCheckinTasks() {
             var d = idbGet(CHECKIN_TASKS_KEY);
-            return d || ['❤️空闲', '💡睡够7小时', '🥚吃早饭', '💧喝1L水', '🏃‍♂️运动', '🛀洗澡洗头', '🍎吃水果', '📺看美剧', '💰成1单', '🧠背单词', '📕阅读', '🎨绘画'];
+            return d || ['❤️空闲', '💡睡够7小时', '🥚吃早饭', '💧喝1L水', '🏃‍♂️运动', '🛀洗澡洗头', '🍎吃水果', '📺看美剧', '💰成1单', '🧠背诵', '📕阅读', '🎨绘画'];
+        }
+
+        // 一次性迁移：把旧任务名「🧠背单词」改成「🧠背诵」（任务列表 + 历史打卡记录 + 时间戳表）。
+        // 幂等：没有旧数据就完全不动、也不触发同步；有旧数据被云端拉回时下次启动会再自愈。
+        var _CHECKIN_RENAME_OLD = '🧠背单词', _CHECKIN_RENAME_NEW = '🧠背诵';
+        function migrateCheckinReciteName() {
+            try {
+                var changed = false;
+                // 1) 任务列表
+                var tasks = idbGet(CHECKIN_TASKS_KEY);
+                if (tasks && tasks.indexOf(_CHECKIN_RENAME_OLD) !== -1) {
+                    setCheckinTasks(tasks.map(function(t){ return t === _CHECKIN_RENAME_OLD ? _CHECKIN_RENAME_NEW : t; }));
+                    changed = true;
+                }
+                // 2) 历史每天的记录数组 + _tmap 键
+                var data = idbGet(CHECKIN_STORE);
+                if (data) {
+                    var dataChanged = false;
+                    Object.keys(data).forEach(function(k) {
+                        var v = data[k];
+                        if (Array.isArray(v)) {
+                            if (v.indexOf(_CHECKIN_RENAME_OLD) !== -1) {
+                                data[k] = v.map(function(t){ return t === _CHECKIN_RENAME_OLD ? _CHECKIN_RENAME_NEW : t; });
+                                dataChanged = true;
+                            }
+                        } else if (v && typeof v === 'object' && k.slice(-5) === '_tmap' && (_CHECKIN_RENAME_OLD in v)) {
+                            v[_CHECKIN_RENAME_NEW] = v[_CHECKIN_RENAME_OLD];
+                            delete v[_CHECKIN_RENAME_OLD];
+                            dataChanged = true;
+                        }
+                    });
+                    if (dataChanged) { setCheckinData(data); changed = true; }
+                }
+                return changed;
+            } catch (e) { return false; }
         }
         function setCheckinTasks(tasks) {
             idbSet(CHECKIN_TASKS_KEY, tasks);
@@ -23939,10 +23974,11 @@ body {
             var mm = month + 1 < 10 ? '0' + (month + 1) : '' + (month + 1);
             var threshold = Math.min(CHECKIN_LIT_THRESHOLD, taskList.length);
 
-            // 统计本月点亮天数 + 运动天数
+            // 统计本月点亮天数 + 运动天数 + 背诵天数
             var litCount = 0;
             var totalDone = 0;
             var sportCount = 0;
+            var reciteCount = 0;
             var totalTasks = taskList.length;
             for (var i = 1; i <= days; i++) {
                 var key = year + '-' + mm + '-' + (i < 10 ? '0' + i : i);
@@ -23952,6 +23988,8 @@ body {
                 totalDone += dayDone.length;
                 // 当天完成了「运动」就算一天（按任务名含"运动"或🏃 emoji 判定）
                 if (dayAll.some(function(t){return t.indexOf('运动')!==-1 || t.indexOf('🏃')!==-1;})) sportCount++;
+                // 当天完成了「背诵」就算一天（兼容旧名"背单词"及🧠 emoji）
+                if (dayAll.some(function(t){return t.indexOf('背诵')!==-1 || t.indexOf('背单词')!==-1 || t.indexOf('🧠')!==-1;})) reciteCount++;
             }
             // 已过去的天数
             var pastDays = (year === todayYear && month === todayMonth) ? todayDate : days;
@@ -23993,6 +24031,7 @@ body {
             var _tagParts = [];
             if (litCount > 0) _tagParts.push('🔥 ' + litCount + '天');
             if (sportCount > 0) _tagParts.push('🏃 ' + sportCount + '天');
+            if (reciteCount > 0) _tagParts.push('🧠 ' + reciteCount + '天');
             var _tagStr = (_tagParts.join(' · ') + headerEmojis).trim();
             if (_tagStr) html += '<span class="card-tag">' + _tagStr + '</span>';
             html += '<div class="card-chevron">▼</div>';
@@ -24070,7 +24109,7 @@ body {
                 var expandMonth = parseInt(_checkinSelectedDay.substring(5, 7)) - 1;
                 var expandYear = parseInt(_checkinSelectedDay.substring(0, 4));
                 if (expandYear === year && expandMonth === month) {
-                    html += renderCheckinExpand(_checkinSelectedDay, litCount, pastDays, totalDone, totalTasks, sportCount);
+                    html += renderCheckinExpand(_checkinSelectedDay, litCount, pastDays, totalDone, totalTasks, sportCount, reciteCount);
                 }
             }
             html += '</div>';
@@ -24079,14 +24118,14 @@ body {
             var selMonth = parseInt(_checkinSelectedDay.substring(5, 7)) - 1;
             var selYear = parseInt(_checkinSelectedDay.substring(0, 4));
             if (selYear === year && selMonth === month) {
-                html += renderCheckinRight(year, month, _checkinSelectedDay, litCount, pastDays, totalDone, totalTasks, sportCount);
+                html += renderCheckinRight(year, month, _checkinSelectedDay, litCount, pastDays, totalDone, totalTasks, sportCount, reciteCount);
             }
 
             html += '</div></div></div>';
             return html;
         }
 
-        function renderCheckinRight(year, month, dateKey, litCount, pastDays, totalDone, totalTasks, sportCount) {
+        function renderCheckinRight(year, month, dateKey, litCount, pastDays, totalDone, totalTasks, sportCount, reciteCount) {
             var tasks = getCheckinTasks();
             var done = getCheckinForDay(dateKey);
             var note = getCheckinNote(dateKey);
@@ -24117,6 +24156,7 @@ body {
             html += '<div class="checkin-stats">';
             html += '<div class="checkin-stat-item"><span class="checkin-stat-num">' + litCount + '</span><span class="checkin-stat-label">点亮</span></div>';
             html += '<div class="checkin-stat-item"><span class="checkin-stat-num">' + (sportCount || 0) + '</span><span class="checkin-stat-label">🏃运动</span></div>';
+            html += '<div class="checkin-stat-item"><span class="checkin-stat-num">' + (reciteCount || 0) + '</span><span class="checkin-stat-label">🧠背诵</span></div>';
             html += '<div class="checkin-stat-item"><span class="checkin-stat-num">' + pastDays + '</span><span class="checkin-stat-label">天数</span></div>';
             html += '<div class="checkin-stat-item"><span class="checkin-stat-num">' + rate + '%</span><span class="checkin-stat-label">完成率</span></div>';
             html += '</div>';
@@ -24155,7 +24195,7 @@ body {
             setCheckinData(data);
         }
 
-        function renderCheckinExpand(dateKey, litCount, pastDays, totalDone, totalTasks, sportCount) {
+        function renderCheckinExpand(dateKey, litCount, pastDays, totalDone, totalTasks, sportCount, reciteCount) {
             var tasks = getCheckinTasks();
             var done = getCheckinForDay(dateKey);
             var note = getCheckinNote(dateKey);
@@ -24175,7 +24215,7 @@ body {
             }
             html += '</div>';
             html += '<textarea class="checkin-note" placeholder="写点备注…" onblur="saveCheckinNote(\'' + dateKey + '\',this.value)">' + esc(note || '') + '</textarea>';
-            html += '<div class="checkin-expand-stats">🔥 ' + litCount + '天点亮 · 🏃 ' + (sportCount || 0) + '天运动 · ' + pastDays + '天 · ' + rate + '%完成率</div>';
+            html += '<div class="checkin-expand-stats">🔥 ' + litCount + '天点亮 · 🏃 ' + (sportCount || 0) + '天运动 · 🧠 ' + (reciteCount || 0) + '天背诵 · ' + pastDays + '天 · ' + rate + '%完成率</div>';
             html += '</div>';
             return html;
         }
@@ -24454,6 +24494,7 @@ body {
 
         idbInit().then(function() {
             migrateOldUrlBookmarks();
+            migrateCheckinReciteName();
 
             // 字体：idb 就绪后立刻注册本地字体 + 应用四/五位置选择（全局 CSS 变量），
             // 这样一进阅读界面就生效，不用先点开 clawd 设置面板才同步上。
