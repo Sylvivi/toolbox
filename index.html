@@ -23939,15 +23939,19 @@ body {
             var mm = month + 1 < 10 ? '0' + (month + 1) : '' + (month + 1);
             var threshold = Math.min(CHECKIN_LIT_THRESHOLD, taskList.length);
 
-            // 统计本月点亮天数
+            // 统计本月点亮天数 + 运动天数
             var litCount = 0;
             var totalDone = 0;
+            var sportCount = 0;
             var totalTasks = taskList.length;
             for (var i = 1; i <= days; i++) {
                 var key = year + '-' + mm + '-' + (i < 10 ? '0' + i : i);
-                var dayDone = (checkinData[key] || []).filter(function(t){return taskList.indexOf(t)!==-1;});
+                var dayAll = checkinData[key] || [];
+                var dayDone = dayAll.filter(function(t){return taskList.indexOf(t)!==-1;});
                 if (threshold > 0 && dayDone.length >= threshold) litCount++;
                 totalDone += dayDone.length;
+                // 当天完成了「运动」就算一天（按任务名含"运动"或🏃 emoji 判定）
+                if (dayAll.some(function(t){return t.indexOf('运动')!==-1 || t.indexOf('🏃')!==-1;})) sportCount++;
             }
             // 已过去的天数
             var pastDays = (year === todayYear && month === todayMonth) ? todayDate : days;
@@ -23986,8 +23990,11 @@ body {
             var html = '<div class="card' + collapsed + '">';
             html += '<div class="card-header" onclick="toggleCard(this)">';
             html += '<div class="card-title">' + monthName + '</div>';
-            if (litCount > 0) html += '<span class="card-tag">🔥 ' + litCount + '天' + headerEmojis + '</span>';
-            else if (headerEmojis) html += '<span class="card-tag">' + headerEmojis.trim() + '</span>';
+            var _tagParts = [];
+            if (litCount > 0) _tagParts.push('🔥 ' + litCount + '天');
+            if (sportCount > 0) _tagParts.push('🏃 ' + sportCount + '天');
+            var _tagStr = (_tagParts.join(' · ') + headerEmojis).trim();
+            if (_tagStr) html += '<span class="card-tag">' + _tagStr + '</span>';
             html += '<div class="card-chevron">▼</div>';
             html += '</div>';
             if (firstActiveDk) {
@@ -24063,7 +24070,7 @@ body {
                 var expandMonth = parseInt(_checkinSelectedDay.substring(5, 7)) - 1;
                 var expandYear = parseInt(_checkinSelectedDay.substring(0, 4));
                 if (expandYear === year && expandMonth === month) {
-                    html += renderCheckinExpand(_checkinSelectedDay, litCount, pastDays, totalDone, totalTasks);
+                    html += renderCheckinExpand(_checkinSelectedDay, litCount, pastDays, totalDone, totalTasks, sportCount);
                 }
             }
             html += '</div>';
@@ -24072,14 +24079,14 @@ body {
             var selMonth = parseInt(_checkinSelectedDay.substring(5, 7)) - 1;
             var selYear = parseInt(_checkinSelectedDay.substring(0, 4));
             if (selYear === year && selMonth === month) {
-                html += renderCheckinRight(year, month, _checkinSelectedDay, litCount, pastDays, totalDone, totalTasks);
+                html += renderCheckinRight(year, month, _checkinSelectedDay, litCount, pastDays, totalDone, totalTasks, sportCount);
             }
 
             html += '</div></div></div>';
             return html;
         }
 
-        function renderCheckinRight(year, month, dateKey, litCount, pastDays, totalDone, totalTasks) {
+        function renderCheckinRight(year, month, dateKey, litCount, pastDays, totalDone, totalTasks, sportCount) {
             var tasks = getCheckinTasks();
             var done = getCheckinForDay(dateKey);
             var note = getCheckinNote(dateKey);
@@ -24109,6 +24116,7 @@ body {
             html += '<div class="checkin-panel checkin-p-stats">';
             html += '<div class="checkin-stats">';
             html += '<div class="checkin-stat-item"><span class="checkin-stat-num">' + litCount + '</span><span class="checkin-stat-label">点亮</span></div>';
+            html += '<div class="checkin-stat-item"><span class="checkin-stat-num">' + (sportCount || 0) + '</span><span class="checkin-stat-label">🏃运动</span></div>';
             html += '<div class="checkin-stat-item"><span class="checkin-stat-num">' + pastDays + '</span><span class="checkin-stat-label">天数</span></div>';
             html += '<div class="checkin-stat-item"><span class="checkin-stat-num">' + rate + '%</span><span class="checkin-stat-label">完成率</span></div>';
             html += '</div>';
@@ -24147,7 +24155,7 @@ body {
             setCheckinData(data);
         }
 
-        function renderCheckinExpand(dateKey, litCount, pastDays, totalDone, totalTasks) {
+        function renderCheckinExpand(dateKey, litCount, pastDays, totalDone, totalTasks, sportCount) {
             var tasks = getCheckinTasks();
             var done = getCheckinForDay(dateKey);
             var note = getCheckinNote(dateKey);
@@ -24167,7 +24175,7 @@ body {
             }
             html += '</div>';
             html += '<textarea class="checkin-note" placeholder="写点备注…" onblur="saveCheckinNote(\'' + dateKey + '\',this.value)">' + esc(note || '') + '</textarea>';
-            html += '<div class="checkin-expand-stats">🔥 ' + litCount + '天点亮 · ' + pastDays + '天 · ' + rate + '%完成率</div>';
+            html += '<div class="checkin-expand-stats">🔥 ' + litCount + '天点亮 · 🏃 ' + (sportCount || 0) + '天运动 · ' + pastDays + '天 · ' + rate + '%完成率</div>';
             html += '</div>';
             return html;
         }
