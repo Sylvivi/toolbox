@@ -5688,10 +5688,35 @@ body {
             setTimeout(function() { if (input) input.focus(); }, 350);
         }
 
-        // 搜索键：单击聚焦搜索，双击切换页面
+        // 搜索键：单击聚焦搜索，双击切换页面，长按切换日/夜间模式
         (function() {
             var clickTimer = null;
-            document.getElementById('fabSearch').addEventListener('click', function(e) {
+            var lpTimer = null;
+            var longPressed = false;
+            var fab = document.getElementById('fabSearch');
+
+            function startPress() {
+                longPressed = false;
+                clearTimeout(lpTimer);
+                lpTimer = setTimeout(function() {
+                    longPressed = true;                         // 标记：随后的 click 一律吞掉，不触发搜索/切页
+                    if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+                    setNightMode(!nightMode);                   // 切换日/夜间（自带换肤+同步开关视觉）
+                    showToast(nightMode ? '🌙 夜间模式' : '☀️ 日间模式');
+                    try { if (navigator.vibrate) navigator.vibrate(15); } catch (e) {}
+                }, 500);
+            }
+            function cancelPress() { clearTimeout(lpTimer); lpTimer = null; }
+
+            fab.addEventListener('touchstart', startPress, { passive: true });
+            fab.addEventListener('touchend', cancelPress);
+            fab.addEventListener('touchmove', cancelPress, { passive: true });
+            fab.addEventListener('mousedown', startPress);
+            fab.addEventListener('mouseup', cancelPress);
+            fab.addEventListener('mouseleave', cancelPress);
+
+            fab.addEventListener('click', function(e) {
+                if (longPressed) { longPressed = false; e.preventDefault(); e.stopPropagation(); return; } // 长按已处理，吞掉这次 click
                 if (clickTimer) {
                     clearTimeout(clickTimer);
                     clickTimer = null;
