@@ -12728,12 +12728,24 @@ body {
 
         // 直接进入最近一次对话；没有任何对话时开新对话
         function chatOpenMostRecent() {
-            var list = chatGetHistory();
-            // 阅读会话（reader_）不算「最近对话」——否则长按搜索键会去打开整本书，又慢又跑偏
-            if (list && list.length) list = list.filter(function(c) { return !(c.id && c.id.indexOf('reader_') === 0); });
-            if (!list || list.length === 0) { chatNewConv(); return; }
-            list.sort(function(a, b) { return (b.updated || b.created || 0) - (a.updated || a.created || 0); });
-            chatLoadConv(list[0].id);
+            var list = chatGetHistory() || [];
+            // 智能恢复「上次在做什么」：把阅读会话(reader_)也算进来一起比时间戳，
+            // 谁最近就进谁——上次在看书就回看书，上次在聊天/共读就开那个对话。
+            var top = null;
+            for (var i = 0; i < list.length; i++) {
+                var t = list[i].updated || list[i].created || 0;
+                if (!top || t > (top.updated || top.created || 0)) top = list[i];
+            }
+            // 上次就在阅读模式 → 回到上次那本书、上次读到的位置（readerResumeLast 只开当前章、不整本堆进来，不慢）
+            if (top && top.id && top.id.indexOf('reader_') === 0 && typeof readerResumeLast === 'function') {
+                readerResumeLast();
+                return;
+            }
+            // 否则打开最近的普通对话/共读（排除阅读会话）
+            var chats = list.filter(function(c) { return !(c.id && c.id.indexOf('reader_') === 0); });
+            if (!chats.length) { chatNewConv(); return; }
+            chats.sort(function(a, b) { return (b.updated || b.created || 0) - (a.updated || a.created || 0); });
+            chatLoadConv(chats[0].id);
         }
 
         function openChatModal() {
