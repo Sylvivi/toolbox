@@ -3559,6 +3559,10 @@ body {
         }
         .theme-picker-item:hover { background: var(--accent-light); }
         .theme-picker-item.active { background: var(--accent-light); color: var(--accent); font-weight: 600; }
+        .theme-picker-night { display: flex; align-items: center; justify-content: space-between; }
+        .theme-picker-night .tp-state { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+        .theme-picker-night.active .tp-state { color: var(--accent); }
+        .theme-picker-sep { height: 1px; background: var(--card-border); margin: 4px 6px 6px; }
 
         .fab-search {
             -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
@@ -4682,6 +4686,8 @@ body {
     <!-- 主题选择面板 -->
     <div class="theme-picker" id="themePicker">
         <div class="theme-picker-title">选择主题</div>
+        <button class="theme-picker-item theme-picker-night" id="themePickerNight" onclick="themePickerToggleNight(event)"></button>
+        <div class="theme-picker-sep"></div>
         <div class="theme-picker-list" id="themePickerList"><button class="theme-picker-item">蓝金</button><button class="theme-picker-item">青蓝</button><button class="theme-picker-item">蓝橙</button><button class="theme-picker-item">紫粉</button><button class="theme-picker-item">冰蓝</button><button class="theme-picker-item active">霞玫</button><button class="theme-picker-item">粘土</button></div>
     </div>
 
@@ -5688,35 +5694,10 @@ body {
             setTimeout(function() { if (input) input.focus(); }, 350);
         }
 
-        // 搜索键：单击聚焦搜索，双击切换页面，长按切换日/夜间模式
+        // 搜索键：单击聚焦搜索，双击切换页面（长按打开聊天/阅读界面，见后面「长按搜索浮标」）
         (function() {
             var clickTimer = null;
-            var lpTimer = null;
-            var longPressed = false;
-            var fab = document.getElementById('fabSearch');
-
-            function startPress() {
-                longPressed = false;
-                clearTimeout(lpTimer);
-                lpTimer = setTimeout(function() {
-                    longPressed = true;                         // 标记：随后的 click 一律吞掉，不触发搜索/切页
-                    if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
-                    setNightMode(!nightMode);                   // 切换日/夜间（自带换肤+同步开关视觉）
-                    showToast(nightMode ? '🌙 夜间模式' : '☀️ 日间模式');
-                    try { if (navigator.vibrate) navigator.vibrate(15); } catch (e) {}
-                }, 500);
-            }
-            function cancelPress() { clearTimeout(lpTimer); lpTimer = null; }
-
-            fab.addEventListener('touchstart', startPress, { passive: true });
-            fab.addEventListener('touchend', cancelPress);
-            fab.addEventListener('touchmove', cancelPress, { passive: true });
-            fab.addEventListener('mousedown', startPress);
-            fab.addEventListener('mouseup', cancelPress);
-            fab.addEventListener('mouseleave', cancelPress);
-
-            fab.addEventListener('click', function(e) {
-                if (longPressed) { longPressed = false; e.preventDefault(); e.stopPropagation(); return; } // 长按已处理，吞掉这次 click
+            document.getElementById('fabSearch').addEventListener('click', function(e) {
                 if (clickTimer) {
                     clearTimeout(clickTimer);
                     clickTimer = null;
@@ -5846,6 +5827,7 @@ body {
                     list.appendChild(btn);
                 })(i);
             }
+            syncThemePickerNight();
             picker.classList.add('show');
             setTimeout(function() {
                 document.addEventListener('pointerdown', closePickerOutside);
@@ -5855,6 +5837,20 @@ body {
         function hideThemePicker() {
             document.getElementById('themePicker').classList.remove('show');
             document.removeEventListener('pointerdown', closePickerOutside);
+        }
+        // 主题小窗里的日/夜间开关：显示当前状态
+        function syncThemePickerNight() {
+            var b = document.getElementById('themePickerNight');
+            if (!b) return;
+            b.innerHTML = (nightMode ? '🌙 夜间模式' : '☀️ 日间模式') + '<span class="tp-state">' + (nightMode ? '开' : '关') + '</span>';
+            b.classList.toggle('active', nightMode);
+        }
+        // 点开关：切日/夜间（复用 setNightMode，自带换肤+同步 clawd 里的开关），小窗不关、即时看效果
+        function themePickerToggleNight(e) {
+            if (e) e.stopPropagation();
+            setNightMode(!nightMode);
+            syncThemePickerNight();
+            showToast(nightMode ? '🌙 夜间模式' : '☀️ 日间模式');
         }
 
         function closePickerOutside(e) {
