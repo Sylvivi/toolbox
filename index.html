@@ -10289,23 +10289,24 @@ body {
                     checkinDirty = cResult.changed;
                 }
 
-                // bookmarks: 整块按时间戳后写覆盖（云端更新则采用云端，正确处理删除）
+                // bookmarks: 逐「会话键」取并集合并（不再整块覆盖）——不同设备的读痕互相补齐、不会被对方一保存就整块盖没。
+                var marksDirty = false;
                 if (manifest.bookmarks) {
-                    var cloudBmTs = manifest.bookmarksTs || '';
-                    var localBmTs = readingGetBookmarksTs();
-                    if (cloudBmTs > localBmTs) {
-                        localStorage.setItem('reading_bookmarks', JSON.stringify(manifest.bookmarks));
-                        localStorage.setItem('reading_bookmarks_ts', cloudBmTs);
+                    var _localBm = readingGetAllBookmarks();
+                    if (_mergeMarksBlobs(_localBm, manifest.bookmarks)) {
+                        localStorage.setItem('reading_bookmarks', JSON.stringify(_localBm));
+                        localStorage.setItem('reading_bookmarks_ts', new Date().toISOString());
+                        marksDirty = true;   // 并进了云端新读痕 → 稍后把并集回推，好让被覆盖过的设备也补回来
                     }
                 }
 
-                // highlights(划线): 同书签，整块按时间戳后写覆盖
+                // highlights(划线): 同书签，逐「会话键」取并集合并
                 if (manifest.highlights) {
-                    var cloudHlTs = manifest.highlightsTs || '';
-                    var localHlTs = readingGetHlTs();
-                    if (cloudHlTs > localHlTs) {
-                        localStorage.setItem('reading_highlights', JSON.stringify(manifest.highlights));
-                        localStorage.setItem('reading_highlights_ts', cloudHlTs);
+                    var _localHl = readingGetAllHl();
+                    if (_mergeMarksBlobs(_localHl, manifest.highlights)) {
+                        localStorage.setItem('reading_highlights', JSON.stringify(_localHl));
+                        localStorage.setItem('reading_highlights_ts', new Date().toISOString());
+                        marksDirty = true;
                     }
                 }
 
@@ -10498,7 +10499,7 @@ body {
                     });
 
                     // 7) 更新 manifest（有变化时才写）
-                    if (pushPromises.length > 0 || mergedKeys.manifestDirty || mergedSnips.manifestDirty || checkinDirty) {
+                    if (pushPromises.length > 0 || mergedKeys.manifestDirty || mergedSnips.manifestDirty || checkinDirty || marksDirty) {
                         var newManifest = cfBuildManifest();
                         newManifest.tombstones = mergedTombs;
                         pushPromises.push(cfPutManifest(newManifest));
@@ -19991,6 +19992,19 @@ body {
             (src || []).forEach(function (m) { var s = _readerMarkSig(m); if (!seen[s]) { seen[s] = 1; dst.push(m); } });
             return dst;
         }
+        // 读痕(书签/划线)整份跨设备合并：逐「会话键」取并集（按签名去重，同源标记签名相同不会重复）。
+        // 就地并进 localBlob，返回是否有新增（云端带来了本地没有的标记）。替代旧的「整块按时间戳覆盖」，
+        // 那种方式一台设备一保存就把另一台的读痕整块盖没——这才是跨设备读痕丢失的根因。
+        function _mergeMarksBlobs(localBlob, cloudBlob) {
+            cloudBlob = cloudBlob || {};
+            var changed = false;
+            Object.keys(cloudBlob).forEach(function (k) {
+                var before = (localBlob[k] && localBlob[k].length) || 0;
+                var merged = _readerMergeMarks(localBlob[k], cloudBlob[k]);
+                if (merged.length !== before || !localBlob[k]) { localBlob[k] = merged; if (merged.length !== before) changed = true; }
+            });
+            return changed;
+        }
         // 首次进书时把旧 reader_<本地bookId> 下的读痕/划线搬到新稳定键（幂等，去重合并）
         function readerMigrateMarksKey(bookId) {
             try {
@@ -22547,6 +22561,12 @@ body {
         // 读痕条目所在章节标题：取该消息原文里、从这一段往上最近的一行「第X章…」标题（识别不出就留空）
         function rdTraceChapterTitle(e) {
             try {
+                // 阅读模式条目 msgIdx 为空，章名直接取书的章节标题
+                if (chatReaderMode && e && typeof e.chap === 'number' && readerBookId != null) {
+                    var _b = rbGetBook(readerBookId);
+                    if (_b && _b.chapters && _b.chapters[e.chap]) return (_b.chapters[e.chap].title || '').trim();
+                    return '';
+                }
                 if (!e || typeof e.msgIdx !== 'number') return '';
                 var orig = readingModeStripParaNums(readingModeGetOriginalText(e.msgIdx) || '');
                 if (!orig) return '';
@@ -22593,26 +22613,62 @@ body {
             return '';
         }
         // 收集 → 把提问按「同一段」聚成话题：一段问 1 次=单问(single)，连续追问≥2 次=追问串(thread)；划线(hl) 各自一条。
-        function rdTraceBuildEntries() {
-            var groups = {}, order = [];
-            readingGetConvBookmarks().forEach(function (b) {
-                if (b.type !== 'ask') return;   // 书签(段落 bookmark)已从面板移除
-                var k = b.msgIdx + '#' + b.p;
-                if (!groups[k]) { groups[k] = []; order.push(k); }
-                groups[k].push({ msgIdx: b.msgIdx, chap: b.chap, p: b.p, q: b.q || '', ts: b.ts || 0, raw: b });
-            });
+        // 阅读模式：提问读痕直接从同步可靠的 reader_qa 生成（与正文问答同源——正文里有问答，读痕就一定有），
+        // 绕开跨设备易丢的 reading_bookmarks。按「章#段」聚成话题：一段问1次=单问、连续≥2次=追问串。
+        function rdTraceReaderAskEntries() {
             var entries = [];
-            order.forEach(function (k) {
-                var g = groups[k].slice().sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
-                var qas = g.map(function (a) {
-                    var ans = (a.raw && a.raw.trE != null)
-                        ? rdTraceTransAnswerFor(a.msgIdx, a.raw.trS, a.raw.trE, a.q)   // 翻译追问
-                        : rdTraceAnswerFor(a.msgIdx, a.p, a.q);                          // 共读提问
-                    return { q: a.q, a: ans, ts: a.ts, raw: a.raw };
+            try {
+                if (readerBookId == null) return entries;
+                var book = readerQAAll()[readerBookKey(readerBookId)];
+                if (!book) return entries;
+                Object.keys(book).forEach(function (chapKey) {
+                    var chap = parseInt(chapKey, 10);
+                    var cell = book[chapKey];
+                    var list = (cell && cell.list) || [];
+                    var ts = (cell && cell.ts) || 0;
+                    var groups = {}, order = [];
+                    list.forEach(function (it) {
+                        if (!it || !(it.p > 0) || !it.q) return;
+                        if (!groups[it.p]) { groups[it.p] = []; order.push(it.p); }
+                        groups[it.p].push(it);
+                    });
+                    order.forEach(function (p) {
+                        var g = groups[p];
+                        var qas = g.map(function (it) { return { q: it.q, a: it.a || '' }; });
+                        entries.push({ type: g.length >= 2 ? 'thread' : 'single', msgIdx: null, chap: chap, p: p, qas: qas, count: g.length, sortTs: ts });
+                    });
                 });
-                var lastTs = g.reduce(function (m, a) { return Math.max(m, a.ts || 0); }, 0);
-                entries.push({ type: g.length >= 2 ? 'thread' : 'single', msgIdx: g[0].msgIdx, chap: g[0].chap, p: g[0].p, qas: qas, count: g.length, sortTs: lastTs });
-            });
+            } catch (e) {}
+            return entries;
+        }
+        function rdTraceBuildEntries() {
+            var entries;
+            if (chatReaderMode) {
+                // 阅读模式：提问从 reader_qa 出（同步可靠），不依赖 reading_bookmarks
+                entries = rdTraceReaderAskEntries();
+            } else {
+                // 共读/翻译：提问从 reading_bookmarks 的 ask 书签出（会话 id chat_ 跨设备稳定，同步没问题）
+                entries = [];
+                var groups = {}, order = [];
+                readingGetConvBookmarks().forEach(function (b) {
+                    if (b.type !== 'ask') return;   // 书签(段落 bookmark)已从面板移除
+                    var k = b.msgIdx + '#' + b.p;
+                    if (!groups[k]) { groups[k] = []; order.push(k); }
+                    groups[k].push({ msgIdx: b.msgIdx, chap: b.chap, p: b.p, q: b.q || '', ts: b.ts || 0, raw: b });
+                });
+                order.forEach(function (k) {
+                    var g = groups[k].slice().sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); });
+                    var qas = g.map(function (a) {
+                        var ans = (a.raw && a.raw.trE != null)
+                            ? rdTraceTransAnswerFor(a.msgIdx, a.raw.trS, a.raw.trE, a.q)   // 翻译追问
+                            : rdTraceAnswerFor(a.msgIdx, a.p, a.q);                          // 共读提问
+                        return { q: a.q, a: ans, ts: a.ts, raw: a.raw };
+                    });
+                    var lastTs = g.reduce(function (m, a) { return Math.max(m, a.ts || 0); }, 0);
+                    entries.push({ type: g.length >= 2 ? 'thread' : 'single', msgIdx: g[0].msgIdx, chap: g[0].chap, p: g[0].p, qas: qas, count: g.length, sortTs: lastTs });
+                });
+            }
+            // 划线(hl)：两种模式都从 reading_highlights 取（阅读模式已按稳定键存+并集同步）
             readingGetConvHl().forEach(function (h) {
                 entries.push({ type: 'hl', msgIdx: h.msgIdx, chap: h.chap, p: h.p, id: h.id, color: h.color, note: h.note || '', preview: h.preview || ('第 ' + h.p + ' 段'), sortTs: h.ts || 0 });
             });
