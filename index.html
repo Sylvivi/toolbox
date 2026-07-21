@@ -19919,6 +19919,7 @@ body {
             var conv = (typeof readerFindConv === 'function') ? readerFindConv(lastBook) : null;
             var hasAnchor = false;
             try { hasAnchor = !!localStorage.getItem('reading_pos_' + readerConvId(lastBook)); } catch (e) {}
+            readerMigrateMarksKey(lastBook); // 「继续阅读」走 chatLoadConv 的路径也搬一次读痕键（幂等）
             if (conv && hasAnchor) {
                 chatLoadConv(readerConvId(lastBook));
             } else {
@@ -19929,6 +19930,56 @@ body {
         // 每本书一个专属阅读会话（id 形如 reader_<bookId>，本身带 readingMode），
         // 这样进度/书签/回到上次位置全部复用共读现成的会话机制。
         function readerConvId(bookId) { return 'reader_' + bookId; }
+        // 读痕（书签/划线）存取用的会话键。
+        // 坑：阅读模式 chatCurrentConvId = 'reader_' + 本地 bookId，而 bookId 是每台设备导入书时各自生成的
+        // （'bk_'+时间戳+随机），同一本书在不同设备上 convId 不同 → 读痕整块同步过去后对不上号、面板空
+        // （但正文问答 reader_qa 按「文件名|大小」存、跨设备稳定，所以正文有、读痕没有）。
+        // 解法：阅读模式下读痕也改用「reader_ + 文件名|大小」这个稳定键。从 chatCurrentConvId 反推 bookId，
+        // 不依赖 readerBookId（继续阅读走 chatLoadConv 时它可能没设）。
+        function readingMarksConvId() {
+            var cid = chatCurrentConvId;
+            // 阅读模式会话 id 形如 reader_<bookId>；共读是 chat_<...>。只认前缀，不依赖 chatReaderMode
+            // （继续阅读走 chatLoadConv 时该标志可能瞬时未置好）。
+            if (cid && cid.indexOf('reader_') === 0) {
+                var bookId = cid.slice(7);
+                var fk = readerBookKey(bookId);
+                if (fk && fk !== bookId) return 'reader_' + fk;
+            }
+            return cid;
+        }
+        function _readerMarkSig(m) {
+            if (m && m.id != null) return 'id:' + m.id;                 // 划线有唯一 id
+            return [m.type || 'para', m.chap, m.p, m.q || '', m.ts || 0].join('|');
+        }
+        function _readerMergeMarks(dst, src) {
+            dst = Array.isArray(dst) ? dst.slice() : [];
+            var seen = {};
+            dst.forEach(function (m) { seen[_readerMarkSig(m)] = 1; });
+            (src || []).forEach(function (m) { var s = _readerMarkSig(m); if (!seen[s]) { seen[s] = 1; dst.push(m); } });
+            return dst;
+        }
+        // 首次进书时把旧 reader_<本地bookId> 下的读痕/划线搬到新稳定键（幂等，去重合并）
+        function readerMigrateMarksKey(bookId) {
+            try {
+                if (!bookId) return;
+                var oldCid = 'reader_' + bookId;
+                var fk = readerBookKey(bookId);
+                if (!fk || fk === bookId) return;         // 书对象没了、退回 bookId，无从迁移
+                var newCid = 'reader_' + fk;
+                var bm = readingGetAllBookmarks();
+                if (bm[oldCid] && bm[oldCid].length) {
+                    bm[newCid] = _readerMergeMarks(bm[newCid], bm[oldCid]);
+                    delete bm[oldCid];
+                    readingSaveAllBookmarks(bm);
+                }
+                var hl = readingGetAllHl();
+                if (hl[oldCid] && hl[oldCid].length) {
+                    hl[newCid] = _readerMergeMarks(hl[newCid], hl[oldCid]);
+                    delete hl[oldCid];
+                    readingSaveAllHl(hl);
+                }
+            } catch (e) {}
+        }
         function readerFindConv(bookId) {
             var list = chatGetHistory(); var cid = readerConvId(bookId);
             for (var i = 0; i < list.length; i++) if (list[i].id === cid) return list[i];
@@ -19957,6 +20008,7 @@ body {
         function readerOpenChapter(bookId, idx) {
             var b = rbGetBook(bookId); if (!b || !b.chapters[idx]) return;
             rbPickForReader = false; // 已真正选章进入阅读，避免关书架时被误判成「没进阅读」而清掉阅读态
+            readerMigrateMarksKey(bookId); // 把旧「设备专属键」下的读痕搬到跨设备稳定键（幂等）
             readerBookId = bookId;
             readerChapterIdx = idx;
             var cid = readerConvId(bookId);
@@ -20082,8 +20134,9 @@ body {
                 }
                 // 2) 书签按 msgIdx 存，也整体 +2，跟上节点下标，避免会话内标记错位
                 try {
+                    var _bmCid = readingMarksConvId();
                     var allBm = readingGetAllBookmarks();
-                    var lst = allBm[chatCurrentConvId];
+                    var lst = allBm[_bmCid];
                     if (lst && lst.length) {
                         for (var bi = 0; bi < lst.length; bi++) { if (typeof lst[bi].msgIdx === 'number') lst[bi].msgIdx += 2; }
                         readingSaveAllBookmarks(allBm);
@@ -21927,9 +21980,10 @@ body {
             return localStorage.getItem('reading_bookmarks_ts') || '';
         }
         function readingGetConvBookmarks() {
-            if (!chatCurrentConvId) return [];
+            var cid = readingMarksConvId();
+            if (!cid) return [];
             var all = readingGetAllBookmarks();
-            return all[chatCurrentConvId] || [];
+            return all[cid] || [];
         }
         function readingIsBookmarked(msgIdx, p) {
             var list = readingGetConvBookmarks();
@@ -21965,14 +22019,16 @@ body {
         }
         function readingGetHlTs() { return localStorage.getItem('reading_highlights_ts') || ''; }
         function readingGetConvHl() {
-            if (!chatCurrentConvId) return [];
+            var cid = readingMarksConvId();
+            if (!cid) return [];
             var all = readingGetAllHl();
-            return all[chatCurrentConvId] || [];
+            return all[cid] || [];
         }
         function readingSaveConvHl(list) {
-            if (!chatCurrentConvId) return;
+            var cid = readingMarksConvId();
+            if (!cid) return;
             var all = readingGetAllHl();
-            all[chatCurrentConvId] = list;
+            all[cid] = list;
             readingSaveAllHl(all);
         }
         // 划线样式：底色 ↔ 下划线（这里叫「划线」），全书统一，存本机。开关在颜色条上。
@@ -22254,26 +22310,28 @@ body {
         }
 
         function readingToggleBookmark(msgIdx, p) {
-            if (!chatCurrentConvId) return false;
+            var cid = readingMarksConvId();
+            if (!cid) return false;
             var all = readingGetAllBookmarks();
-            var list = all[chatCurrentConvId] || [];
+            var list = all[cid] || [];
             var _chap = _readerChapOf(msgIdx);
             var found = -1;
             for (var i = 0; i < list.length; i++) { if (_markMatchesMsg(list[i], msgIdx, _chap) && list[i].p === p && list[i].type !== 'ask') { found = i; break; } }
             var nowOn;
             if (found >= 0) { list.splice(found, 1); nowOn = false; }
             else { list.push({ msgIdx: msgIdx, chap: _chap, p: p, preview: readingParaPreview(msgIdx, p), type: 'para', ts: Date.now() }); nowOn = true; }
-            all[chatCurrentConvId] = list;
+            all[cid] = list;
             readingSaveAllBookmarks(all);
             return nowOn;
         }
         // 共读提问后，把问题作为「💬 问题书签」加入同一书签列表，便于跳转回该段
         function readingAddQuestionBookmark(msgIdx, p, question, meta) {
-            if (!chatCurrentConvId) return;
+            var cid = readingMarksConvId();
+            if (!cid) return;
             question = (question || '').trim();
             if (!question) return;
             var all = readingGetAllBookmarks();
-            var list = all[chatCurrentConvId] || [];
+            var list = all[cid] || [];
             var _chap = _readerChapOf(msgIdx);
             for (var i = 0; i < list.length; i++) {
                 if (list[i].type === 'ask' && _markMatchesMsg(list[i], msgIdx, _chap) && list[i].p === p && list[i].q === question) return;
@@ -22282,22 +22340,23 @@ body {
             var bm = { msgIdx: msgIdx, chap: _chap, p: p, q: question, preview: prev, type: 'ask', ts: Date.now() };
             if (meta) { for (var mk in meta) { if (meta.hasOwnProperty(mk)) bm[mk] = meta[mk]; } } // 翻译追问带 trS/trE，回取答案时认这个
             list.push(bm);
-            all[chatCurrentConvId] = list;
+            all[cid] = list;
             readingSaveAllBookmarks(all);
             readingRefreshBookmarkUI();
         }
         // 按对象精确删除一条书签（段落书签与问题书签通用）
         function readingRemoveBookmarkObj(bm) {
-            if (!chatCurrentConvId) return;
+            var cid = readingMarksConvId();
+            if (!cid) return;
             var all = readingGetAllBookmarks();
-            var list = all[chatCurrentConvId] || [];
+            var list = all[cid] || [];
             for (var i = 0; i < list.length; i++) {
                 var b = list[i];
                 if (b.msgIdx === bm.msgIdx && b.p === bm.p && (b.type || 'para') === (bm.type || 'para') && (b.q || '') === (bm.q || '') && (b.ts || 0) === (bm.ts || 0)) {
                     list.splice(i, 1); break;
                 }
             }
-            all[chatCurrentConvId] = list;
+            all[cid] = list;
             readingSaveAllBookmarks(all);
         }
         function readingToggleBookmarkFromBar(msgIdx, pNum, btn) {
