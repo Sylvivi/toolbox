@@ -20013,6 +20013,31 @@ body {
                 }
             } catch (e) {}
         }
+        // 开机全量扫描：把所有旧「reader_<本地bookId>」下的读痕/划线搬到跨设备稳定键 reader_<文件名|大小>。
+        // per-book 迁移只在打开该书时才跑；若记读痕的设备更新后没再逐本打开，旧读痕就一直压在设备专属键下、
+        // 不会按稳定键重新上传 → 别的设备永远拉不到。开机扫一遍全搬+重推，无需手动逐本打开。
+        function readerMigrateAllMarksKeys() {
+            try {
+                if (typeof rbLoad === 'function') rbLoad();   // 确保本地书已载入，rbGetBook 才能把 bookId 换成 文件名|大小
+                var sweep = function (getAll, saveAll) {
+                    var all = getAll(), changed = false;
+                    Object.keys(all).forEach(function (cid) {
+                        if (cid.indexOf('reader_') !== 0) return;
+                        var bookId = cid.slice(7);
+                        var fk = readerBookKey(bookId);
+                        if (!fk || fk === bookId) return;      // 书没了(退回bookId)或本身已是稳定键 → 跳过(幂等)
+                        var newCid = 'reader_' + fk;
+                        if (newCid === cid) return;
+                        all[newCid] = _readerMergeMarks(all[newCid], all[cid]);
+                        delete all[cid];
+                        changed = true;
+                    });
+                    if (changed) saveAll(all);                 // saveAll 会盖新时间戳并触发上传
+                };
+                sweep(readingGetAllBookmarks, readingSaveAllBookmarks);
+                sweep(readingGetAllHl, readingSaveAllHl);
+            } catch (e) {}
+        }
         function readerFindConv(bookId) {
             var list = chatGetHistory(); var cid = readerConvId(bookId);
             for (var i = 0; i < list.length; i++) if (list[i].id === cid) return list[i];
@@ -24612,6 +24637,7 @@ body {
         idbInit().then(function() {
             migrateOldUrlBookmarks();
             migrateCheckinReciteName();
+            readerMigrateAllMarksKeys();  // 开机把旧「设备专属键」下的读痕全搬到跨设备稳定键并重推（修跨设备不同步）
 
             // 字体：idb 就绪后立刻注册本地字体 + 应用四/五位置选择（全局 CSS 变量），
             // 这样一进阅读界面就生效，不用先点开 clawd 设置面板才同步上。
