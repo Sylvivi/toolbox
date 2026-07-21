@@ -2783,7 +2783,7 @@ body {
            用 id 选择器(特异性高于 .active)保证预览装饰一直在。「长短」是分工开关、非视觉效果，不加预览。 */
         #chipQuoteHl, #chipNameColor { color: var(--accent-mid); font-weight: 600; }   /* 着色 */
         #chipKsHl { color: var(--accent-mid); }                                        /* 精句着色：只上色不加粗，与实际效果一致 */
-        #chipNameBold { font-weight: 800; }                                            /* 加粗 */
+        #chipNameBold, #chipKsBold { font-weight: 800; }                               /* 加粗 */
         #chipQuoteUl, #chipNameDash, #chipKsUl { text-decoration: underline dashed var(--accent-mid); text-underline-offset: 3px; }  /* 划线 */
         #chipQuoteWave, #chipKsWave { text-decoration: underline wavy var(--accent-mid); text-underline-offset: 3px; }               /* 波浪 */
         #chipQuoteGlow, #chipNameGlow, #chipKsGlow { text-shadow: 0 0 5px var(--accent-mid); }       /* 柔光 */
@@ -3018,7 +3018,8 @@ body {
            跟「长短分工」井水不犯河水——那套只作用在引号(.reading-quote)上，精句用自己的 class，不会打架。
            总开关 body.reading-keysent-on；字体在字体面板单独选(--reading-font-keysent)。 */
         .reading-merged .reading-keysent { font-family: var(--reading-font-keysent, inherit); }
-        body.reading-ks-hl .reading-merged .reading-keysent { color: var(--accent); }  /* 着色（只变色不加粗，整句加粗太重） */
+        body.reading-ks-hl .reading-merged .reading-keysent { color: var(--accent); }  /* 着色（只变色）*/
+        body.reading-ks-bold .reading-merged .reading-keysent { font-weight: 700; }  /* 加粗（独立开关，可与着色分开）*/
         body.reading-ks-ul .reading-merged .reading-keysent-inner { text-decoration: underline dashed var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }  /* 划线 */
         body.reading-ks-glow .reading-merged .reading-keysent-inner {  /* 柔光 */
             background-image: linear-gradient(to right, transparent 0%,
@@ -5141,6 +5142,7 @@ body {
                         <button class="pagebtn-pos-opt" id="chipKsGlow" onclick="readingToggleKeySentStyle('glow')" title="精句背后铺一条柔光带">柔光</button>
                         <button class="pagebtn-pos-opt" id="chipKsUl" onclick="readingToggleKeySentStyle('ul')" title="精句加虚线下划线">划线</button>
                         <button class="pagebtn-pos-opt" id="chipKsHl" onclick="readingToggleKeySentStyle('hl')" title="精句用强调色">着色</button>
+                        <button class="pagebtn-pos-opt" id="chipKsBold" onclick="readingToggleKeySentStyle('bold')" title="精句加粗（可单独开、跟着色分开）">加粗</button>
                     </div>
                 </div>
                 <div id="readingNameRow" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
@@ -17725,7 +17727,7 @@ body {
         // 画框/波浪/柔光 铺句底三选一；划线与波浪/画框互斥（都在底部）；着色可与任意叠加。
         function readingApplyKeySentStyles() {
             var b = document.body;
-            [['hl', 'chipKsHl'], ['glow', 'chipKsGlow'], ['wave', 'chipKsWave'], ['box', 'chipKsBox'], ['ul', 'chipKsUl']].forEach(function (x) {
+            [['hl', 'chipKsHl'], ['bold', 'chipKsBold'], ['glow', 'chipKsGlow'], ['wave', 'chipKsWave'], ['box', 'chipKsBox'], ['ul', 'chipKsUl']].forEach(function (x) {
                 var on = localStorage.getItem('reading_ks_' + x[0]) === '1';
                 b.classList.toggle('reading-ks-' + x[0], on);
                 var c = document.getElementById(x[1]); if (c) c.classList.toggle('active', on);
