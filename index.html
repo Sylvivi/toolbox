@@ -3012,6 +3012,36 @@ body {
         body.reading-ls-on:not(.reading-ls-pd) .reading-merged .reading-quote.rq-wide .reading-quote-inner { text-decoration: none !important; }
         /* ② 短句被波浪/画框占住(ls-pd)→划线移到长句、跟着色叠，去掉短句的划线。 */
         body.reading-ls-pd .reading-merged .reading-quote:not(.rq-wide) .reading-quote-inner { text-decoration: none !important; }
+        /* ===== 精句：每段里最短的那句完整话（结尾是句号/问号/叹号），套用你在「样式」里选的引号样式 =====
+           独立元素 .reading-keysent（外层管着色/画框/字体）+ .reading-keysent-inner（内层管柔光/波浪/划线，铺句底不擦字）。
+           跟「长短分工」井水不犯河水——那套只作用在引号(.reading-quote)上，精句用自己的 class，不会打架。
+           总开关 body.reading-keysent-on；字体在字体面板单独选(--reading-font-keysent)。 */
+        .reading-merged .reading-keysent { font-family: var(--reading-font-keysent, inherit); }
+        body.reading-ks-hl .reading-merged .reading-keysent { color: var(--accent); font-weight: 600; }  /* 着色 */
+        body.reading-ks-ul .reading-merged .reading-keysent-inner { text-decoration: underline dashed var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }  /* 划线 */
+        body.reading-ks-glow .reading-merged .reading-keysent-inner {  /* 柔光 */
+            background-image: linear-gradient(to right, transparent 0%,
+                color-mix(in srgb, var(--accent), transparent 95%) 20%,
+                color-mix(in srgb, var(--accent), transparent 95%) 80%, transparent 100%);
+            background-repeat: no-repeat;
+            box-shadow: inset 0 0 10px color-mix(in srgb, var(--accent), transparent 84%);
+            padding: 0 5px; -webkit-box-decoration-break: clone; box-decoration-break: clone;
+        }
+        body.dark.reading-ks-glow .reading-merged .reading-keysent-inner {
+            background-image: linear-gradient(to right, transparent 0%,
+                color-mix(in srgb, var(--accent), transparent 82%) 20%,
+                color-mix(in srgb, var(--accent), transparent 82%) 80%, transparent 100%);
+            box-shadow: inset 0 0 10px color-mix(in srgb, var(--accent), transparent 72%);
+        }
+        body.reading-ks-wave .reading-merged .reading-keysent-inner {  /* 波浪 */
+            background-image: var(--quote-wave-img); background-position: left bottom;
+            background-repeat: repeat-x; background-size: auto 10px; padding-bottom: 8px;
+            -webkit-box-decoration-break: clone; box-decoration-break: clone;
+        }
+        body.reading-ks-box .reading-merged .reading-keysent {  /* 画框 */
+            background-image: var(--quote-box-img); background-size: 100% 100%; background-repeat: no-repeat;
+            padding: 2px 4px 2px 8px; -webkit-box-decoration-break: clone; box-decoration-break: clone;
+        }
         .reading-merged blockquote { font-style: normal; }
         .reading-merged blockquote .reading-q { font-weight: 600; }
         .reading-merged blockquote .reading-q-name { color: var(--accent); font-weight: 600; }
@@ -5102,6 +5132,16 @@ body {
                         <button class="pagebtn-pos-opt active" id="chipQuoteLs" onclick="readingToggleQuoteLs()" title="开：着色给长句、画框/波浪/划线给短句；关：所选样式所有引号一视同仁" style="">长短</button>
                     </div>
                 </div>
+                <div id="readingKeySentRow" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0" title="每段里最短的那句完整话（结尾是句号/问号/叹号），常是论断/重点句；下面挑样式即开启，读小说可全关">精句</span>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
+                        <button class="pagebtn-pos-opt" id="chipKsHl" onclick="readingToggleKeySentStyle('hl')" title="精句用强调色">着色</button>
+                        <button class="pagebtn-pos-opt" id="chipKsGlow" onclick="readingToggleKeySentStyle('glow')" title="精句背后铺一条柔光带">柔光</button>
+                        <button class="pagebtn-pos-opt" id="chipKsWave" onclick="readingToggleKeySentStyle('wave')" title="精句底部加手绘波浪线">波浪</button>
+                        <button class="pagebtn-pos-opt" id="chipKsBox" onclick="readingToggleKeySentStyle('box')" title="精句加毛边方框">画框</button>
+                        <button class="pagebtn-pos-opt" id="chipKsUl" onclick="readingToggleKeySentStyle('ul')" title="精句加虚线下划线">划线</button>
+                    </div>
+                </div>
                 <div id="readingNameRow" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
                     <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0">名词</span>
                     <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
@@ -5155,6 +5195,7 @@ body {
                             <div class="rfont-slot-row"><span class="rfont-slot-label" title="开「长短分工」时，短句单独用这个字体；不选就跟「引号」一样">短句</span><select id="readingFontSel_quoteShort" class="rfont-select" onchange="readingSetSlotFont('quoteShort', this.value)"></select></div>
                             <div class="rfont-slot-row"><span class="rfont-slot-label">标题</span><select id="readingFontSel_title" class="rfont-select" onchange="readingSetSlotFont('title', this.value)"></select></div>
                             <div class="rfont-slot-row"><span class="rfont-slot-label">人名</span><select id="readingFontSel_person" class="rfont-select" onchange="readingSetSlotFont('person', this.value)"></select></div>
+                            <div class="rfont-slot-row"><span class="rfont-slot-label" title="开「精句」时，每段最短的完整句单独用这个字体">精句</span><select id="readingFontSel_keysent" class="rfont-select" onchange="readingSetSlotFont('keysent', this.value)"></select></div>
                         </div>
                         <span id="readingFontStatus" class="rfont-status">正文：默认</span>
                     </div>
@@ -10064,7 +10105,8 @@ body {
                     quote: localStorage.getItem('reading_font_quote') || '',
                     quoteShort: localStorage.getItem('reading_font_quote_short') || '',
                     title: localStorage.getItem('reading_font_title') || '',
-                    person: localStorage.getItem('reading_font_person') || ''
+                    person: localStorage.getItem('reading_font_person') || '',
+                    keysent: localStorage.getItem('reading_font_keysent') || ''
                 },
                 readerPos: (function () { try { return JSON.parse(localStorage.getItem('reader_pos') || '{}'); } catch (e) { return {}; } })(),
                 readerQA: (function () { try { return JSON.parse(localStorage.getItem('reader_qa') || '{}'); } catch (e) { return {}; } })(),
@@ -17675,7 +17717,32 @@ body {
             c = document.getElementById('chipQuoteGlow'); if (c) c.classList.toggle('active', glow);
             c = document.getElementById('chipQuoteLs'); if (c) c.classList.toggle('active', split);
             if (typeof rdHlInitStyle === 'function') rdHlInitStyle();   // 顺带恢复「划线」底色/下划线样式
+            readingApplyKeySentStyles();   // 精句样式独立一套，跟着一起初始化
             updateStatusBarColor();
+        }
+        // ===== 精句样式（独立于引号，作用在每段最短完整句 .reading-keysent 上）=====
+        // 画框/波浪/柔光 铺句底三选一；划线与波浪/画框互斥（都在底部）；着色可与任意叠加。
+        function readingApplyKeySentStyles() {
+            var b = document.body;
+            [['hl', 'chipKsHl'], ['glow', 'chipKsGlow'], ['wave', 'chipKsWave'], ['box', 'chipKsBox'], ['ul', 'chipKsUl']].forEach(function (x) {
+                var on = localStorage.getItem('reading_ks_' + x[0]) === '1';
+                b.classList.toggle('reading-ks-' + x[0], on);
+                var c = document.getElementById(x[1]); if (c) c.classList.toggle('active', on);
+            });
+        }
+        function readingToggleKeySentStyle(kind) {
+            var key = 'reading_ks_' + kind;
+            var on = localStorage.getItem(key) === '1';
+            localStorage.setItem(key, on ? '0' : '1');
+            if (!on) {   // 刚打开 → 处理互斥
+                if (kind === 'box' || kind === 'wave' || kind === 'glow') {
+                    ['box', 'wave', 'glow'].forEach(function (x) { if (x !== kind) localStorage.setItem('reading_ks_' + x, '0'); }); // 铺句底三选一
+                    if (kind === 'box' || kind === 'wave') localStorage.setItem('reading_ks_ul', '0'); // 波浪/画框与划线互斥
+                } else if (kind === 'ul') {
+                    localStorage.setItem('reading_ks_box', '0'); localStorage.setItem('reading_ks_wave', '0');
+                }
+            }
+            readingApplyKeySentStyles();
         }
         // 共读：引号高亮（着色）
         function readingApplyQuoteHl() { readingApplyQuoteStyles(); }
@@ -18133,6 +18200,52 @@ body {
             return s;
         }
 
+        // 引号感知拆句：只在「引号外」的句末标点(。！？)处断句，绝不在引号内部断（否则小说里跨句号的对话会被拆坏）。
+        // 返回各句片段(含各自的句末标点)；末尾没标点的收尾残句单独成段。
+        function readingSplitSentences(raw) {
+            var parts = [], cur = '', depth = 0;
+            for (var i = 0; i < raw.length; i++) {
+                var ch = raw[i];
+                cur += ch;
+                if (ch === '「' || ch === '『' || ch === '“') depth++;
+                else if (ch === '」' || ch === '』' || ch === '”') { if (depth > 0) depth--; }
+                else if (depth === 0 && (ch === '。' || ch === '！' || ch === '？')) {
+                    while (i + 1 < raw.length && '。！？'.indexOf(raw[i + 1]) >= 0) cur += raw[++i]; // 连续句末标点(如？！)一并收尾
+                    parts.push(cur); cur = '';
+                }
+            }
+            if (cur) parts.push(cur);
+            return parts;
+        }
+        var _KEYSENT_MIN = 4;   // 精句核心(去标点)最少字数，避免点亮「对。」这种没意义的短句
+        // 把一段原文处理成内层 HTML：引号/人名高亮照旧；并把「最短的完整句」包进 .reading-keysent（亮不亮由精句开关的 CSS 管）。
+        // 一直包（与开关无关），所以切换精句样式只动 CSS、不必重排；缓存签名也不用带精句状态。
+        function readingBuildParaInner(raw, nre) {
+            var proc = function (seg) {
+                var h = readingHighlightQuotes(esc(seg));
+                if (nre) h = readingWrapNames(h, nre);
+                return h;
+            };
+            var parts = readingSplitSentences(raw);
+            if (parts.length < 2) return proc(raw);   // 单句/拆不开 → 不点亮，免得整段发光
+            var shortestIdx = -1, shortestLen = Infinity, completeCnt = 0;
+            for (var i = 0; i < parts.length; i++) {
+                if (!/[。！？]$/.test(parts[i])) continue;                 // 收尾残句(无句末标点)不算完整句
+                var core = parts[i].replace(/[。！？]+$/, '').trim();
+                if (core.length < _KEYSENT_MIN) continue;
+                completeCnt++;
+                if (core.length < shortestLen) { shortestLen = core.length; shortestIdx = i; }
+            }
+            if (completeCnt < 2 || shortestIdx < 0) return proc(raw);      // 需≥2个完整句才有「最短」可言
+            var out = '';
+            for (var j = 0; j < parts.length; j++) {
+                var ph = proc(parts[j]);
+                if (j === shortestIdx) ph = '<span class="reading-keysent"><span class="reading-keysent-inner">' + ph + '</span></span>';
+                out += ph;
+            }
+            return out;
+        }
+
         // 共读：正文网络字体。支持「字体库」——存多个，点一下切换。随云同步（CF manifest，按时间戳整块覆盖）。
         /* ===== 阅读字体 =====
            两类字体源：
@@ -18144,7 +18257,8 @@ body {
             { slot: 'quote',  key: 'reading_font_quote',  varName: '--reading-font-quote', label: '引号' },
             { slot: 'quoteShort', key: 'reading_font_quote_short', varName: '--reading-font-quote-short', label: '短句' },
             { slot: 'title',  key: 'reading_font_title',  varName: '--reading-font-title', label: '标题' },
-            { slot: 'person', key: 'reading_font_person', varName: '--reading-font-name',  label: '人名' }
+            { slot: 'person', key: 'reading_font_person', varName: '--reading-font-name',  label: '人名' },
+            { slot: 'keysent', key: 'reading_font_keysent', varName: '--reading-font-keysent', label: '精句' }
         ];
         var _readingFontLinks = {};       // name -> <link>（在线字体 CSS，按需挂载）
         var _readingLocalFontFaces = {};  // name -> true（已注册的本地 FontFace，防重复）
@@ -23277,8 +23391,7 @@ body {
                 var _nre = readingNamesRe();
                 pHtml = [];
                 for (var p = 0; p < paras.length; p++) {
-                    var _ph = readingHighlightQuotes(esc(paras[p]));
-                    if (_nre) _ph = readingWrapNames(_ph, _nre);
+                    var _ph = readingBuildParaInner(paras[p], _nre);   // 引号/人名高亮 + 最短完整句包 .reading-keysent
                     // 章节标题识别：整段以「第X章/节/回…」开头且较短 → 包 class，可单独上「标题字体」
                     var _tcls = READING_TITLE_RE.test(paras[p]) ? ' class="reading-chap-title"' : '';
                     pHtml.push('<p data-p="' + (p + 1) + '"' + _tcls + ' style="white-space:pre-wrap;word-break:break-word;margin:0.5em 0">' + _ph + '</p>');
