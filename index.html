@@ -22888,7 +22888,13 @@ body {
                 var hay = (e.type === 'hl') ? ((e.preview || '') + ' ' + (e.note || '')) : e.qas.map(function (x) { return x.q + ' ' + x.a; }).join(' ');
                 return hay.toLowerCase().indexOf(q) >= 0;
             });
-            entries.sort(function (a, b) { return _rdTraceDesc ? ((b.sortTs || 0) - (a.sortTs || 0)) : ((a.sortTs || 0) - (b.sortTs || 0)); });
+            // 按「阅读顺序」排：章节 → 段落 在书里的位置，时间戳仅作同位置时的兜底；倒序键整体翻转
+            entries.sort(function (a, b) {
+                var d = ((a.chap == null ? 0 : a.chap) - (b.chap == null ? 0 : b.chap))
+                    || ((a.p == null ? 0 : a.p) - (b.p == null ? 0 : b.p))
+                    || ((a.sortTs || 0) - (b.sortTs || 0));
+                return _rdTraceDesc ? -d : d;
+            });
             _rdTraceShown = entries;
             list.innerHTML = entries.length ? entries.map(function (e, i) { return rdTraceItemHtml(e, i); }).join('') : '<div class="rd-trace-empty">没有符合条件的读痕</div>';
             list.querySelectorAll('.rd-trace-item').forEach(function (el) {
