@@ -13050,6 +13050,7 @@ body {
             chatReaderMode = (conv.id && conv.id.indexOf('reader_') === 0);
             if (chatReaderMode) {
                 readerBookId = conv.id.slice(7);
+                readerHydrateLoadedQA(); // 用已同步的 reader_qa 重灌正文问答（渲染前，修「换设备正文看不到问答」）
                 readerChapterIdx = readerLastLoadedChapter();
                 if (typeof readerSchedulePrefetch === 'function' && readerChapterIdx >= 0) readerSchedulePrefetch(readerChapterIdx); // 进会话也后台备好前文摘要
             }
@@ -19017,6 +19018,22 @@ body {
             return readerQAGet(fileKey, chap).map(function (it) {
                 return '[P' + it.p + '] 汐：' + it.q + '\n' + (it.a || '');
             }).join('\n');
+        }
+        // 从（可能刚跨设备同步过来的）reader_qa 把每章正文问答重新拼回已载入的会话消息。
+        // 坑：chatLoadConv 载入的是「上次保存那刻的正文快照」；换设备时那快照多半是「问答还没同步来」的空版
+        // （所以读痕面板直接读 reader_qa 能看到、正文快照却是空的）。reader_qa 按「文件名|大小」稳定键跨设备
+        // 同步、才是权威 → 载入阅读会话后按它把每章正文重灌，同步过来的问答就能在正文里显示。
+        function readerHydrateLoadedQA() {
+            try {
+                var cid = chatCurrentConvId;
+                if (!cid || cid.indexOf('reader_') !== 0) return;
+                var fk = readerBookKey(cid.slice(7));
+                if (!fk) return;
+                for (var i = 0; i < chatMessages.length; i++) {
+                    var m = chatMessages[i];
+                    if (m && m.readerChapter != null) m.content = readerQABuildContent(fk, m.readerChapter);
+                }
+            } catch (e) {}
         }
         // 单点同步：把某条阅读章节消息里的问答整体抽出，覆盖进可同步的 reader_qa（删空写空列表当墓碑）
         function readerPersistQA(msgIdx) {
