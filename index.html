@@ -5290,6 +5290,12 @@ body {
                                 <input type="range" id="compressKeepInput" min="4" max="100" step="2" oninput="chatUpdateCompressLabel()" style="background: linear-gradient(to right, var(--accent) 0%, var(--accent) 2.083333333333333%, var(--card-border) 2.083333333333333%, var(--card-border) 100%); border-radius: 3px;">
                                 <span class="ctx-label" id="compressKeepLabel" style="font-size:11px">5 条</span>
                             </div>
+                            <div id="presetModelFold" style="margin-top:12px">
+                                <div onclick="chatToggleModelFold()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none">
+                                    <span style="font-size:11px;font-weight:600;color:var(--text-muted)">各功能模型（可选）</span>
+                                    <span id="presetModelArrow" style="font-size:10px;color:var(--text-muted);transition:transform 0.2s;display:inline-block">▶</span>
+                                </div>
+                                <div id="presetModelSection" style="display:none;margin-top:2px">
                             <div style="margin-top:8px">
                                 <span style="font-size:11px;color:var(--text-muted)">摘要 / 记忆模型</span>
                                 <select id="compressModelSelect" onchange="chatSaveCompressModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">跟随当前模型</option><option value="claude-opus-4-6-request-antigravity||https://vsllm.com/v1">VSLLM / claude-opus-4-6-request-antigravity</option><option value="claude-opus-4-6||https://cc.lucoo.net/v1">Lucoo / claude-opus-4-6</option></select>
@@ -5313,6 +5319,8 @@ body {
                                     <option value="1536x1024">1536×1024（横）</option>
                                     <option value="1024x1536">1024×1536（竖）</option>
                                 </select>
+                            </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -13982,6 +13990,15 @@ body {
             var arrow = document.getElementById('chatTuneArrow');
             if (section) section.style.display = _chatTuneExpanded ? 'flex' : 'none';
             if (arrow) arrow.style.transform = _chatTuneExpanded ? 'rotate(90deg)' : '';
+        }
+        // 「各功能模型」折叠：摘要/共读点评/共读提问/生图模型/生图尺寸这几个下拉设一次就不动，收进折叠条省地方
+        var _presetModelExpanded = false;
+        function chatToggleModelFold() {
+            _presetModelExpanded = !_presetModelExpanded;
+            var section = document.getElementById('presetModelSection');
+            var arrow = document.getElementById('presetModelArrow');
+            if (section) section.style.display = _presetModelExpanded ? '' : 'none';
+            if (arrow) arrow.style.transform = _presetModelExpanded ? 'rotate(90deg)' : '';
         }
         // 设置面板内两个子tab：clawd皮肤 / 气泡装饰（主题已独立成一行，不在这里）
         function switchOptSubTab(which) {
