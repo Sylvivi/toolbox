@@ -1775,6 +1775,16 @@ body {
                这里把气泡限制为最多占满可用宽度，超宽内容交给内部 pre 自己横向滚动。 */
             max-width: 100%; min-width: 0;
         }
+        /* 对话模式：用户消息也变成 AI 那样的纯文字（无气泡底色/边框/圆角、左对齐），像一行字。
+           只在对话模式(body.chat-plain-user)生效；共读/翻译不加此类，不受影响。 */
+        body.chat-plain-user .chat-msg.user { align-items: flex-start; }
+        body.chat-plain-user .chat-msg.user .chat-bubble {
+            max-width: 100%; font-size: 14px;
+            background: none; border: none; border-radius: 0;
+            padding: 0; box-shadow: none;
+            backdrop-filter: none; -webkit-backdrop-filter: none;
+        }
+        body.chat-plain-user .chat-msg.user .chat-more-btn { align-self: flex-start; }
 
         /* ===== 气泡装饰（数据驱动，通过 CSS 变量控制） ===== */
         .chat-msg .chat-bubble { position: relative; overflow: visible; }
@@ -17764,6 +17774,8 @@ body {
             if (!bmShow) { chatCloseBookmarkPanel(); }
             // 「用量」只在对话模式的 ⋮ 菜单里出现：共读/翻译/阅读模式有 clawd 菜单自带用量入口，对话模式 clawd 是切模型、原来没入口
             var usageShow = (chatView === 'conv') && !chatReadingMode && !chatTranslateMode && !chatReaderMode;
+            // 对话模式：用户消息去气泡、变纯文字（跟 AI 一样）。共读/翻译/阅读不加此类。
+            document.body.classList.toggle('chat-plain-user', usageShow);
             var usageBtn = document.getElementById('chatUsageBtn');
             if (usageBtn) usageBtn.style.display = usageShow ? '' : 'none';
             // 「查看摘要」同理只在对话模式的 ⋮ 菜单里出现：共读/翻译/阅读模式的 clawd 菜单已有「📋 摘要」入口
