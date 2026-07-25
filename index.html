@@ -4981,6 +4981,7 @@ body {
                         <button onclick="clawdMenuAct('shelf')">📚 目录</button>
                         <button onclick="clawdMenuAct('summary')">📋 摘要</button>
                         <button onclick="clawdMenuAct('usage')">💰 用量</button>
+                        <button id="clawdGenImgBtn" onclick="clawdMenuAct('genimg')" style="display:none">🎨 生图</button>
                         <button onclick="clawdMenuAct('nextchap')">⏭️ 下一章</button>
                         <button onclick="clawdMenuAct('model')">🦀 clawd</button>
                     </div>
@@ -16163,11 +16164,10 @@ body {
                 m.style.display = 'none';
             }
         });
-        // 共读/翻译：clawd 点击行为——阅读模式弹功能菜单，其余模式直接切换模型
+        // clawd 点击行为——所有模式（对话/共读/翻译）统一弹功能菜单；切模型在菜单里的「🦀 clawd」项
         function clawdBtnClick(e) {
             if (e) e.stopPropagation();
-            if (chatReadingMode || chatTranslateMode) clawdToggleMenu();
-            else chatOpenModelSheet();
+            clawdToggleMenu();
         }
         function clawdToggleMenu() {
             var m = document.getElementById('clawdReadingMenu');
@@ -16184,6 +16184,7 @@ body {
             if (what === 'shelf') { rbOpenShelf(); return; }
             if (what === 'nextchap') { clawdNextChapter(); return; }
             if (what === 'usage') { apiLogShowPanel(); return; }
+            if (what === 'genimg') { genImageOpenDialog(); return; }
             if (what === 'model') { chatOpenModelSheet(); return; }
             if (what === 'summary') { if (chatReaderMode) readerShowSummaryModal(); else chatShowSummaryModal(); return; }
             // 阅读/翻译模式下，书签/搜索/导航不再依赖横栏——直接浮出来，横栏始终不露面
@@ -16228,7 +16229,7 @@ body {
                 readingHidePanelMask();
                 return;
             }
-            var floating = !!(chatReadingMode || chatTranslateMode);
+            var floating = true;   // 横幅已全模式隐藏，面板一律浮动
             if (floating) chatCloseBookmarkPanel();  // 两个弹窗不叠在一起
             chatBuildNavPanel();
             panel.classList.toggle('panel-float', floating);
@@ -17745,9 +17746,11 @@ body {
             // 「查看摘要」同理只在对话模式的 ⋮ 菜单里出现：共读/翻译/阅读模式的 clawd 菜单已有「📋 摘要」入口
             var summaryBtn = document.getElementById('chatSummaryBtn');
             if (summaryBtn) summaryBtn.style.display = usageShow ? '' : 'none';
-            // 「生图」只在对话模式的 ⋮ 菜单里出现（共读/阅读已不做配图）
+            // 「生图」只在对话模式出现（共读/阅读已不做配图）；横幅 ⋮ 与 clawd 菜单两处同步
             var genBtn = document.getElementById('chatGenImgBtn');
             if (genBtn) genBtn.style.display = usageShow ? '' : 'none';
+            var clawdGenBtn = document.getElementById('clawdGenImgBtn');
+            if (clawdGenBtn) clawdGenBtn.style.display = usageShow ? '' : 'none';
             // 共读/翻译模式下隐藏「回到底部」按钮（点输入框会自动回到底部）
             var inReading = (chatView === 'conv') && (chatReadingMode || chatTranslateMode);
             var sb = document.getElementById('chatScrollBtn');
@@ -21356,14 +21359,13 @@ body {
         }
         // 按当前模式决定横栏显隐：阅读/翻译模式永久藏，其余模式显示
         function readingApplyTopbarMode(instant) {
-            if (chatReadingMode || chatTranslateMode) readingHideTopbar(instant);
-            else readingShowTopbar();
+            // 所有模式都藏顶部横幅，功能统一走 clawd 菜单
+            readingHideTopbar(instant);
         }
         function readingAutoHideTopbar() {
             var bar = document.getElementById('chatTopbarConv');
             var el = document.getElementById('chatMessages');
             if (!bar || !el) return;
-            if (!(chatReadingMode || chatTranslateMode)) { readingShowTopbar(); return; }
             if (Date.now() < _topbarSuppressUntil) { _topbarLastScroll = el.scrollTop; return; }
             // 永久隐藏：除非正开着面板/搜索（临时借横栏当锚点），否则保持隐藏
             if (readingPanelOpen()) return;
@@ -22724,7 +22726,7 @@ body {
             if (panel.classList.contains('show')) {
                 panel.classList.remove('show'); btn.classList.remove('active'); readingHidePanelMask(); return;
             }
-            var floating = !!(chatReadingMode || chatTranslateMode);
+            var floating = true;   // 横幅已全模式隐藏，面板一律浮动
             if (floating) chatCloseNavPanel();  // 两个弹窗不叠在一起
             chatBuildBookmarkPanel();
             panel.classList.toggle('panel-float', floating);
