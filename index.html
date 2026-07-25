@@ -1785,6 +1785,8 @@ body {
         }
         /* 去气泡后没有底色内边距撑开留白，纯文字会显挤 → 对话模式加大每条消息的上下间距找回呼吸感 */
         body.chat-plain-user .chat-msg { padding-top: 11px; padding-bottom: 11px; }
+        /* AI 消息底部操作栏：默认隐藏（clawd 菜单「显示/隐藏消息按钮」开关控制），要用时打开 */
+        body.chat-tools-hidden .chat-toolbar { display: none; }
 
         /* ===== 气泡装饰（数据驱动，通过 CSS 变量控制） ===== */
         .chat-msg .chat-bubble { position: relative; overflow: visible; }
@@ -4995,6 +4997,7 @@ body {
                         <button onclick="clawdMenuAct('usage')">💰 用量</button>
                         <button id="clawdGenImgBtn" onclick="clawdMenuAct('genimg')" style="display:none">🎨 生图</button>
                         <button id="clawdNextChapBtn" onclick="clawdMenuAct('nextchap')">⏭️ 下一章</button>
+                        <button id="clawdMsgToolsBtn" onclick="clawdMenuAct('msgtools')">👁 显示消息按钮</button>
                         <button onclick="clawdMenuAct('model')">🦀 clawd</button>
                     </div>
                     <div class="reading-collapse-hint" id="readingCollapseHint" onclick="readingExpandInput()"><span class="reading-hint-motto" id="readingHintMotto">Tomorrow is another day.</span><span class="reading-progress-inline" id="readingProgressInline">已读 7%</span></div>
@@ -16211,6 +16214,20 @@ body {
             var m = document.getElementById('clawdReadingMenu');
             if (m) m.classList.remove('show');
         }
+        // AI 消息底部操作栏 显示/隐藏（默认隐藏）——clawd 菜单「显示/隐藏消息按钮」控制，状态记住。
+        // 隐藏后要用复制/重新生成/截断/删除，就来菜单打开一下。
+        var _msgToolsShown = localStorage.getItem('chat_show_msgtools') === '1';
+        function chatApplyMsgTools() {
+            document.body.classList.toggle('chat-tools-hidden', !_msgToolsShown);
+            var btn = document.getElementById('clawdMsgToolsBtn');
+            if (btn) btn.textContent = _msgToolsShown ? '🙈 隐藏消息按钮' : '👁 显示消息按钮';
+        }
+        function clawdToggleMsgTools() {
+            _msgToolsShown = !_msgToolsShown;
+            localStorage.setItem('chat_show_msgtools', _msgToolsShown ? '1' : '0');
+            chatApplyMsgTools();
+        }
+        chatApplyMsgTools();
         function clawdMenuAct(what) {
             clawdCloseMenu();
             if (what === 'back') { chatBackToList(); return; }
@@ -16218,6 +16235,7 @@ body {
             if (what === 'nextchap') { clawdNextChapter(); return; }
             if (what === 'usage') { apiLogShowPanel(); return; }
             if (what === 'genimg') { genImageOpenDialog(); return; }
+            if (what === 'msgtools') { clawdToggleMsgTools(); return; }
             if (what === 'model') { chatOpenModelSheet(); return; }
             if (what === 'summary') { if (chatReaderMode) readerShowSummaryModal(); else chatShowSummaryModal(); return; }
             // 阅读/翻译模式下，书签/搜索/导航不再依赖横栏——直接浮出来，横栏始终不露面
