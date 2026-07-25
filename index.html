@@ -11491,6 +11491,7 @@ body {
         var chatSelectedModel = '';
         var chatSelectedKeyStr = '';
         var chatFavModels = JSON.parse(localStorage.getItem('chat_fav_models') || '[]');
+        var _favGroupExpanded = {};   // 每个中转站分组是否展开全部收藏（默认每组只显示前 3 个，其余折叠）
         try { modelPriceMigrateFromFav(); } catch (e) {}  // 把老的「收藏内价」迁进独立价格表（一次性，幂等）
         // 保存收藏模型（含每个模型配的备注/价格）：写本地 + 盖时间戳 + 触发云同步。
         // 收藏模型跟着密钥一起同步——CF 走清单(manifest)、Gist 走整包，时间戳让两台设备「谁新用谁」、删除也能正确传播。
@@ -14217,7 +14218,9 @@ body {
                 gLabel.style.cssText = 'font-size:11px;color:var(--accent-mid);padding:8px 0 4px;font-weight:600;opacity:0.7;';
                 gLabel.textContent = gn;
                 container.appendChild(gLabel);
-                for (var mi = 0; mi < groups[gn].length; mi++) {
+                var _gExpanded = !!_favGroupExpanded[gn];
+                var _gShow = (_gExpanded || groups[gn].length <= 3) ? groups[gn].length : 3;
+                for (var mi = 0; mi < _gShow; mi++) {
                     (function(fav) {
                         var isActive = fav.model === chatSelectedModel && fav.providerId === ((document.getElementById('chatProviderSelect') || {}).value || '');
                         var row = document.createElement('div');
@@ -14263,6 +14266,15 @@ body {
                         }
                         container.appendChild(row);
                     })(groups[gn][mi]);
+                }
+                if (groups[gn].length > 3) {
+                    (function(gnLocal, expandedLocal) {
+                        var more = document.createElement('div');
+                        more.style.cssText = 'text-align:center;padding:8px 4px 4px;font-size:12px;color:var(--accent-mid);cursor:pointer;user-select:none;';
+                        more.textContent = expandedLocal ? '收起 ▴' : ('展开其余 ' + (groups[gnLocal].length - 3) + ' 个 ▾');
+                        more.onclick = function() { _favGroupExpanded[gnLocal] = !expandedLocal; chatRenderFavSection(); };
+                        container.appendChild(more);
+                    })(gn, _gExpanded);
                 }
             }
         }
