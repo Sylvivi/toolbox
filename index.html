@@ -5257,7 +5257,11 @@ body {
             </div>
             <div id="sheetTabPreset" class="sheet-tab-body">
                 <div style="margin-bottom:16px">
-                    <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">系统提示词</div>
+                    <div id="chatSpFoldHeader" onclick="chatToggleSpFold()" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;user-select:none">
+                        <span style="font-size:13px;font-weight:600;color:var(--text);flex-shrink:0">系统提示词</span>
+                        <span id="chatSpPreview" style="flex:1;min-width:0;font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right"></span>
+                        <span id="chatSpFoldArrow" style="font-size:10px;color:var(--text-muted);transition:transform 0.2s;display:inline-block;flex-shrink:0">▶</span>
+                    </div>
                     <div class="sp-preset-bar" id="chatSpBar"></div>
                     <div class="sp-edit-banner" id="chatSpEditBanner" style="display:none"></div>
                     <div class="sp-name-row" id="chatSpNameRow" style="display:none">
@@ -5265,7 +5269,9 @@ body {
                         <button class="sp-name-ok" onclick="chatSpNameConfirm()">保存</button>
                         <button onclick="chatSpNameCancel()">取消</button>
                     </div>
-                    <textarea id="chatSysPrompt" placeholder="输入系统提示词（可选）…" rows="6" style="width:100%;padding:12px 14px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;color:var(--text);font-size:14px;outline:none;resize:none;font-family:inherit;line-height:1.6"></textarea>
+                    <div id="chatSpFold" style="display:none">
+                        <textarea id="chatSysPrompt" placeholder="输入系统提示词（可选）…" rows="6" style="width:100%;padding:12px 14px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;color:var(--text);font-size:14px;outline:none;resize:none;font-family:inherit;line-height:1.6"></textarea>
+                    </div>
                 </div>
                 <div style="margin-top:4px;padding-top:14px;border-top:1px solid var(--card-border)">
                     <!-- 「发送最近」已隐藏：与上下文压缩功能重复 -->
@@ -14047,6 +14053,26 @@ body {
             if (section) section.style.display = _presetModelExpanded ? '' : 'none';
             if (arrow) arrow.style.transform = _presetModelExpanded ? 'rotate(90deg)' : '';
         }
+        // 预设里的系统提示词文本框：默认收起，收起时标题行显示一行预览；点标题或去编辑预设时展开。状态记住。
+        var _spFoldExpanded = (localStorage.getItem('sp_fold_expanded') === '1');
+        function chatApplySpFold() {
+            var fold = document.getElementById('chatSpFold');
+            var arrow = document.getElementById('chatSpFoldArrow');
+            var prev = document.getElementById('chatSpPreview');
+            if (fold) fold.style.display = _spFoldExpanded ? '' : 'none';
+            if (arrow) arrow.style.transform = _spFoldExpanded ? 'rotate(90deg)' : '';
+            if (prev) {
+                var ta = document.getElementById('chatSysPrompt');
+                var v = ((ta && ta.value) || '').trim().replace(/\s+/g, ' ');
+                prev.textContent = _spFoldExpanded ? '' : (v ? (v.slice(0, 28) + (v.length > 28 ? '…' : '')) : '（未设置，点此展开编辑）');
+            }
+        }
+        function chatToggleSpFold() {
+            _spFoldExpanded = !_spFoldExpanded;
+            localStorage.setItem('sp_fold_expanded', _spFoldExpanded ? '1' : '0');
+            chatApplySpFold();
+        }
+        function chatExpandSpFold() { if (!_spFoldExpanded) chatToggleSpFold(); }
         // 设置面板内两个子tab：clawd皮肤 / 气泡装饰（主题已独立成一行，不在这里）
         function switchOptSubTab(which) {
             var keys = ['skin', 'deco'];
@@ -14475,6 +14501,7 @@ body {
                 bar.innerHTML = h;
             }
             chatRenderSpEditBanner();
+            chatApplySpFold();
             var mask = document.getElementById('chatSpManagerMask');
             if (mask && mask.classList.contains('show')) chatRenderSpManager();
         }
@@ -14505,7 +14532,7 @@ body {
         // 新建（chips ＋）：内容取自当前输入框，弹内联命名行
         function chatNewSpPresetFromBar() {
             var content = document.getElementById('chatSysPrompt').value.trim();
-            if (!content) { showToast('⚠️ 先在下面写好提示词内容'); document.getElementById('chatSysPrompt').focus(); return; }
+            if (!content) { chatExpandSpFold(); showToast('⚠️ 先在下面写好提示词内容'); document.getElementById('chatSysPrompt').focus(); return; }
             chatShowSpNameRow();
         }
         function chatShowSpNameRow() {
@@ -14542,6 +14569,7 @@ body {
             chatEditingPresetIdx = idx;
             chatActivePresetIdx = idx;
             chatCloseSpManager();
+            chatExpandSpFold();
             chatRenderSpPresets();
             showToast('已载入「' + presets[idx].name + '」，改完点「更新」回写');
         }
