@@ -13830,7 +13830,48 @@ body {
             if (pBtn) pBtn.classList.toggle('active', tab === 'preset');
             if (tab === 'preset') chatRenderSpPresets();
         }
+        // 底部面板（设置/模型/预设）左右滑切换，手感对齐摘要弹窗
+        var _SHEET_TAB_ORDER = ['opts', 'model', 'preset'];
+        function _sheetCurrentTab() {
+            if (document.getElementById('sheetTabModel').classList.contains('active')) return 'model';
+            var p = document.getElementById('sheetTabPreset');
+            if (p && p.classList.contains('active')) return 'preset';
+            return 'opts';
+        }
+        // 切到相邻 tab：dir=+1 下一个 / -1 上一个（到头循环）
+        function sheetStepTab(dir) {
+            var cur = _SHEET_TAB_ORDER.indexOf(_sheetCurrentTab());
+            if (cur < 0) cur = 0;
+            var ni = (cur + dir + _SHEET_TAB_ORDER.length) % _SHEET_TAB_ORDER.length;
+            switchSheetTab(_SHEET_TAB_ORDER[ni]);
+            var btnId = ni === 0 ? 'sheetTabBtnOpts' : (ni === 1 ? 'sheetTabBtnModel' : 'sheetTabBtnPreset');
+            var btn = document.getElementById(btnId);
+            if (btn && btn.scrollIntoView) btn.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+        }
+        // 给底部面板绑左右滑：向左→下一个 tab、向右→上一个。整块都能滑，只认明显横向；
+        // 落在下拉/输入/按钮/模型列表滚动区上不抢手势。绑一次即可（面板是常驻 DOM）。
+        function chatBindSheetSwipe() {
+            var el = document.getElementById('chatModelSheet');
+            if (!el || el._swipeBound) return;
+            el._swipeBound = true;
+            var sx = 0, sy = 0, tracking = false;
+            el.addEventListener('touchstart', function(e) {
+                if (e.touches.length !== 1) { tracking = false; return; }
+                var tg = e.target;
+                if (tg && tg.closest && (tg.closest('textarea') || tg.closest('input') || tg.closest('select') || tg.closest('button'))) { tracking = false; return; }
+                sx = e.touches[0].clientX; sy = e.touches[0].clientY; tracking = true;
+            }, { passive: true });
+            el.addEventListener('touchend', function(e) {
+                if (!tracking) return; tracking = false;
+                var t = e.changedTouches[0];
+                var dx = t.clientX - sx, dy = t.clientY - sy;
+                if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+                    sheetStepTab(dx < 0 ? 1 : -1);
+                }
+            }, { passive: true });
+        }
         function chatOpenModelSheet() {
+            chatBindSheetSwipe();
             switchSheetTab('opts');
             chatInitSheetOpts();
             // 同步 provider select
