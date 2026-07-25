@@ -5283,9 +5283,14 @@ body {
                         <input type="range" id="chatCtxRange" min="0" max="50" value="0" oninput="chatUpdateCtxLabel()" style="background: linear-gradient(to right, var(--accent) 0%, var(--accent) 0%, var(--card-border) 0%, var(--card-border) 100%); border-radius: 3px;">
                         <span class="ctx-label" id="chatCtxLabel" style="font-size:12px">全部</span>
                     </div>
-                    <div>
+                    <div id="compressFold">
+                        <div onclick="chatToggleCompressFold()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;padding:2px 0">
+                            <span style="font-size:13px;font-weight:600;color:var(--text)">上下文压缩 <span id="compressFoldStatus" style="font-weight:400;font-size:11px;color:var(--text-muted)"></span></span>
+                            <span id="compressFoldArrow" style="font-size:10px;color:var(--text-muted);transition:transform 0.2s;display:inline-block">▶</span>
+                        </div>
+                        <div id="compressFoldSection" style="display:none;margin-top:8px">
                         <div style="display:flex;align-items:center;justify-content:space-between">
-                            <span style="font-size:13px;font-weight:600;color:var(--text)">上下文压缩</span>
+                            <span style="font-size:12px;color:var(--text-muted)">开关</span>
                             <label style="position:relative;width:40px;height:22px;cursor:pointer">
                                 <input type="checkbox" id="compressToggle" onchange="toggleCompress(this.checked)" style="display:none">
                                 <span style="position: absolute; inset: 0px; background: var(--accent); border-radius: 11px; transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1);"></span>
@@ -5303,6 +5308,7 @@ body {
                                 <input type="range" id="compressKeepInput" min="4" max="100" step="2" oninput="chatUpdateCompressLabel()" style="background: linear-gradient(to right, var(--accent) 0%, var(--accent) 2.083333333333333%, var(--card-border) 2.083333333333333%, var(--card-border) 100%); border-radius: 3px;">
                                 <span class="ctx-label" id="compressKeepLabel" style="font-size:11px">5 条</span>
                             </div>
+                        </div>
                         </div>
                     </div>
                 </div>
@@ -14076,6 +14082,20 @@ body {
             chatApplySpFold();
         }
         function chatExpandSpFold() { if (!_spFoldExpanded) chatToggleSpFold(); }
+        // 上下文压缩：默认收起（很少调，已成默认），收起时标题旁显示 开/关；点标题展开。哪天要调点开即可。
+        var _compressFoldExpanded = false;
+        function chatApplyCompressFold() {
+            var section = document.getElementById('compressFoldSection');
+            var arrow = document.getElementById('compressFoldArrow');
+            var status = document.getElementById('compressFoldStatus');
+            if (section) section.style.display = _compressFoldExpanded ? '' : 'none';
+            if (arrow) arrow.style.transform = _compressFoldExpanded ? 'rotate(90deg)' : '';
+            if (status) {
+                var on = document.getElementById('compressToggle');
+                status.textContent = _compressFoldExpanded ? '' : ((on && on.checked) ? '开' : '关');
+            }
+        }
+        function chatToggleCompressFold() { _compressFoldExpanded = !_compressFoldExpanded; chatApplyCompressFold(); }
         // 设置面板内两个子tab：clawd皮肤 / 气泡装饰（主题已独立成一行，不在这里）
         function switchOptSubTab(which) {
             var keys = ['skin', 'deco'];
@@ -14505,6 +14525,7 @@ body {
             }
             chatRenderSpEditBanner();
             chatApplySpFold();
+            chatApplyCompressFold();
             var mask = document.getElementById('chatSpManagerMask');
             if (mask && mask.classList.contains('show')) chatRenderSpManager();
         }
