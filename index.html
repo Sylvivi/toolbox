@@ -2659,6 +2659,12 @@ body {
         .rb-chap-append { flex-shrink: 0; width: 28px; height: 28px; border: 1px solid var(--card-border); border-radius: 7px; background: transparent; color: var(--accent); font-size: 17px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
         .rb-chap-append:hover { background: var(--accent-light); border-color: var(--accent); }
         .rb-chap-append:active { transform: scale(0.9); }
+        /* 社科书两级目录的第二级：小节。缩进 + 无边框 + 一根竖线，明显从属于上面那一章 */
+        .rb-sec { display: flex; align-items: center; gap: 8px; margin: -2px 0 4px 14px; padding: 6px 10px;
+            border-left: 2px solid var(--card-border); cursor: pointer; transition: all 0.15s; }
+        .rb-sec:hover { border-left-color: var(--accent); background: var(--accent-light); }
+        .rb-sec-title { flex: 1; min-width: 0; font-size: 12px; color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .rb-sec-p { flex-shrink: 0; font-size: 10px; color: var(--text-muted); }
         /* 手动标注分章弹窗 */
         .rb-sp-mask { position: fixed; inset: 0; z-index: 100000; background: var(--overlay-bg, rgba(0,0,0,0.5)); display: flex; align-items: center; justify-content: center; padding: 16px; }
         .rb-sp-panel { background: var(--modal-bg); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--card-border); border-radius: 16px; width: 100%; max-width: 460px; max-height: 86vh; display: flex; flex-direction: column; color: var(--text); box-shadow: 0 12px 44px rgba(0,0,0,0.35); overflow: hidden; }
@@ -3093,8 +3099,6 @@ body {
         .reading-actbar button.rp-cancel { background: transparent; color: var(--text-muted); padding: 4px 6px; }
         .reading-actbar button.rp-bookmark { background: transparent; color: var(--accent); padding: 4px 8px; }
         .reading-actbar button.rp-bookmark.on { background: var(--accent); color: #fff; }
-        /* 社科书的「导读」：描边款，跟实心的「讨论」区分开——一眼看出是两件不同的事 */
-        .reading-actbar button.rp-guide { background: transparent; color: var(--accent); border: 1px solid currentColor; white-space: nowrap; }
         .reading-actbar button.rp-del { background: transparent; color: #e5484d; border: 1px solid currentColor; }
         .reading-actbar button.rp-del.armed { background: #e5484d; color: #fff; border-color: #e5484d; }
         .reading-actbar.rp-actions { justify-content: flex-end; }
@@ -3302,8 +3306,6 @@ body {
         .reading-actbar button.rp-cancel { background: transparent; color: var(--text-muted); padding: 4px 6px; }
         .reading-actbar button.rp-bookmark { background: transparent; color: var(--accent); padding: 4px 8px; }
         .reading-actbar button.rp-bookmark.on { background: var(--accent); color: #fff; }
-        /* 社科书的「导读」：描边款，跟实心的「讨论」区分开——一眼看出是两件不同的事 */
-        .reading-actbar button.rp-guide { background: transparent; color: var(--accent); border: 1px solid currentColor; white-space: nowrap; }
         .reading-actbar button.rp-del { background: transparent; color: #e5484d; border: 1px solid currentColor; }
         .reading-actbar button.rp-del.armed { background: #e5484d; color: #fff; border-color: #e5484d; }
         .reading-actbar.rp-actions { justify-content: flex-end; }
@@ -20829,10 +20831,43 @@ body {
             rbScrollShelfTop();
         }
 
+        /* 社科书目录做成两级：章 → 小节。一章三四万字，想回到某一小节原本只能手动翻。
+           小标题用 rbDetectHeads 认（已验证零误判），点小节名直接开这一章 + 滚到那一节。
+           只对社科书做（rbIsSocial）：小说章节短、认不出小标题，目录保持原来的一级、零影响。
+           每本书每章算一次就缓存起来，搜索框每敲一下重渲不会反复扫全书。 */
+        var _rbHeadsCache = {};
+        function rbChapterHeads(b, i) {
+            var key = b.id + '|' + i;
+            if (_rbHeadsCache[key]) return _rbHeadsCache[key];
+            var lines = (b.chapters[i].body || '').split('\n').filter(function (l) { return l.trim().length > 0; });
+            var out = rbDetectHeads(lines).map(function (p) { return { p: p, title: lines[p - 1].trim() }; });
+            _rbHeadsCache[key] = out;
+            return out;
+        }
+        /* 这一章值不值得在目录里展开小节。挡掉版权页/致谢/目录/术语表（太短）和英文注释/索引（非中文），
+           这些地方的短行会被误当成小标题。正文章节都是几万字的中文，稳稳通过。 */
+        function rbChapterHasSections(b, i) {
+            var body = b.chapters[i].body || '';
+            if (body.length < 6000) return false;
+            if (rbCnRatio(body.slice(0, 3000)) < 0.5) return false;
+            return rbChapterHeads(b, i).length >= 2;
+        }
+        // 目录点小节：开这一章，渲染好之后滚到小标题那一段（照 _readerJumpTo 的轮询套路）
+        function rbJumpSection(bookId, chapIdx, headP) {
+            readerOpenChapter(bookId, chapIdx);   // 这一步会关掉书架
+            var tries = 0, timer = setInterval(function () {
+                tries++;
+                var pEl = _readerFindParaEl(chapIdx, headP);
+                if (pEl) { clearInterval(timer); _rpFlashScroll(pEl, pEl); }
+                else if (tries > 25) clearInterval(timer);
+            }, 60);
+        }
+
         function rbRenderChapters() {
             var b = rbGetBook(rbActiveBookId); if (!b) return;
             var q = (document.getElementById('rbChapterSearch').value || '').toLowerCase();
             var box = document.getElementById('rbChapterList');
+            var _subs = rbPickForReader && rbIsSocial(b);   // 两级目录只在「社科书 + 阅读模式选书」时出现
             // 阅读模式按「阅读器进度」标记当前章；共读模式按 lastChapter 标记
             var markCur = rbPickForReader ? readerGetProgress(b.id).chapter : b.lastChapter;
             var html = b.chapters.map(function (ch, i) {
@@ -20840,10 +20875,21 @@ body {
                 var cls = 'rb-chap';
                 if (markCur != null) { if (i < markCur) cls += ' rb-read'; if (i === markCur) cls += ' rb-current'; }
                 if (rbPickForReader) {
-                    return '<div class="' + cls + '" onclick="readerOpenChapter(\'' + b.id + '\',' + i + ')">'
+                    var _row = '<div class="' + cls + '" onclick="readerOpenChapter(\'' + b.id + '\',' + i + ')">'
                         + '<div class="rb-chap-info"><div class="rb-chap-title">' + rbEsc(ch.title) + '</div><div class="rb-chap-meta">' + ch.body.length.toLocaleString() + ' 字' + (i === markCur ? ' · 在读' : '') + '</div></div>'
                         + (ch.body.length >= 6000 ? '<button class="rb-chap-append" onclick="event.stopPropagation();rbSplitOneChapter(\'' + b.id + '\',' + i + ')" title="这一章太长，手动标注在哪里分章">✂️</button>' : '')
                         + '<span style="font-size:11px;color:var(--accent);flex-shrink:0">阅读 ›</span></div>';
+                    if (_subs && rbChapterHasSections(b, i)) {
+                        var _hs = rbChapterHeads(b, i);
+                        // 搜索时只留标题匹配的小节；没搜索就全列
+                        if (q) _hs = _hs.filter(function (h) { return h.title.toLowerCase().indexOf(q) >= 0; });
+                        for (var _si = 0; _si < _hs.length; _si++) {
+                            _row += '<div class="rb-sec" onclick="rbJumpSection(\'' + b.id + '\',' + i + ',' + _hs[_si].p + ')">'
+                                + '<span class="rb-sec-title">' + rbEsc(_hs[_si].title) + '</span>'
+                                + '<span class="rb-sec-p">P' + _hs[_si].p + '</span></div>';
+                        }
+                    }
+                    return _row;
                 }
                 return '<div class="' + cls + '" onclick="rbInsertChapter(\'' + b.id + '\',' + i + ')">'
                     + '<div class="rb-chap-info"><div class="rb-chap-title">' + rbEsc(ch.title) + '</div><div class="rb-chap-meta">' + ch.body.length.toLocaleString() + ' 字' + (i === markCur ? ' · 当前' : '') + '</div></div>'
@@ -21601,7 +21647,16 @@ body {
            判定规则在《社会性动物》9 章正文上实测过：76 个小标题全中、零误判。
            排除的干扰项：图注（「本图来源于…」）、选择题选项（「a. …」）、● 列表项、正文长句。 */
         var SECTION_CHAR_BUDGET = 12000;   // 一节实测 4000~8000 字，留足余量；真超了就从节尾往前截
+        var MIN_SECTION_PARAS = 4;         // 一小节至少要有这么多段正文，否则那行不是小标题
 
+        // 中文字符占比。用来把英文索引/注释里的条目挡在外面（"Aronson, Elliot, 8,369" 这种）。
+        // ⚠️面向中文书；将来若要读英文原版书，这条规则得另想。
+        function rbCnRatio(s) {
+            if (!s) return 0;
+            var n = 0;
+            for (var i = 0; i < s.length; i++) { var c = s.charCodeAt(i); if (c >= 0x4e00 && c <= 0x9fff) n++; }
+            return n / s.length;
+        }
         // 这一行像不像小标题？nxt = 下一行（标题后面应该跟着正文段，据此排掉短句/列表）
         function rbLineIsHead(s, nxt) {
             s = (s || '').trim();
@@ -21611,14 +21666,22 @@ body {
             if (/^[a-zA-Z]\./.test(s)) return false;            // a. b. 选择题选项
             if (/^[（(]/.test(s)) return false;                 // （图1）这类
             if (/来源于|图\d|表\d|注：/.test(s)) return false;    // 图表注释
+            if (rbCnRatio(s) < 0.5) return false;               // 以英文/数字为主 → 索引条目、ISBN 之类
             if (nxt != null && nxt.trim().length < 40) return false;  // 后面没跟正文长段 → 更可能是列表
             return true;
         }
-        // 返回本章所有小标题的段号（1 起）
+        /* 返回本章所有小标题的段号（1 起）。
+           除了逐行判定，还要求「一小节至少 MIN_SECTION_PARAS 段正文」——版权页那种短行紧挨短行
+           会一连串命中，靠这条一次清干净。实测：正文 9 章 67 个真小节一个不少，附录垃圾清零。 */
         function rbDetectHeads(lines) {
-            var out = [];
+            var raw = [];
             for (var i = 0; i < lines.length; i++) {
-                if (rbLineIsHead(lines[i], i + 1 < lines.length ? lines[i + 1] : null)) out.push(i + 1);
+                if (rbLineIsHead(lines[i], i + 1 < lines.length ? lines[i + 1] : null)) raw.push(i + 1);
+            }
+            var out = [];
+            for (var k = 0; k < raw.length; k++) {
+                var end = (k + 1 < raw.length) ? (raw[k + 1] - 1) : lines.length;
+                if (end - raw[k] >= MIN_SECTION_PARAS) out.push(raw[k]);
             }
             return out;
         }
@@ -21672,23 +21735,30 @@ body {
             var leftSide = (pos === 'lm' || pos === 'lb');
             var bar = document.createElement('div');
             bar.className = 'reading-actbar';
-            var inputHtml = '<textarea class="rp-ask" rows="1" placeholder="问问这一段…（如：他这句话什么意思？）"></textarea>';
-            var askHtml = '<button class="rp-ask-send">讨论</button>';
-            // 社科书专属：一键「导读」——不用打字，取你点的这一段所在的整个小节讲一遍。
-            // 只在标了社科的书里出现，读小说时这条操作栏一字不变。
-            var guideHtml = rbCurBookIsSocial() ? '<button class="rp-guide">导读</button>' : '';
+            /* 社科书不另加按钮——手机上一行挤两个键太多。改成【一个按钮，标签跟着输入框变】：
+               框里空着＝你没有具体问题，按钮显示「导读」，点了讲这一整节；
+               一开始打字就自动变「讨论」，回到原来的逐段问答。
+               零多余按钮、零多余点击，也不用点完再弹窗让你选。读小说时这条操作栏一字不变。 */
+            var _isSocial = rbCurBookIsSocial();
+            var inputHtml = '<textarea class="rp-ask" rows="1" placeholder="' +
+                (_isSocial ? '有问题就问…（留空直接点「导读」讲这一节）' : '问问这一段…（如：他这句话什么意思？）') +
+                '"></textarea>';
+            var askHtml = '<button class="rp-ask-send">' + (_isSocial ? '导读' : '讨论') + '</button>';
             // 极简：输入框 + 讨论按钮，「带前文问答」勾选框紧贴讨论按钮左边（粘性，状态存 localStorage，替代原设置里的全局开关）
             var ctxHtml = readingAskCtxBoxHtml();
-            bar.innerHTML = leftSide ? (ctxHtml + guideHtml + askHtml + inputHtml) : (inputHtml + ctxHtml + guideHtml + askHtml);
+            bar.innerHTML = leftSide ? (ctxHtml + askHtml + inputHtml) : (inputHtml + ctxHtml + askHtml);
             anchorEl.insertAdjacentElement('afterend', bar);
             // 一步式：直接出输入框；不自动聚焦弹键盘，等用户点输入框再唤起；点「讨论」发送；再点该段收起
             var input = bar.querySelector('.rp-ask');
             var send = bar.querySelector('.rp-ask-send');
-            function go() { readingAskOne(msgIdx, pNum, input.value, bar); }
+            function go() {
+                // 社科书 + 输入框空着 → 走整节导读（question 传占位符，函数里会换成「导读：《小节名》」）
+                if (_isSocial && !input.value.trim()) { readingAskOne(msgIdx, pNum, '导读', bar, { guide: true }); return; }
+                readingAskOne(msgIdx, pNum, input.value, bar);
+            }
             send.onclick = go;
-            var guideBtn = bar.querySelector('.rp-guide');
-            // 「导读」不用输入框内容，question 传占位符（函数里会换成「导读：《小节名》」）
-            if (guideBtn) guideBtn.onclick = function () { readingAskOne(msgIdx, pNum, '导读', bar, { guide: true }); };
+            // 标签跟着输入框内容切换（打字→讨论、清空→导读）；prefill 时下面会派发 input 事件一并同步
+            if (_isSocial) input.addEventListener('input', function () { send.textContent = input.value.trim() ? '讨论' : '导读'; });
             readingBindAskBox(input);
             readingBindCtxBox(bar);
             if (prefill) { input.value = prefill; try { input.dispatchEvent(new Event('input')); } catch (e) {} try { input.focus(); } catch (e) {} }
