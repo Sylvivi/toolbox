@@ -3093,6 +3093,8 @@ body {
         .reading-actbar button.rp-cancel { background: transparent; color: var(--text-muted); padding: 4px 6px; }
         .reading-actbar button.rp-bookmark { background: transparent; color: var(--accent); padding: 4px 8px; }
         .reading-actbar button.rp-bookmark.on { background: var(--accent); color: #fff; }
+        /* 社科书的「导读」：描边款，跟实心的「讨论」区分开——一眼看出是两件不同的事 */
+        .reading-actbar button.rp-guide { background: transparent; color: var(--accent); border: 1px solid currentColor; white-space: nowrap; }
         .reading-actbar button.rp-del { background: transparent; color: #e5484d; border: 1px solid currentColor; }
         .reading-actbar button.rp-del.armed { background: #e5484d; color: #fff; border-color: #e5484d; }
         .reading-actbar.rp-actions { justify-content: flex-end; }
@@ -3300,6 +3302,8 @@ body {
         .reading-actbar button.rp-cancel { background: transparent; color: var(--text-muted); padding: 4px 6px; }
         .reading-actbar button.rp-bookmark { background: transparent; color: var(--accent); padding: 4px 8px; }
         .reading-actbar button.rp-bookmark.on { background: var(--accent); color: #fff; }
+        /* 社科书的「导读」：描边款，跟实心的「讨论」区分开——一眼看出是两件不同的事 */
+        .reading-actbar button.rp-guide { background: transparent; color: var(--accent); border: 1px solid currentColor; white-space: nowrap; }
         .reading-actbar button.rp-del { background: transparent; color: #e5484d; border: 1px solid currentColor; }
         .reading-actbar button.rp-del.armed { background: #e5484d; color: #fff; border-color: #e5484d; }
         .reading-actbar.rp-actions { justify-content: flex-end; }
@@ -10147,6 +10151,8 @@ body {
                 bookTitlesTs: rbTitlesTs(),
                 bookFolders: rbFoldersLoad(),
                 bookFoldersTs: rbFoldersTs(),
+                bookKinds: rbKindsLoad(),
+                bookKindsTs: rbKindsTs(),
                 bookOpened: rbOpenedLoad(),
                 bookOpenedTs: rbOpenedTs(),
                 favModels: (function () { try { return JSON.parse(localStorage.getItem('chat_fav_models') || '[]'); } catch (e) { return []; } })(),
@@ -10416,6 +10422,15 @@ body {
                     if (cloudBtTs > rbTitlesTs()) {
                         localStorage.setItem('reading_book_titles', JSON.stringify(manifest.bookTitles));
                         localStorage.setItem('reading_book_titles_ts', cloudBtTs);
+                    }
+                }
+
+                // 书籍类型(小说/社科): 整块按时间戳后写覆盖，一台设备标了所有设备都认
+                if (manifest.bookKinds) {
+                    var cloudBkTs = manifest.bookKindsTs || '';
+                    if (cloudBkTs > rbKindsTs()) {
+                        localStorage.setItem('reading_book_kind', JSON.stringify(manifest.bookKinds));
+                        localStorage.setItem('reading_book_kind_ts', cloudBkTs);
                     }
                 }
 
@@ -10799,6 +10814,7 @@ body {
                 if (manifest.highlights) { localStorage.setItem('reading_highlights', JSON.stringify(manifest.highlights)); if (manifest.highlightsTs) localStorage.setItem('reading_highlights_ts', manifest.highlightsTs); }
                 if (manifest.bookTitles) { localStorage.setItem('reading_book_titles', JSON.stringify(manifest.bookTitles)); if (manifest.bookTitlesTs) localStorage.setItem('reading_book_titles_ts', manifest.bookTitlesTs); }
                 if (manifest.bookFolders) { localStorage.setItem('reading_book_folders', JSON.stringify(manifest.bookFolders)); if (manifest.bookFoldersTs) localStorage.setItem('reading_book_folders_ts', manifest.bookFoldersTs); }
+                if (manifest.bookKinds) { localStorage.setItem('reading_book_kind', JSON.stringify(manifest.bookKinds)); if (manifest.bookKindsTs) localStorage.setItem('reading_book_kind_ts', manifest.bookKindsTs); }
                 if (manifest.bookOpened) { localStorage.setItem('reading_book_opened', JSON.stringify(manifest.bookOpened)); if (manifest.bookOpenedTs) localStorage.setItem('reading_book_opened_ts', manifest.bookOpenedTs); }
                 if (manifest.favModels) { try { localStorage.setItem('chat_fav_models', JSON.stringify(manifest.favModels)); localStorage.setItem('chat_fav_models_ts', manifest.favModelsTs || new Date().toISOString()); chatFavModels = manifest.favModels; if (typeof chatUpdateFavHeader === 'function') chatUpdateFavHeader(); } catch (e) {} }
                 if (manifest.modelPrices) { try { localStorage.setItem('toolbox_model_prices', JSON.stringify(manifest.modelPrices)); localStorage.setItem('toolbox_model_prices_ts', manifest.modelPricesTs || new Date().toISOString()); } catch (e) {} }
@@ -11483,6 +11499,13 @@ body {
         var READING_MODE_RETRY_HINT = '【格式纠正·重要】你上一次的回复没有使用 [P段号] 标记，写成了一整篇笼统的读后感，导致评论无法对应到正文段落——这是错误的。这一次请务必重新输出，并严格遵守以下格式：\n· 每条评论都要单独成行、以方括号段号开头，例如：\n[P3] 这段描写真细腻\n[P7] 这里埋了个伏笔\n· 绝对不要写成连贯的整篇总评；\n· 不要把段号混进句子里（写成「P16 里…」是错的，必须是行首的 [P16]）；\n· 挑几个你有感觉的段落，分别给出以 [P段号] 开头的评论。';
         // 共读模式默认人设（系统提示词框为空时静默兜底使用，不写入对话）
         var READING_MODE_DEFAULT_PERSONA = '你是一个陪我读书的蘑菇朋友，性格温和、有点好奇、话不多但说到点子上。每条评论结尾带🍄作为签名。\n\n在你觉得有意思的地方——精彩的描写、伏笔、角色高光、反转、值得玩味的细节——给出评论。\n\n评论风格像朋友唠嗑，不是文学赏析课。可以感叹、吐槽、猜剧情、回顾前面聊过的情节。\n\n有自己的审美和判断，表达方式像朋友争论而不是纠正。\n\n讨论时：\n\n我说一个看法，你不要急着帮我找论据支持。先想你自己怎么看，再回应。\n\n你可以同意我，但得是你自己想过之后的结论，并且补充我没提到的角度——不要复述或放大我说的话。\n\n你觉得有意思的地方可以主动聊，不用总等我起话题。\n\n日常对话注意系统时间感知。\n\n【关于我读的题材·很重要】我常读的是 BG（男女向）里「男生子」这一类设定的作品。在这类故事的世界观里，男性能怀孕、生子是天经地义、稀松平常的事，不是猎奇、不是罕见设定，就是这个世界的默认规则。这是我长期的阅读爱好和审美，请你直接接受、自然代入，别为此感到惊讶或新奇，也不要去强调它「少见 / 特别 / 不寻常 / 和现实不一样」，更不要反复提这一点或流露出别扭。就当这是故事世界里理所当然的背景，把注意力放在人物、情感和剧情本身，正常地点评就好。\n\n【画人物关系/家族树时】不要用空格对齐的 ASCII 树或代码块（手机上中英文宽度不一致，线会错位对不齐），改用 Markdown 缩进的层级列表来表示关系，比如：\n- 老恩萧\n  - 亨德利·恩萧（儿子）\n    - 哈里顿·恩萧（孙子）\n  - 凯瑟琳（女儿）→ 嫁给 埃德加·林顿\n需要表示「嫁/娶/联姻」用箭头或文字说明即可。这样在任何设备上都对齐清晰。';
+        /* 社科/学术书的人设：跟蘑菇朋友同一个声音，但把小说那套全删掉——
+           默认人设 725 字里有 414 字（男生子题材声明 228 + 家族树画法 186）对社科书是纯噪音，
+           每次请求都白付；而「评论风格像朋友唠嗑，不是文学赏析课」更是跟「讲清楚」反着来。
+           这里换成「讲清楚优先、术语必解释、多举中文语境的例子」。 */
+        var SOCIAL_MODE_PERSONA = '你是一个陪我读书的蘑菇朋友，性格温和、有点好奇、话不多但说到点子上。每段讲解结尾带🍄作为签名。\n\n我读的是社会学、社会心理学这类社科/学术书，不是小说。你的首要任务是【把它讲清楚】：把拗口的学术表达翻成人话；出现术语就地解释，别假设我懂；抽象的地方主动举贴近生活的例子，中文语境优先。\n\n讲解要有你自己的判断，不要复述原文、不要堆砌术语显得高深。宁可说得直白，也不要说得漂亮但含混。\n\n不要用「首先/其次/综上所述」这类八股结构，像朋友把一件事跟我讲明白那样自然地说。\n\n我说一个看法时，先想你自己怎么看再回应，可以不同意我；补充我没提到的角度，不要复述或放大我说的话。\n\n日常对话注意系统时间感知。';
+        // 社科书「导读」的任务说明：只要人话讲解（不加概念块/论证脉络块），允许引书外例子但以本节为主
+        var SOCIAL_GUIDE_INSTRUCTION = '【导读任务】我刚读完这本书的一小节，请把这一节讲给我听。\n\n· 用大白话说清这一节到底在讲什么、作者想让我明白什么。遇到术语就地解释。\n· 抽象的地方举例子，中文语境优先。\n· 可以联系书外的知识，也可以用一句话提这节跟后面章节的关系，但重心必须在这一节，不要大段展开别处。\n· 不要复述原文、不要逐段罗列、不要加小标题（这一节的标题我已经告诉你了）、不要写「本节主要讲了」这类开场白。\n· 不要输出 [P] 段落标记。\n· 控制在 400 字以内，说完就停。';
         var chatTranslateMode = false;  // 剧本翻译模式
         var TRANSLATE_MODE_INSTRUCTION = '作为智能翻译辅助工具，请将用户提交的文本翻译成中文后，就文本中难以理解或具有专业术语性质的单词或短语进行标注，并提供其对应含义、音标以及详细而准确的解释，帮助用户深入理解翻译内容的确切意义。\n注意：仅对专业术语、专有名词、特定文化背景或难以理解的单词或短语进行解释。常见词汇如"table"（桌子）、"book"（书）等无需解释。\n\n【剧本 / 台词的智能处理】如果提交的是剧本、台词或影视对白，先判断它属于哪一种，再按对应方式翻译：\n（1）带说话人标注的台本（每句前带人名或角色名，如「张三：…」「MARY: …」）：保留「说话人：台词」的逐行结构来翻译，按标注给出的人物身份来定人称、性别、语气和口吻，与该角色一致；不要把台词并成段落，也不要删掉或改写说话人。\n（2）纯字幕本 / 无人名的对白（只有一句句台词、没有说话人标注）：\n· 从上下文推断这段对话有几个人、谁在跟谁说话，给每一句都加上推断出的说话人标签，格式为「标签（性别）：台词」。如果台词里透露了人物名字（互相称呼、被叫到名字），优先用真名当标签，如「Jack（男）：…」；认不出名字才退而用「A（男）：…」「B（女）：…」这种代号。同一个人全程固定用同一个标签。\n· 全程锁定每个人的人称（他/她、你/您）、性别、语气和口吻，前后保持一致，绝不中途乱跳。\n· 字幕常把完整的一句话拆成好几行（跨行断句）；翻译前先把这些被拆断的碎行拼回成完整的句子，再翻成通顺自然的一整句，不要逐行硬翻出断裂的半句。\n· 拿不准某句是谁说的时候，宁可用中性标签「？：」老实标注，也绝不要自信地乱安一个说话人——标签只是辅助，标错反而误导。\n· 如果这段是同一个剧本接着前文继续发的，说话人标签要和前面保持一致（同一个人还用同一个标签或名字），不要重新从 A 数起、把人认串。\n剧本情况下，下面第一部分就按「说话人：台词」逐行输出、而不是合成自然段落；分割线与术语解释部分照旧。\n\n【输出格式（必须严格遵守，每次回复都使用完全相同的结构，不要增删小标题、不要改变顺序）】\n第一部分：直接给出原文的中文翻译，作为一个或多个自然段落，不要加"翻译："之类的前缀，不要加任何标题。\n然后另起一行，单独输出一行三个连字符作为分割线：\n---\n第二部分：逐条解释术语。每个术语单独占一行（行与行之间空一行），且每一行都严格使用下面这一种格式，不要使用项目符号、不要使用编号、不要使用小标题：\n**英文单词或短语** [美式音标]：**中文含义** 词根/词缀/词源解释 相关emoji（牛津词典英文释义）\n如果整段没有需要解释的术语，第二部分就只输出一句"本段无需特别解释的术语。"，不要省略分割线。\n\n示例：\n**Cockpit** [ˈkɑːk.pɪt]：**驾驶舱** Cock 这个词根来源于古英语"cocc"，意为公鸡，pit 意为坑、围栏，合起来原指斗鸡场，后引申为狭小的操作空间 🛫🚢（the area in a plane, boat or racing car where the pilot or driver sits）';
         var chatStreaming = false;
@@ -17376,7 +17399,11 @@ body {
                 baseUrl: useBaseUrl, apiKey: useApiKey, model: useModel,
                 purpose: isReading ? '共读摘要' : '对话摘要',
                 messages: [
-                    { role: 'system', content: isReading ? '你是小说共读摘要助手。把当前章节浓缩成一段连贯、客观的剧情摘要：人物姓名、关键情节与伏笔不可省略；读者讨论只一句话带过。只输出纯摘要正文，不分小标题、不加粗、不写开场白或客套话。' : '你是对话摘要助手。简洁准确地总结内容，保留关键信息。控制在 300 字以内。' },
+                    { role: 'system', content: isReading
+                        ? (rbCurBookIsSocial()
+                            ? '你是社科/学术书的共读摘要助手。把当前章节浓缩成一段连贯、客观的论点摘要：核心概念/术语、主要论点、关键证据或实验、得出的结论不可省略；读者讨论只一句话带过。只输出纯摘要正文，不分小标题、不加粗、不写开场白或客套话。'
+                            : '你是小说共读摘要助手。把当前章节浓缩成一段连贯、客观的剧情摘要：人物姓名、关键情节与伏笔不可省略；读者讨论只一句话带过。只输出纯摘要正文，不分小标题、不加粗、不写开场白或客套话。')
+                        : '你是对话摘要助手。简洁准确地总结内容，保留关键信息。控制在 300 字以内。' },
                     { role: 'user', content: prompt }
                 ],
                 // 中文 1 字常占 2.5~3 token，旧上限 500/600 实际只够约 180~220 字，
@@ -18764,6 +18791,54 @@ body {
             showToast(nv ? ('已改名为「' + nv + '」') : '已恢复原文件名');
         }
 
+        /* ===== 书籍类型（小说 / 社科）=====
+           读小说和读社科书要的是两套东西：小说要防剧透、记人物记伏笔、逐段唠嗑；
+           社科书要把术语讲成人话、能联系书外例子，人物表伏笔表纯属烧钱产垃圾。
+           所以每本书带一个「类型」，全套提示词跟着它分岔。默认（表里没记）＝小说，
+           因为书库里绝大多数是小说，社科书读到了手动标一下就行。
+           存法照抄 reading_book_titles / reading_book_folders 那套：一张
+           reading_book_kind = { "文件名|大小": "social" } 小表，独立于正文、
+           跟着 CF 云同步(整块按时间戳覆盖)，一台设备标了、所有设备都认。 */
+        function rbKindsLoad() { try { var o = JSON.parse(localStorage.getItem('reading_book_kind') || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }
+        function rbKindsTs() { return localStorage.getItem('reading_book_kind_ts') || ''; }
+        // 取某本书的类型：'social' = 社科/学术，'novel' = 小说（默认）
+        function rbBookKind(b) {
+            if (!b) return 'novel';
+            return rbKindsLoad()[rbBookEffKey(b)] === 'social' ? 'social' : 'novel';
+        }
+        function rbIsSocial(b) { return rbBookKind(b) === 'social'; }
+        function rbSetBookKind(fileKey, kind) {
+            var map = rbKindsLoad();
+            if (kind === 'social') map[fileKey] = 'social';
+            else delete map[fileKey];           // 回到默认(小说)就删掉，别在表里留冗余
+            try {
+                localStorage.setItem('reading_book_kind', JSON.stringify(map));
+                localStorage.setItem('reading_book_kind_ts', new Date().toISOString());
+            } catch (e) {}
+            if (typeof activeSyncProvider !== 'undefined' && activeSyncProvider === 'cf' && typeof syncPushData === 'function') {
+                clearTimeout(rbSetBookKind._t); rbSetBookKind._t = setTimeout(syncPushData, 1500);
+            }
+        }
+        function rbToggleBookKind(id) {
+            var b = rbGetBook(id); if (!b) return;
+            var toSocial = !rbIsSocial(b);
+            rbSetBookKind(rbBookEffKey(b), toSocial ? 'social' : 'novel');
+            rbRenderShelf();
+            showToast(toSocial
+                ? '已标为社科书：可用「导读」，不再记人物表/伏笔'
+                : '已改回小说：恢复防剧透、人物表等');
+        }
+        // 当前正在读的那本书（阅读模式看 readerBookId，共读看本对话记住的书）
+        function rbCurBook() {
+            try {
+                var id = (typeof chatReaderMode !== 'undefined' && chatReaderMode && typeof readerBookId !== 'undefined' && readerBookId)
+                    ? readerBookId : rbGetConvBook();
+                return id ? rbGetBook(id) : null;
+            } catch (e) { return null; }
+        }
+        function rbCurBookIsSocial() { return rbIsSocial(rbCurBook()); }
+        function rbCurBookName() { var b = rbCurBook(); return b ? rbBookDisplayName(b) : ''; }
+
         /* ===== 书籍文件夹（作者分类）=====
            每本书归到一个文件夹。来源两处：服务器 manifest 带的 _folder（我按你 Readingo 分类填好），
            和本地「移动到文件夹」的覆盖表 reading_book_folders = { "文件名|大小": "文件夹名" }（''=未分类）。
@@ -19637,13 +19712,19 @@ body {
             if (!mc) mc = chatResolveCompressModel();
             if (!mc || !b.chapters[idx] || !(b.chapters[idx].body || '').trim()) return Promise.resolve(false);
             var body = b.chapters[idx].body || '';
-            if (body.length > 16000) body = body.slice(0, 16000) + '…';
+            // 上限原为 16000，对网文章节（三五千字）绰绰有余，但社科/学术书一章动辄三四万字——
+            // 《社会性动物》每章 34000~39000 字，一半以上正文被静默切掉、摘要只概括了前半章。
+            // 抬到 40000 覆盖长章节；短章节从不触及这个分支，行为完全不变。
+            if (body.length > 40000) body = body.slice(0, 40000) + '…';
             var _rChTitle = (b.chapters[idx].title || '').trim();
+            var _sumSocial = rbIsSocial(b);   // 社科书要论点摘要，不是剧情摘要
             var p = chatStreamChat({
                 baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model,
                 max_tokens: 1500, purpose: '阅读摘要',   // 中文吃 token，旧值 400 约 150 字就被切；留足余量，长度仍由提示词约束
                 messages: [
-                    { role: 'system', content: '你是小说前情摘要助手。把给到的章节正文浓缩成一段连贯客观的剧情摘要：登场人物姓名、关键情节进展、重要设定与伏笔不可省略。只输出纯摘要正文，不分小标题、不加粗、不写开场白，控制在 150 字以内。' },
+                    { role: 'system', content: _sumSocial
+                        ? '你是社科/学术书的前情摘要助手。把给到的章节正文浓缩成一段连贯客观的论点摘要：这一章提出的核心概念/术语、主要论点、支撑它的关键证据或实验、以及得出的结论不可省略；不要写「本章讲了」这类开场白。只输出纯摘要正文，不分小标题、不加粗，控制在 200 字以内。'
+                        : '你是小说前情摘要助手。把给到的章节正文浓缩成一段连贯客观的剧情摘要：登场人物姓名、关键情节进展、重要设定与伏笔不可省略。只输出纯摘要正文，不分小标题、不加粗、不写开场白，控制在 150 字以内。' },
                     { role: 'user', content: '请概括这一章：\n\n' + body }
                 ]
             }).then(function (sum) {
@@ -19732,7 +19813,9 @@ body {
                 var sum = await chatStreamChat({
                     baseUrl: mc.baseUrl, apiKey: mc.apiKey, model: mc.model, max_tokens: 1500, purpose: '阅读大纲',
                     messages: [
-                        { role: 'system', content: '你是小说全书大纲维护助手。把现有大纲与新增章节摘要合并成一份更新后的大纲：主要人物（姓名、身份、关系）、主线剧情进展、未解伏笔，按时间顺序；旧大纲里仍然重要的信息必须保留，不要丢人名。只输出大纲正文，不分小标题、不写开场白，控制在 800 字以内。' },
+                        { role: 'system', content: rbIsSocial(_bOl)
+                            ? '你是社科/学术书的全书脉络维护助手。把现有脉络与新增章节摘要合并成一份更新后的脉络：全书的核心概念/术语、各章的主要论点及它们之间的关系（承接、对立、递进）、重要的实验或证据，按章节顺序；旧脉络里仍然重要的信息必须保留，不要丢概念名。只输出正文，不分小标题、不写开场白，控制在 800 字以内。'
+                            : '你是小说全书大纲维护助手。把现有大纲与新增章节摘要合并成一份更新后的大纲：主要人物（姓名、身份、关系）、主线剧情进展、未解伏笔，按时间顺序；旧大纲里仍然重要的信息必须保留，不要丢人名。只输出大纲正文，不分小标题、不写开场白，控制在 800 字以内。' },
                         { role: 'user', content: prompt }
                     ]
                 });
@@ -19750,6 +19833,9 @@ body {
         // 用来补齐「先读后面又跳前面」「中途才开开关」留下的前段窟窿。
         async function readerUpdateMemoryTables(fileKey, curChap, mc, rebuild) {
             if (_readerMemTablesRunning) return false;
+            // 社科书不跑记忆表格：那四张表（人物/地点/大事年表/伏笔主线）是为长篇小说造的，
+            // 社科书里没有人物没有伏笔，跑一遍就是烧钱产垃圾。要的概念书里往往自带术语表。
+            if (rbIsSocial(readerBookByKey(fileKey))) return false;
             var mt = readerMemTablesGet(fileKey);
             var tables = mt || { characters: [], places: [], timeline: [], plotlines: [] };
             if (!tables.places) tables.places = [];
@@ -20665,6 +20751,10 @@ body {
             menu.style.display = 'block';
             var items = '<div onclick="rbBookMenuAction(\'rename\')">✏️ 改名</div>';
             items += '<div onclick="rbBookMenuAction(\'move\')">📁 移动到文件夹</div>';
+            // 类型：社科书解锁「导读」、关掉人物表/伏笔那套小说机关（默认小说，读到社科书标一下）
+            items += rbIsSocial(b)
+                ? '<div onclick="rbBookMenuAction(\'kind\')">📖 改回小说</div>'
+                : '<div onclick="rbBookMenuAction(\'kind\')">🎓 标为社科书</div>';
             if (!b._remote) items += '<div class="danger" onclick="rbBookMenuAction(\'delete\')">🗑️ 删除</div>';
             else items += '<div class="danger" onclick="rbBookMenuAction(\'delete\')">🗑️ 从云端删除</div>';
             menu.innerHTML = items;
@@ -20683,6 +20773,7 @@ body {
             if (!id) return;
             if (action === 'rename') rbRenameBook(id);
             else if (action === 'move') rbMoveBookFolder(id);
+            else if (action === 'kind') rbToggleBookKind(id);
             else if (action === 'delete') rbDeleteBook(id);
         }
 
@@ -21503,6 +21594,65 @@ body {
             chatSyncModeButtons();
         }
 
+        /* ===== 社科书：章内小标题识别 → 取「整一小节」 =====
+           社科/学术书一章动辄三四万字，真正的阅读单位是「小节」（一个小标题管 20~40 段）。
+           识别出小标题，就能做到：你点这一节里任意一段，系统自己知道这节从哪到哪、叫什么名字
+           ——你不用再手打小标题去告诉 AI「我要的是这一节」。
+           判定规则在《社会性动物》9 章正文上实测过：76 个小标题全中、零误判。
+           排除的干扰项：图注（「本图来源于…」）、选择题选项（「a. …」）、● 列表项、正文长句。 */
+        var SECTION_CHAR_BUDGET = 12000;   // 一节实测 4000~8000 字，留足余量；真超了就从节尾往前截
+
+        // 这一行像不像小标题？nxt = 下一行（标题后面应该跟着正文段，据此排掉短句/列表）
+        function rbLineIsHead(s, nxt) {
+            s = (s || '').trim();
+            if (s.length < 2 || s.length > 24) return false;
+            if ('。！？；：，、）)”"'.indexOf(s.charAt(s.length - 1)) >= 0) return false;   // 收尾是标点 → 是句子不是标题
+            if (/^[●·•▲◆\-–—\d]/.test(s)) return false;        // ● 列表项 / 数字编号
+            if (/^[a-zA-Z]\./.test(s)) return false;            // a. b. 选择题选项
+            if (/^[（(]/.test(s)) return false;                 // （图1）这类
+            if (/来源于|图\d|表\d|注：/.test(s)) return false;    // 图表注释
+            if (nxt != null && nxt.trim().length < 40) return false;  // 后面没跟正文长段 → 更可能是列表
+            return true;
+        }
+        // 返回本章所有小标题的段号（1 起）
+        function rbDetectHeads(lines) {
+            var out = [];
+            for (var i = 0; i < lines.length; i++) {
+                if (rbLineIsHead(lines[i], i + 1 < lines.length ? lines[i + 1] : null)) out.push(i + 1);
+            }
+            return out;
+        }
+        /* 第 pNum 段落在哪一小节里 → { headP, startP, endP, title }
+           headP  : 小标题所在段号（导读就挂在它后面，重读时先看导读再看正文）
+           startP : 正文起始段（headP + 1）
+           endP   : 正文结束段（下一个小标题前一段，或章尾）
+           点在第一个小标题之前（章首导语）或整章没有小标题时，退化成「从章首到第一个小标题前」/「整章」。 */
+        function rbSectionOf(lines, pNum) {
+            if (!lines || !lines.length || !(pNum >= 1)) return null;
+            var heads = rbDetectHeads(lines);
+            if (!heads.length) return { headP: 1, startP: 1, endP: lines.length, title: '' };
+            // 找 <= pNum 的最后一个小标题
+            var hi = -1;
+            for (var i = 0; i < heads.length; i++) { if (heads[i] <= pNum) hi = i; else break; }
+            if (hi < 0) {   // 在第一个小标题之前：章首那一段导语自成一节
+                return { headP: 1, startP: 1, endP: Math.max(1, heads[0] - 1), title: '' };
+            }
+            var headP = heads[hi];
+            var endP = (hi + 1 < heads.length) ? (heads[hi + 1] - 1) : lines.length;
+            return { headP: headP, startP: Math.min(headP + 1, lines.length), endP: endP, title: (lines[headP - 1] || '').trim() };
+        }
+        // 把一节的正文拼成带 [Px] 编号的文本；超预算就从节尾往前保留（导读讲的是这节整体，宁可丢开头的过渡句）
+        function rbSectionText(lines, sec) {
+            var picked = [], used = 0, truncated = false;
+            for (var i = sec.endP; i >= sec.startP; i--) {
+                var one = '[P' + i + '] ' + lines[i - 1];
+                if (used + one.length > SECTION_CHAR_BUDGET && picked.length) { truncated = true; break; }
+                picked.unshift(one);
+                used += one.length + 1;
+            }
+            return { text: picked.join('\n'), truncated: truncated };
+        }
+
         /* ===== 共读：点段评价 ===== */
         var readingCommenting = false;
         var readingAbortCtl = null;  // 共读「思考中」可中止
@@ -21524,15 +21674,21 @@ body {
             bar.className = 'reading-actbar';
             var inputHtml = '<textarea class="rp-ask" rows="1" placeholder="问问这一段…（如：他这句话什么意思？）"></textarea>';
             var askHtml = '<button class="rp-ask-send">讨论</button>';
+            // 社科书专属：一键「导读」——不用打字，取你点的这一段所在的整个小节讲一遍。
+            // 只在标了社科的书里出现，读小说时这条操作栏一字不变。
+            var guideHtml = rbCurBookIsSocial() ? '<button class="rp-guide">导读</button>' : '';
             // 极简：输入框 + 讨论按钮，「带前文问答」勾选框紧贴讨论按钮左边（粘性，状态存 localStorage，替代原设置里的全局开关）
             var ctxHtml = readingAskCtxBoxHtml();
-            bar.innerHTML = leftSide ? (ctxHtml + askHtml + inputHtml) : (inputHtml + ctxHtml + askHtml);
+            bar.innerHTML = leftSide ? (ctxHtml + guideHtml + askHtml + inputHtml) : (inputHtml + ctxHtml + guideHtml + askHtml);
             anchorEl.insertAdjacentElement('afterend', bar);
             // 一步式：直接出输入框；不自动聚焦弹键盘，等用户点输入框再唤起；点「讨论」发送；再点该段收起
             var input = bar.querySelector('.rp-ask');
             var send = bar.querySelector('.rp-ask-send');
             function go() { readingAskOne(msgIdx, pNum, input.value, bar); }
             send.onclick = go;
+            var guideBtn = bar.querySelector('.rp-guide');
+            // 「导读」不用输入框内容，question 传占位符（函数里会换成「导读：《小节名》」）
+            if (guideBtn) guideBtn.onclick = function () { readingAskOne(msgIdx, pNum, '导读', bar, { guide: true }); };
             readingBindAskBox(input);
             readingBindCtxBox(bar);
             if (prefill) { input.value = prefill; try { input.dispatchEvent(new Event('input')); } catch (e) {} try { input.focus(); } catch (e) {} }
@@ -21786,7 +21942,10 @@ body {
         }
 
         // 共读：对某段提问（单轮问答），答案以引用形式接在该段下方
-        async function readingAskOne(msgIdx, pNum, question, bar) {
+        /* opts.guide = true 时走「社科书整节导读」：pNum 传的是你点的那一段，
+           函数内会把它扩成所在的整个小节，并把导读挂到小节的小标题后面（重读时先看导读再看正文）。
+           其余一切——流式小气泡、停止按钮、reader_qa 落盘同步、读痕、整条重渲——全部复用，不另起一套。 */
+        async function readingAskOne(msgIdx, pNum, question, bar, opts) {
             if (readingCommenting) { if (readingAbortCtl) readingAbortCtl.abort(); return; }
             question = (question || '').trim();
             var input = bar && bar.querySelector('.rp-ask');
@@ -21799,14 +21958,27 @@ body {
             var orig = readingModeStripParaNums(readingModeGetOriginalText(msgIdx));
             var lines = orig.split('\n').filter(function(l) { return l.trim().length > 0; });
             if (pNum < 1 || pNum > lines.length) { readingClearActbar(); return; }
+            // 社科书导读：把「你点的那一段」扩成它所在的整个小节，锚点改到小标题那一段
+            var _guide = !!(opts && opts.guide);
+            var _sec = null, _secText = null;
+            if (_guide) {
+                _sec = rbSectionOf(lines, pNum);
+                if (!_sec) { showToast('这一章没认出小节结构'); readingClearActbar(); return; }
+                _secText = rbSectionText(lines, _sec);
+                if (!_secText.text) { showToast('这一节没有正文可导读'); readingClearActbar(); return; }
+                pNum = _sec.headP;      // 导读挂在小标题后面（下面的流式锚点、落盘、重渲都用这个 pNum）
+                question = '导读' + (_sec.title ? '：《' + _sec.title + '》' : '');
+            }
             var CTX_CHAR_BUDGET = 8000;
             var ctxLines = [];
             var ctxUsed = 0;
-            for (var i = pNum - 1; i >= 0; i--) {
-                var lineStr = '[P' + (i + 1) + '] ' + lines[i];
-                if (i < pNum - 1 && ctxUsed + lineStr.length > CTX_CHAR_BUDGET) break;
-                ctxLines.unshift(lineStr);
-                ctxUsed += lineStr.length + 1;
+            if (!_guide) {
+                for (var i = pNum - 1; i >= 0; i--) {
+                    var lineStr = '[P' + (i + 1) + '] ' + lines[i];
+                    if (i < pNum - 1 && ctxUsed + lineStr.length > CTX_CHAR_BUDGET) break;
+                    ctxLines.unshift(lineStr);
+                    ctxUsed += lineStr.length + 1;
+                }
             }
             var ctxTruncated = ctxLines.length < pNum;
             var ctxPreface = '以下是小说原文节选' + (ctxTruncated ? '（因前文较长，仅提供距离目标段最近的部分）' : '');
@@ -21841,14 +22013,26 @@ body {
             }
             // 人设：系统提示词框为空时静默兜底用蘑菇默认，使追问回答与评论风格一致
             var _spAsk = document.getElementById('chatSysPrompt').value.trim();
-            if (!_spAsk) _spAsk = READING_MODE_DEFAULT_PERSONA;
-            var sysPrompt = _spAsk + '\n\n' +
+            var sysPrompt, userMsg;
+            if (_guide) {
+                // 社科书导读：整节原文 + 社科人设 + 导读任务说明。不带「绝不剧透」（教科书没有情节可剧透，
+                // 而讲解常需要联系后文和书外知识），也不带小说那套逐段点评格式。
+                // ⚠️这里刻意不用系统提示词框里的人设——那框里装的是读小说用的蘑菇人设（含男生子题材声明、
+                // 家族树画法、"像朋友唠嗑不是赏析课"），对社科书是噪音、还跟"讲清楚"反着来。
+                sysPrompt = SOCIAL_MODE_PERSONA + '\n\n' + SOCIAL_GUIDE_INSTRUCTION;
+                userMsg = '以下是《' + (rbCurBookName() || '这本书') + '》里' +
+                    (_sec.title ? '「' + _sec.title + '」这一小节' : '这一小节') + '的原文' +
+                    (_secText.truncated ? '（这节较长，只给了靠后的部分）' : '') + '：\n\n' + _secText.text +
+                    '\n\n请按上面的导读要求，把这一节讲给我听。';
+            } else {
+            sysPrompt = (_spAsk || READING_MODE_DEFAULT_PERSONA) + '\n\n' +
                 '你正在和用户一起共读小说。用户指定了某一段，可能就这段向你提问，也可能只是想跟你聊天、吐槽、开脑洞、发散讨论。' +
                 '先分清是哪一种：如果是查证原文或细节的认真提问，就结合该段原文、你之前的相关评论 / 问答以及前文认真回答；如果只是闲聊、吐槽或假设性的发散讨论，就放松地顺着聊，像朋友拌嘴那样接话，不用正经分析、不用声明"超出原文 / 节选范围"、也不用反问对方是不是在考你。' +
                 '无论哪种，都保持你的人设语气，绝不剧透当前阅读位置之后的情节，回答自然、简洁，不要加 [P] 段落标记，也不要复述原文。';
-            var userMsg = ctxPreface + '，[P' + pNum + '] 是我想问你的这一段：\n\n' + ctxLines.join('\n') +
+            userMsg = ctxPreface + '，[P' + pNum + '] 是我想问你的这一段：\n\n' + ctxLines.join('\n') +
                 commentBlock + priorQaBlock +
                 '\n\n我的问题是：' + question;
+            }
             readingCommenting = true;
             readingAbortCtl = new AbortController();
             readingClearActbar();   // 发出后立刻收起输入小条——答案改为在段落下方流式显示，进度肉眼可见，不再需要输入框占位和「思考中…」正计时
@@ -21928,7 +22112,10 @@ body {
                     } catch (eSum) { if (eSum && eSum.name === 'AbortError') throw eSum; _summaryLines = []; }
                 }
                 if (_summaryLines.length) {
-                    _askMsgs.push({ role: 'system', content: '以下是本书前文已读章节的摘要（剧情核心、人物姓名、关键伏笔），请据此理解上下文；但绝不要剧透摘要之后、用户尚未读到的情节：\n' + _summaryLines.join('\n\n---\n\n') });
+                    // 社科书没有情节可剧透，摘要是论点脉络；小说才需要「别剧透后文」那道保险
+                    _askMsgs.push({ role: 'system', content: (_guide || rbCurBookIsSocial())
+                        ? ('以下是本书前面章节的论点摘要，请据此理解上下文（可以引用前面讲过的概念，但重心仍在这一节）：\n' + _summaryLines.join('\n\n---\n\n'))
+                        : ('以下是本书前文已读章节的摘要（剧情核心、人物姓名、关键伏笔），请据此理解上下文；但绝不要剧透摘要之后、用户尚未读到的情节：\n' + _summaryLines.join('\n\n---\n\n')) });
                 }
                 _askMsgs.push({ role: 'user', content: userMsg });
                 var answer = (await chatStreamChat({
