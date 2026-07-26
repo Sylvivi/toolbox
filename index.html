@@ -2634,11 +2634,25 @@ body {
         /* 书架章节视图：顶部功能区（发下一章/拆分/搜索）固定，滚动章节列表时不跟着滚走 */
         .rb-sticky-head {
             position: sticky; top: 0; z-index: 5;
-            margin: 0 -20px; padding: 10px 20px 6px;
+            margin: 0 -20px; padding: 10px 20px 10px;
             background: var(--modal-bg);
             backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4);
             box-shadow: 0 8px 12px -10px rgba(0,0,0,0.22);
         }
+        /* 目录顶栏：返回和齿轮做成无边框文字按钮，只留搜索框一个方框，视觉噪音降到最低 */
+        .rb-head-row { display: flex; align-items: center; gap: 8px; margin: 0 0 9px; }
+        .rb-head-back { flex-shrink: 0; border: none; background: transparent; color: var(--accent);
+            font-size: 13px; padding: 4px 2px; cursor: pointer; white-space: nowrap; -webkit-tap-highlight-color: transparent; }
+        .rb-head-back:active { opacity: 0.6; }
+        .rb-head-title { flex: 1; min-width: 0; font-size: 15px; font-weight: 700; color: var(--text);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .rb-head-icon { flex-shrink: 0; border: none; background: transparent; color: var(--text-muted);
+            font-size: 15px; line-height: 1; padding: 5px 4px; cursor: pointer; border-radius: 7px;
+            opacity: 0.55; transition: opacity 0.15s, color 0.15s; -webkit-tap-highlight-color: transparent; }
+        .rb-head-icon:hover, .rb-head-icon.on { opacity: 1; color: var(--accent); }
+        .rb-search-full { display: block; width: 100%; box-sizing: border-box; }
+        .rb-split-tools { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+        .rb-split-tools .rb-select { flex: 1; min-width: 0; }
         /* 书架：阅读器风格网格，一行三本，上面书籍 emoji、下面书名，纵向滚动 */
         #rbShelfList { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
         .rb-book { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 15px 8px 11px; border: 1px solid var(--card-border); border-radius: 12px; cursor: pointer; transition: border-color 0.15s, background 0.15s; min-width: 0; }
@@ -5059,12 +5073,16 @@ body {
             </div>
             <div id="rbChapterView" style="display:none">
                 <div class="rb-sticky-head">
-                <div style="display:flex;align-items:center;gap:8px;margin:6px 0 12px">
-                    <button class="rb-btn" onclick="rbBackToShelf()">‹ 书架</button>
-                    <div id="rbBookTitle" style="flex:1;min-width:0;font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+                <!-- 顶部只留「返回 + 书名 + 两个轻按钮」，方框从 6 个减到 1 个（搜索框），主次分明 -->
+                <div class="rb-head-row">
+                    <button class="rb-head-back" onclick="rbBackToShelf()">‹ 书架</button>
+                    <div id="rbBookTitle" class="rb-head-title"></div>
                     <button class="rb-btn rb-btn-primary" id="rbNextBtn" onclick="rbSendNext()">发下一章 ›</button>
+                    <button class="rb-head-icon" id="rbSplitToggle" onclick="rbToggleSplitTools()" title="分章设置（导书时才用）">⚙</button>
                 </div>
-                <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+                <input type="text" id="rbChapterSearch" class="rb-search rb-search-full" placeholder="搜索章节 / 小节…" oninput="rbChapterSearchInput()">
+                <!-- 分章工具：一本书导进来时才用一次，平时收起来不占地方 -->
+                <div class="rb-split-tools" id="rbSplitTools" style="display:none">
                     <select id="rbPresetSelect" class="rb-select">
                         <option value="auto">自动检测</option>
                         <option value="chinese">中文章节（第X章）</option>
@@ -5077,7 +5095,6 @@ body {
                         <option value="empty-line">空行分隔</option>
                     </select>
                     <button class="rb-btn" onclick="rbReSplit()">重新拆分</button>
-                    <input type="text" id="rbChapterSearch" class="rb-search" placeholder="搜索章节…" oninput="rbChapterSearchInput()">
                 </div>
                 </div>
                 <div id="rbChapterList"></div>
@@ -18770,6 +18787,20 @@ body {
             var t = rbTitlesLoad()[rbBookFileKey(b)];
             return (t && String(t).trim()) ? String(t).trim() : (b.fileName || '未命名');
         }
+        /* 目录顶部显示用的书名：去掉 .epub/.txt 这类文件后缀。
+           只动显示，fileName 一个字不改——它是同步身份证（云同步、阅读进度、划线都靠它认书）。 */
+        function rbBookNiceName(b) {
+            return rbBookDisplayName(b).replace(/\.(epub|txt|md|markdown|text|mobi|azw3|azw)$/i, '');
+        }
+        // 目录顶部的「⚙ 分章设置」：导书时才用一次，平时收起
+        function rbToggleSplitTools() {
+            var box = document.getElementById('rbSplitTools');
+            var btn = document.getElementById('rbSplitToggle');
+            if (!box) return;
+            var show = box.style.display === 'none';
+            box.style.display = show ? '' : 'none';
+            if (btn) btn.classList.toggle('on', show);
+        }
         function rbSetBookTitle(fileKey, name) {
             var map = rbTitlesLoad();
             name = (name || '').trim();
@@ -20787,7 +20818,7 @@ body {
             if (b._remote && (!b.chapters || !b.chapters.length)) {
                 document.getElementById('rbShelfView').style.display = 'none';
                 document.getElementById('rbChapterView').style.display = '';
-                document.getElementById('rbBookTitle').textContent = rbBookDisplayName(b);
+                document.getElementById('rbBookTitle').textContent = rbBookNiceName(b);
                 var cl = document.getElementById('rbChapterList');
                 if (cl) cl.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:34px 0">☁️ 正在从服务器下载「' + rbEsc(b.fileName) + '」…</div>';
                 bkSyncDownload(b, function (full) {
@@ -20801,12 +20832,15 @@ body {
             }
             document.getElementById('rbShelfView').style.display = 'none';
             document.getElementById('rbChapterView').style.display = '';
-            document.getElementById('rbBookTitle').textContent = rbBookDisplayName(b);
+            document.getElementById('rbBookTitle').textContent = rbBookNiceName(b);
             rbMarkOpened(rbBookEffKey(b));   // 记「最近打开」时间，供书架文件夹按最近阅读排序
             var ps = document.getElementById('rbPresetSelect'); if (ps) ps.value = b.preset || 'auto';
             var cs = document.getElementById('rbChapterSearch'); if (cs) cs.value = '';
             // 阅读模式下「发下一章」是共读专用，隐藏掉
             var nb = document.getElementById('rbNextBtn'); if (nb) nb.style.display = rbPickForReader ? 'none' : '';
+            // 分章工具每次开书都收回去（低频功能，不该占着顶部）
+            var st = document.getElementById('rbSplitTools'); if (st) st.style.display = 'none';
+            var stb = document.getElementById('rbSplitToggle'); if (stb) stb.classList.remove('on');
             rbRenderChapters();
             // 打开目录时自动定位到「当前在读的那一章」，省得每次从头下滑找
             rbScrollToCurrentChapter();
@@ -21128,7 +21162,7 @@ body {
             rbActiveBookId = book.id;
             document.getElementById('rbShelfView').style.display = 'none';
             document.getElementById('rbChapterView').style.display = '';
-            document.getElementById('rbBookTitle').textContent = rbBookDisplayName(book);
+            document.getElementById('rbBookTitle').textContent = rbBookNiceName(book);
             document.getElementById('rbPresetSelect').value = 'auto';
             document.getElementById('rbChapterSearch').value = '';
             rbRenderChapters();
