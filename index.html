@@ -2632,13 +2632,25 @@ body {
         .rb-select, .rb-search { padding: 6px 10px; border: 1px solid var(--input-border); border-radius: 8px; background: var(--input-bg); color: var(--text); font-size: 12px; outline: none; }
         .rb-search { flex: 1; min-width: 0; }
         /* 书架章节视图：顶部功能区（发下一章/拆分/搜索）固定，滚动章节列表时不跟着滚走 */
+        /* 目录＝Excel 冻结表头：表头钉住、只有列表滚动。
+           关键在于**把列表单独做成滚动区**，让内容根本不从表头底下穿过——
+           这样表头就不需要任何底色/模糊来遮挡，天然和列表是同一张纸。
+           （旧写法是 position:sticky + 自己一层 --modal-bg + blur(20)：弹窗本体已经是
+           transparent+blur(28) 的毛玻璃，表头再叠一层blur，两层材质的色调和饱和度对不上，
+           看着就是浮在目录上的另一块玻璃——用户说的「割裂」「风格太怪」就是这么来的。） */
+        /* 书架 body 改成纵向 flex：目录视图撑满可用高度(flex:1)，书架视图保持自然高度、由 body 自己滚。
+           不用 height:100%——弹窗高度是内容驱动+max-height 封顶，百分比高度在这种父级下不可靠。 */
+        .chat-settings-body { display: flex; flex-direction: column; }
+        #rbShelfView { flex-shrink: 0; }
+        /* 行内 style="display:none" 优先级高于这条，所以显隐切换照常：style.display='' 时才轮到这里的 flex */
+        #rbChapterView { display: flex; flex-direction: column; flex: 1; min-height: 0; }
         .rb-sticky-head {
-            position: sticky; top: 0; z-index: 5;
-            margin: 0 -20px; padding: 10px 20px 10px;
-            background: var(--modal-bg);
-            backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4);
-            box-shadow: 0 8px 12px -10px rgba(0,0,0,0.22);
+            flex-shrink: 0;
+            margin: 0 -20px; padding: 2px 20px 10px;
+            border-bottom: 1px solid var(--card-border);   /* 表头与正文之间的一条分隔线，仅此而已 */
         }
+        /* 列表自己滚。左右负边距让滚动条贴到弹窗边缘，内容仍与表头左对齐 */
+        #rbChapterList { flex: 1; min-height: 0; overflow-y: auto; margin: 0 -20px; padding: 10px 20px 4px; }
         /* 目录顶栏：返回和齿轮做成无边框文字按钮，只留搜索框一个方框，视觉噪音降到最低 */
         .rb-head-row { display: flex; align-items: center; gap: 8px; margin: 0 0 9px; }
         .rb-head-back { flex-shrink: 0; border: none; background: transparent; color: var(--accent);
@@ -20849,7 +20861,8 @@ body {
         function rbScrollToCurrentChapter() {
             requestAnimationFrame(function () {
                 var cur = document.querySelector('#rbChapterList .rb-current');
-                var scroller = document.querySelector('#rbModal .chat-settings-body');
+                // 目录改成「表头固定 + 列表自己滚」后，滚动区是列表本身，不再是整个弹窗 body
+                var scroller = document.getElementById('rbChapterList');
                 if (!cur || !scroller) return;
                 var cRect = cur.getBoundingClientRect();
                 var sRect = scroller.getBoundingClientRect();
