@@ -22884,12 +22884,45 @@ body {
             return { picks: picked, replies: replies, matched: matched };
         }
 
+        /* 标背景的「看得见的流式」：只在要插的那一段**此刻就在屏幕里**时才建临时气泡。
+           为什么要加这个条件（导读没有）：导读写的是你刚双击的那一段、眼睛正盯着；
+           标背景一口气扫一整节，十几个插入点大多在屏外，屏外渲染纯属白忙。
+           ⚠️**绝不 scrollIntoView**——导读那套临时气泡是会滚过去的，照抄过来就会
+           把你正读的行拽走，而那正是 `_rdKeepScroll` 一直在防的事。
+           气泡只是临时的：讲完就删掉，真正的块由外层走 `_rdKeepScroll` + 重渲插进去。 */
+        function _rdBgStream(msgIdx, pick) {
+            var cont = document.getElementById('chatMessages');
+            var msgEl = document.querySelector('.chat-msg.ai[data-idx="' + msgIdx + '"]');
+            var merged = msgEl && msgEl.querySelector('.reading-merged');
+            var anchor = merged && merged.querySelector('p[data-p="' + pick.p + '"]');
+            if (!cont || !anchor) return null;
+            var ar = anchor.getBoundingClientRect(), cr = cont.getBoundingClientRect();
+            if (ar.bottom < cr.top || ar.top > cr.bottom) return null;   // 不在视口里：不渲，省事也不惹麻烦
+            var bq = document.createElement('blockquote');
+            bq.setAttribute('style', 'position:relative;margin:0.4em 0 0.6em;padding:6px 12px;border-left:3px solid var(--accent);background:var(--quote-bg, var(--accent-light));border-radius:0 8px 8px 0;font-size:0.92em;color:var(--text-sub);line-height:1.6');
+            bq.innerHTML = '<div class="reading-q"><span class="reading-q-name">汐</span>：' + rbEsc(BG_Q_PREFIX + pick.term) + '</div>'
+                + '<div class="rd-stream-ans"><span class="rd-stream-ph">思考中…<span class="rd-stream-cursor">▍</span></span></div>';
+            anchor.parentNode.insertBefore(bq, anchor.nextSibling);
+            var ansEl = bq.querySelector('.rd-stream-ans'), last = 0;
+            return {
+                onDelta: function (full) {
+                    var now = Date.now();
+                    if (now - last < 60) return;   // 节流照抄导读：最多约每 60ms 渲一次
+                    last = now;
+                    ansEl.textContent = full;      // 用 textContent，模型吐什么都不会当标签解析
+                },
+                kill: function () { try { if (bq.parentNode) bq.parentNode.removeChild(bq); } catch (e) {} }
+            };
+        }
+
         // 第二遍：一条一条讲，每次只想一件事。只喂这个背景点 + 它所在段落前后一小圈上下文。
         // ⚠️模型必须由调用方在「开章之前」定好传进来：readerOpenChapter → chatResetConvState()
         // 会把 chatSelectedModel/chatSelectedKeyStr 清空，之后要等 chatLoadModelsForCurrentKey
         // 异步跑完才恢复。这里若现读全局，从目录标一个没打开的章节就会拿着空模型名发请求。
-        async function _rdBgExplain(b, lines, pick, mdl) {
+        async function _rdBgExplain(b, lines, pick, mdl, msgIdx) {
             var around = lines.slice(Math.max(0, pick.p - 2), Math.min(lines.length, pick.p + 1)).join('\n');
+            var _stm = (msgIdx != null) ? _rdBgStream(msgIdx, pick) : null;
+            try {
             var out = await _rdBgTimed({
                 baseUrl: mdl.baseUrl, apiKey: mdl.apiKey, model: mdl.model, markUsed: true,
                 purpose: '标背景·讲解',
@@ -22903,7 +22936,8 @@ body {
                 // ⚠️和第一遍同一个坑，别调回 700：chatStreamChat 只收 delta.content，思考过程不算在内。
                 // 讲解本身才 120 字（约 200 token），700 看着够，但剩下那 500 给思考是**卡在边界上**——
                 // 有时够有时不够，于是「第 1 条插进去了，后面全没了」（用户实测，且每条还白重试一遍）。
-                max_tokens: 4000
+                max_tokens: 4000,
+                onDelta: _stm ? _stm.onDelta : null   // 只有目标段落在屏幕里时才有它
             }, 90000, _rdMdlName(mdl));   // 单条只讲 120 字，90 秒还没回就是卡了
             var txt = (out || '').replace(/\[P\d+\]/gi, '').replace(/\n\s*\n+/g, '\n').trim();
             // 空回复必须抛错，不能当"这条讲完了"返回空串：外层只会 failed++ 然后 continue，
@@ -22911,6 +22945,11 @@ body {
             // 却完全看不出为什么。抛出来才能走重试、并在提示里说清原因。
             if (!txt) throw new Error('模型只回了空（多半是 max_tokens 被思考过程吃光了）');
             return txt;
+            } finally {
+                // 成功/失败/中止都要收掉临时气泡：正式的块紧接着由外层重渲插进来，
+                // 不删就会同一条内容显示两遍（一条是临时的、一条是正式的）
+                if (_stm) _stm.kill();
+            }
         }
 
         // secHeadP（可选）＝小标题所在段号（阅读器编号）。传了就只标那一小节——
@@ -22991,7 +23030,7 @@ body {
                     for (var att = 0; att < 2 && !txt; att++) {
                         _rdBgBarShow('讲第 ' + (k + 1) + '/' + picks.length + ' 条：' + picks[k].term + (att ? '（重试）' : ''));
                         try {
-                            txt = await _rdBgExplain(b, lines, picks[k], explainM);
+                            txt = await _rdBgExplain(b, lines, picks[k], explainM, msgIdx);
                         } catch (eOne) {
                             if (eOne && eOne.name === 'AbortError') throw eOne;
                             lastErr = (eOne && eOne.message) || String(eOne);
