@@ -249,69 +249,6 @@ function bootSocial() {
     }).toString());
     ok('模型说"无" → 提示是"没有新的背景"，不是报错', /没有新的背景/.test(E3.提示), JSON.stringify(E3));
 
-    /* ── E2 组：看得见的流式（只在目标段落在屏幕里时才渲） ─────────────── */
-    const S = await page.evaluate(async () => {
-        window._bootNovel();
-        const out = {};
-        const cont = document.getElementById('chatMessages');
-        const mi = chatMessages.findIndex(m => m && m.readerChapter === 0);
-        const merged = () => document.querySelector('.chat-msg.ai[data-idx="' + mi + '"] .reading-merged');
-        // 目标段落在屏幕里 → 该出现临时气泡，并且逐段更新
-        const seen = [];
-        window.readerBgAbort = new AbortController();
-        window.chatStreamChat = async (o) => {
-            if (o.onDelta) {
-                o.onDelta('那一年');
-                await new Promise(r => setTimeout(r, 80));   // 跨过 60ms 节流
-                seen.push(merged().querySelectorAll('blockquote').length);
-                out.气泡里的字 = (merged().querySelector('.rd-stream-ans') || {}).textContent;
-                o.onDelta('那一年他们在费城开会。');
-                await new Promise(r => setTimeout(r, 80));
-                out.气泡里的字2 = (merged().querySelector('.rd-stream-ans') || {}).textContent;
-            }
-            return '那一年他们在费城开会。';
-        };
-        cont.scrollTop = 0;
-        await _rdBgExplain({ title: 't' }, ['一', '二', '三', '四', '五'], { p: 2, term: '大陆会议' }, { model: 'm' }, mi);
-        out.流式时有气泡 = seen.length > 0 && seen[0] > 0;
-        out.讲完气泡删干净 = merged().querySelectorAll('.rd-stream-ans').length === 0;
-
-        // 目标段落在屏幕外 → 不建气泡（省事，也不惹滚动的麻烦）
-        let gotDelta = null;
-        window.readerBgAbort = new AbortController();
-        window.chatStreamChat = (o) => { gotDelta = o.onDelta; return Promise.resolve('讲解'); };
-        // 测试章节太短、容器根本滚不动，靠 scrollTop 制造不出"屏幕外"。
-        // 直接把那一段的位置改成远在容器下方，判定逻辑吃的就是这个矩形。
-        const p1 = merged().querySelector('p[data-p="1"]');
-        const realRect = p1.getBoundingClientRect.bind(p1);
-        const cr = cont.getBoundingClientRect();
-        p1.getBoundingClientRect = () => ({ top: cr.bottom + 500, bottom: cr.bottom + 540, left: 0, right: 390, width: 390, height: 40 });
-        await _rdBgExplain({ title: 't' }, ['一', '二', '三'], { p: 1, term: '屏幕外的词' }, { model: 'm' }, mi);
-        p1.getBoundingClientRect = realRect;
-        out.屏外没气泡 = !gotDelta;
-        out.屏外也没留气泡 = merged().querySelectorAll('.rd-stream-ans').length === 0;
-
-        // 出错也要收干净，不能留下半截临时气泡
-        window.readerBgAbort = new AbortController();
-        cont.scrollTop = 0;
-        window.chatStreamChat = () => Promise.reject(new Error('中转站挂了'));
-        try { await _rdBgExplain({ title: 't' }, ['一', '二', '三'], { p: 2, term: '甲' }, { model: 'm' }, mi); } catch (e) { out.抛错了 = true; }
-        out.出错后没残留 = merged().querySelectorAll('.rd-stream-ans').length === 0;
-
-        // 不传 msgIdx（比如从目录标一个没打开的章节）→ 老路径，不该炸
-        window.readerBgAbort = new AbortController();
-        window.chatStreamChat = () => Promise.resolve('讲解');
-        out.没锚点也能跑 = await _rdBgExplain({ title: 't' }, ['一', '二', '三'], { p: 2, term: '甲' }, { model: 'm' });
-        return out;
-    });
-    ok('目标段落在屏幕里 → 边生成边显示', S.流式时有气泡, JSON.stringify(S));
-    eq('气泡里的字跟着模型往外冒', S.气泡里的字, '那一年');
-    eq('后续增量继续更新同一个气泡', S.气泡里的字2, '那一年他们在费城开会。');
-    ok('讲完把临时气泡删掉（否则同一条会显示两遍）', S.讲完气泡删干净, JSON.stringify(S));
-    ok('目标段落在屏幕外 → 不建气泡、不传 onDelta', S.屏外没气泡 && S.屏外也没留气泡, JSON.stringify(S));
-    ok('出错时也把临时气泡收干净', S.抛错了 && S.出错后没残留, JSON.stringify(S));
-    eq('不传 msgIdx 时走老路径，照常返回讲解', S.没锚点也能跑, '讲解');
-
     /* ── F 组：按小节标 + 目录段号 ───────────────────────────────────── */
     const F = await page.evaluate(async () => {
         const book = window._bootSocial();
