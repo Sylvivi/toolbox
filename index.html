@@ -3127,6 +3127,8 @@ body {
         .reading-actbar button.rp-bookmark.on { background: var(--accent); color: #fff; }
         .reading-actbar button.rp-del { background: transparent; color: #e5484d; border: 1px solid currentColor; }
         .reading-actbar button.rp-del.armed { background: #e5484d; color: #fff; border-color: #e5484d; }
+        /* 长按「导读」键蓄力到位：标签就地变「标背景」，底色一并变深，告诉你松手就开始 */
+        .reading-actbar button.rp-ask-send.rp-bg-armed { background: var(--accent-mid); box-shadow: 0 0 0 2px var(--accent-light); }
         .reading-actbar.rp-actions { justify-content: flex-end; }
         /* 删除键顶到最左、跟右侧「重新回答/取消」拉开距离，防误触 */
         .reading-actbar.rp-actions .rp-del { margin-right: auto; }
@@ -3334,6 +3336,8 @@ body {
         .reading-actbar button.rp-bookmark.on { background: var(--accent); color: #fff; }
         .reading-actbar button.rp-del { background: transparent; color: #e5484d; border: 1px solid currentColor; }
         .reading-actbar button.rp-del.armed { background: #e5484d; color: #fff; border-color: #e5484d; }
+        /* 长按「导读」键蓄力到位：标签就地变「标背景」，底色一并变深，告诉你松手就开始 */
+        .reading-actbar button.rp-ask-send.rp-bg-armed { background: var(--accent-mid); box-shadow: 0 0 0 2px var(--accent-light); }
         .reading-actbar.rp-actions { justify-content: flex-end; }
         /* 删除键顶到最左、跟右侧「重新回答/取消」拉开距离，防误触 */
         .reading-actbar.rp-actions .rp-del { margin-right: auto; }
@@ -21980,7 +21984,7 @@ body {
                零多余按钮、零多余点击，也不用点完再弹窗让你选。读小说时这条操作栏一字不变。 */
             var _isSocial = rbCurBookIsSocial();
             var inputHtml = '<textarea class="rp-ask" rows="1" placeholder="' +
-                (_isSocial ? '有问题就问…（留空直接点「导读」讲这一节）' : '问问这一段…（如：他这句话什么意思？）') +
+                (_isSocial ? '有问题就问…（留空＝导读，长按＝标背景）' : '问问这一段…（如：他这句话什么意思？）') +
                 '"></textarea>';
             var askHtml = '<button class="rp-ask-send">' + (_isSocial ? '导读' : '讨论') + '</button>';
             // 极简：输入框 + 讨论按钮，「带前文问答」勾选框紧贴讨论按钮左边（粘性，状态存 localStorage，替代原设置里的全局开关）
@@ -21995,9 +21999,49 @@ body {
                 if (_isSocial && !input.value.trim()) { readingAskOne(msgIdx, pNum, '导读', bar, { guide: true }); return; }
                 readingAskOne(msgIdx, pNum, input.value, bar);
             }
-            send.onclick = go;
+            send.onclick = function () { if (_bgEatClick) { _bgEatClick = false; return; } go(); };
             // 标签跟着输入框内容切换（打字→讨论、清空→导读）；prefill 时下面会派发 input 事件一并同步
-            if (_isSocial) input.addEventListener('input', function () { send.textContent = input.value.trim() ? '讨论' : '导读'; });
+            if (_isSocial) input.addEventListener('input', function () { if (!_bgArmed) send.textContent = input.value.trim() ? '讨论' : '导读'; });
+            /* 第三态＝长按这个按钮：标这一节的背景。
+               为什么不另加一个按钮：用户明确要「零新增图标」的极简，而她喜欢的正是
+               「一个键、标签跟着状态变」那套。可「想听导读」和「想标背景」时输入框都是空的，
+               程序猜不出来，所以第三态只能靠手势——按住半秒，标签**就地**变成「标背景」，
+               松手才真开始（长按期间滑开手指＝反悔）。这样手势自己教会自己，也永远不会误点。 */
+            var _bgHoldTimer = null, _bgHoldAt = null, _bgArmed = false, _bgEatClick = false, _bgLabel = send.textContent;
+            function _bgDisarm() {
+                if (_bgHoldTimer) { clearTimeout(_bgHoldTimer); _bgHoldTimer = null; }
+                _bgHoldAt = null;
+                if (_bgArmed) { _bgArmed = false; send.textContent = _bgLabel; send.classList.remove('rp-bg-armed'); }
+            }
+            send.addEventListener('pointerdown', function (e) {
+                if (input.value.trim()) return;     // 打了字＝讨论，长按不接管
+                if (readerBgRunning || readingCommenting) return;
+                _bgHoldAt = { x: e.clientX, y: e.clientY };
+                _bgHoldTimer = setTimeout(function () {
+                    _bgHoldTimer = null; _bgArmed = true;
+                    _bgLabel = send.textContent;
+                    send.textContent = '标背景';
+                    send.classList.add('rp-bg-armed');
+                    try { navigator.vibrate && navigator.vibrate(15); } catch (x) {}
+                }, 500);
+            });
+            send.addEventListener('pointermove', function (e) {
+                if (!_bgHoldAt) return;
+                if (Math.abs(e.clientX - _bgHoldAt.x) <= 10 && Math.abs(e.clientY - _bgHoldAt.y) <= 10) return;
+                // 「按住之后滑开」是通用的反悔手势。但按钮有宽度，手指滑 40px 可能还在按钮上，
+                // 松手照样会产生一次 click——那就成了「想取消，结果走了导读」，还照样花钱。
+                // 所以取消的同时把紧随其后的 click 也吃掉。（测试里真的踩到了这一条）
+                _bgEatClick = true;
+                _bgDisarm();
+            });
+            send.addEventListener('pointerup', function () {
+                if (!_bgArmed) { _bgDisarm(); return; }
+                _bgDisarm();
+                _bgEatClick = true;                // pointerup 之后紧跟一个 click，别让它再走一遍导读
+                readingStartBgFromPara(msgIdx, pNum);
+            });
+            send.addEventListener('pointercancel', _bgDisarm);
+            send.addEventListener('pointerleave', _bgDisarm);
             readingBindAskBox(input);
             readingBindCtxBox(bar);
             if (prefill) { input.value = prefill; try { input.dispatchEvent(new Event('input')); } catch (e) {} try { input.focus(); } catch (e) {} }
@@ -22029,6 +22073,20 @@ body {
             var msgIdx = parseInt(msgEl.getAttribute('data-idx'));
             var pNum = parseInt(pEl.getAttribute('data-p'));
             readingOpenAskBar(msgIdx, pNum, pEl);
+        }
+
+        /* 从正文里开标背景（长按操作栏那个按钮触发）。范围刻意跟目录里的入口对齐，
+           免得同一个功能在两处标出来的量不一样：社科书＝这一段所在的**小节**
+           （readerMarkBg 里的 rbSectionOf 会把任意段号折算成它所在那一节，所以直接把
+           双击的段号丢进去就行），小说＝**整章**（小说没有目录小节，rbDetectHeads 在
+           小说正文上偶尔会认出几个假小标题，按它切范围会跟目录对不上）。 */
+        function readingStartBgFromPara(msgIdx, pNum) {
+            var b = rbGetBook(readerBookId); if (!b) return;
+            var m = chatMessages[msgIdx];
+            var ci = (m && m.readerChapter != null) ? m.readerChapter : readerChapterIdx;
+            if (!b.chapters || !b.chapters[ci]) return;
+            readingClearActbar();   // 先收操作栏：接下来插入会整段重渲，留着它会连同进度一起闪
+            readerMarkBg(readerBookId, ci, rbIsSocial(b) ? pNum : 0);
         }
 
         // 双击 AI 回答 / 评论块：接着聊同一段，输入框插在该段问答串的最下面（贴着正在看的回答）

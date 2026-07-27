@@ -289,6 +289,99 @@ function bootSocial() {
     ok('顶栏收展时进度条跟着走，不压住顶栏', G.跟随阅读区 === 61, '实际 top=' + G.跟随阅读区 + '（期望 61）');
     ok('反复开关不留残节点 / 不积攒监听器', !G.收尾残留节点 && !G.收尾残留监听, JSON.stringify(G));
 
+    /* ── H 组：正文里的入口（长按「导读」键＝标这一节背景） ─────────────
+       用户要「零新增图标」的极简，所以第三态只能靠手势。这组钉住的是：
+       短按仍是导读、长按才蓄力、滑开能反悔、打了字长按不接管。 */
+    const H = await page.evaluate(async () => {
+        const out = {};
+        const book = window._bootSocial();
+        // 手势测试只关心"调了谁、传了什么"，把两个终点换成记录器
+        const calls = [];
+        window.readerMarkBg = (id, ci, p) => { calls.push(['bg', id, ci, p]); return Promise.resolve(); };
+        window.readingAskOne = (mi, p, q) => { calls.push(['ask', q]); };
+        const mi = chatMessages.findIndex(m => m && m.readerChapter === 0);
+        const para = () => document.querySelector('.chat-msg.ai[data-idx="' + mi + '"] .reading-merged p[data-p="15"]');
+        const openBar = () => { readingClearActbar(); readingOnParaClick(para()); return document.querySelector('.reading-actbar'); };
+        const pe = (el, type, dx) => el.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: 100 + (dx || 0), clientY: 100 }));
+        const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+        let bar = openBar();
+        out.按钮初始 = bar.querySelector('.rp-ask-send').textContent;
+        out.提示语 = bar.querySelector('.rp-ask').placeholder;
+
+        // ① 短按 → 还是导读
+        calls.length = 0;
+        let send = bar.querySelector('.rp-ask-send');
+        pe(send, 'pointerdown'); await wait(120); pe(send, 'pointerup'); send.click();
+        out.短按 = calls.slice();
+
+        // ② 长按到位 → 标签就地变
+        bar = openBar(); send = bar.querySelector('.rp-ask-send');
+        calls.length = 0;
+        pe(send, 'pointerdown'); await wait(600);
+        out.蓄力时标签 = send.textContent;
+        out.蓄力时高亮 = send.classList.contains('rp-bg-armed');
+        pe(send, 'pointerup'); send.click();
+        await wait(30);
+        out.松手后 = calls.slice();
+
+        // ③ 长按中途滑开 → 反悔
+        bar = openBar(); send = bar.querySelector('.rp-ask-send');
+        calls.length = 0;
+        pe(send, 'pointerdown'); await wait(600);
+        pe(send, 'pointermove', 40);          // 手指滑开
+        out.滑开后标签 = send.textContent;
+        pe(send, 'pointerup'); send.click();
+        await wait(30);
+        out.滑开后 = calls.slice();
+
+        // ④ 打了字再长按 → 不接管，仍然是讨论
+        bar = openBar(); send = bar.querySelector('.rp-ask-send');
+        const inp = bar.querySelector('.rp-ask');
+        inp.value = '他这句话什么意思'; inp.dispatchEvent(new Event('input'));
+        calls.length = 0;
+        pe(send, 'pointerdown'); await wait(600);
+        out.有字时标签 = send.textContent;
+        pe(send, 'pointerup'); send.click();
+        await wait(30);
+        out.有字时 = calls.slice();
+        readingClearActbar();
+        return out;
+    });
+    eq('社科书双击段落，按钮仍是「导读」', H.按钮初始, '导读');
+    ok('提示语告诉你有长按这一手', /长按/.test(H.提示语), H.提示语);
+    eq('短按 → 还是导读，不会误标背景', H.短按, [['ask', '导读']]);
+    eq('按住半秒 → 标签就地变「标背景」', H.蓄力时标签, '标背景');
+    ok('蓄力时按钮高亮（告诉你松手就开始）', H.蓄力时高亮);
+    ok('松手 → 开标背景，且传的是双击那一段的段号', H.松手后.length === 1 && H.松手后[0][0] === 'bg' && H.松手后[0][3] === 15, JSON.stringify(H.松手后));
+    ok('松手后不会再顺手走一遍导读（pointerup 后面紧跟一个 click）', H.松手后.filter(c => c[0] === 'ask').length === 0, JSON.stringify(H.松手后));
+    eq('长按中途滑开 → 标签变回「导读」', H.滑开后标签, '导读');
+    eq('长按中途滑开 → 什么都不触发（反悔得掉）', H.滑开后, []);
+    eq('输入框有字时长按不接管，标签仍是「讨论」', H.有字时标签, '讨论');
+    eq('输入框有字时长按 → 走讨论，不标背景', H.有字时, [['ask', '他这句话什么意思']]);
+
+    /* 小说没有目录小节，正文长按要标整章——跟目录入口保持一致 */
+    const H2 = await page.evaluate(async () => {
+        window._bootNovel();
+        const calls = [];
+        window.readerMarkBg = (id, ci, p) => { calls.push([id, ci, p]); return Promise.resolve(); };
+        const mi = chatMessages.findIndex(m => m && m.readerChapter === 0);
+        readingClearActbar();
+        readingOnParaClick(document.querySelector('.chat-msg.ai[data-idx="' + mi + '"] .reading-merged p[data-p="5"]'));
+        const send = document.querySelector('.reading-actbar .rp-ask-send');
+        const label0 = send.textContent;
+        send.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 100, clientY: 100 }));
+        await new Promise(r => setTimeout(r, 600));
+        const label1 = send.textContent;
+        send.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 100, clientY: 100 }));
+        await new Promise(r => setTimeout(r, 30));
+        readingClearActbar();
+        return { label0, label1, calls };
+    });
+    eq('小说书按钮是「讨论」', H2.label0, '讨论');
+    eq('小说书长按也能蓄力', H2.label1, '标背景');
+    ok('小说书标的是整章（第 3 参传 0），跟目录入口一致', H2.calls.length === 1 && H2.calls[0][2] === 0, JSON.stringify(H2.calls));
+
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' ｜ '));
 
     await browser.close();
