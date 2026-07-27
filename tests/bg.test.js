@@ -360,6 +360,35 @@ function bootSocial() {
     eq('输入框有字时长按不接管，标签仍是「讨论」', H.有字时标签, '讨论');
     eq('输入框有字时长按 → 走讨论，不标背景', H.有字时, [['ask', '他这句话什么意思']]);
 
+    /* 长按按钮不许被系统当成"选词复制"（用户实测「偶尔会变成复制选中」） */
+    const H3 = await page.evaluate(async () => {
+        window._bootSocial();
+        const mi = chatMessages.findIndex(m => m && m.readerChapter === 0);
+        readingClearActbar();
+        readingOnParaClick(document.querySelector('.chat-msg.ai[data-idx="' + mi + '"] .reading-merged p[data-p="15"]'));
+        const send = document.querySelector('.reading-actbar .rp-ask-send');
+        // ⚠️getComputedStyle 返回的是**活对象**：元素之后被重渲染换掉，再读就全是空串。
+        //   必须当场取成字符串（第一版栽在这里，报告"样式没生效"其实是节点没了）。
+        const cs = getComputedStyle(send);
+        const style = { userSelect: cs.userSelect || cs.webkitUserSelect, callout: cs.webkitTouchCallout || '', touchAction: cs.touchAction };
+        // 模拟"系统抢在 CSS 之前选中了东西"：选正文段落（按钮本身 user-select:none，选不出内容）
+        try {
+            const r = document.createRange(); r.selectNodeContents(document.querySelector('.reading-merged p[data-p="15"]'));
+            const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        } catch (e) {}
+        const before = String(window.getSelection()).length;
+        send.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 100, clientY: 100 }));
+        await new Promise(r => setTimeout(r, 600));
+        const after = String(window.getSelection()).length;
+        send.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, clientX: 100, clientY: 100 }));
+        readingClearActbar();
+        return { userSelect: style.userSelect, callout: style.callout || '(浏览器不支持这个属性)', touchAction: style.touchAction, 选区_长按前: before, 选区_蓄力后: after };
+    });
+    eq('按钮关掉了文字选中（长按不再变成选词）', H3.userSelect, 'none');
+    ok('按钮关掉了 iOS 长按弹出的复制菜单', H3.callout === 'none' || /不支持/.test(H3.callout), H3.callout);
+    ok('按钮 touch-action 是 manipulation（去掉双击缩放的等待）', /manipulation/.test(H3.touchAction), H3.touchAction);
+    ok('系统抢先选中时，蓄力到位会就地清掉选区', H3.选区_长按前 > 0 && H3.选区_蓄力后 === 0, JSON.stringify(H3));
+
     /* 小说没有目录小节，正文长按要标整章——跟目录入口保持一致 */
     const H2 = await page.evaluate(async () => {
         window._bootNovel();

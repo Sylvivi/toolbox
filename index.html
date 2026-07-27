@@ -3121,6 +3121,12 @@ body {
         .reading-actbar button {
             border: none; background: var(--accent); color: #fff;
             font-size: 12px; padding: 4px 12px; border-radius: 8px; cursor: pointer;
+            /* ⚠️「导读」键要被长按（＝标背景），手机默认会把长按理解成选词，于是弹出
+               复制/全选那套、按钮文字被蓝底选中（用户实测「偶尔会变成复制选中」）。
+               三件套缺一不可：user-select 关掉选中，touch-callout 关掉 iOS 长按菜单，
+               touch-action:manipulation 去掉双击缩放的 300ms 等待。 */
+            -webkit-user-select: none; user-select: none;
+            -webkit-touch-callout: none; touch-action: manipulation;
         }
         .reading-actbar button.rp-cancel { background: transparent; color: var(--text-muted); padding: 4px 6px; }
         .reading-actbar button.rp-bookmark { background: transparent; color: var(--accent); padding: 4px 8px; }
@@ -3330,6 +3336,12 @@ body {
         .reading-actbar button {
             border: none; background: var(--accent); color: #fff;
             font-size: 12px; padding: 4px 12px; border-radius: 8px; cursor: pointer;
+            /* ⚠️「导读」键要被长按（＝标背景），手机默认会把长按理解成选词，于是弹出
+               复制/全选那套、按钮文字被蓝底选中（用户实测「偶尔会变成复制选中」）。
+               三件套缺一不可：user-select 关掉选中，touch-callout 关掉 iOS 长按菜单，
+               touch-action:manipulation 去掉双击缩放的 300ms 等待。 */
+            -webkit-user-select: none; user-select: none;
+            -webkit-touch-callout: none; touch-action: manipulation;
         }
         .reading-actbar button.rp-cancel { background: transparent; color: var(--text-muted); padding: 4px 6px; }
         .reading-actbar button.rp-bookmark { background: transparent; color: var(--accent); padding: 4px 8px; }
@@ -22022,6 +22034,9 @@ body {
                     _bgLabel = send.textContent;
                     send.textContent = '标背景';
                     send.classList.add('rp-bg-armed');
+                    // 兜底：万一系统抢在 CSS 之前已经选中了按钮文字（安卓部分机型），就地清掉，
+                    // 照抄长按评论块那条路的做法。不清的话选区还会拦住后面的点击。
+                    try { window.getSelection().removeAllRanges(); } catch (x) {}
                     try { navigator.vibrate && navigator.vibrate(15); } catch (x) {}
                 }, 500);
             });

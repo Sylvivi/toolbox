@@ -46,3 +46,8 @@ mkdir -p ~/.toolbox-test && cd ~/.toolbox-test && npm i playwright && npx playwr
 插入背景块会**整段重渲染**，之前拿到的 DOM 节点当场作废。
 `await readerMarkBg(...)` 之后必须**重新 query 一次**，
 拿旧节点去数 `blockquote` 永远是 0——写这套测试时第一版就栽在这里。
+
+## ⚠️ 第二个坑：`getComputedStyle` 返回的是活对象
+
+元素之后被重渲染换掉，再去读那个对象就全是空串——报告"样式没生效"，其实是节点没了。
+**当场取成字符串**再传出来。（写长按那组测试时又栽了一次。）
