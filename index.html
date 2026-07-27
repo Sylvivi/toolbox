@@ -22721,10 +22721,15 @@ body {
                 // max-width:88vw 永远吃不满，词名被截成「共…」（条子的意义就是告诉你在标哪个词）。
                 // 改成 left:0;right:0;margin:0 auto + width:fit-content，居中效果一样、能撑到 88vw。
                 el.setAttribute('style', 'position:fixed;left:0;right:0;margin:0 auto;width:fit-content;top:70px;z-index:240;display:flex;align-items:center;gap:10px;max-width:88vw;padding:8px 14px;border-radius:999px;background:var(--modal-bg);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--card-border);box-shadow:0 8px 26px rgba(0,0,0,0.18);font-size:12.5px;color:var(--text)');
-                el.innerHTML = '<span class="rd-bg-txt" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>'
+                el.innerHTML = '<span class="rd-bg-caret" style="flex-shrink:0;opacity:0.55;font-size:11px">▾</span>'
+                    + '<span class="rd-bg-txt" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>'
                     + '<button type="button" class="rd-bg-stop" style="flex-shrink:0;border:none;background:var(--card-border);color:var(--text);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer">停止</button>';
                 document.body.appendChild(el);
-                el.querySelector('.rd-bg-stop').onclick = function () { if (readerBgAbort) readerBgAbort.abort(); };
+                el.querySelector('.rd-bg-stop').onclick = function (e) { e.stopPropagation(); if (readerBgAbort) readerBgAbort.abort(); };
+                // 点条子本身＝展开/收起清单。用户原话：「不然我总要等到全部生成完才知道有哪些」——
+                // 清单第一遍就扫出来了，没理由捂到最后。「停止」键 stopPropagation，免得想停却展开了。
+                el.style.cursor = 'pointer';
+                el.onclick = function () { _rdBgListToggle(); };
                 // 顶栏(.chat-topbar)会随滚动收起/展开，一收一展整个阅读区上下移 51px。
                 // 只在 _rdBgBarShow 时贴一次位的话，条子会在顶栏出现时压住它上面的按钮
                 //（顶栏 z-index 才 20，压得严严实实）。跟着滚动重贴，一条讲解几十秒足够遇上。
@@ -22759,8 +22764,52 @@ body {
             }
             el.style.top = Math.max(10, top) + 'px';
             el.style.bottom = 'auto';   // 复用同一个节点：上一版设过 bottom，不清掉会被上下同时钉住
+            _rdBgListPlace();           // 展开的清单钉在条子正下方，一起动
+        }
+        /* 背景点清单：第一遍扫出来就存这儿，点条子能展开看。
+           st: wait 待讲 / run 正在讲 / ok 已插入 / fail 没成功。 */
+        var _rdBgPicks = [];
+        function _rdBgPicksSet(picks) {
+            _rdBgPicks = (picks || []).map(function (p) { return { p: p.p, term: p.term, st: 'wait' }; });
+            _rdBgListRender();
+        }
+        function _rdBgPicksMark(i, st) {
+            if (_rdBgPicks[i]) { _rdBgPicks[i].st = st; _rdBgListRender(); }
+        }
+        function _rdBgListToggle() {
+            var box = document.getElementById('rdBgList');
+            if (box) { box.remove(); var c0 = document.querySelector('#rdBgBar .rd-bg-caret'); if (c0) c0.textContent = '▾'; return; }
+            if (!_rdBgPicks.length) { showToast('清单还没扫出来'); return; }
+            box = document.createElement('div');
+            box.id = 'rdBgList';
+            box.setAttribute('style', 'position:fixed;left:0;right:0;margin:0 auto;width:fit-content;max-width:88vw;max-height:46vh;overflow-y:auto;z-index:239;padding:8px 12px;border-radius:14px;background:var(--modal-bg);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--card-border);box-shadow:0 8px 26px rgba(0,0,0,0.18);font-size:12.5px;color:var(--text);line-height:1.9');
+            document.body.appendChild(box);
+            var c = document.querySelector('#rdBgBar .rd-bg-caret'); if (c) c.textContent = '▴';
+            _rdBgListRender();
+            _rdBgListPlace();
+        }
+        var _RD_BG_ST = { wait: '·', run: '⏳', ok: '✓', fail: '✗' };
+        function _rdBgListRender() {
+            var box = document.getElementById('rdBgList'); if (!box) return;
+            var done = 0;
+            _rdBgPicks.forEach(function (x) { if (x.st === 'ok') done++; });
+            box.innerHTML = '<div style="opacity:0.6;font-size:11px;margin-bottom:4px">这一轮要讲 ' + _rdBgPicks.length + ' 条，已完成 ' + done + '</div>'
+                + _rdBgPicks.map(function (x) {
+                    var dim = (x.st === 'wait') ? 'opacity:0.55;' : '';
+                    var col = (x.st === 'fail') ? 'color:#e5484d;' : (x.st === 'ok' ? 'color:var(--accent);' : '');
+                    return '<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' + dim + col + '">'
+                        + _RD_BG_ST[x.st] + ' ' + rbEsc(x.term) + ' <span style="opacity:0.45;font-size:11px">P' + x.p + '</span></div>';
+                }).join('');
+            _rdBgListPlace();
+        }
+        function _rdBgListPlace() {
+            var box = document.getElementById('rdBgList'), bar = document.getElementById('rdBgBar');
+            if (!box || !bar) return;
+            box.style.top = Math.round(bar.getBoundingClientRect().bottom) + 6 + 'px';
         }
         function _rdBgBarHide() {
+            var _lst = document.getElementById('rdBgList'); if (_lst) _lst.remove();
+            _rdBgPicks = [];
             if (_rdBgBarPlace._on) {
                 var area = document.getElementById('chatMessages');
                 if (area) area.removeEventListener('scroll', _rdBgBarPlace._on);
@@ -23002,6 +23051,7 @@ body {
                 var scan = await _rdBgScan(b, lines, readerBgDoneTerms(fileKey), scanM, explainM,
                                            _sec ? { from: _sec.startP, to: _sec.endP } : null);
                 var picks = scan.picks;
+                _rdBgPicksSet(picks);   // 清单一到手就能点开看，不用等全部讲完
                 if (!picks.length) {
                     // 三种情况都让清单为空，但只有第一种是正常的。混为一谈的后果：用户以为「这章确实没背景」，
                     // 又点了两轮想让它接着标，每轮都实打实把整章喂出去一遍——扫描白跑、额度白烧、一条讲解都没有。
@@ -23029,6 +23079,7 @@ body {
                     // 偶发空回复）。第 1 条成、后面连挂，正是"连着猛发"的形状：这个循环原本
                     // 是背靠背发请求的，一秒钟能打出去七八个。所以改成 3 次 + 越等越久，
                     // 遇到限流类报错(429/rate/too many/频率)再多等一截。
+                    _rdBgPicksMark(k, 'run');
                     var _bo = [0, 2000, 6000];
                     for (var att = 0; att < 3 && !txt; att++) {
                         if (att) {
@@ -23046,7 +23097,7 @@ body {
                             lastErr = (eOne && eOne.message) || String(eOne);
                         }
                     }
-                    if (!txt) { failed++; continue; }
+                    if (!txt) { _rdBgPicksMark(k, 'fail'); failed++; continue; }
                     // 讲完一条插一条：内容进 msg.content → 落 reader_qa → 重渲这条消息，全程锁住阅读位置
                     (function (mi, pk, body) {
                         _rdKeepScroll(mi, function () {
@@ -23058,6 +23109,7 @@ body {
                             readingRerenderMsg(mi);
                         });
                     })(msgIdx, picks[k], txt);
+                    _rdBgPicksMark(k, 'ok');
                     done++;
                     // 条与条之间喘口气：整轮十几条背靠背发，手机上很容易撞中转站的频率限制。
                     // 半秒钟对总时长几乎无感（9 条也才多 4 秒），换来的是别一挂挂一串。

@@ -74,6 +74,8 @@ function bootSocial() {
     await page.goto(APP);
     await page.waitForTimeout(6000);   // 应用启动会自己跳一次，等它稳下来
     await page.addScriptTag({ content: 'window._bootNovel=' + bootNovel + ';window._bootSocial=' + bootSocial + ';' });
+    // 手势那几组会把 readerMarkBg/readingAskOne 换成记录器；先存一份真的，后面要用时换回来
+    await page.evaluate(() => { window._realMarkBg = window.readerMarkBg; window._realAskOne = window.readingAskOne; });
 
     /* ── A 组：参数护栏（这些数字改回去过一次，代价是用户白花钱） ───────────── */
     const A = await page.evaluate(async () => {
@@ -526,6 +528,49 @@ function bootSocial() {
     eq('小说书打字后点 → 走逐段问答，不标背景', H2.打字后点, [['ask', '他这句什么意思']]);
     eq('清空后又变回「背景」', H2.清空后的标签, '背景');
     eq('小说书不需要长按，长按不再蓄力', H2.长按时的标签, '背景');
+
+    /* 进度条点一下能展开清单——用户不想等全部生成完才知道有哪些 */
+    const L = await page.evaluate(async () => {
+        window.readerMarkBg = window._realMarkBg;      // 前面被换成了记录器，这里要真的跑一轮
+        window.readingAskOne = window._realAskOne;
+        window._bootNovel();
+        const out = {};
+        const txt = () => (document.getElementById('rdBgList') || {}).textContent || '';
+        let resolveHold, held = new Promise(r => { resolveHold = r; });
+        let n = 0;
+        window.chatStreamChat = async (o) => {
+            if (o.purpose === '标背景·找点') return 'P2|共济会\nP5|大陆会议\nP9|邦联条例';
+            n++;
+            if (n === 2) await held;           // 卡在第 2 条，方便中途查看状态
+            return '讲解内容。';
+        };
+        const run = readerMarkBg('bk_t', 0);
+        // 等清单扫出来
+        for (let i = 0; i < 60 && n < 2; i++) await new Promise(r => setTimeout(r, 50));
+        const bar = document.getElementById('rdBgBar');
+        out.收起时没有清单 = !document.getElementById('rdBgList');
+        bar.click();                            // 展开
+        out.展开后 = txt();
+        out.箭头 = bar.querySelector('.rd-bg-caret').textContent;
+        out.清单在条子下方 = document.getElementById('rdBgList').getBoundingClientRect().top
+            >= bar.getBoundingClientRect().bottom;
+        // 点「停止」不该被当成展开/收起
+        const before = !!document.getElementById('rdBgList');
+        bar.querySelector('.rd-bg-stop').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        out.点停止不影响清单 = before === !!document.getElementById('rdBgList');
+        resolveHold();
+        await run;
+        out.跑完清单收掉了 = !document.getElementById('rdBgList');
+        return out;
+    });
+    ok('默认收起，不占地方', L.收起时没有清单);
+    ok('点一下就能看到这一轮要讲哪些词', /共济会/.test(L.展开后) && /大陆会议/.test(L.展开后) && /邦联条例/.test(L.展开后), L.展开后);
+    ok('清单里带进度（第 1 条已完成、第 2 条正在讲、第 3 条待讲）', /✓ 共济会/.test(L.展开后) && /⏳ 大陆会议/.test(L.展开后) && /· 邦联条例/.test(L.展开后), L.展开后);
+    ok('顶部写清共几条、已完成几条', /要讲 3 条，已完成 1/.test(L.展开后), L.展开后);
+    eq('展开后箭头翻过来', L.箭头, '▴');
+    ok('清单贴在条子正下方', L.清单在条子下方);
+    ok('点「停止」不会顺手把清单展开/收起', L.点停止不影响清单);
+    ok('整轮结束把清单一起收掉', L.跑完清单收掉了);
 
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' ｜ '));
 
