@@ -20607,7 +20607,22 @@ body {
             readerChapterIdx = idx;
             var cid = readerConvId(bookId);
             rbCloseShelf();
+            // ⚠️chatResetConvState() 会把 chatSelectedModel/chatSelectedKeyStr 清空，而这里
+            // 不像 chatLoadConv 那样从 conv 恢复——于是「从目录点一章」之后模型就没了，
+            // 导读/共读提问/标背景全都弹「请先选择模型」。更坑的是下面还会 chatSaveCurrentConv，
+            // 把 model:'' 写回这本书的会话，下次载入照样是空的（不是一次性的，会一直烂着）。
+            // 所以先记下来，重置后按「本书会话 → 上次用过的模型」的顺序还原。
+            var _prevModel = chatSelectedModel, _prevKeyStr = chatSelectedKeyStr;
             chatResetConvState();
+            var _rconv = readerFindConv(bookId);
+            var _provId = document.getElementById('chatProviderSelect').value;
+            chatSelectedModel = _prevModel || (_rconv && _rconv.model) || localStorage.getItem('chat_last_model_' + _provId) || '';
+            chatSelectedKeyStr = _prevKeyStr || (_rconv && _rconv.keyStr) || '';
+            if (chatSelectedModel) {
+                var _mi = document.getElementById('chatModelInput'); if (_mi) _mi.value = chatSelectedModel;
+                var _ml = document.getElementById('chatModelLabel'); if (_ml) _ml.textContent = chatSelectedModel;
+                var _sb = document.getElementById('chatSendBtn'); if (_sb) _sb.disabled = false;
+            }
             chatCurrentConvId = cid;
             chatMessages = readerChapterPair(b.chapters[idx], idx);
             chatReadingMode = true;
@@ -22446,6 +22461,32 @@ body {
         }
         function _rdBgBarHide() { var el = document.getElementById('rdBgBar'); if (el) el.remove(); }
 
+        // ⚠️chatStreamChat 没有任何超时：中转站卡住不返回时，`await reader.read()` 会永远挂着。
+        // 标背景是个十几条的循环——一条挂死就整轮不动，还把 readerBgRunning 焊死在 true，
+        // 之后每次点「接着标」都只会被挡回来（用户实测「很久都不响应」）。
+        // 所以每条请求自带一个超时闹钟：超时按「这条失败」处理（外层会重试/跳过），不拖累别的条。
+        function _rdBgTimed(opts, ms) {
+            var ctl = new AbortController();
+            var onAbort = function () { ctl.abort(); };
+            if (readerBgAbort) {
+                if (readerBgAbort.signal.aborted) ctl.abort();
+                else readerBgAbort.signal.addEventListener('abort', onAbort, { once: true });
+            }
+            var timedOut = false;
+            var timer = setTimeout(function () { timedOut = true; ctl.abort(); }, ms);
+            opts.signal = ctl.signal;
+            var cleanup = function () {
+                clearTimeout(timer);
+                if (readerBgAbort) { try { readerBgAbort.signal.removeEventListener('abort', onAbort); } catch (x) {} }
+            };
+            return chatStreamChat(opts).then(function (r) { cleanup(); return r; }, function (e) {
+                cleanup();
+                // 超时要变成普通失败（可重试/可跳过）；用户按停止才是 AbortError（整轮结束）
+                if (timedOut) throw new Error('等了 ' + Math.round(ms / 1000) + ' 秒没响应（中转站没回）');
+                throw e;
+            });
+        }
+
         // 第一遍：只列清单（输出短＝注意力不被拉长）。已讲过的词滚动带下去，跨段、跨章都不重复。
         async function _rdBgScan(b, lines, doneTerms, mdl) {
             var chunks = [], cur = [], curLen = 0;
@@ -22461,16 +22502,15 @@ body {
                 if (readerBgAbort.signal.aborted) break;
                 if (chunks.length > 1) _rdBgBarShow('通读全章（第 ' + (c + 1) + '/' + chunks.length + ' 段）…');
                 var skip = Object.keys(seen);
-                var out = await chatStreamChat({
+                var out = await _rdBgTimed({
                     baseUrl: mdl.baseUrl, apiKey: mdl.apiKey, model: mdl.model,
                     purpose: '标背景·找点',
                     messages: [
                         { role: 'system', content: BG_SCAN_INSTRUCTION + (skip.length ? '\n\n【已经讲过、请跳过】' + skip.join('、') : '') },
                         { role: 'user', content: '书名《' + (rbBookNiceName(b) || '这本书') + '》。以下是本章原文：\n\n' + chunks[c].join('\n') }
                     ],
-                    max_tokens: 800,
-                    signal: readerBgAbort.signal
-                });
+                    max_tokens: 800
+                }, 120000);   // 长章第一遍可能慢，给足 2 分钟
                 (out || '').split('\n').forEach(function (ln) {
                     var m = /^\s*P(\d+)\s*[|｜]\s*(.+?)\s*$/.exec(ln);
                     if (!m) return;
@@ -22490,7 +22530,7 @@ body {
         // 异步跑完才恢复。这里若现读全局，从目录标一个没打开的章节就会拿着空模型名发请求。
         async function _rdBgExplain(b, lines, pick, mdl) {
             var around = lines.slice(Math.max(0, pick.p - 2), Math.min(lines.length, pick.p + 1)).join('\n');
-            var out = await chatStreamChat({
+            var out = await _rdBgTimed({
                 baseUrl: mdl.baseUrl, apiKey: mdl.apiKey, model: mdl.model, markUsed: true,
                 purpose: '标背景·讲解',
                 messages: [
@@ -22498,14 +22538,17 @@ body {
                     { role: 'user', content: '我正在读《' + (rbBookNiceName(b) || '这本书') + '》，读到这里：\n\n' + around
                         + '\n\n请给我讲讲「' + pick.term + '」这个背景。' }
                 ],
-                max_tokens: 700,
-                signal: readerBgAbort.signal
-            });
+                max_tokens: 700
+            }, 90000);   // 单条只讲 120 字，90 秒还没回就是卡了
             return (out || '').replace(/\[P\d+\]/gi, '').replace(/\n\s*\n+/g, '\n').trim();
         }
 
         async function readerMarkBg(bookId, chapIdx) {
-            if (readerBgRunning) { showToast('正在标背景，等这章标完'); return; }
+            if (readerBgRunning) {
+                // 别只把用户挡回去——万一上一轮卡住了，这是唯一的出口
+                if (confirm('这一章正在标背景，要停下吗？') && readerBgAbort) readerBgAbort.abort();
+                return;
+            }
             if (readingCommenting) { showToast('正在生成回答，稍等一下'); return; }
             var b = rbGetBook(bookId); if (!b || !b.chapters[chapIdx]) return;
             var fileKey = readerBookKey(bookId); if (!fileKey) return;
