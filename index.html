@@ -22534,7 +22534,7 @@ body {
                 cur.push(s); curLen += s.length + 1;
             }
             if (cur.length) chunks.push(cur);
-            var picked = [], seen = {};
+            var picked = [], seen = {}, replies = [];
             doneTerms.forEach(function (t) { seen[t] = 1; });
             for (var c = 0; c < chunks.length; c++) {
                 if (readerBgAbort.signal.aborted) break;
@@ -22549,7 +22549,12 @@ body {
                         baseUrl: m.baseUrl, apiKey: m.apiKey, model: m.model,
                         purpose: '标背景·找点',
                         messages: _msgs,
-                        max_tokens: 800
+                        // ⚠️别调回 800：chatStreamChat 只收 delta.content，**思考型模型的推理过程不算在内**。
+                        // 800 对不思考的模型绰绰有余（清单就二十来行），但思考模型光"想"就把额度用光，
+                        // 正文一个字都吐不出来 → out='' → 0 条 → 每次都报「这一章没有新的背景要补」，
+                        // 而两万字输入和推理 token 照样计费（用户实测「烧了不少额度」还什么都没得到）。
+                        // 按实际生成量计费，所以对不思考的模型抬上限几乎不增加成本。
+                        max_tokens: 4000
                     }, 120000, _rdMdlName(m));   // 长章第一遍可能慢，给足 2 分钟
                 };
                 var out;
@@ -22563,17 +22568,23 @@ body {
                     _rdBgBarShow('摘要模型没回应，换主模型再试…');
                     out = await _ask(fb);
                 }
+                if ((out || '').trim()) replies.push(out.trim());
                 (out || '').split('\n').forEach(function (ln) {
-                    var m = /^\s*P(\d+)\s*[|｜]\s*(.+?)\s*$/.exec(ln);
+                    // 容错：严格只认「P7|共济会」的话，模型稍微加点列表符号/加粗/中文冒号就整轮解析不出东西，
+                    // 而调用方只会说「这一章没有新的背景要补」，看不出是没内容还是没对上格式。
+                    var m = /^[\s\-*•·]*(?:\d+[.、)])?\s*\*{0,2}\s*[PpＰ]\s*(\d+)\s*\*{0,2}\s*[|｜:：]\s*(.+?)\s*$/.exec(ln);
                     if (!m) return;
-                    var p = parseInt(m[1], 10), term = m[2].trim();
+                    var p = parseInt(m[1], 10);
+                    var term = m[2].trim().replace(/^\*+|\*+$/g, '').trim();   // 去掉 **加粗**
                     if (!(p >= 1 && p <= lines.length) || !term || seen[term]) return;
                     seen[term] = 1;
                     picked.push({ p: p, term: term });
                 });
             }
             picked.sort(function (x, y) { return x.p - y.p; });
-            return picked;
+            // replies 给调用方区分「模型说这章没背景」「模型回了但没按格式」「模型一个字没回」——
+            // 三种都会让 picked 为空，但只有第一种是正常的，混为一谈会让人白点好几轮、白烧额度。
+            return { picks: picked, replies: replies };
         }
 
         // 第二遍：一条一条讲，每次只想一件事。只喂这个背景点 + 它所在段落前后一小圈上下文。
@@ -22636,8 +22647,21 @@ body {
             var done = 0, failed = 0, lastErr = '', namesAdded = 0;
             try {
                 _rdBgBarShow('通读全章，找背景点…');
-                var picks = await _rdBgScan(b, lines, readerBgDoneTerms(fileKey), scanM, explainM);
-                if (!picks.length) { showToast('这一章没有新的背景要补'); return; }
+                var scan = await _rdBgScan(b, lines, readerBgDoneTerms(fileKey), scanM, explainM);
+                var picks = scan.picks;
+                if (!picks.length) {
+                    // 三种情况都让清单为空，但只有第一种是正常的。混为一谈的后果：用户以为「这章确实没背景」，
+                    // 又点了两轮想让它接着标，每轮都实打实把整章喂出去一遍——扫描白跑、额度白烧、一条讲解都没有。
+                    var raw = scan.replies.join('\n').trim();
+                    if (!raw) {
+                        showToast('模型一个字都没回（多半是 max_tokens 被思考过程吃光了），这轮没扫出清单', true);
+                    } else if (/^无[。.\s]*$/.test(raw)) {
+                        showToast('这一章没有新的背景要补');
+                    } else {
+                        showToast('模型没按格式回，认不出清单：' + raw.replace(/\s+/g, ' ').slice(0, 40) + '…', true);
+                    }
+                    return;
+                }
                 for (var k = 0; k < picks.length; k++) {
                     if (readerBgAbort.signal.aborted) break;
                     // 单条失败不能拖垮整轮：重试一次，还不行就跳过接着下一条。
