@@ -10200,6 +10200,8 @@ body {
                 bookFoldersTs: rbFoldersTs(),
                 bookKinds: rbKindsLoad(),
                 bookKindsTs: rbKindsTs(),
+                readerNames: readingNamesAll(),
+                readerNamesTs: readingNamesTs(),
                 bookOpened: rbOpenedLoad(),
                 bookOpenedTs: rbOpenedTs(),
                 favModels: (function () { try { return JSON.parse(localStorage.getItem('chat_fav_models') || '[]'); } catch (e) { return []; } })(),
@@ -10479,6 +10481,12 @@ body {
                         localStorage.setItem('reading_book_kind', JSON.stringify(manifest.bookKinds));
                         localStorage.setItem('reading_book_kind_ts', cloudBkTs);
                     }
+                }
+
+                // 名单(人名/地名高亮): 整块按时间戳后写覆盖。键是 fileKey，跨设备对得上号
+                if (manifest.readerNames) {
+                    var cloudNmTs = manifest.readerNamesTs || '';
+                    if (cloudNmTs > readingNamesTs()) readingNamesApplyAll(manifest.readerNames, cloudNmTs);
                 }
 
                 // 书籍文件夹(移动): 整块按时间戳后写覆盖，跨设备传播移动/归类
@@ -10862,6 +10870,7 @@ body {
                 if (manifest.bookTitles) { localStorage.setItem('reading_book_titles', JSON.stringify(manifest.bookTitles)); if (manifest.bookTitlesTs) localStorage.setItem('reading_book_titles_ts', manifest.bookTitlesTs); }
                 if (manifest.bookFolders) { localStorage.setItem('reading_book_folders', JSON.stringify(manifest.bookFolders)); if (manifest.bookFoldersTs) localStorage.setItem('reading_book_folders_ts', manifest.bookFoldersTs); }
                 if (manifest.bookKinds) { localStorage.setItem('reading_book_kind', JSON.stringify(manifest.bookKinds)); if (manifest.bookKindsTs) localStorage.setItem('reading_book_kind_ts', manifest.bookKindsTs); }
+                if (manifest.readerNames) { readingNamesApplyAll(manifest.readerNames, manifest.readerNamesTs || new Date().toISOString()); }
                 if (manifest.bookOpened) { localStorage.setItem('reading_book_opened', JSON.stringify(manifest.bookOpened)); if (manifest.bookOpenedTs) localStorage.setItem('reading_book_opened_ts', manifest.bookOpenedTs); }
                 if (manifest.favModels) { try { localStorage.setItem('chat_fav_models', JSON.stringify(manifest.favModels)); localStorage.setItem('chat_fav_models_ts', manifest.favModelsTs || new Date().toISOString()); chatFavModels = manifest.favModels; if (typeof chatUpdateFavHeader === 'function') chatUpdateFavHeader(); } catch (e) {} }
                 if (manifest.modelPrices) { try { localStorage.setItem('toolbox_model_prices', JSON.stringify(manifest.modelPrices)); localStorage.setItem('toolbox_model_prices_ts', manifest.modelPricesTs || new Date().toISOString()); } catch (e) {} }
@@ -18192,37 +18201,137 @@ body {
            名单按「书」存：优先用书架里这本书的 id，没绑书就退回当前对话 id，互不串味。
            同一本书阅读模式与共读模式名单互通：两边都把 key 解析到同一个「书 id」——
            阅读会话不写 rbGetConvBook 那套映射，所以阅读模式优先取 readerBookId，否则退回共读的绑书，再退回对话 id。 */
+        /* 名单的存储键。⚠️必须是**跨设备稳定**的 fileKey(`书名|字节数`)，不能用书 id——
+           书 id 是 `bk_<时间戳>_<随机>`，**每台设备导入时各生成一个**，同一本书在手机和
+           电脑上 id 不一样。用 id 当键的话，名单同步过去也对不上号（用户报「名单好像不太会同步」）。
+           书签/划线早就踩过这个坑，`readingMarksConvId()` 就是干这件事的，这里同一个思路。 */
         function readingNamesKey() {
-            if (typeof chatReaderMode !== 'undefined' && chatReaderMode && typeof readerBookId !== 'undefined' && readerBookId) return readerBookId;
-            return (typeof rbGetConvBook === 'function' && rbGetConvBook()) || chatCurrentConvId || '';
+            var raw = '';
+            if (typeof chatReaderMode !== 'undefined' && chatReaderMode && typeof readerBookId !== 'undefined' && readerBookId) raw = readerBookId;
+            else raw = (typeof rbGetConvBook === 'function' && rbGetConvBook()) || chatCurrentConvId || '';
+            if (!raw) return '';
+            var fk = (typeof readerBookKey === 'function') ? readerBookKey(raw) : raw;   // 书没了会原样退回
+            return fk || raw;
+        }
+        // 旧键（书 id / reader_书id）→ 新键（fileKey）一次性搬家，搬完删旧键。
+        // 不搬的话用户会觉得"名单凭空没了"——本地明明还在，只是程序换了个抽屉找。
+        function _readingNamesMigrate(newKey) {
+            if (!newKey) return;
+            var olds = [];
+            if (typeof chatReaderMode !== 'undefined' && chatReaderMode && typeof readerBookId !== 'undefined' && readerBookId) {
+                olds.push('reading_names_' + readerBookId, 'reading_names_reader_' + readerBookId);
+            }
+            var cb = (typeof rbGetConvBook === 'function' && rbGetConvBook()) || '';
+            if (cb) olds.push('reading_names_' + cb);
+            if (chatCurrentConvId) olds.push('reading_names_' + chatCurrentConvId);
+            olds.forEach(function (ok) {
+                if (ok === 'reading_names_' + newKey) return;
+                try {
+                    var raw = localStorage.getItem(ok);
+                    if (!raw) return;
+                    var arr = JSON.parse(raw);
+                    if (Array.isArray(arr) && arr.length) {
+                        var cur = JSON.parse(localStorage.getItem('reading_names_' + newKey) || '[]');
+                        if (!Array.isArray(cur)) cur = [];
+                        _readingNamesWrite(newKey, cur.concat(arr));
+                    }
+                    localStorage.removeItem(ok);
+                } catch (e) {}
+            });
         }
         function readingGetNames() {
             var key = readingNamesKey(); if (!key) return [];
-            // 一次性兼容：早期阅读模式名单存在「reader_<书id>」会话 key 下，跟共读的「书id」key 分了家。
-            // 现在两模式统一用书 id，把旧的孤立名单并进来一次（搬完删旧 key，避免重复迁移）。
-            if (typeof chatReaderMode !== 'undefined' && chatReaderMode && typeof readerBookId !== 'undefined' && readerBookId && key === readerBookId) {
-                var oldKey = 'reading_names_reader_' + readerBookId;
-                try {
-                    var oldRaw = localStorage.getItem(oldKey);
-                    if (oldRaw) {
-                        var oldArr = JSON.parse(oldRaw);
-                        if (Array.isArray(oldArr) && oldArr.length) {
-                            var cur = JSON.parse(localStorage.getItem('reading_names_' + key) || '[]');
-                            if (!Array.isArray(cur)) cur = [];
-                            readingSetNames(cur.concat(oldArr)); // 合并去重由 readingSetNames 负责
-                        }
-                        localStorage.removeItem(oldKey);
-                    }
-                } catch (e) {}
-            }
+            _readingNamesMigrate(key);   // 旧键搬到 fileKey 下，一次性
             try { var a = JSON.parse(localStorage.getItem('reading_names_' + key) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
         }
-        function readingSetNames(arr) {
-            var key = readingNamesKey(); if (!key) return;
+        // 落盘 + 打时间戳 + 排队推云。迁移时也走它，保证搬过来的名单同样进同步。
+        function _readingNamesWrite(key, arr) {
             var seen = {}, out = [];
             (arr || []).forEach(function (n) { n = (n || '').trim(); if (n && !seen[n]) { seen[n] = 1; out.push(n); } });
             out.sort(function (a, b) { return b.length - a.length; }); // 长名优先匹配，避免短名先吃掉长名的一截
-            try { localStorage.setItem('reading_names_' + key, JSON.stringify(out)); } catch (e) {}
+            try {
+                localStorage.setItem('reading_names_' + key, JSON.stringify(out));
+                localStorage.setItem('reading_names_ts', new Date().toISOString());
+            } catch (e) {}
+            if (typeof activeSyncProvider !== 'undefined' && activeSyncProvider === 'cf') {
+                // 合并名单时会连着调好多次（readingBgMergeNames 每标一条就并一次），攒一攒再推
+                clearTimeout(_readingNamesWrite._t);
+                _readingNamesWrite._t = setTimeout(syncPushData, 3000);
+            }
+        }
+        function readingSetNames(arr) {
+            var key = readingNamesKey(); if (!key) return;
+            _readingNamesWrite(key, arr);
+        }
+        /* 云同步用：把散落的 reading_names_<书> 打包成一张表 {fileKey: [名字…]}。
+           ⚠️`reading_names_on`(高亮总开关) 和 `reading_names_ts`(时间戳) 前缀一样，必须排掉。 */
+        /* 全量搬家：把还挂在书 id 下的老名单一次性改挂到 fileKey。
+           `_readingNamesMigrate` 只在"打开那本书"时搬当前这本，没打开过的书要是就这么推上云，
+           另一台设备只会收到一堆对不上号的死键。所以打包前先扫一遍（幂等，每次开机做一次就够）。 */
+        function _readingNamesSweep() {
+            if (_readingNamesSweep._done) return;
+            _readingNamesSweep._done = true;
+            if (typeof rbBooks === 'undefined' || !Array.isArray(rbBooks) || !rbBooks.length) {
+                _readingNamesSweep._done = false;   // 书还没加载完，等下次再扫
+                return;
+            }
+            var byId = {};
+            rbBooks.forEach(function (b) { if (b && b.id) byId[b.id] = rbBookEffKey(b); });
+            try {
+                var moves = [];
+                for (var i = 0; i < localStorage.length; i++) {
+                    var k = localStorage.key(i);
+                    if (!k || k.indexOf('reading_names_') !== 0) continue;
+                    var sub = k.slice(14);
+                    if (!sub || sub === 'on' || sub === 'ts') continue;
+                    if (sub.indexOf('reader_') === 0 && byId[sub.slice(7)]) moves.push([k, byId[sub.slice(7)]]);
+                    else if (byId[sub] && byId[sub] !== sub) moves.push([k, byId[sub]]);
+                }
+                moves.forEach(function (mv) {
+                    var arr = JSON.parse(localStorage.getItem(mv[0]) || '[]');
+                    if (!Array.isArray(arr) || !arr.length) { localStorage.removeItem(mv[0]); return; }
+                    var cur = JSON.parse(localStorage.getItem('reading_names_' + mv[1]) || '[]');
+                    if (!Array.isArray(cur)) cur = [];
+                    _readingNamesWrite(mv[1], cur.concat(arr));
+                    localStorage.removeItem(mv[0]);
+                });
+            } catch (e) {}
+        }
+        function readingNamesAll() {
+            _readingNamesSweep();
+            var out = {};
+            try {
+                for (var i = 0; i < localStorage.length; i++) {
+                    var k = localStorage.key(i);
+                    if (!k || k.indexOf('reading_names_') !== 0) continue;
+                    var sub = k.slice(14);
+                    if (!sub || sub === 'on' || sub === 'ts') continue;
+                    var a = JSON.parse(localStorage.getItem(k) || '[]');
+                    if (Array.isArray(a) && a.length) out[sub] = a;
+                }
+            } catch (e) {}
+            return out;
+        }
+        function readingNamesTs() { return localStorage.getItem('reading_names_ts') || ''; }
+        // 整块覆盖（跟书名/书籍类型同一套路）：先清掉本地所有名单键，再写云端那份。
+        // 不清就成了"只增不删"，在别的设备删掉的名字会被这台机器复活。
+        function readingNamesApplyAll(map, ts) {
+            if (!map || typeof map !== 'object') return;
+            try {
+                var doomed = [];
+                for (var i = 0; i < localStorage.length; i++) {
+                    var k = localStorage.key(i);
+                    if (!k || k.indexOf('reading_names_') !== 0) continue;
+                    var sub = k.slice(14);
+                    if (!sub || sub === 'on' || sub === 'ts') continue;
+                    doomed.push(k);
+                }
+                doomed.forEach(function (k) { localStorage.removeItem(k); });
+                Object.keys(map).forEach(function (fk) {
+                    if (Array.isArray(map[fk]) && map[fk].length) localStorage.setItem('reading_names_' + fk, JSON.stringify(map[fk]));
+                });
+                if (ts) localStorage.setItem('reading_names_ts', ts);
+            } catch (e) {}
         }
         function _readingEscapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
         function readingNamesRe() {

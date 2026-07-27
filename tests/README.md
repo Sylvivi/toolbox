@@ -51,3 +51,8 @@ mkdir -p ~/.toolbox-test && cd ~/.toolbox-test && npm i playwright && npx playwr
 
 元素之后被重渲染换掉，再去读那个对象就全是空串——报告"样式没生效"，其实是节点没了。
 **当场取成字符串**再传出来。（写长按那组测试时又栽了一次。）
+
+## 覆盖范围
+
+- `bg.test.js`（61 条）——「标背景」
+- `names.test.js`（18 条）——名单的云同步（按 fileKey 存、旧数据搬家、时间戳护栏）
