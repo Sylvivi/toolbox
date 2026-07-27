@@ -11547,6 +11547,12 @@ body {
             '【输出格式】一行一条，严格是「P段号|背景点名称」，不要编号、不要解释、不要任何别的话。段号取这个背景点第一次真正需要被解释的那一段。例如：\n' +
             'P7|共济会\nP23|宾夕法尼亚议会\n\n' +
             '如果这一章确实没有需要解释的背景，就只输出一行：无';
+        /* 「标背景」讲解那一遍的小说版人设。为什么不直接复用 SOCIAL_MODE_PERSONA：
+         * 它开头就写死「我读的是社会学…不是小说」，读小说时标背景等于在骗模型。
+         * 也不能复用 READING_MODE_DEFAULT_PERSONA——那是共读点评的人设（挑伏笔、聊角色），
+         * 跟 BG_EXPLAIN_INSTRUCTION 的「绝不解读原文」直接打架。所以单起一个最小版：
+         * 同一个蘑菇声音，只留「把书本之外的世界讲清楚」，外加小说特有的不许剧透。 */
+        var BG_NOVEL_PERSONA = '你是一个陪我读书的蘑菇朋友，性格温和、有点好奇、话不多但说到点子上。每段讲解结尾带🍄作为签名。\n\n我在读小说，读到不懂的时代背景来问你。你的首要任务是【把它讲清楚】：那时候是怎么回事直接说明白，别假设我懂；抽象的地方举贴近生活的例子，中文语境优先。\n\n讲解要有你自己的判断，不要复述原文、不要堆砌术语显得高深。宁可说得直白，也不要说得漂亮但含混。\n\n不要用「首先/其次/综上所述」这类八股结构，像朋友把一件事跟我讲明白那样自然地说。\n\n我读到哪儿就问到哪儿，别提到我还没读到的后续剧情。';
         var BG_EXPLAIN_INSTRUCTION = '【任务】用大白话给我讲清楚这一个背景点。\n\n' +
             '· 只讲**书本之外的世界**：它是什么、当时是怎么回事、为什么要紧。\n' +
             '· 用今天的东西打个比方，让我有画面。\n' +
@@ -22663,7 +22669,9 @@ body {
                 baseUrl: mdl.baseUrl, apiKey: mdl.apiKey, model: mdl.model, markUsed: true,
                 purpose: '标背景·讲解',
                 messages: [
-                    { role: 'system', content: SOCIAL_MODE_PERSONA + '\n\n' + BG_EXPLAIN_INSTRUCTION },
+                    // 按书种挑人设：社科书沿用原来那套（术语翻人话正对路），小说走 BG_NOVEL_PERSONA。
+                    // 以前不分书种、一律用社科人设，等于在读小说时跟模型说「我读的不是小说」。
+                    { role: 'system', content: (rbIsSocial(b) ? SOCIAL_MODE_PERSONA : BG_NOVEL_PERSONA) + '\n\n' + BG_EXPLAIN_INSTRUCTION },
                     { role: 'user', content: '我正在读《' + (rbBookNiceName(b) || '这本书') + '》，读到这里：\n\n' + around
                         + '\n\n请给我讲讲「' + pick.term + '」这个背景。' }
                 ],
