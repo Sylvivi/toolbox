@@ -12692,6 +12692,7 @@ body {
             var decoder = new TextDecoder();
             var buffer = '';
             var full = '';
+            var _thinkLen = 0;   // 只统计推理过程的长度，用来解释"生成了却什么都没拿到"
             var _usage = null;
             while (true) {
                 var result = await reader.read();
@@ -12712,6 +12713,12 @@ body {
                             full += delta.content;
                             if (opts.onDelta) opts.onDelta(full);
                         }
+                        // 只数不收：思考型模型可能把额度全花在推理上、正文一个字不吐，
+                        // 那时 full='' 而这里不为 0 —— 调用方据此能说清"是思考吃光了"还是"真没回"，
+                        // 而不是甩一句含糊的「模型只回了空」。⚠️别把它拼进 full，那是给人看的正文。
+                        if (delta && (delta.reasoning_content || delta.reasoning || delta.thinking)) {
+                            _thinkLen += (delta.reasoning_content || delta.reasoning || delta.thinking || '').length;
+                        }
                         var u = apiUsageFromChunk(chunk);
                         if (u) _usage = u;
                     } catch (e) { /* 跳过不完整 / 非 JSON 的行 */ }
@@ -12726,6 +12733,8 @@ body {
                     apiLogRecord(opts.purpose, opts.model, estTokens(_inStr), estTokens(full), true, opts.baseUrl || '');
                 }
             } catch (e) { /* 记账失败不影响主流程 */ }
+            // 挂在返回值上：字符串照常用，需要时才去问它思考了多少（不影响任何既有调用点）
+            try { if (_thinkLen) chatStreamChat._lastThinkLen = _thinkLen; else chatStreamChat._lastThinkLen = 0; } catch (e) {}
             return full;
         }
         // 大输出调用（记忆表格等）：max_tokens 设很高防截断，但便宜/小模型可能因超出自身上限直接报错。
@@ -22909,7 +22918,15 @@ body {
             // 空回复必须抛错，不能当"这条讲完了"返回空串：外层只会 failed++ 然后 continue，
             // lastErr 还是空的，收尾提示就成了「N 条没成功：」后面什么都没有——请求发了、钱扣了，
             // 却完全看不出为什么。抛出来才能走重试、并在提示里说清原因。
-            if (!txt) throw new Error('模型只回了空（多半是 max_tokens 被思考过程吃光了）');
+            // 空回复要分清是「思考吃光了」还是「真的一个字没回」——两者的处置完全不同：
+            // 前者换个不思考的模型就好，后者是中转站/模型本身的问题。含糊的一句话害用户
+            // 白点好几轮（她实测过一次 9 条只成 1 条、其余全白扣费，却看不出为什么）。
+            if (!txt) {
+                var _tk = chatStreamChat._lastThinkLen || 0;
+                throw new Error(_tk
+                    ? ('模型只吐了思考过程（约 ' + _tk + ' 字）、正文一个字没给——这个模型把额度花在"想"上了，讲解模型换一个不思考的')
+                    : '模型一个字都没回（中转站或模型本身的问题，不是额度不够）');
+            }
             return txt;
         }
 
@@ -23021,8 +23038,12 @@ body {
                 // 本章的重渲已经带上高亮了；这一下是给「同时载入的其它章节」补上（就地刷，不动滚动位置）
                 if (namesAdded) { try { readingApplyNames(); readingRehighlightNamesInPlace(); } catch (e) {} }
                 if (failed) {
+                    // ⚠️失败提示必须 sticky。原来没传第 2 参 → 2 秒就自己消失，
+                    // 而这条恰恰是"钱花了却没拿到东西"时唯一的解释：用户实测 9 条只成 1 条，
+                    // 回头问起来只记得"扣费了、只插进去一条"，完全不知道剩下 8 条败在哪。
+                    // 成功的提示照旧自动消失（那种不用追问）。
                     showToast(done ? ('已标 ' + done + ' 条，' + failed + ' 条没成功：' + lastErr + '（再点一次「接着标」会补上）')
-                                   : ('标背景失败：' + lastErr));
+                                   : ('标背景失败：' + lastErr), true);
                 } else if (done) {
                     showToast('已标 ' + done + ' 条背景' + (namesAdded ? '，' + namesAdded + ' 个词已加进名单' : ''));
                 }

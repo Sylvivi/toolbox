@@ -241,8 +241,39 @@ function bootSocial() {
             n++; return Promise.resolve(n <= 1 ? '第一条讲解。' : '');   // 用户实测：第 1 条成，后面全空
         };
     }).toString());
-    ok('讲解回空必须报出来，不能静默（钱扣了却看不出为什么）', /没成功|失败|空/.test(E2.提示), JSON.stringify(E2));
+    ok('讲解回空必须报出来，不能静默（钱扣了却看不出为什么）', /没成功|失败|没回|思考/.test(E2.提示), JSON.stringify(E2));
     ok('讲解回空时不假装成功：插入数＝真正成功的条数', E2.正文里的块 === E2.存进reader_qa的, JSON.stringify(E2));
+
+    /* 失败提示不许 2 秒就溜走——那是"钱花了却没拿到东西"时唯一的解释 */
+    const E2b = await page.evaluate(async () => {
+        window._bootNovel();
+        let sticky = null;
+        const orig = window.showToast;
+        window.showToast = (m, s) => { sticky = { msg: m, sticky: !!s }; return orig(m, s); };
+        window.chatStreamChat = (o) => Promise.resolve(o.purpose === '标背景·找点' ? 'P2|甲\nP5|乙' : '');
+        await readerMarkBg('bk_t', 0);
+        const fail = sticky;
+        // 成功的提示照旧自动消失
+        window.chatStreamChat = (o) => Promise.resolve(o.purpose === '标背景·找点' ? 'P3|丙' : '讲解');
+        await readerMarkBg('bk_t', 0);
+        return { 失败提示: fail, 成功提示: sticky };
+    });
+    ok('失败提示是 sticky（不会 2 秒就消失）', E2b.失败提示 && E2b.失败提示.sticky === true, JSON.stringify(E2b));
+    ok('成功提示照旧自动消失', E2b.成功提示 && E2b.成功提示.sticky === false, JSON.stringify(E2b));
+
+    /* 空回复要说清是"思考吃光了"还是"真的一个字没回" */
+    const E2c = await page.evaluate(async () => {
+        const run = async (thinkLen) => {
+            window.readerBgAbort = new AbortController();
+            window.chatStreamChat = () => { chatStreamChat._lastThinkLen = thinkLen; return Promise.resolve(''); };
+            chatStreamChat._lastThinkLen = thinkLen;
+            try { await _rdBgExplain({ title: 't' }, ['一', '二', '三'], { p: 2, term: '甲' }, { model: 'm' }); return '没抛错'; }
+            catch (e) { return e.message; }
+        };
+        return { 思考吃光: await run(3200), 真的没回: await run(0) };
+    });
+    ok('只吐思考过程 → 说清是模型在"想"，并建议换模型', /思考过程/.test(E2c.思考吃光) && /3200/.test(E2c.思考吃光), JSON.stringify(E2c));
+    ok('一个字没回 → 说清是中转站/模型的问题，别误导成额度不够', /一个字都没回/.test(E2c.真的没回), JSON.stringify(E2c));
 
     const E3 = await e2e((() => {
         window.chatStreamChat = (o) => Promise.resolve(o.purpose === '标背景·找点' ? '无' : '讲解');
