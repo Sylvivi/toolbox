@@ -408,7 +408,7 @@ function bootSocial() {
     eq('社科书双击段落，按钮仍是「导读」', H.按钮初始, '导读');
     ok('提示语告诉你有长按这一手', /长按/.test(H.提示语), H.提示语);
     eq('短按 → 还是导读，不会误标背景', H.短按, [['ask', '导读']]);
-    eq('按住半秒 → 标签就地变「标背景」', H.蓄力时标签, '标背景');
+    eq('按住半秒 → 标签就地变「背景」', H.蓄力时标签, '背景');
     ok('蓄力时按钮高亮（告诉你松手就开始）', H.蓄力时高亮);
     ok('松手 → 开标背景，且传的是双击那一段的段号', H.松手后.length === 1 && H.松手后[0][0] === 'bg' && H.松手后[0][3] === 15, JSON.stringify(H.松手后));
     ok('松手后不会再顺手走一遍导读（pointerup 后面紧跟一个 click）', H.松手后.filter(c => c[0] === 'ask').length === 0, JSON.stringify(H.松手后));
@@ -446,27 +446,57 @@ function bootSocial() {
     ok('按钮 touch-action 是 manipulation（去掉双击缩放的等待）', /manipulation/.test(H3.touchAction), H3.touchAction);
     ok('系统抢先选中时，蓄力到位会就地清掉选区', H3.选区_长按前 > 0 && H3.选区_蓄力后 === 0, JSON.stringify(H3));
 
-    /* 小说没有目录小节，正文长按要标整章——跟目录入口保持一致 */
+    /* 小说没有导读，那个空状态本来点了什么都不会发生 → 让给背景，且不用长按 */
     const H2 = await page.evaluate(async () => {
         window._bootNovel();
         const calls = [];
         window.readerMarkBg = (id, ci, p) => { calls.push([id, ci, p]); return Promise.resolve(); };
+        window.readingAskOne = (mi, p, q) => { calls.push(['ask', q]); };
         const mi = chatMessages.findIndex(m => m && m.readerChapter === 0);
         readingClearActbar();
         readingOnParaClick(document.querySelector('.chat-msg.ai[data-idx="' + mi + '"] .reading-merged p[data-p="5"]'));
-        const send = document.querySelector('.reading-actbar .rp-ask-send');
-        const label0 = send.textContent;
-        send.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 100, clientY: 100 }));
-        await new Promise(r => setTimeout(r, 600));
-        const label1 = send.textContent;
-        send.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 100, clientY: 100 }));
+        const bar = document.querySelector('.reading-actbar');
+        const send = bar.querySelector('.rp-ask-send');
+        const inp = bar.querySelector('.rp-ask');
+        const out = { 空着的标签: send.textContent, 提示语: inp.placeholder };
+
+        // 空着点一下 → 直接标背景
+        send.click();
         await new Promise(r => setTimeout(r, 30));
+        out.空着点一下 = calls.slice();
+
+        // 打字 → 变讨论，走原来的逐段问答
         readingClearActbar();
-        return { label0, label1, calls };
+        readingOnParaClick(document.querySelector('.chat-msg.ai[data-idx="' + mi + '"] .reading-merged p[data-p="5"]'));
+        const bar2 = document.querySelector('.reading-actbar');
+        const send2 = bar2.querySelector('.rp-ask-send'), inp2 = bar2.querySelector('.rp-ask');
+        inp2.value = '他这句什么意思'; inp2.dispatchEvent(new Event('input'));
+        out.打字后的标签 = send2.textContent;
+        calls.length = 0;
+        send2.click();
+        await new Promise(r => setTimeout(r, 30));
+        out.打字后点 = calls.slice();
+
+        // 清空又变回「背景」
+        inp2.value = ''; inp2.dispatchEvent(new Event('input'));
+        out.清空后的标签 = send2.textContent;
+
+        // 小说不需要长按（留空点一下就是背景），长按不该再蓄力
+        calls.length = 0;
+        send2.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 100, clientY: 100 }));
+        await new Promise(r => setTimeout(r, 600));
+        out.长按时的标签 = send2.textContent;
+        send2.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 100, clientY: 100 }));
+        readingClearActbar();
+        return out;
     });
-    eq('小说书按钮是「讨论」', H2.label0, '讨论');
-    eq('小说书长按也能蓄力', H2.label1, '标背景');
-    ok('小说书标的是整章（第 3 参传 0），跟目录入口一致', H2.calls.length === 1 && H2.calls[0][2] === 0, JSON.stringify(H2.calls));
+    eq('小说书空着时按钮是「背景」（原来是点了没反应的「讨论」）', H2.空着的标签, '背景');
+    ok('小说书提示语说清留空＝背景', /留空＝背景/.test(H2.提示语), H2.提示语);
+    ok('小说书空着点一下 → 标整章背景（第 3 参 0）', H2.空着点一下.length === 1 && H2.空着点一下[0][2] === 0, JSON.stringify(H2.空着点一下));
+    eq('小说书打字后变「讨论」', H2.打字后的标签, '讨论');
+    eq('小说书打字后点 → 走逐段问答，不标背景', H2.打字后点, [['ask', '他这句什么意思']]);
+    eq('清空后又变回「背景」', H2.清空后的标签, '背景');
+    eq('小说书不需要长按，长按不再蓄力', H2.长按时的标签, '背景');
 
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' ｜ '));
 

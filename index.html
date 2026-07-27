@@ -22108,15 +22108,20 @@ body {
             var leftSide = (pos === 'lm' || pos === 'lb');
             var bar = document.createElement('div');
             bar.className = 'reading-actbar';
-            /* 社科书不另加按钮——手机上一行挤两个键太多。改成【一个按钮，标签跟着输入框变】：
-               框里空着＝你没有具体问题，按钮显示「导读」，点了讲这一整节；
-               一开始打字就自动变「讨论」，回到原来的逐段问答。
-               零多余按钮、零多余点击，也不用点完再弹窗让你选。读小说时这条操作栏一字不变。 */
+            /* 不另加按钮——手机上一行挤两个键太多。改成【一个按钮，标签跟着输入框变】：
+               框里空着＝你没有具体问题；一打字就自动变「讨论」，回到逐段问答。
+               零多余按钮、零多余点击，也不用点完再弹窗让你选。
+               ⚠️空着时按哪个功能，两种书不一样：
+               · 社科书 → 「导读」（讲这一整节），背景让给**长按**；
+               · 小说   → 「背景」。小说本来就没有导读，那个空状态点了什么也不会发生，
+                 与其空着不如让给背景（用户原话「非社科类的书没有导读，把切换让给标背景」）。
+                 所以小说**不需要长按**——留空点一下就是背景。 */
             var _isSocial = rbCurBookIsSocial();
+            var _emptyLabel = _isSocial ? '导读' : '背景';
             var inputHtml = '<textarea class="rp-ask" rows="1" placeholder="' +
-                (_isSocial ? '有问题就问…（留空＝导读，长按＝标背景）' : '问问这一段…（如：他这句话什么意思？）') +
+                (_isSocial ? '有问题就问…（留空＝导读，长按＝背景）' : '问问这一段…（留空＝背景，打字＝讨论）') +
                 '"></textarea>';
-            var askHtml = '<button class="rp-ask-send">' + (_isSocial ? '导读' : '讨论') + '</button>';
+            var askHtml = '<button class="rp-ask-send">' + _emptyLabel + '</button>';
             // 极简：输入框 + 讨论按钮，「带前文问答」勾选框紧贴讨论按钮左边（粘性，状态存 localStorage，替代原设置里的全局开关）
             var ctxHtml = readingAskCtxBoxHtml();
             bar.innerHTML = leftSide ? (ctxHtml + askHtml + inputHtml) : (inputHtml + ctxHtml + askHtml);
@@ -22125,13 +22130,17 @@ body {
             var input = bar.querySelector('.rp-ask');
             var send = bar.querySelector('.rp-ask-send');
             function go() {
-                // 社科书 + 输入框空着 → 走整节导读（question 传占位符，函数里会换成「导读：《小节名》」）
-                if (_isSocial && !input.value.trim()) { readingAskOne(msgIdx, pNum, '导读', bar, { guide: true }); return; }
+                if (!input.value.trim()) {
+                    // 社科书 + 空着 → 整节导读（question 传占位符，函数里会换成「导读：《小节名》」）
+                    if (_isSocial) { readingAskOne(msgIdx, pNum, '导读', bar, { guide: true }); return; }
+                    readingStartBgFromPara(msgIdx, pNum);   // 小说 + 空着 → 标这一章的背景
+                    return;
+                }
                 readingAskOne(msgIdx, pNum, input.value, bar);
             }
             send.onclick = function () { if (_bgEatClick) { _bgEatClick = false; return; } go(); };
             // 标签跟着输入框内容切换（打字→讨论、清空→导读）；prefill 时下面会派发 input 事件一并同步
-            if (_isSocial) input.addEventListener('input', function () { if (!_bgArmed) send.textContent = input.value.trim() ? '讨论' : '导读'; });
+            input.addEventListener('input', function () { if (!_bgArmed) send.textContent = input.value.trim() ? '讨论' : _emptyLabel; });
             /* 第三态＝长按这个按钮：标这一节的背景。
                为什么不另加一个按钮：用户明确要「零新增图标」的极简，而她喜欢的正是
                「一个键、标签跟着状态变」那套。可「想听导读」和「想标背景」时输入框都是空的，
@@ -22144,13 +22153,14 @@ body {
                 if (_bgArmed) { _bgArmed = false; send.textContent = _bgLabel; send.classList.remove('rp-bg-armed'); }
             }
             send.addEventListener('pointerdown', function (e) {
+                if (!_isSocial) return;             // 小说留空点一下就是背景，不用长按这一手
                 if (input.value.trim()) return;     // 打了字＝讨论，长按不接管
                 if (readerBgRunning || readingCommenting) return;
                 _bgHoldAt = { x: e.clientX, y: e.clientY };
                 _bgHoldTimer = setTimeout(function () {
                     _bgHoldTimer = null; _bgArmed = true;
                     _bgLabel = send.textContent;
-                    send.textContent = '标背景';
+                    send.textContent = '背景';
                     send.classList.add('rp-bg-armed');
                     // 兜底：万一系统抢在 CSS 之前已经选中了按钮文字（安卓部分机型），就地清掉，
                     // 照抄长按评论块那条路的做法。不清的话选区还会拦住后面的点击。
