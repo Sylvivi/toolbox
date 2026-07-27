@@ -22534,7 +22534,7 @@ body {
                 cur.push(s); curLen += s.length + 1;
             }
             if (cur.length) chunks.push(cur);
-            var picked = [], seen = {}, replies = [];
+            var picked = [], seen = {}, replies = [], matched = 0;
             doneTerms.forEach(function (t) { seen[t] = 1; });
             for (var c = 0; c < chunks.length; c++) {
                 if (readerBgAbort.signal.aborted) break;
@@ -22574,6 +22574,7 @@ body {
                     // 而调用方只会说「这一章没有新的背景要补」，看不出是没内容还是没对上格式。
                     var m = /^[\s\-*•·]*(?:\d+[.、)])?\s*\*{0,2}\s*[PpＰ]\s*(\d+)\s*\*{0,2}\s*[|｜:：]\s*(.+?)\s*$/.exec(ln);
                     if (!m) return;
+                    matched++;   // 认出了格式（哪怕随后因「已讲过/段号越界」被滤掉），用来区分「模型没照做」和「确实没新的」
                     var p = parseInt(m[1], 10);
                     var term = m[2].trim().replace(/^\*+|\*+$/g, '').trim();   // 去掉 **加粗**
                     if (!(p >= 1 && p <= lines.length) || !term || seen[term]) return;
@@ -22584,7 +22585,7 @@ body {
             picked.sort(function (x, y) { return x.p - y.p; });
             // replies 给调用方区分「模型说这章没背景」「模型回了但没按格式」「模型一个字没回」——
             // 三种都会让 picked 为空，但只有第一种是正常的，混为一谈会让人白点好几轮、白烧额度。
-            return { picks: picked, replies: replies };
+            return { picks: picked, replies: replies, matched: matched };
         }
 
         // 第二遍：一条一条讲，每次只想一件事。只喂这个背景点 + 它所在段落前后一小圈上下文。
@@ -22601,9 +22602,17 @@ body {
                     { role: 'user', content: '我正在读《' + (rbBookNiceName(b) || '这本书') + '》，读到这里：\n\n' + around
                         + '\n\n请给我讲讲「' + pick.term + '」这个背景。' }
                 ],
-                max_tokens: 700
+                // ⚠️和第一遍同一个坑，别调回 700：chatStreamChat 只收 delta.content，思考过程不算在内。
+                // 讲解本身才 120 字（约 200 token），700 看着够，但剩下那 500 给思考是**卡在边界上**——
+                // 有时够有时不够，于是「第 1 条插进去了，后面全没了」（用户实测，且每条还白重试一遍）。
+                max_tokens: 4000
             }, 90000, _rdMdlName(mdl));   // 单条只讲 120 字，90 秒还没回就是卡了
-            return (out || '').replace(/\[P\d+\]/gi, '').replace(/\n\s*\n+/g, '\n').trim();
+            var txt = (out || '').replace(/\[P\d+\]/gi, '').replace(/\n\s*\n+/g, '\n').trim();
+            // 空回复必须抛错，不能当"这条讲完了"返回空串：外层只会 failed++ 然后 continue，
+            // lastErr 还是空的，收尾提示就成了「N 条没成功：」后面什么都没有——请求发了、钱扣了，
+            // 却完全看不出为什么。抛出来才能走重试、并在提示里说清原因。
+            if (!txt) throw new Error('模型只回了空（多半是 max_tokens 被思考过程吃光了）');
+            return txt;
         }
 
         async function readerMarkBg(bookId, chapIdx) {
@@ -22653,7 +22662,11 @@ body {
                     // 三种情况都让清单为空，但只有第一种是正常的。混为一谈的后果：用户以为「这章确实没背景」，
                     // 又点了两轮想让它接着标，每轮都实打实把整章喂出去一遍——扫描白跑、额度白烧、一条讲解都没有。
                     var raw = scan.replies.join('\n').trim();
-                    if (!raw) {
+                    if (scan.matched) {
+                        // 模型照格式回了，只是这些词全被滤掉了（多半是别的章已经讲过）——这是正常态，
+                        // 别报成「没按格式回」冤枉它（实测会这样误判）。
+                        showToast('这一章的背景点都已经讲过了');
+                    } else if (!raw) {
                         showToast('模型一个字都没回（多半是 max_tokens 被思考过程吃光了），这轮没扫出清单', true);
                     } else if (/^无[。.\s]*$/.test(raw)) {
                         showToast('这一章没有新的背景要补');
