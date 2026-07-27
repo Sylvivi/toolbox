@@ -22451,7 +22451,14 @@ body {
             if (!el) {
                 el = document.createElement('div');
                 el.id = 'rdBgBar';
-                el.setAttribute('style', 'position:fixed;left:50%;transform:translateX(-50%);bottom:78px;z-index:70;display:flex;align-items:center;gap:10px;max-width:88vw;padding:8px 14px;border-radius:999px;background:var(--modal-bg);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--card-border);box-shadow:0 8px 26px rgba(0,0,0,0.18);font-size:12.5px;color:var(--text)');
+                // ⚠️z-index 必须盖过聊天/阅读界面那层 modal（`.modal-overlay` 是 200）——原来写 70，
+                // 于是「停止」条被整个阅读界面压在底下，只有切到密钥/收藏/日历那些没开 modal 的
+                // 页面才露出来（用户实测「打开阅读时候基本上是看不到」）。240 照抄 #translateActBar，
+                // 它是同类东西：浮在聊天界面里的固定条。仍低于底部弹层(997~999)和 toast(1000)。
+                // 居中不用 left:50%+transform：那样元素的可用宽度只剩「视口减去左边那 50%」＝半屏，
+                // max-width:88vw 永远吃不满，词名被截成「共…」（条子的意义就是告诉你在标哪个词）。
+                // 改成 left:0;right:0;margin:0 auto + width:fit-content，居中效果一样、能撑到 88vw。
+                el.setAttribute('style', 'position:fixed;left:0;right:0;margin:0 auto;width:fit-content;bottom:78px;z-index:240;display:flex;align-items:center;gap:10px;max-width:88vw;padding:8px 14px;border-radius:999px;background:var(--modal-bg);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--card-border);box-shadow:0 8px 26px rgba(0,0,0,0.18);font-size:12.5px;color:var(--text)');
                 el.innerHTML = '<span class="rd-bg-txt" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>'
                     + '<button type="button" class="rd-bg-stop" style="flex-shrink:0;border:none;background:var(--card-border);color:var(--text);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer">停止</button>';
                 document.body.appendChild(el);
