@@ -22486,7 +22486,17 @@ body {
         // 标背景是个十几条的循环——一条挂死就整轮不动，还把 readerBgRunning 焊死在 true，
         // 之后每次点「接着标」都只会被挡回来（用户实测「很久都不响应」）。
         // 所以每条请求自带一个超时闹钟：超时按「这条失败」处理（外层会重试/跳过），不拖累别的条。
-        function _rdBgTimed(opts, ms) {
+        // 超时提示里点名是「谁」没回：标背景两遍走的是两个不同模型（第一遍摘要模型、第二遍主模型），
+        // 只说「中转站没回」会让人直奔聊天那个中转站去查——那边好好的，白查半天还以为不是模型的事
+        // （用户实测被误导过：「说是中转站问题，可是中转站没问题呀」）。
+        function _rdMdlName(m) {
+            if (!m || !m.model) return '中转站';
+            var host = '';
+            try { host = new URL(m.baseUrl).hostname.replace(/^www\./, ''); } catch (e) {}
+            return m.model + (host ? '@' + host : '');
+        }
+
+        function _rdBgTimed(opts, ms, who) {
             var ctl = new AbortController();
             var onAbort = function () { ctl.abort(); };
             if (readerBgAbort) {
@@ -22503,13 +22513,13 @@ body {
             return chatStreamChat(opts).then(function (r) { cleanup(); return r; }, function (e) {
                 cleanup();
                 // 超时要变成普通失败（可重试/可跳过）；用户按停止才是 AbortError（整轮结束）
-                if (timedOut) throw new Error('等了 ' + Math.round(ms / 1000) + ' 秒没响应（中转站没回）');
+                if (timedOut) throw new Error('等了 ' + Math.round(ms / 1000) + ' 秒没响应（' + (who || '中转站') + ' 没回）');
                 throw e;
             });
         }
 
         // 第一遍：只列清单（输出短＝注意力不被拉长）。已讲过的词滚动带下去，跨段、跨章都不重复。
-        async function _rdBgScan(b, lines, doneTerms, mdl) {
+        async function _rdBgScan(b, lines, doneTerms, mdl, fb) {
             var chunks = [], cur = [], curLen = 0;
             for (var i = 0; i < lines.length; i++) {
                 var s = '[P' + (i + 1) + '] ' + lines[i];
@@ -22523,15 +22533,29 @@ body {
                 if (readerBgAbort.signal.aborted) break;
                 if (chunks.length > 1) _rdBgBarShow('通读全章（第 ' + (c + 1) + '/' + chunks.length + ' 段）…');
                 var skip = Object.keys(seen);
-                var out = await _rdBgTimed({
-                    baseUrl: mdl.baseUrl, apiKey: mdl.apiKey, model: mdl.model,
-                    purpose: '标背景·找点',
-                    messages: [
-                        { role: 'system', content: BG_SCAN_INSTRUCTION + (skip.length ? '\n\n【已经讲过、请跳过】' + skip.join('、') : '') },
-                        { role: 'user', content: '书名《' + (rbBookNiceName(b) || '这本书') + '》。以下是本章原文：\n\n' + chunks[c].join('\n') }
-                    ],
-                    max_tokens: 800
-                }, 120000);   // 长章第一遍可能慢，给足 2 分钟
+                var _msgs = [
+                    { role: 'system', content: BG_SCAN_INSTRUCTION + (skip.length ? '\n\n【已经讲过、请跳过】' + skip.join('、') : '') },
+                    { role: 'user', content: '书名《' + (rbBookNiceName(b) || '这本书') + '》。以下是本章原文：\n\n' + chunks[c].join('\n') }
+                ];
+                var _ask = function (m) {
+                    return _rdBgTimed({
+                        baseUrl: m.baseUrl, apiKey: m.apiKey, model: m.model,
+                        purpose: '标背景·找点',
+                        messages: _msgs,
+                        max_tokens: 800
+                    }, 120000, _rdMdlName(m));   // 长章第一遍可能慢，给足 2 分钟
+                };
+                var out;
+                try {
+                    out = await _ask(mdl);
+                } catch (eScan) {
+                    // 摘要模型挂了不该让整个功能报废：它多半是另一个中转站（跟聊天那个不是一路，
+                    // 所以「聊天好好的」和「标背景卡死」能同时成立），而这一遍主模型也做得了，
+                    // 只是贵一点。换主模型再试一次，失败才算真失败。用户按停止除外。
+                    if ((eScan && eScan.name === 'AbortError') || !fb || fb.model === mdl.model) throw eScan;
+                    _rdBgBarShow('摘要模型没回应，换主模型再试…');
+                    out = await _ask(fb);
+                }
                 (out || '').split('\n').forEach(function (ln) {
                     var m = /^\s*P(\d+)\s*[|｜]\s*(.+?)\s*$/.exec(ln);
                     if (!m) return;
@@ -22560,7 +22584,7 @@ body {
                         + '\n\n请给我讲讲「' + pick.term + '」这个背景。' }
                 ],
                 max_tokens: 700
-            }, 90000);   // 单条只讲 120 字，90 秒还没回就是卡了
+            }, 90000, _rdMdlName(mdl));   // 单条只讲 120 字，90 秒还没回就是卡了
             return (out || '').replace(/\[P\d+\]/gi, '').replace(/\n\s*\n+/g, '\n').trim();
         }
 
@@ -22605,7 +22629,7 @@ body {
             var done = 0, failed = 0, lastErr = '', namesAdded = 0;
             try {
                 _rdBgBarShow('通读全章，找背景点…');
-                var picks = await _rdBgScan(b, lines, readerBgDoneTerms(fileKey), scanM);
+                var picks = await _rdBgScan(b, lines, readerBgDoneTerms(fileKey), scanM, explainM);
                 if (!picks.length) { showToast('这一章没有新的背景要补'); return; }
                 for (var k = 0; k < picks.length; k++) {
                     if (readerBgAbort.signal.aborted) break;
