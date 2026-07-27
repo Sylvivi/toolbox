@@ -6,6 +6,7 @@
 ## 项目概况
 - **单文件 HTML PWA**：核心就是 `index.html`（约 2.4 万行 / 约 1.4MB，JS/CSS 全部内联）。**不要拆成多文件**，用户要求保持单文件。
 - **⚠️ `#chatMessages` 容器必须保持空**（源码里应是 `<div class="chat-messages" id="chatMessages"></div>`）。它是运行时消息/阅读内容的渲染区，app 启动会清空重渲染——**绝不能让渲染后的正文/点评被冻进源码**。曾有一整段《傲慢与偏见》阅读快照误存进去，白白撑大文件 1.2MB（2026-07-07 已清）。多半是**从运行中的网页整页保存/导出**导致的，改动后留意别把 DOM 快照写回源码；发现文件异常变大先 grep 书中人名/`class="chat-msg"` 排查这里。
+- **⚠️同一个坑还会冻进密钥——仓库是 public（2026-07-27 发现并清理）**：`chatKeySelect`/`chatKeySelect2` 里躺过**两把明文 API 密钥**，`chatProviderSelect(2)` 躺过 16 个中转站的名字和 id，`compressModelSelect`/`imageModelSelect` 躺过收藏模型列表——**GitHub Pages 直接对外，查看源代码就能读到**，且在公开 git 历史里躺了两个多月才被发现（排查别的 bug 时顺带看见的）。这些 `<select>` 的内容**全部由 JS 在运行时重建**（`populateChatProviders` / `onChatProviderChange` / `_chatRenderModelSelect` 都是 `innerHTML` 整个重写），源码里**只该留占位项**。旁证：出事的 select 连 `style` 都被序列化成 `flex: 1 1 0%` 这类计算值。**每次改完 index.html 建议扫一眼**：`grep -oE 'sk-[A-Za-z0-9_-]{16,}' index.html`（应为空）+ 检查上述 select 是否只剩占位 option。**密钥一旦进过公开历史就必须去中转站作废重发，删文件没用。**
 - **部署**：GitHub Pages，仓库 `Sylvivi/toolbox`、分支 `main`。线上 https://sylvivi.github.io/toolbox/ ，**自定义域**（免梯子）`https://tool.masterofmydomain.top`（Cloudflare CNAME → sylvivi.github.io）。
 - **更新机制**：network-first 的 service worker，推送后过一两分钟刷新页面即生效。
 - **主要用途**：用户主要用「共读模式」读长篇小说（如天龙八部），其次翻译模式、普通对话模式。
