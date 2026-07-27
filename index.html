@@ -20970,9 +20970,35 @@ body {
             var key = b.id + '|' + i;
             if (_rbHeadsCache[key]) return _rbHeadsCache[key];
             var lines = (b.chapters[i].body || '').split('\n').filter(function (l) { return l.trim().length > 0; });
-            var out = rbDetectHeads(lines).map(function (p) { return { p: p, title: lines[p - 1].trim() }; });
+            // ⚠️段号要按「阅读器的编号」返回：readerChapterPair 会把章节标题拼到正文前，于是标题占掉 P1、
+            // 正文整体后移一段。原来直接返回正文内的段号，比阅读器少 1——目录点小节会停在上一节的末尾
+            // （2026-07-27 实测：「自我辩护的代价」目录算 P3、阅读器实际 P4）。
+            // 只给结果加偏移、不把标题喂进 rbDetectHeads：否则标题行自己就可能被当成小标题，凭空多出一行小节。
+            var off = rbChapterHeadOffset(b.chapters[i]);
+            var out = rbDetectHeads(lines).map(function (p) { return { p: p + off, title: lines[p - 1].trim() }; });
             _rbHeadsCache[key] = out;
             return out;
+        }
+        // 章节标题在阅读器里占掉几段（readerChapterPair 的拼法：标题 + 空行 + 正文）
+        function rbChapterHeadOffset(ch) {
+            if (!ch || !ch.title) return 0;
+            return (ch.title + '\n\n').split('\n').filter(function (l) { return l.trim().length > 0; }).length;
+        }
+        /* 每个小节在「阅读器编号」下的范围 → [{p, title, startP, endP}]
+           endP 取下一个小标题前一段；最后一节到章尾。给「按小节标背景」划定扫描范围、
+           也给目录数「这一节已标了几条背景」。 */
+        function rbSectionRanges(b, i) {
+            var hs = rbChapterHeads(b, i);
+            if (!hs.length) return [];
+            var total = rbChapterHeadOffset(b.chapters[i])
+                + (b.chapters[i].body || '').split('\n').filter(function (l) { return l.trim().length > 0; }).length;
+            return hs.map(function (h, k) {
+                return {
+                    p: h.p, title: h.title,
+                    startP: h.p + 1,
+                    endP: (k + 1 < hs.length) ? (hs[k + 1].p - 1) : total
+                };
+            });
         }
         /* 这一章值不值得在目录里展开小节。挡掉版权页/致谢/目录/术语表（太短）和英文注释/索引（非中文），
            这些地方的短行会被误当成小标题。正文章节都是几万字的中文，稳稳通过。 */
@@ -20981,6 +21007,12 @@ body {
             if (body.length < 6000) return false;
             if (rbCnRatio(body.slice(0, 3000)) < 0.5) return false;
             return rbChapterHeads(b, i).length >= 2;
+        }
+        // 目录里点小节的 🏛：只标这一节的背景。必须先关目录——标背景是边标边插进正文的，
+        // 目录盖在上面就全看不见了（跟 rbChapMenuAction 里整章那条走同样的规矩）。
+        function rbMarkBgSection(bookId, i, headP) {
+            rbCloseShelf();
+            readerMarkBg(bookId, i, headP);
         }
         // 目录点小节：开这一章，渲染好之后滚到小标题那一段（照 _readerJumpTo 的轮询套路）
         function rbJumpSection(bookId, chapIdx, headP) {
@@ -21027,13 +21059,27 @@ body {
                         + (_bgMap[i] ? ' · 🏛 已标 ' + _bgMap[i] + ' 条' : '') + '</div></div>'
                         + '<button class="rb-chap-append" onclick="event.stopPropagation();rbChapMenuOpen(\'' + b.id + '\',' + i + ',event)" title="更多">⋯</button></div>';
                     if (_subs && rbChapterHasSections(b, i)) {
-                        var _hs = rbChapterHeads(b, i);
+                        var _hs = rbSectionRanges(b, i);
+                        // 这一章每段各标了几条背景，按小节范围分摊（整章只取一次 list，别每节各扫一遍）
+                        var _bgPs = [];
+                        var _cellL = _qaBook[i] && _qaBook[i].list;
+                        if (Array.isArray(_cellL)) {
+                            for (var _z = 0; _z < _cellL.length; _z++) {
+                                if ((_cellL[_z].q || '').indexOf(BG_Q_PREFIX) === 0) _bgPs.push(_cellL[_z].p);
+                            }
+                        }
                         // 搜索时只留标题匹配的小节；没搜索就全列
                         if (q) _hs = _hs.filter(function (h) { return h.title.toLowerCase().indexOf(q) >= 0; });
                         for (var _si = 0; _si < _hs.length; _si++) {
-                            _row += '<div class="rb-sec" onclick="rbJumpSection(\'' + b.id + '\',' + i + ',' + _hs[_si].p + ')">'
-                                + '<span class="rb-sec-title">' + rbEsc(_hs[_si].title) + '</span>'
-                                + '<span class="rb-sec-p">P' + _hs[_si].p + '</span></div>';
+                            var _sc = _hs[_si], _sn = 0;
+                            for (var _y = 0; _y < _bgPs.length; _y++) {
+                                if (_bgPs[_y] >= _sc.startP && _bgPs[_y] <= _sc.endP) _sn++;
+                            }
+                            _row += '<div class="rb-sec" onclick="rbJumpSection(\'' + b.id + '\',' + i + ',' + _sc.p + ')">'
+                                + '<span class="rb-sec-title">' + rbEsc(_sc.title) + '</span>'
+                                + '<span class="rb-sec-p">' + (_sn ? '🏛 ' + _sn + ' 条' : 'P' + _sc.p) + '</span>'
+                                // 整章三四万字标一次又慢又贵，这里让她只标看不懂的那一节
+                                + '<button class="rb-chap-append" onclick="event.stopPropagation();rbMarkBgSection(\'' + b.id + '\',' + i + ',' + _sc.p + ')" title="只标这一节的背景">🏛</button></div>';
                         }
                     }
                     return _row;
@@ -22526,9 +22572,14 @@ body {
         }
 
         // 第一遍：只列清单（输出短＝注意力不被拉长）。已讲过的词滚动带下去，跨段、跨章都不重复。
-        async function _rdBgScan(b, lines, doneTerms, mdl, fb) {
+        // range={from,to}（可选）：只扫这一段落区间，用于「按小节标背景」。
+        // ⚠️段号仍按整章算（[P<全章段号]），因为插入、渲染、reader_qa 全都用全章编号——
+        // 若改成节内相对编号，块会插到章首去。
+        async function _rdBgScan(b, lines, doneTerms, mdl, fb, range) {
+            var from = Math.max(1, (range && range.from) || 1);
+            var to = Math.min(lines.length, (range && range.to) || lines.length);
             var chunks = [], cur = [], curLen = 0;
-            for (var i = 0; i < lines.length; i++) {
+            for (var i = from - 1; i < to; i++) {
                 var s = '[P' + (i + 1) + '] ' + lines[i];
                 if (curLen && curLen + s.length > BG_SCAN_CHUNK) { chunks.push(cur); cur = []; curLen = 0; }
                 cur.push(s); curLen += s.length + 1;
@@ -22577,7 +22628,8 @@ body {
                     matched++;   // 认出了格式（哪怕随后因「已讲过/段号越界」被滤掉），用来区分「模型没照做」和「确实没新的」
                     var p = parseInt(m[1], 10);
                     var term = m[2].trim().replace(/^\*+|\*+$/g, '').trim();   // 去掉 **加粗**
-                    if (!(p >= 1 && p <= lines.length) || !term || seen[term]) return;
+                    // 限定在扫描区间内：标某一节时，模型偶尔会引用节外的段号，那样块会插到别处去
+                    if (!(p >= from && p <= to) || !term || seen[term]) return;
                     seen[term] = 1;
                     picked.push({ p: p, term: term });
                 });
@@ -22615,7 +22667,9 @@ body {
             return txt;
         }
 
-        async function readerMarkBg(bookId, chapIdx) {
+        // secHeadP（可选）＝小标题所在段号（阅读器编号）。传了就只标那一小节——
+        // 社科书一章三四万字，整章标一次又慢又贵，背景点还摊得很散（用户原话「一章有3万多字，太多了」）。
+        async function readerMarkBg(bookId, chapIdx, secHeadP) {
             if (readerBgRunning) {
                 // 别只把用户挡回去——万一上一轮卡住了，这是唯一的出口
                 if (confirm('这一章正在标背景，要停下吗？') && readerBgAbort) readerBgAbort.abort();
@@ -22650,13 +22704,21 @@ body {
             var lines = readingModeStripParaNums(readingModeGetOriginalText(msgIdx))
                 .split('\n').filter(function (l) { return l.trim().length > 0; });
             if (!lines.length) { showToast('这一章没有正文'); return; }
+            // 只标某一节：范围取「小标题的下一段」到「下个小标题前一段」。段号仍是全章编号。
+            var _sec = null;
+            if (secHeadP > 0) {
+                _sec = rbSectionOf(lines, secHeadP);
+                if (!_sec || _sec.startP > _sec.endP) { showToast('这一节没有正文'); return; }
+            }
+            var _scope = _sec ? ('「' + (_sec.title || '这一节') + '」') : '全章';
 
             readerBgRunning = true;
             readerBgAbort = new AbortController();
             var done = 0, failed = 0, lastErr = '', namesAdded = 0;
             try {
-                _rdBgBarShow('通读全章，找背景点…');
-                var scan = await _rdBgScan(b, lines, readerBgDoneTerms(fileKey), scanM, explainM);
+                _rdBgBarShow('通读' + _scope + '，找背景点…');
+                var scan = await _rdBgScan(b, lines, readerBgDoneTerms(fileKey), scanM, explainM,
+                                           _sec ? { from: _sec.startP, to: _sec.endP } : null);
                 var picks = scan.picks;
                 if (!picks.length) {
                     // 三种情况都让清单为空，但只有第一种是正常的。混为一谈的后果：用户以为「这章确实没背景」，
@@ -22665,11 +22727,11 @@ body {
                     if (scan.matched) {
                         // 模型照格式回了，只是这些词全被滤掉了（多半是别的章已经讲过）——这是正常态，
                         // 别报成「没按格式回」冤枉它（实测会这样误判）。
-                        showToast('这一章的背景点都已经讲过了');
+                        showToast(_scope + '的背景点都已经讲过了');
                     } else if (!raw) {
                         showToast('模型一个字都没回（多半是 max_tokens 被思考过程吃光了），这轮没扫出清单', true);
                     } else if (/^无[。.\s]*$/.test(raw)) {
-                        showToast('这一章没有新的背景要补');
+                        showToast(_scope + '没有新的背景要补');
                     } else {
                         showToast('模型没按格式回，认不出清单：' + raw.replace(/\s+/g, ' ').slice(0, 40) + '…', true);
                     }
