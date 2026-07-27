@@ -22461,6 +22461,27 @@ body {
         }
         function _rdBgBarHide() { var el = document.getElementById('rdBgBar'); if (el) el.remove(); }
 
+        // 把标出来的背景词并进「名单」，让它们在正文里被高亮——
+        // 用户原话：「不然我一下子对应不上为什么这一段要标注背景」。词被点亮了，
+        // 一眼就知道这块背景是冲着哪个词来的。规矩照抄 readingAutoMergeNamesFromTables：只增不删。
+        // quiet=true 时只写名单、不重刷 DOM（紧接着的 readingRerenderMsg 会按新名单重渲，省一次全量重刷）。
+        function readerBgMergeNames(terms, quiet) {
+            if (!terms || !terms.length) return 0;
+            var cur = readingGetNames(), seen = {}, merged = cur.slice(), added = 0;
+            cur.forEach(function (n) { seen[n] = 1; });
+            terms.forEach(function (t) {
+                t = (t || '').trim();
+                if (t && !seen[t]) { seen[t] = 1; merged.push(t); added++; }
+            });
+            if (!added) return 0;
+            readingSetNames(merged);   // 内部负责去重 + 长名优先排序
+            // 加了词却一种样式都没开＝白加，跟名单编辑器保存时的兜底一致
+            if (!readingNameAnyOn()) localStorage.setItem('reading_name_color', '1');
+            _readingMergeCache.text = null;   // 名单变了，下次渲染必须按新名单重包
+            if (!quiet) { readingApplyNames(); readingRehighlightNamesInPlace(); }
+            return added;
+        }
+
         // ⚠️chatStreamChat 没有任何超时：中转站卡住不返回时，`await reader.read()` 会永远挂着。
         // 标背景是个十几条的循环——一条挂死就整轮不动，还把 readerBgRunning 焊死在 true，
         // 之后每次点「接着标」都只会被挡回来（用户实测「很久都不响应」）。
@@ -22581,7 +22602,7 @@ body {
 
             readerBgRunning = true;
             readerBgAbort = new AbortController();
-            var done = 0, failed = 0, lastErr = '';
+            var done = 0, failed = 0, lastErr = '', namesAdded = 0;
             try {
                 _rdBgBarShow('通读全章，找背景点…');
                 var picks = await _rdBgScan(b, lines, readerBgDoneTerms(fileKey), scanM);
@@ -22605,6 +22626,8 @@ body {
                     // 讲完一条插一条：内容进 msg.content → 落 reader_qa → 重渲这条消息，全程锁住阅读位置
                     (function (mi, pk, body) {
                         _rdKeepScroll(mi, function () {
+                            // 先并名单再重渲，这一次重渲就顺带把这个词点亮了
+                            namesAdded += readerBgMergeNames([pk.term], true);
                             chatMessages[mi].content += '\n[P' + pk.p + '] 汐：' + BG_Q_PREFIX + pk.term + '\n' + body;
                             chatSaveCurrentConv(true);
                             readerPersistQA(mi);
@@ -22619,11 +22642,13 @@ body {
             } finally {
                 readerBgRunning = false; readerBgAbort = null;
                 _rdBgBarHide();
+                // 本章的重渲已经带上高亮了；这一下是给「同时载入的其它章节」补上（就地刷，不动滚动位置）
+                if (namesAdded) { try { readingApplyNames(); readingRehighlightNamesInPlace(); } catch (e) {} }
                 if (failed) {
                     showToast(done ? ('已标 ' + done + ' 条，' + failed + ' 条没成功：' + lastErr + '（再点一次「接着标」会补上）')
                                    : ('标背景失败：' + lastErr));
                 } else if (done) {
-                    showToast('已标 ' + done + ' 条背景');
+                    showToast('已标 ' + done + ' 条背景' + (namesAdded ? '，' + namesAdded + ' 个词已加进名单' : ''));
                 }
                 if (done && document.getElementById('rbModal') && document.getElementById('rbChapterList')) rbRenderChapters();
             }
