@@ -244,6 +244,35 @@ function bootSocial() {
     ok('讲解回空必须报出来，不能静默（钱扣了却看不出为什么）', /没成功|失败|没回|思考/.test(E2.提示), JSON.stringify(E2));
     ok('讲解回空时不假装成功：插入数＝真正成功的条数', E2.正文里的块 === E2.存进reader_qa的, JSON.stringify(E2));
 
+    /* 间歇性失败要扛得住：第 1 条成、后面连挂，正是"连着猛发"的形状 */
+    const R = await page.evaluate(async () => {
+        window._bootNovel();
+        const out = {};
+        // 每条第 1 次都挂、第 2 次才成 → 三次退避应当全部救回来
+        let n = 0;
+        window.chatStreamChat = (o) => {
+            if (o.purpose === '标背景·找点') return Promise.resolve('P2|甲\nP5|乙\nP9|丙');
+            n++;
+            return (n % 2 === 1) ? Promise.reject(new Error('HTTP 429: too many requests')) : Promise.resolve('讲解内容。');
+        };
+        const t0 = Date.now();
+        await readerMarkBg('bk_t', 0);
+        out.耗时秒 = Math.round((Date.now() - t0) / 1000);
+        out.成功条数 = readerBgOfChap(readerBookKey('bk_t'), 0).length;
+        out.提示 = window._toasts[window._toasts.length - 1];
+
+        // 三次全挂 → 才算这条失败，且提示要说得出原因
+        window._bootNovel();
+        window.chatStreamChat = (o) => o.purpose === '标背景·找点'
+            ? Promise.resolve('P2|甲') : Promise.reject(new Error('HTTP 500: 中转站炸了'));
+        await readerMarkBg('bk_t', 0);
+        out.全挂时提示 = window._toasts[window._toasts.length - 1];
+        return out;
+    });
+    ok('单条偶发失败能被退避重试救回来（限流时等更久）', R.成功条数 === 3, JSON.stringify(R));
+    ok('限流退避真的等了（不是空转重试）', R.耗时秒 >= 8, '实际 ' + R.耗时秒 + ' 秒');
+    ok('三次全挂才算失败，且提示带原因', /没成功|失败/.test(R.全挂时提示 || '') && /500/.test(R.全挂时提示 || ''), JSON.stringify(R));
+
     /* 失败提示不许 2 秒就溜走——那是"钱花了却没拿到东西"时唯一的解释 */
     const E2b = await page.evaluate(async () => {
         window._bootNovel();

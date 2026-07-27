@@ -18263,9 +18263,18 @@ body {
                 localStorage.setItem('reading_names_ts', new Date().toISOString());
             } catch (e) {}
             if (typeof activeSyncProvider !== 'undefined' && activeSyncProvider === 'cf') {
-                // 合并名单时会连着调好多次（readingBgMergeNames 每标一条就并一次），攒一攒再推
+                // 合并名单时会连着调好多次（readerBgMergeNames 每标一条就并一次），攒一攒再推。
+                // ⚠️标背景跑的时候一直往后推：那一轮每插一条就并一次名单，3 秒的防抖必然
+                // 在中途触发，等于在十几个模型请求中间插一次整包上传，跟它们抢手机的网。
+                // 跑完再推一次就够了（内容一条没少）。
                 clearTimeout(_readingNamesWrite._t);
-                _readingNamesWrite._t = setTimeout(syncPushData, 3000);
+                _readingNamesWrite._t = setTimeout(function again() {
+                    if (typeof readerBgRunning !== 'undefined' && readerBgRunning) {
+                        _readingNamesWrite._t = setTimeout(again, 3000);
+                        return;
+                    }
+                    syncPushData();
+                }, 3000);
             }
         }
         function readingSetNames(arr) {
@@ -23015,14 +23024,26 @@ body {
                     // 单条失败不能拖垮整轮：重试一次，还不行就跳过接着下一条。
                     // 中转站偶发 429/超时很常见，为此把后面十几条全废掉太亏。
                     var txt = '';
-                    for (var att = 0; att < 2 && !txt; att++) {
-                        _rdBgBarShow('讲第 ' + (k + 1) + '/' + picks.length + ' 条：' + picks[k].term + (att ? '（重试）' : ''));
+                    // 退避重试：原来只重试 1 次、固定等 1.5 秒。实测「9 条只成第 1 条」，
+                    // 而且**换不换模型都可能复现／都可能好**——典型的间歇性失败（中转站限流、
+                    // 偶发空回复）。第 1 条成、后面连挂，正是"连着猛发"的形状：这个循环原本
+                    // 是背靠背发请求的，一秒钟能打出去七八个。所以改成 3 次 + 越等越久，
+                    // 遇到限流类报错(429/rate/too many/频率)再多等一截。
+                    var _bo = [0, 2000, 6000];
+                    for (var att = 0; att < 3 && !txt; att++) {
+                        if (att) {
+                            var _wait = _bo[att];
+                            if (/429|rate|too many|频率|限流/i.test(lastErr || '')) _wait = Math.max(_wait, 8000);
+                            _rdBgBarShow('第 ' + (k + 1) + '/' + picks.length + ' 条失败，' + Math.round(_wait / 1000) + ' 秒后重试…');
+                            await new Promise(function (r) { setTimeout(r, _wait); });
+                            if (readerBgAbort.signal.aborted) break;
+                        }
+                        _rdBgBarShow('讲第 ' + (k + 1) + '/' + picks.length + ' 条：' + picks[k].term + (att ? '（第 ' + (att + 1) + ' 次）' : ''));
                         try {
                             txt = await _rdBgExplain(b, lines, picks[k], explainM);
                         } catch (eOne) {
                             if (eOne && eOne.name === 'AbortError') throw eOne;
                             lastErr = (eOne && eOne.message) || String(eOne);
-                            if (!att) await new Promise(function (r) { setTimeout(r, 1500); });
                         }
                     }
                     if (!txt) { failed++; continue; }
@@ -23038,6 +23059,9 @@ body {
                         });
                     })(msgIdx, picks[k], txt);
                     done++;
+                    // 条与条之间喘口气：整轮十几条背靠背发，手机上很容易撞中转站的频率限制。
+                    // 半秒钟对总时长几乎无感（9 条也才多 4 秒），换来的是别一挂挂一串。
+                    if (k + 1 < picks.length) await new Promise(function (r) { setTimeout(r, 500); });
                 }
             } catch (e) {
                 // 连清单都没拿到才算整轮失败（已插进去的那几条都已落盘，不会丢）
