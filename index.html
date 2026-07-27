@@ -21010,8 +21010,7 @@ body {
                         + '<div class="rb-chap-info"><div class="rb-chap-title">' + rbEsc(ch.title) + '</div><div class="rb-chap-meta">'
                         + ch.body.length.toLocaleString() + ' 字' + (i === markCur ? ' · 在读' : '')
                         + (_bgMap[i] ? ' · 🏛 已标 ' + _bgMap[i] + ' 条' : '') + '</div></div>'
-                        + '<button class="rb-chap-append" onclick="event.stopPropagation();rbChapMenuOpen(\'' + b.id + '\',' + i + ',event)" title="更多">⋯</button>'
-                        + '<span style="font-size:11px;color:var(--accent);flex-shrink:0">阅读 ›</span></div>';
+                        + '<button class="rb-chap-append" onclick="event.stopPropagation();rbChapMenuOpen(\'' + b.id + '\',' + i + ',event)" title="更多">⋯</button></div>';
                     if (_subs && rbChapterHasSections(b, i)) {
                         var _hs = rbChapterHeads(b, i);
                         // 搜索时只留标题匹配的小节；没搜索就全列
@@ -21048,7 +21047,7 @@ body {
             menu.id = 'rbChapMenu';
             menu.className = 'chat-hist-menu';
             menu.style.display = 'block';
-            var items = '<div onclick="rbChapMenuAction(\'bg\')">🏛 ' + (n ? '重标背景' : '标背景') + '</div>';
+            var items = '<div onclick="rbChapMenuAction(\'bg\')">🏛 ' + (n ? '接着标背景' : '标背景') + '</div>';
             if ((b.chapters[i].body || '').length >= 6000) items += '<div onclick="rbChapMenuAction(\'split\')">✂️ 手动分章</div>';
             if (n) items += '<div class="danger" onclick="rbChapMenuAction(\'clearbg\')">🗑️ 清掉本章背景（' + n + ' 条）</div>';
             menu.innerHTML = items;
@@ -22510,8 +22509,9 @@ body {
             if (readingCommenting) { showToast('正在生成回答，稍等一下'); return; }
             var b = rbGetBook(bookId); if (!b || !b.chapters[chapIdx]) return;
             var fileKey = readerBookKey(bookId); if (!fileKey) return;
-            var already = readerBgOfChap(fileKey, chapIdx).length;
-            if (already && !confirm('本章标过 ' + already + ' 条背景，清掉重标吗？')) return;
+            // 再点＝接着标，不清空。跑到一半失败/中断是常事，不该让用户在
+            //「留着残缺的几条」和「全推倒重来」之间二选一。已讲过的词会被
+            // readerBgDoneTerms 收进第一遍的「请跳过」名单里，所以天然接得上。
             var mainIt = getKeyItemById(document.getElementById('chatProviderSelect').value);
             if (!mainIt || !chatSelectedModel) { alert('请先选择模型'); return; }
             var scanM = chatResolveCompressModel();
@@ -22527,7 +22527,6 @@ body {
                 readerOpenChapter(bookId, chapIdx);
                 await new Promise(function (r) { setTimeout(r, 300); });
             }
-            if (already) readerBgClearChap(bookId, chapIdx);
             var msgIdx = -1;
             for (var i = 0; i < chatMessages.length; i++) {
                 if (chatMessages[i] && chatMessages[i].readerChapter === chapIdx) { msgIdx = i; break; }
@@ -22539,16 +22538,27 @@ body {
 
             readerBgRunning = true;
             readerBgAbort = new AbortController();
-            var done = 0;
+            var done = 0, failed = 0, lastErr = '';
             try {
                 _rdBgBarShow('通读全章，找背景点…');
                 var picks = await _rdBgScan(b, lines, readerBgDoneTerms(fileKey), scanM);
-                if (!picks.length) { showToast('这一章没找到需要补背景的地方'); return; }
+                if (!picks.length) { showToast('这一章没有新的背景要补'); return; }
                 for (var k = 0; k < picks.length; k++) {
                     if (readerBgAbort.signal.aborted) break;
-                    _rdBgBarShow('讲第 ' + (k + 1) + '/' + picks.length + ' 条：' + picks[k].term);
-                    var txt = await _rdBgExplain(b, lines, picks[k], explainM);
-                    if (!txt) continue;
+                    // 单条失败不能拖垮整轮：重试一次，还不行就跳过接着下一条。
+                    // 中转站偶发 429/超时很常见，为此把后面十几条全废掉太亏。
+                    var txt = '';
+                    for (var att = 0; att < 2 && !txt; att++) {
+                        _rdBgBarShow('讲第 ' + (k + 1) + '/' + picks.length + ' 条：' + picks[k].term + (att ? '（重试）' : ''));
+                        try {
+                            txt = await _rdBgExplain(b, lines, picks[k], explainM);
+                        } catch (eOne) {
+                            if (eOne && eOne.name === 'AbortError') throw eOne;
+                            lastErr = (eOne && eOne.message) || String(eOne);
+                            if (!att) await new Promise(function (r) { setTimeout(r, 1500); });
+                        }
+                    }
+                    if (!txt) { failed++; continue; }
                     // 讲完一条插一条：内容进 msg.content → 落 reader_qa → 重渲这条消息，全程锁住阅读位置
                     (function (mi, pk, body) {
                         _rdKeepScroll(mi, function () {
@@ -22561,14 +22571,18 @@ body {
                     done++;
                 }
             } catch (e) {
-                if (!e || e.name !== 'AbortError') alert('标背景失败：' + ((e && e.message) || e));
+                // 连清单都没拿到才算整轮失败（已插进去的那几条都已落盘，不会丢）
+                if (!e || e.name !== 'AbortError') { lastErr = (e && e.message) || String(e); failed++; }
             } finally {
                 readerBgRunning = false; readerBgAbort = null;
                 _rdBgBarHide();
-                if (done) {
+                if (failed) {
+                    showToast(done ? ('已标 ' + done + ' 条，' + failed + ' 条没成功：' + lastErr + '（再点一次「接着标」会补上）')
+                                   : ('标背景失败：' + lastErr));
+                } else if (done) {
                     showToast('已标 ' + done + ' 条背景');
-                    if (document.getElementById('rbModal') && document.getElementById('rbChapterList')) rbRenderChapters();
                 }
+                if (done && document.getElementById('rbModal') && document.getElementById('rbChapterList')) rbRenderChapters();
             }
         }
 
