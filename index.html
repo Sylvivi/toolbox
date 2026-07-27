@@ -22510,7 +22510,20 @@ body {
                 document.body.appendChild(el);
                 el.querySelector('.rd-bg-stop').onclick = function () { if (readerBgAbort) readerBgAbort.abort(); };
             }
+            _rdBgBarPlace(el);
             el.querySelector('.rd-bg-txt').textContent = text;
+        }
+        // 每次显示都重新贴位：原来写死 bottom:78px，正好压住 clawd 按钮的上沿
+        //（实测三种屏幕都压住，且条子 z-index 240 远高于 clawd 的 10，那一条就点不动了）。
+        // 写死不行的原因是输入框展开/收起时 clawd 会上下移动，所以改成按它的实时位置算。
+        function _rdBgBarPlace(el) {
+            var anchor = document.querySelector('.clawd-model-btn') || document.getElementById('chatInputArea');
+            var bottom = 78;
+            if (anchor) {
+                var r = anchor.getBoundingClientRect();
+                if (r.height > 0) bottom = Math.round(window.innerHeight - r.top) + 12;   // 贴在它上沿再留 12px
+            }
+            el.style.bottom = bottom + 'px';
         }
         function _rdBgBarHide() { var el = document.getElementById('rdBgBar'); if (el) el.remove(); }
 
