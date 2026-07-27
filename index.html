@@ -11537,6 +11537,24 @@ body {
         var SOCIAL_MODE_PERSONA = '你是一个陪我读书的蘑菇朋友，性格温和、有点好奇、话不多但说到点子上。每段讲解结尾带🍄作为签名。\n\n我读的是社会学、社会心理学这类社科/学术书，不是小说。你的首要任务是【把它讲清楚】：把拗口的学术表达翻成人话；出现术语就地解释，别假设我懂；抽象的地方主动举贴近生活的例子，中文语境优先。\n\n讲解要有你自己的判断，不要复述原文、不要堆砌术语显得高深。宁可说得直白，也不要说得漂亮但含混。\n\n不要用「首先/其次/综上所述」这类八股结构，像朋友把一件事跟我讲明白那样自然地说。\n\n我说一个看法时，先想你自己怎么看再回应，可以不同意我；补充我没提到的角度，不要复述或放大我说的话。\n\n日常对话注意系统时间感知。';
         // 社科书「导读」的任务说明：只要人话讲解（不加概念块/论证脉络块），允许引书外例子但以本节为主
         var SOCIAL_GUIDE_INSTRUCTION = '【导读任务】我刚读完这本书的一小节，请把这一节讲给我听。\n\n· 用大白话说清这一节到底在讲什么、作者想让我明白什么。遇到术语就地解释。\n· 抽象的地方举例子，中文语境优先。\n· 可以联系书外的知识，也可以用一句话提这节跟后面章节的关系，但重心必须在这一节，不要大段展开别处。\n· 不要复述原文、不要逐段罗列、不要加小标题（这一节的标题我已经告诉你了）、不要写「本节主要讲了」这类开场白。\n· 不要输出 [P] 段落标记。\n· 控制在 400 字以内，说完就停。';
+        /* 「标背景」两遍法的提示词。
+         * 为什么分两遍：一遍到底＝把整章丢给模型让它自己看着办，那正是共读「散漫点评」的形状——
+         * 前几段挑得细、读到后面就敷衍。第一遍只列清单（输出短，注意力不被拉长），第二遍逐条讲、
+         * 每次只想一件事。第一遍走便宜的压缩模型，第二遍走主模型。 */
+        var BG_SCAN_INSTRUCTION = '【任务】下面是一本书某一章的原文，每段前面标了 [P序号]。请找出这一章里「中文读者多半没有概念、不知道就读不出味道」的背景点。\n\n' +
+            '背景点指的是**书本之外的世界**：那个年代的社会状况、制度与机构、历史事件、思想流派、宗教派别、货币与度量、提到的真实人物是谁。\n' +
+            '不要挑：作者自己的论点、这段话在讲什么、常识词、只出现一次且无关紧要的路人。\n\n' +
+            '【输出格式】一行一条，严格是「P段号|背景点名称」，不要编号、不要解释、不要任何别的话。段号取这个背景点第一次真正需要被解释的那一段。例如：\n' +
+            'P7|共济会\nP23|宾夕法尼亚议会\n\n' +
+            '如果这一章确实没有需要解释的背景，就只输出一行：无';
+        var BG_EXPLAIN_INSTRUCTION = '【任务】用大白话给我讲清楚这一个背景点。\n\n' +
+            '· 只讲**书本之外的世界**：它是什么、当时是怎么回事、为什么要紧。\n' +
+            '· 用今天的东西打个比方，让我有画面。\n' +
+            '· **绝不复述或解读原文**，也不要说「这段在讲…」——那是导读的活，不归你。\n' +
+            '· 不要开场白（别写「好的」「这个背景是」），直接说内容。\n' +
+            '· 不要小标题、不要列表、不要 [P] 标记。\n' +
+            '· 120 字左右，说完就停。';
+
         var chatTranslateMode = false;  // 剧本翻译模式
         var TRANSLATE_MODE_INSTRUCTION = '作为智能翻译辅助工具，请将用户提交的文本翻译成中文后，就文本中难以理解或具有专业术语性质的单词或短语进行标注，并提供其对应含义、音标以及详细而准确的解释，帮助用户深入理解翻译内容的确切意义。\n注意：仅对专业术语、专有名词、特定文化背景或难以理解的单词或短语进行解释。常见词汇如"table"（桌子）、"book"（书）等无需解释。\n\n【剧本 / 台词的智能处理】如果提交的是剧本、台词或影视对白，先判断它属于哪一种，再按对应方式翻译：\n（1）带说话人标注的台本（每句前带人名或角色名，如「张三：…」「MARY: …」）：保留「说话人：台词」的逐行结构来翻译，按标注给出的人物身份来定人称、性别、语气和口吻，与该角色一致；不要把台词并成段落，也不要删掉或改写说话人。\n（2）纯字幕本 / 无人名的对白（只有一句句台词、没有说话人标注）：\n· 从上下文推断这段对话有几个人、谁在跟谁说话，给每一句都加上推断出的说话人标签，格式为「标签（性别）：台词」。如果台词里透露了人物名字（互相称呼、被叫到名字），优先用真名当标签，如「Jack（男）：…」；认不出名字才退而用「A（男）：…」「B（女）：…」这种代号。同一个人全程固定用同一个标签。\n· 全程锁定每个人的人称（他/她、你/您）、性别、语气和口吻，前后保持一致，绝不中途乱跳。\n· 字幕常把完整的一句话拆成好几行（跨行断句）；翻译前先把这些被拆断的碎行拼回成完整的句子，再翻成通顺自然的一整句，不要逐行硬翻出断裂的半句。\n· 拿不准某句是谁说的时候，宁可用中性标签「？：」老实标注，也绝不要自信地乱安一个说话人——标签只是辅助，标错反而误导。\n· 如果这段是同一个剧本接着前文继续发的，说话人标签要和前面保持一致（同一个人还用同一个标签或名字），不要重新从 A 数起、把人认串。\n剧本情况下，下面第一部分就按「说话人：台词」逐行输出、而不是合成自然段落；分割线与术语解释部分照旧。\n\n【输出格式（必须严格遵守，每次回复都使用完全相同的结构，不要增删小标题、不要改变顺序）】\n第一部分：直接给出原文的中文翻译，作为一个或多个自然段落，不要加"翻译："之类的前缀，不要加任何标题。\n然后另起一行，单独输出一行三个连字符作为分割线：\n---\n第二部分：逐条解释术语。每个术语单独占一行（行与行之间空一行），且每一行都严格使用下面这一种格式，不要使用项目符号、不要使用编号、不要使用小标题：\n**英文单词或短语** [美式音标]：**中文含义** 词根/词缀/词源解释 相关emoji（牛津词典英文释义）\n如果整段没有需要解释的术语，第二部分就只输出一句"本段无需特别解释的术语。"，不要省略分割线。\n\n示例：\n**Cockpit** [ˈkɑːk.pɪt]：**驾驶舱** Cock 这个词根来源于古英语"cocc"，意为公鸡，pit 意为坑、围栏，合起来原指斗鸡场，后引申为狭小的操作空间 🛫🚢（the area in a plane, boat or racing car where the pilot or driver sits）';
         var chatStreaming = false;
@@ -19367,6 +19385,56 @@ body {
             if (activeSyncProvider === 'cf') syncPushData();
         }
 
+        /* ===== 阅读模式：整章「标背景」的存储 =====
+         * 读非虚构最常卡的不是生词、是缺背景：字都认识，但不知道那个年代/制度/学派是怎么回事，
+         * 而且往往不知道自己缺。用户在目录里点某章的「⋯ → 🏛 标背景」，两遍跑完把背景说明插进对应段落下方。
+         *
+         * 存储完全复用 reader_qa：一个背景块就是一条 q 以「背景：」开头的问答。
+         * 于是云同步、换设备重灌、长按删除/重新回答、读痕面板全部白拿，不新增任何存储键。 */
+        var BG_Q_PREFIX = '背景：';
+        function readerBgOfChap(fileKey, chap) {
+            return readerQAGet(fileKey, chap).filter(function (it) { return (it.q || '').indexOf(BG_Q_PREFIX) === 0; });
+        }
+        // 全书已讲过的背景词——喂给第一遍让它跳过，免得共济会在第 3、7、11 章各讲一遍
+        function readerBgDoneTerms(fileKey) {
+            var book = readerQAAll()[fileKey] || {}, seen = {}, out = [];
+            Object.keys(book).forEach(function (k) {
+                var cell = book[k];
+                if (!cell || !Array.isArray(cell.list)) return;
+                cell.list.forEach(function (it) {
+                    if ((it.q || '').indexOf(BG_Q_PREFIX) !== 0) return;
+                    var t = it.q.slice(BG_Q_PREFIX.length).trim();
+                    if (t && !seen[t]) { seen[t] = 1; out.push(t); }
+                });
+            });
+            return out;
+        }
+        // 清掉某章的背景块。reader_qa 是权威，先清它；这一章正开着才顺带清正文并重渲（没开着也能清）
+        function readerBgClearChap(bookId, chap) {
+            var fileKey = readerBookKey(bookId); if (!fileKey) return 0;
+            var all = readerQAAll();
+            var cell = all[fileKey] && all[fileKey][chap];
+            if (!cell || !Array.isArray(cell.list)) return 0;
+            var before = cell.list.length;
+            cell.list = cell.list.filter(function (it) { return (it.q || '').indexOf(BG_Q_PREFIX) !== 0; });
+            var removed = before - cell.list.length;
+            if (!removed) return 0;
+            cell.ts = Date.now();   // 盖新时间戳，免得云端旧值回灌把删掉的背景又拉回来
+            readerQASaveAll(all);
+            if (activeSyncProvider === 'cf') syncPushData();
+            if (chatReaderMode && readerBookId === bookId) {
+                for (var i = 0; i < chatMessages.length; i++) {
+                    if (chatMessages[i] && chatMessages[i].readerChapter === chap) {
+                        chatMessages[i].content = readerQABuildContent(fileKey, chap);
+                        chatSaveCurrentConv(true);
+                        readingRerenderMsg(i);
+                        break;
+                    }
+                }
+            }
+            return removed;
+        }
+
         function readerSummariesAll() { try { return JSON.parse(localStorage.getItem('reader_summaries') || '{}'); } catch (e) { return {}; } }
         function readerSummariesSaveAll(all) { try { localStorage.setItem('reader_summaries', JSON.stringify(all)); } catch (e) {} }
         function readerSummaryGet(fileKey, chap) {
@@ -20917,14 +20985,32 @@ body {
             var _subs = rbPickForReader && rbIsSocial(b);   // 两级目录只在「社科书 + 阅读模式选书」时出现
             // 阅读模式按「阅读器进度」标记当前章；共读模式按 lastChapter 标记
             var markCur = rbPickForReader ? readerGetProgress(b.id).chapter : b.lastChapter;
+            // 每章标过几条背景，显示在字数后面。整本 reader_qa 只读一次——
+            // 二三百章的书要是每行各查一次，等于把整个 reader_qa 反复 JSON.parse 几百遍。
+            var _bgMap = {};
+            if (rbPickForReader) {
+                var _fk = readerBookKey(b.id);
+                var _qaBook = _fk ? (readerQAAll()[_fk] || {}) : {};
+                Object.keys(_qaBook).forEach(function (k) {
+                    var l = _qaBook[k] && _qaBook[k].list;
+                    if (!Array.isArray(l)) return;
+                    var n = 0;
+                    for (var z = 0; z < l.length; z++) { if ((l[z].q || '').indexOf(BG_Q_PREFIX) === 0) n++; }
+                    if (n) _bgMap[k] = n;
+                });
+            }
             var html = b.chapters.map(function (ch, i) {
                 if (q && ch.title.toLowerCase().indexOf(q) < 0 && ch.body.toLowerCase().indexOf(q) < 0) return '';
                 var cls = 'rb-chap';
                 if (markCur != null) { if (i < markCur) cls += ' rb-read'; if (i === markCur) cls += ' rb-current'; }
                 if (rbPickForReader) {
+                    // 阅读模式每行统一一个「⋯」（跟书架上的书一致），标背景/手动分章都收进去。
+                    // 长章原本比别人多个 ✂️，收进菜单后反而跟所有行一样干净。
                     var _row = '<div class="' + cls + '" onclick="readerOpenChapter(\'' + b.id + '\',' + i + ')">'
-                        + '<div class="rb-chap-info"><div class="rb-chap-title">' + rbEsc(ch.title) + '</div><div class="rb-chap-meta">' + ch.body.length.toLocaleString() + ' 字' + (i === markCur ? ' · 在读' : '') + '</div></div>'
-                        + (ch.body.length >= 6000 ? '<button class="rb-chap-append" onclick="event.stopPropagation();rbSplitOneChapter(\'' + b.id + '\',' + i + ')" title="这一章太长，手动标注在哪里分章">✂️</button>' : '')
+                        + '<div class="rb-chap-info"><div class="rb-chap-title">' + rbEsc(ch.title) + '</div><div class="rb-chap-meta">'
+                        + ch.body.length.toLocaleString() + ' 字' + (i === markCur ? ' · 在读' : '')
+                        + (_bgMap[i] ? ' · 🏛 已标 ' + _bgMap[i] + ' 条' : '') + '</div></div>'
+                        + '<button class="rb-chap-append" onclick="event.stopPropagation();rbChapMenuOpen(\'' + b.id + '\',' + i + ',event)" title="更多">⋯</button>'
                         + '<span style="font-size:11px;color:var(--accent);flex-shrink:0">阅读 ›</span></div>';
                     if (_subs && rbChapterHasSections(b, i)) {
                         var _hs = rbChapterHeads(b, i);
@@ -20948,6 +21034,46 @@ body {
         }
         // 搜索框防抖：等停手 200ms 再扫全书，避免每敲一个字母就把整本几百万字重扫一遍（结果完全一致，只是少做无用功）
         var rbChapterSearchInput = debounce(rbRenderChapters, 200);
+
+        /* 目录里每章的「⋯」菜单（阅读模式）。放这儿而不是塞进 clawd 菜单，是因为
+         * 标背景本来就是按章的动作，目录天然按章组织，还能顺带显示哪几章已经标过。 */
+        var rbChapMenuBook = null, rbChapMenuIdx = -1;
+        function rbChapMenuOpen(bookId, i, e) {
+            e.stopPropagation(); e.preventDefault();
+            var old = document.getElementById('rbChapMenu'); if (old) old.remove();
+            var b = rbGetBook(bookId); if (!b || !b.chapters[i]) return;
+            var fk = readerBookKey(bookId);
+            var n = fk ? readerBgOfChap(fk, i).length : 0;
+            var menu = document.createElement('div');
+            menu.id = 'rbChapMenu';
+            menu.className = 'chat-hist-menu';
+            menu.style.display = 'block';
+            var items = '<div onclick="rbChapMenuAction(\'bg\')">🏛 ' + (n ? '重标背景' : '标背景') + '</div>';
+            if ((b.chapters[i].body || '').length >= 6000) items += '<div onclick="rbChapMenuAction(\'split\')">✂️ 手动分章</div>';
+            if (n) items += '<div class="danger" onclick="rbChapMenuAction(\'clearbg\')">🗑️ 清掉本章背景（' + n + ' 条）</div>';
+            menu.innerHTML = items;
+            document.body.appendChild(menu);
+            rbChapMenuBook = bookId; rbChapMenuIdx = i;
+            var rect = e.currentTarget.getBoundingClientRect();
+            menu.style.top = Math.min(rect.bottom + 4, window.innerHeight - menu.offsetHeight - 8) + 'px';
+            menu.style.right = (window.innerWidth - rect.right) + 'px';
+            menu.style.left = '';
+            setTimeout(function () { document.addEventListener('click', rbChapMenuClose, { once: true }); }, 0);
+        }
+        function rbChapMenuClose() { var m = document.getElementById('rbChapMenu'); if (m) m.remove(); }
+        function rbChapMenuAction(action) {
+            var id = rbChapMenuBook, i = rbChapMenuIdx;
+            rbChapMenuClose();
+            if (!id || i < 0) return;
+            if (action === 'split') { rbSplitOneChapter(id, i); return; }
+            if (action === 'clearbg') {
+                var n = readerBgClearChap(id, i);
+                if (n) { showToast('已清掉 ' + n + ' 条背景'); rbRenderChapters(); }
+                return;
+            }
+            // 标背景要边标边插进正文，得让用户看得见——先把目录关掉
+            if (action === 'bg') { rbCloseShelf(); readerMarkBg(id, i); }
+        }
 
         function rbInsertChapter(id, i) {
             var b = rbGetBook(id); if (!b || !b.chapters[i]) return;
@@ -22278,6 +22404,171 @@ body {
                 } catch (e) {}
                 readingCommenting = false;
                 readingAbortCtl = null;
+            }
+        }
+
+        /* ===== 阅读模式：整章「标背景」引擎（两遍法 + 边标边插） ===== */
+        var readerBgRunning = false, readerBgAbort = null;
+        var BG_SCAN_CHUNK = 20000;   // 第一遍每次最多喂这么多字；超长章（社会性动物有 28000 字的章）切几段分别扫
+
+        // 边标边插时锁住阅读位置：插入若发生在视口上方，会把用户正在看的那一行顶跑。
+        // 做法是先记下当前露在视口顶部的那一段，重渲后按它的位移把 scrollTop 补回去。
+        function _rdKeepScroll(msgIdx, fn) {
+            var cont = document.getElementById('chatMessages');
+            var msgEl = cont && cont.querySelector('.chat-msg.ai[data-idx="' + msgIdx + '"]');
+            var anchorP = null, before = 0;
+            if (cont && msgEl) {
+                var ctop = cont.getBoundingClientRect().top;
+                var ps = msgEl.querySelectorAll('.reading-merged p[data-p]');
+                for (var i = 0; i < ps.length; i++) {
+                    var t = ps[i].getBoundingClientRect().top - ctop;
+                    if (t > -4) { anchorP = ps[i].getAttribute('data-p'); before = t; break; }
+                }
+            }
+            fn();
+            if (!cont || !anchorP) return;
+            var fresh = cont.querySelector('.chat-msg.ai[data-idx="' + msgIdx + '"] .reading-merged p[data-p="' + anchorP + '"]');
+            if (!fresh) return;
+            cont.scrollTop += (fresh.getBoundingClientRect().top - cont.getBoundingClientRect().top) - before;
+        }
+
+        function _rdBgBarShow(text) {
+            var el = document.getElementById('rdBgBar');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'rdBgBar';
+                el.setAttribute('style', 'position:fixed;left:50%;transform:translateX(-50%);bottom:78px;z-index:70;display:flex;align-items:center;gap:10px;max-width:88vw;padding:8px 14px;border-radius:999px;background:var(--modal-bg);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--card-border);box-shadow:0 8px 26px rgba(0,0,0,0.18);font-size:12.5px;color:var(--text)');
+                el.innerHTML = '<span class="rd-bg-txt" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>'
+                    + '<button type="button" class="rd-bg-stop" style="flex-shrink:0;border:none;background:var(--card-border);color:var(--text);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer">停止</button>';
+                document.body.appendChild(el);
+                el.querySelector('.rd-bg-stop').onclick = function () { if (readerBgAbort) readerBgAbort.abort(); };
+            }
+            el.querySelector('.rd-bg-txt').textContent = text;
+        }
+        function _rdBgBarHide() { var el = document.getElementById('rdBgBar'); if (el) el.remove(); }
+
+        // 第一遍：只列清单（输出短＝注意力不被拉长）。已讲过的词滚动带下去，跨段、跨章都不重复。
+        async function _rdBgScan(b, lines, doneTerms, mdl) {
+            var chunks = [], cur = [], curLen = 0;
+            for (var i = 0; i < lines.length; i++) {
+                var s = '[P' + (i + 1) + '] ' + lines[i];
+                if (curLen && curLen + s.length > BG_SCAN_CHUNK) { chunks.push(cur); cur = []; curLen = 0; }
+                cur.push(s); curLen += s.length + 1;
+            }
+            if (cur.length) chunks.push(cur);
+            var picked = [], seen = {};
+            doneTerms.forEach(function (t) { seen[t] = 1; });
+            for (var c = 0; c < chunks.length; c++) {
+                if (readerBgAbort.signal.aborted) break;
+                if (chunks.length > 1) _rdBgBarShow('通读全章（第 ' + (c + 1) + '/' + chunks.length + ' 段）…');
+                var skip = Object.keys(seen);
+                var out = await chatStreamChat({
+                    baseUrl: mdl.baseUrl, apiKey: mdl.apiKey, model: mdl.model,
+                    purpose: '标背景·找点',
+                    messages: [
+                        { role: 'system', content: BG_SCAN_INSTRUCTION + (skip.length ? '\n\n【已经讲过、请跳过】' + skip.join('、') : '') },
+                        { role: 'user', content: '书名《' + (rbBookNiceName(b) || '这本书') + '》。以下是本章原文：\n\n' + chunks[c].join('\n') }
+                    ],
+                    max_tokens: 800,
+                    signal: readerBgAbort.signal
+                });
+                (out || '').split('\n').forEach(function (ln) {
+                    var m = /^\s*P(\d+)\s*[|｜]\s*(.+?)\s*$/.exec(ln);
+                    if (!m) return;
+                    var p = parseInt(m[1], 10), term = m[2].trim();
+                    if (!(p >= 1 && p <= lines.length) || !term || seen[term]) return;
+                    seen[term] = 1;
+                    picked.push({ p: p, term: term });
+                });
+            }
+            picked.sort(function (x, y) { return x.p - y.p; });
+            return picked;
+        }
+
+        // 第二遍：一条一条讲，每次只想一件事。只喂这个背景点 + 它所在段落前后一小圈上下文。
+        // ⚠️模型必须由调用方在「开章之前」定好传进来：readerOpenChapter → chatResetConvState()
+        // 会把 chatSelectedModel/chatSelectedKeyStr 清空，之后要等 chatLoadModelsForCurrentKey
+        // 异步跑完才恢复。这里若现读全局，从目录标一个没打开的章节就会拿着空模型名发请求。
+        async function _rdBgExplain(b, lines, pick, mdl) {
+            var around = lines.slice(Math.max(0, pick.p - 2), Math.min(lines.length, pick.p + 1)).join('\n');
+            var out = await chatStreamChat({
+                baseUrl: mdl.baseUrl, apiKey: mdl.apiKey, model: mdl.model, markUsed: true,
+                purpose: '标背景·讲解',
+                messages: [
+                    { role: 'system', content: SOCIAL_MODE_PERSONA + '\n\n' + BG_EXPLAIN_INSTRUCTION },
+                    { role: 'user', content: '我正在读《' + (rbBookNiceName(b) || '这本书') + '》，读到这里：\n\n' + around
+                        + '\n\n请给我讲讲「' + pick.term + '」这个背景。' }
+                ],
+                max_tokens: 700,
+                signal: readerBgAbort.signal
+            });
+            return (out || '').replace(/\[P\d+\]/gi, '').replace(/\n\s*\n+/g, '\n').trim();
+        }
+
+        async function readerMarkBg(bookId, chapIdx) {
+            if (readerBgRunning) { showToast('正在标背景，等这章标完'); return; }
+            if (readingCommenting) { showToast('正在生成回答，稍等一下'); return; }
+            var b = rbGetBook(bookId); if (!b || !b.chapters[chapIdx]) return;
+            var fileKey = readerBookKey(bookId); if (!fileKey) return;
+            var already = readerBgOfChap(fileKey, chapIdx).length;
+            if (already && !confirm('本章标过 ' + already + ' 条背景，清掉重标吗？')) return;
+            var mainIt = getKeyItemById(document.getElementById('chatProviderSelect').value);
+            if (!mainIt || !chatSelectedModel) { alert('请先选择模型'); return; }
+            var scanM = chatResolveCompressModel();
+            if (!scanM) { alert('请先选择模型'); return; }
+            // 两个模型都在开章之前定死（开章会清空 chatSelectedModel，见 _rdBgExplain 上的注释）
+            var explainM = chatResolveReadingModel('qa') || {
+                baseUrl: getBaseUrl(mainIt.url),
+                apiKey: chatSelectedKeyStr || getActiveKey(mainIt),
+                model: chatSelectedModel
+            };
+            // 没开在这一章就先打开它——不然没地方插
+            if (!chatReaderMode || readerBookId !== bookId || readerChapterIdx !== chapIdx) {
+                readerOpenChapter(bookId, chapIdx);
+                await new Promise(function (r) { setTimeout(r, 300); });
+            }
+            if (already) readerBgClearChap(bookId, chapIdx);
+            var msgIdx = -1;
+            for (var i = 0; i < chatMessages.length; i++) {
+                if (chatMessages[i] && chatMessages[i].readerChapter === chapIdx) { msgIdx = i; break; }
+            }
+            if (msgIdx < 0) { showToast('打不开这一章'); return; }
+            var lines = readingModeStripParaNums(readingModeGetOriginalText(msgIdx))
+                .split('\n').filter(function (l) { return l.trim().length > 0; });
+            if (!lines.length) { showToast('这一章没有正文'); return; }
+
+            readerBgRunning = true;
+            readerBgAbort = new AbortController();
+            var done = 0;
+            try {
+                _rdBgBarShow('通读全章，找背景点…');
+                var picks = await _rdBgScan(b, lines, readerBgDoneTerms(fileKey), scanM);
+                if (!picks.length) { showToast('这一章没找到需要补背景的地方'); return; }
+                for (var k = 0; k < picks.length; k++) {
+                    if (readerBgAbort.signal.aborted) break;
+                    _rdBgBarShow('讲第 ' + (k + 1) + '/' + picks.length + ' 条：' + picks[k].term);
+                    var txt = await _rdBgExplain(b, lines, picks[k], explainM);
+                    if (!txt) continue;
+                    // 讲完一条插一条：内容进 msg.content → 落 reader_qa → 重渲这条消息，全程锁住阅读位置
+                    (function (mi, pk, body) {
+                        _rdKeepScroll(mi, function () {
+                            chatMessages[mi].content += '\n[P' + pk.p + '] 汐：' + BG_Q_PREFIX + pk.term + '\n' + body;
+                            chatSaveCurrentConv(true);
+                            readerPersistQA(mi);
+                            readingRerenderMsg(mi);
+                        });
+                    })(msgIdx, picks[k], txt);
+                    done++;
+                }
+            } catch (e) {
+                if (!e || e.name !== 'AbortError') alert('标背景失败：' + ((e && e.message) || e));
+            } finally {
+                readerBgRunning = false; readerBgAbort = null;
+                _rdBgBarHide();
+                if (done) {
+                    showToast('已标 ' + done + ' 条背景');
+                    if (document.getElementById('rbModal') && document.getElementById('rbChapterList')) rbRenderChapters();
+                }
             }
         }
 
