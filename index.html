@@ -22633,6 +22633,20 @@ body {
             var el = document.getElementById('rdBgBar'); if (el) el.remove();
         }
 
+        /* 去重用的归一化键：**只用来比对，显示仍用原样**。
+           原来是一模一样的字符串比对，于是模型这一章写「共济会」、下一章写
+           「共济会（Freemasonry）」就被当成两个词，用户被讲第二遍、还扣一次费。
+           这里抹掉的都是**同一个词的不同写法**：括号注解、书名号/引号、空格中点连字符、
+           英文大小写、全角字母数字。⚠️故意**不做包含关系**（「独立战争」⊂「美国独立战争」）——
+           那会连「宪法」和「美国宪法」这种真该分开讲的也一起吞掉，而且吞得无声无息。 */
+        function _rdBgKey(t) {
+            return String(t || '')
+                .replace(/[（(［\[【][^）)］\]】]*[）)］\]】]/g, '')   // 括号及里面的注解
+                .replace(/[《》〈〉「」『』“”‘’"'·・\-—_\s]/g, '')      // 书名号/引号/空格/中点/连字符
+                .replace(/[Ａ-Ｚａ-ｚ０-９]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 65248); })
+                .toLowerCase();
+        }
+
         // 把标出来的背景词并进「名单」，让它们在正文里被高亮——
         // 用户原话：「不然我一下子对应不上为什么这一段要标注背景」。词被点亮了，
         // 一眼就知道这块背景是冲着哪个词来的。规矩照抄 readingAutoMergeNamesFromTables：只增不删。
@@ -22705,7 +22719,8 @@ body {
             }
             if (cur.length) chunks.push(cur);
             var picked = [], seen = {}, replies = [], matched = 0;
-            doneTerms.forEach(function (t) { seen[t] = 1; });
+            // 键用归一化后的（见 _rdBgKey）；喂给模型的「请跳过」名单仍用原词，那是给人/模型看的
+            doneTerms.forEach(function (t) { seen[_rdBgKey(t)] = 1; });
             for (var c = 0; c < chunks.length; c++) {
                 if (readerBgAbort.signal.aborted) break;
                 if (chunks.length > 1) _rdBgBarShow('通读全章（第 ' + (c + 1) + '/' + chunks.length + ' 段）…');
@@ -22748,8 +22763,9 @@ body {
                     var p = parseInt(m[1], 10);
                     var term = m[2].trim().replace(/^\*+|\*+$/g, '').trim();   // 去掉 **加粗**
                     // 限定在扫描区间内：标某一节时，模型偶尔会引用节外的段号，那样块会插到别处去
-                    if (!(p >= from && p <= to) || !term || seen[term]) return;
-                    seen[term] = 1;
+                    var key = _rdBgKey(term);
+                    if (!(p >= from && p <= to) || !term || !key || seen[key]) return;
+                    seen[key] = 1;
                     picked.push({ p: p, term: term });
                 });
             }

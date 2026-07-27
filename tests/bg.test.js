@@ -154,6 +154,32 @@ function bootSocial() {
     });
     eq('清单解析容错（- / 1. / ** / ：/ 全角Ｐ / 小写p 都要认）', C.tolerant, ['1甲', '2乙', '3丙', '4丁']);
     eq('跨章去重：讲过的词滤掉', C.dedup, ['乙']);
+
+    /* 去重要认得出"同一个词的不同写法"，否则同一个背景被讲两遍、扣两次费 */
+    const C2 = await page.evaluate(async () => {
+        const scan = async (out, done) => {
+            window.readerBgAbort = new AbortController();
+            window.chatStreamChat = () => Promise.resolve(out);
+            return (await _rdBgScan({ title: 't' }, ['一', '二', '三'], done, { model: 'c' }, { model: 'm' })).picks.map(x => x.term);
+        };
+        return {
+            括号注解: await scan('P1|共济会（Freemasonry）\nP2|大陆会议', ['共济会']),
+            书名号: await scan('P1|《联邦党人文集》', ['联邦党人文集']),
+            大小写: await scan('P1|Freemasonry', ['freemasonry']),
+            空格中点: await scan('P1|圣 巴托罗缪 之夜', ['圣巴托罗缪之夜']),
+            同轮变体: await scan('P1|共济会\nP2|共济会（Freemasonry）', []),
+            // ⚠️反向保护：包含关系**不算**重复，否则「宪法」讲过就再也讲不了「美国宪法」
+            包含不算重复: await scan('P1|美国独立战争', ['独立战争']),
+            显示的是原样: await scan('P1|共济会（Freemasonry）', [])
+        };
+    });
+    eq('去重认得「共济会（Freemasonry）」＝「共济会」', C2.括号注解, ['大陆会议']);
+    eq('去重认得书名号', C2.书名号, []);
+    eq('去重不分英文大小写', C2.大小写, []);
+    eq('去重忽略空格/中点', C2.空格中点, []);
+    eq('同一轮里的不同写法也只留一条', C2.同轮变体, ['共济会']);
+    eq('包含关系不当成重复（「宪法」讲过≠「美国宪法」不用讲）', C2.包含不算重复, ['美国独立战争']);
+    eq('归一化只用于比对，显示仍是模型给的原样', C2.显示的是原样, ['共济会（Freemasonry）']);
     eq('按小节标时：区间外的段号丢弃（否则块会插到别的节去）', C.inRange, [4]);
     eq('摘要模型挂了 → 自动换主模型再试', C.fallback.tried, ['c', 'm']);
     ok('回退后照样拿到清单', C.fallback.picks === 1, '实际 ' + C.fallback.picks + ' 条');
