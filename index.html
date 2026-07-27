@@ -22510,28 +22510,55 @@ body {
                 // 居中不用 left:50%+transform：那样元素的可用宽度只剩「视口减去左边那 50%」＝半屏，
                 // max-width:88vw 永远吃不满，词名被截成「共…」（条子的意义就是告诉你在标哪个词）。
                 // 改成 left:0;right:0;margin:0 auto + width:fit-content，居中效果一样、能撑到 88vw。
-                el.setAttribute('style', 'position:fixed;left:0;right:0;margin:0 auto;width:fit-content;bottom:78px;z-index:240;display:flex;align-items:center;gap:10px;max-width:88vw;padding:8px 14px;border-radius:999px;background:var(--modal-bg);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--card-border);box-shadow:0 8px 26px rgba(0,0,0,0.18);font-size:12.5px;color:var(--text)');
+                el.setAttribute('style', 'position:fixed;left:0;right:0;margin:0 auto;width:fit-content;top:70px;z-index:240;display:flex;align-items:center;gap:10px;max-width:88vw;padding:8px 14px;border-radius:999px;background:var(--modal-bg);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--card-border);box-shadow:0 8px 26px rgba(0,0,0,0.18);font-size:12.5px;color:var(--text)');
                 el.innerHTML = '<span class="rd-bg-txt" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>'
                     + '<button type="button" class="rd-bg-stop" style="flex-shrink:0;border:none;background:var(--card-border);color:var(--text);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer">停止</button>';
                 document.body.appendChild(el);
                 el.querySelector('.rd-bg-stop').onclick = function () { if (readerBgAbort) readerBgAbort.abort(); };
+                // 顶栏(.chat-topbar)会随滚动收起/展开，一收一展整个阅读区上下移 51px。
+                // 只在 _rdBgBarShow 时贴一次位的话，条子会在顶栏出现时压住它上面的按钮
+                //（顶栏 z-index 才 20，压得严严实实）。跟着滚动重贴，一条讲解几十秒足够遇上。
+                _rdBgBarPlace._on = function () { var e = document.getElementById('rdBgBar'); if (e) _rdBgBarPlace(e); };
+                var _area = document.getElementById('chatMessages');
+                if (_area) _area.addEventListener('scroll', _rdBgBarPlace._on, { passive: true });
+                window.addEventListener('resize', _rdBgBarPlace._on);
             }
             _rdBgBarPlace(el);
             el.querySelector('.rd-bg-txt').textContent = text;
         }
-        // 每次显示都重新贴位：原来写死 bottom:78px，正好压住 clawd 按钮的上沿
-        //（实测三种屏幕都压住，且条子 z-index 240 远高于 clawd 的 10，那一条就点不动了）。
-        // 写死不行的原因是输入框展开/收起时 clawd 会上下移动，所以改成按它的实时位置算。
+        // ⚠️贴在屏幕**顶部**，别再往底下放（2026-07-27 第三次改这个位置，前两版都在底部）。
+        // 底部是手机的拇指区：初版写死 bottom:78px 直接压住 clawd 上沿；第二版改成按 clawd 实时位置
+        // 上移、留 12px，矩形已经不相交了，用户仍然报「真的需要再移上去很多」——因为条子高 41px、
+        // z-index 240，够到 clawd(32px 高) 的那一路全被它吃掉，差几像素跟压着没区别。
+        // 它只是「进度 + 停止」，本来就不该跟常用按钮抢拇指区，所以整条搬到阅读区顶端：
+        // 离 clawd/输入框最远，且输入框展开收起时它纹丝不动（第二版每次都要跟着算）。
         function _rdBgBarPlace(el) {
-            var anchor = document.querySelector('.clawd-model-btn') || document.getElementById('chatInputArea');
-            var bottom = 78;
-            if (anchor) {
-                var r = anchor.getBoundingClientRect();
-                if (r.height > 0) bottom = Math.round(window.innerHeight - r.top) + 12;   // 贴在它上沿再留 12px
+            var area = document.getElementById('chatMessages');
+            var top = 70;
+            if (area) {
+                var r = area.getBoundingClientRect();
+                if (r.height > 0) top = Math.round(r.top) + 10;   // 阅读区顶端往下 10px
             }
-            el.style.bottom = bottom + 'px';
+            // 翻译模式那条也是 z-index 240，两者都在时按它的下沿让开。
+            // ⚠️必须认 .show：它平时用 opacity:0+pointer-events:none 藏着（不是 display:none），
+            // 光看 offsetParent 会永远判成"在显示"，白白把条子往下推 46px。
+            var ta = document.getElementById('translateActBar');
+            if (ta && ta.classList.contains('show')) {
+                var tr = ta.getBoundingClientRect();
+                if (tr.height > 0 && tr.bottom + 8 > top) top = Math.round(tr.bottom) + 8;
+            }
+            el.style.top = Math.max(10, top) + 'px';
+            el.style.bottom = 'auto';   // 复用同一个节点：上一版设过 bottom，不清掉会被上下同时钉住
         }
-        function _rdBgBarHide() { var el = document.getElementById('rdBgBar'); if (el) el.remove(); }
+        function _rdBgBarHide() {
+            if (_rdBgBarPlace._on) {
+                var area = document.getElementById('chatMessages');
+                if (area) area.removeEventListener('scroll', _rdBgBarPlace._on);
+                window.removeEventListener('resize', _rdBgBarPlace._on);
+                _rdBgBarPlace._on = null;   // 不清掉的话下一轮会再挂一个，标几次就积一堆监听
+            }
+            var el = document.getElementById('rdBgBar'); if (el) el.remove();
+        }
 
         // 把标出来的背景词并进「名单」，让它们在正文里被高亮——
         // 用户原话：「不然我一下子对应不上为什么这一段要标注背景」。词被点亮了，
