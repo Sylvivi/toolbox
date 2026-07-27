@@ -23032,6 +23032,16 @@ body {
                 if (chatMessages[i] && chatMessages[i].readerChapter === chapIdx) { msgIdx = i; break; }
             }
             if (msgIdx < 0) { showToast('打不开这一章'); return; }
+            /* ⚠️只认这条消息**本身**，别把下标揣在兜里跨过 await（2026-07-28 修）。
+               标背景一轮要发十几个请求、几十秒，而这期间用户还在读——只要往上滑到章首，
+               `readerPrependPrevChapter()` 就会把上一章插到数组最前，**所有消息下标整体 +2**
+               （那函数自己也得把已渲染节点和书签的 msgIdx 一起 +2，可见这个坑早有先例）。
+               于是捕获的 msgIdx 指到了上一章头上：用户实测「三十四章的背景插进了三十三章」。
+               这也解释了之前那次「9 条只成 1 条」——剩下 8 条没丢，是插进上一章去了，
+               所以本章读痕里只剩第 1 条；且是否踩到全看那一轮有没有往上滑，故时好时坏。
+               对象引用不会因为插队而失效，DOM/落盘要用的下标每次现查。 */
+            var msgObj = chatMessages[msgIdx];
+            var _curMsgIdx = function () { return chatMessages.indexOf(msgObj); };
             var lines = readingModeStripParaNums(readingModeGetOriginalText(msgIdx))
                 .split('\n').filter(function (l) { return l.trim().length > 0; });
             if (!lines.length) { showToast('这一章没有正文'); return; }
@@ -23098,17 +23108,21 @@ body {
                         }
                     }
                     if (!txt) { _rdBgPicksMark(k, 'fail'); failed++; continue; }
-                    // 讲完一条插一条：内容进 msg.content → 落 reader_qa → 重渲这条消息，全程锁住阅读位置
+                    // 讲完一条插一条：内容进 msg.content → 落 reader_qa → 重渲这条消息，全程锁住阅读位置。
+                    // 下标每条都现查（见上面 msgObj 的注释）；查不到＝这一章被卸载了，
+                    // 与其把内容写到别处去，不如当场停下，让用户重开这一章再「接着标」。
+                    var _mi = _curMsgIdx();
+                    if (_mi < 0) { lastErr = '这一章在标注途中被移出了阅读区，剩下的没标（重开这一章再点一次「接着标」）'; failed += (picks.length - k); break; }
                     (function (mi, pk, body) {
                         _rdKeepScroll(mi, function () {
                             // 先并名单再重渲，这一次重渲就顺带把这个词点亮了
                             namesAdded += readerBgMergeNames([pk.term], true);
-                            chatMessages[mi].content += '\n[P' + pk.p + '] 汐：' + BG_Q_PREFIX + pk.term + '\n' + body;
+                            msgObj.content += '\n[P' + pk.p + '] 汐：' + BG_Q_PREFIX + pk.term + '\n' + body;
                             chatSaveCurrentConv(true);
                             readerPersistQA(mi);
                             readingRerenderMsg(mi);
                         });
-                    })(msgIdx, picks[k], txt);
+                    })(_mi, picks[k], txt);
                     _rdBgPicksMark(k, 'ok');
                     done++;
                     // 条与条之间喘口气：整轮十几条背靠背发，手机上很容易撞中转站的频率限制。

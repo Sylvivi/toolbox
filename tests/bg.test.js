@@ -529,6 +529,57 @@ function bootSocial() {
     eq('清空后又变回「背景」', H2.清空后的标签, '背景');
     eq('小说书不需要长按，长按不再蓄力', H2.长按时的标签, '背景');
 
+    /* ⚠️标注途中往上滑会自动补上一章，所有消息下标整体 +2。
+       用户实测「三十四章的背景插进了三十三章」，而且这也是「9 条只成 1 条」的真凶。 */
+    const P = await page.evaluate(async () => {
+        window.readerMarkBg = window._realMarkBg;
+        window.readingAskOne = window._realAskOne;
+        const out = {};
+        // 两章的书：先只载入第 2 章（模拟从目录直接进第 34 章）
+        const mk = (n) => { const b = []; for (let i = 1; i <= 10; i++) b.push('第' + n + '章的第' + i + '段正文。'); return b.join('\n'); };
+        const book = { id: 'bk_p', fileName: '大唐辟珠记.txt', fileSize: 7, chapters: [
+            { title: '第三十三章', body: mk(33) }, { title: '第三十四章', body: mk(34) }] };
+        window.rbBooks = [book];
+        window.rbGetBook = (id) => id === 'bk_p' ? book : null;
+        window.chatResolveCompressModel = () => ({ model: 'scan', baseUrl: 'https://a/v1', apiKey: 'k' });
+        window.chatResolveReadingModel = () => ({ model: 'main', baseUrl: 'https://b/v1', apiKey: 'k' });
+        window.getKeyItemById = () => ({ id: 'p1', url: 'https://b/v1', key: 'k' });
+        window.chatSelectedModel = 'main';
+        localStorage.removeItem('reader_qa');
+        document.getElementById('chatModalOverlay').classList.add('show');
+        readerBookId = 'bk_p'; readerChapterIdx = 1; chatReaderMode = true; chatReadingMode = true;
+        chatCurrentConvId = 'reader_bk_p';
+        chatMessages = readerChapterPair(book.chapters[1], 1);   // 只有第 34 章
+        chatRenderAllMessages(false);
+
+        let n = 0;
+        window.chatStreamChat = async (o) => {
+            if (o.purpose === '标背景·找点') return 'P2|甲\nP4|乙\nP6|丙';
+            n++;
+            // ★ 讲完第 1 条之后，模拟用户往上滑触发「补上一章」——下标整体 +2
+            if (n === 1) {
+                setTimeout(() => {
+                    chatMessages = readerChapterPair(book.chapters[0], 0).concat(chatMessages);
+                    chatRenderAllMessages(false);
+                }, 0);
+            }
+            return '讲解内容。';
+        };
+        await readerMarkBg('bk_p', 1);
+        const fk = readerBookKey('bk_p');
+        out.第34章存了 = readerBgOfChap(fk, 1).length;
+        out.第33章被污染 = readerBgOfChap(fk, 0).length;
+        const m34 = chatMessages.find(m => m && m.readerChapter === 1);
+        const m33 = chatMessages.find(m => m && m.readerChapter === 0);
+        out.第34章正文里 = (m34.content.match(/汐：背景：/g) || []).length;
+        out.第33章正文里 = (m33.content.match(/汐：背景：/g) || []).length;
+        return out;
+    });
+    eq('补上一章导致下标位移后，3 条仍全部落在第 34 章', P.第34章存了, 3);
+    eq('第 33 章一条都没被污染', P.第33章被污染, 0);
+    eq('第 34 章的消息正文里也是 3 条', P.第34章正文里, 3);
+    eq('第 33 章的消息正文一个字没被动', P.第33章正文里, 0);
+
     /* 进度条点一下能展开清单——用户不想等全部生成完才知道有哪些 */
     const L = await page.evaluate(async () => {
         window.readerMarkBg = window._realMarkBg;      // 前面被换成了记录器，这里要真的跑一轮
