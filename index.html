@@ -11569,6 +11569,11 @@ body {
         var BG_SCAN_INSTRUCTION = '【任务】下面是一本书某一章的原文，每段前面标了 [P序号]。请找出这一章里「中文读者多半没有概念、不知道就读不出味道」的背景点。\n\n' +
             '背景点指的是**书本之外的世界**：那个年代的社会状况、制度与机构、历史事件、思想流派、宗教派别、货币与度量、提到的真实人物是谁。\n' +
             '不要挑：作者自己的论点、这段话在讲什么、常识词、只出现一次且无关紧要的路人。\n\n' +
+            '【背景点名称怎么写】写那个东西**本身的名字**，短名词，一般 2～8 个字，像词典词条那样。\n' +
+            '· 对：悬丝诊脉、绿衣官员、共济会\n' +
+            '· 错：「丝帕覆腕诊脉是高门女眷就医礼制」「绿衣官员指六七品官服颜色为绿色的唐代官服制度」——这是解释，不是名字。名称里不许出现「是」「指」「制度／礼制」这类解释性尾巴。\n\n' +
+            '【最重要的一条：不要车轱辘话】同一件事只列一条，挑最准的那个名字，别把同一个概念换四种说法列四遍。\n' +
+            '**同一段最多只列 1 条**，就列这一段里最值得讲的那个。\n\n' +
             '【输出格式】一行一条，严格是「P段号|背景点名称」，不要编号、不要解释、不要任何别的话。段号取这个背景点第一次真正需要被解释的那一段。例如：\n' +
             'P7|共济会\nP23|宾夕法尼亚议会\n\n' +
             '如果这一章确实没有需要解释的背景，就只输出一行：无';
@@ -22833,6 +22838,30 @@ body {
                 .toLowerCase();
         }
 
+        /* 一段里最多留几条背景点。用户实测（《大唐辟珠记》第 44 章）：同一段被拆成四条讲，
+           「高门女子悬丝诊脉与帷幔隔诊」「帷幔隔诊」「丝帕覆腕诊脉是高门女眷就医礼制」
+           「悬丝诊脉与帷幔隔诊礼制」——同一件事说了四遍，四次扣费、四个块堆在一段下面。
+           提示词已经要求「同一段最多 1 条」，这里是兜底：模型不听话时由代码砍。 */
+        var BG_MAX_PER_PARA = 1;
+
+        /* 近义判定：_rdBgKey 只能抓「同一个词的不同写法」，抓不住**同一件事的不同说法**。
+           ⚠️**只在同一段之内**用，跨段一律不用——这是有意的，别顺手推广到全章：
+           跨段的「宪法」和「美国宪法」、「独立战争」和「美国独立战争」是真该分开讲的
+           （见 C2 组测试），而同一段里冒出两个字面高度重合的词，几乎必然是模型在换说法重复自己。
+           两条规则都要求短的那个≥4 字，免得两三个字的词随便一撞就被吞掉。 */
+        function _rdBgNear(a, b) {
+            if (!a || !b) return false;
+            if (a === b) return true;
+            if (Math.min(a.length, b.length) < 4) return false;
+            if (a.indexOf(b) >= 0 || b.indexOf(a) >= 0) return true;   // 「帷幔隔诊」⊂「高门女子悬丝诊脉与帷幔隔诊」
+            var sa = {}, na = 0, sb = {}, nb = 0, hit = 0, i;
+            for (i = 0; i < a.length; i++) if (!sa[a[i]]) { sa[a[i]] = 1; na++; }
+            for (i = 0; i < b.length; i++) if (!sb[b[i]]) { sb[b[i]] = 1; nb++; }
+            Object.keys(sb).forEach(function (c) { if (sa[c]) hit++; });
+            var mn = Math.min(na, nb);
+            return mn >= 4 && hit / mn >= 0.5;
+        }
+
         // 把标出来的背景词并进「名单」，让它们在正文里被高亮——
         // 用户原话：「不然我一下子对应不上为什么这一段要标注背景」。词被点亮了，
         // 一眼就知道这块背景是冲着哪个词来的。规矩照抄 readingAutoMergeNamesFromTables：只增不删。
@@ -22894,7 +22923,7 @@ body {
         // range={from,to}（可选）：只扫这一段落区间，用于「按小节标背景」。
         // ⚠️段号仍按整章算（[P<全章段号]），因为插入、渲染、reader_qa 全都用全章编号——
         // 若改成节内相对编号，块会插到章首去。
-        async function _rdBgScan(b, lines, doneTerms, mdl, fb, range) {
+        async function _rdBgScan(b, lines, doneTerms, mdl, fb, range, donePara) {
             var from = Math.max(1, (range && range.from) || 1);
             var to = Math.min(lines.length, (range && range.to) || lines.length);
             var chunks = [], cur = [], curLen = 0;
@@ -22905,8 +22934,25 @@ body {
             }
             if (cur.length) chunks.push(cur);
             var picked = [], seen = {}, replies = [], matched = 0;
+            // seenList 是 seen 的有序版：近义判定要逐个比，光有 map 比不了。p=0 表示「不知道在哪一段」。
+            // perPara 记每段已经有几条（含这一章以前标过的），BG_MAX_PER_PARA 就靠它兜底。
+            var seenList = [], perPara = {};
             // 键用归一化后的（见 _rdBgKey）；喂给模型的「请跳过」名单仍用原词，那是给人/模型看的
-            doneTerms.forEach(function (t) { seen[_rdBgKey(t)] = 1; });
+            doneTerms.forEach(function (t) {
+                var k = _rdBgKey(t);
+                if (!k || seen[k]) return;
+                seen[k] = 1; seenList.push({ k: k, p: 0 });
+            });
+            // 本章已经标过的背景点带段号，重标这一章时才认得出「这段已经有一条了」
+            (donePara || []).forEach(function (it) {
+                var k = _rdBgKey(it.term);
+                if (!k) return;
+                perPara[it.p] = (perPara[it.p] || 0) + 1;
+                for (var i = 0; i < seenList.length; i++) {
+                    if (seenList[i].k === k) { seenList[i].p = it.p; return; }
+                }
+                seen[k] = 1; seenList.push({ k: k, p: it.p });
+            });
             for (var c = 0; c < chunks.length; c++) {
                 if (readerBgAbort.signal.aborted) break;
                 if (chunks.length > 1) _rdBgBarShow('通读全章（第 ' + (c + 1) + '/' + chunks.length + ' 段）…');
@@ -22951,7 +22997,14 @@ body {
                     // 限定在扫描区间内：标某一节时，模型偶尔会引用节外的段号，那样块会插到别处去
                     var key = _rdBgKey(term);
                     if (!(p >= from && p <= to) || !term || !key || seen[key]) return;
+                    if ((perPara[p] || 0) >= BG_MAX_PER_PARA) return;   // 这一段已经有背景点了，别再往上堆
+                    for (var q = 0; q < seenList.length; q++) {
+                        // 只跟同一段的比（_rdBgNear 上的注释说明了为什么不敢跨段）
+                        if (seenList[q].p === p && _rdBgNear(key, seenList[q].k)) return;
+                    }
                     seen[key] = 1;
+                    seenList.push({ k: key, p: p });
+                    perPara[p] = (perPara[p] || 0) + 1;
                     picked.push({ p: p, term: term });
                 });
             }
@@ -23059,7 +23112,10 @@ body {
             try {
                 _rdBgBarShow('通读' + _scope + '，找背景点…');
                 var scan = await _rdBgScan(b, lines, readerBgDoneTerms(fileKey), scanM, explainM,
-                                           _sec ? { from: _sec.startP, to: _sec.endP } : null);
+                                           _sec ? { from: _sec.startP, to: _sec.endP } : null,
+                                           readerBgOfChap(fileKey, chapIdx).map(function (it) {
+                                               return { p: it.p, term: (it.q || '').slice(BG_Q_PREFIX.length) };
+                                           }));
                 var picks = scan.picks;
                 _rdBgPicksSet(picks);   // 清单一到手就能点开看，不用等全部讲完
                 if (!picks.length) {
