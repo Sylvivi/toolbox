@@ -21601,6 +21601,11 @@ body {
                 var rp = readerGetProgress(b.id);
                 if (rp && rp.chapter != null && rp.chapter > i) readerSetProgress(b.id, { chapter: rp.chapter + delta });
                 rbSave();
+                /* ⚠️必须推服务器（2026-07-28 补）：原来只 rbSave() 存本地，服务器那份还是没拆的。
+                   后果是用户手动切好章、哪天删了重下，拿回来的又是没拆的那份——白干一场。
+                   （她自己问出来的：「我手动分好的，删除后再从服务器下载，下载下来的是分好的吗」，
+                   查了才发现答案是"不是"。）改书就要推，跟改错字/追加章节保持一条规矩。 */
+                bkSyncPush(b);
                 document.body.removeChild(mask);
                 rbRenderChapters();
                 showToast('已拆成 ' + newChaps.length + ' 章');
@@ -21871,7 +21876,9 @@ body {
             b.chapters = rbDedupChapters(b.chapters).chapters;  // 并掉同章多条的重复
             if (!b.chapters.length) b.chapters = [{ title: '全文', body: b.rawText.trim() }];
             b.lastChapter = null;
-            rbSave(); rbRenderChapters();
+            rbSave();
+            bkSyncPush(b);   // ⚠️同上：改了书就要推服务器，否则删了重下拿回来的还是旧切法
+            rbRenderChapters();
             showToast('重新拆分完成，共 ' + b.chapters.length + ' 章');
         }
 

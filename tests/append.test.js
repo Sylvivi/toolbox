@@ -271,6 +271,29 @@ function bootShelf() {
     ok('I1 正在读这本书时提示「重开这一章」', /重开这一章/.test(I.提示), '实际：' + I.提示);
     ok('I2 段落渲染缓存作废（正文变了不能再用旧的）', I.缓存清了, JSON.stringify(I));
 
+    /* ── I2 组：改了书就必须推服务器 ────────────────────────────────
+       用户自己问出来的：「我手动分好的，删除后再从服务器下载，下载下来的是分好的吗」——
+       查了才发现答案是"不是"：rbSplitOneChapter / rbReSplit 都只 rbSave() 存本地，
+       服务器那份还是没拆的，删了重下等于白切一场。这组守住"改书就推"这条规矩。 */
+    const S = await page.evaluate(() => {
+        const src = {};
+        for (const fn of ['rbSplitOneChapter', 'rbReSplit', 'rbAppendChapters', 'rdEditApply']) {
+            src[fn] = typeof window[fn] === 'function' ? window[fn].toString() : '';
+        }
+        return {
+            手动分章有推: /bkSyncPush\s*\(/.test(src.rbSplitOneChapter),
+            重新拆分有推: /bkSyncPush\s*\(/.test(src.rbReSplit),
+            追加章节有推: /bkSyncPush\s*\(/.test(src.rbAppendChapters),
+            改错字有推: /bkSyncPush\s*\(/.test(src.rdEditApply),
+            都存了盘: ['rbSplitOneChapter', 'rbReSplit', 'rbAppendChapters'].every(f => /rbSave\s*\(/.test(src[f]))
+        };
+    });
+    ok('S1 手动分章会推服务器（否则删了重下白切一场）', S.手动分章有推, JSON.stringify(S));
+    ok('S2 重新拆分会推服务器', S.重新拆分有推, JSON.stringify(S));
+    ok('S3 追加章节会推服务器', S.追加章节有推, JSON.stringify(S));
+    ok('S4 改错字会推服务器', S.改错字有推, JSON.stringify(S));
+    ok('S5 这几个改书的地方都会落盘', S.都存了盘, JSON.stringify(S));
+
     /* ── J 组：入口在书架 ⋯ 菜单里 ──────────────────────────────── */
     const J = await page.evaluate(() => {
         window._bootShelf();
