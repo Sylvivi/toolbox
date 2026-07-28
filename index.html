@@ -2940,8 +2940,9 @@ body {
         body.reading-quote-on .reading-merged .reading-quote { color: var(--accent); font-weight: 600; }
         /* 名词高亮：正文里命中的人名/地名包成 .reading-name（渲染时一直在），下面几种样式可单选可叠加，靠 body class 即时切换、不用重排。
            着色=强调色；加粗=只加粗不变色。
-           例外：名词若套了自定义字体(rn-has-font) 且 出现在短句(对话, .reading-quote 非 rq-wide 长句)里，
-           加粗会和花字打架不好看 → 仅此情形强制不加粗，让字体自己说话；其余位置照常加粗。 */
+           例外①：名词若套了自定义字体(rn-has-font) 且 出现在短句(对话, .reading-quote 非 rq-wide 长句)里，
+           加粗会和花字打架不好看 → 仅此情形强制不加粗，让字体自己说话；其余位置照常加粗。
+           例外②：名词出现在精句(.reading-keysent)里也不单独加粗，同样的理由 → 规则写在下面精句那一段（3080 附近）。 */
         body.reading-names-on.rn-color .reading-merged .reading-name { color: var(--accent); }
         body.reading-names-on.rn-bold .reading-merged .reading-name { font-weight: 700; }
         /* 划线：复用引号「划线」那条虚线下划线写法（同款 underline dashed），让人名走划线、对话走着色，两不打架不花。
@@ -3076,6 +3077,12 @@ body {
         .reading-merged .reading-keysent { font-family: var(--reading-font-keysent, inherit); }
         body.reading-ks-hl .reading-merged .reading-keysent { color: var(--accent); }  /* 着色（只变色）*/
         body.reading-ks-bold .reading-merged .reading-keysent { font-weight: 700; }  /* 加粗（独立开关，可与着色分开）*/
+        /* 例外：精句里的名词不吃「名词·加粗」那一档——跟短句里的名词同一个理由（见 .reading-name 那段例外①，2950 那条）：
+           精句通常单独换过字体，花字上再叠加粗，字体没有粗体字面时浏览器只会合成假粗、糊成一团，不好看，让字体自己说话。
+           ⚠️ 用 inherit 而不是写死 400：精句自己开了「加粗」时名词跟着整句一起粗（粗细均匀、看不出接缝），
+           精句没开加粗时 inherit 到的就是正文的正常字重 = 不加粗。写死 400 会在加粗的精句中间露出一个细字。
+           用户 2026-07-28 明确要的就是「跟着精句走」。特异性 (0,5,1) 高过上面那条 rn-bold (0,4,1)，稳赢，不靠源序。 */
+        body.reading-names-on.rn-bold .reading-merged .reading-keysent .reading-name { font-weight: inherit; }
         body.reading-ks-ul .reading-merged .reading-keysent-inner { text-decoration: underline dashed var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }  /* 划线 */
         body.reading-ks-glow .reading-merged .reading-keysent-inner {  /* 柔光 */
             background-image: linear-gradient(to right, transparent 0%,
