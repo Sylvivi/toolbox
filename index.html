@@ -3280,6 +3280,19 @@ body {
         .rd-edit-box button.rde-cancel { background: transparent; color: var(--text-muted); padding: 7px 8px; }
         .rd-edit-box button.rde-save { background: var(--accent); color: #fff; }
         .rd-edit-box button.rde-save:disabled { opacity: 0.5; cursor: default; }
+        /* 追加章节（番外）的预览弹窗 */
+        .rb-ap-sum { font-size: 13px; line-height: 1.7; color: var(--text-sub); margin-bottom: 10px; }
+        .rb-ap-sum b { color: var(--accent); font-size: 15px; }
+        .rb-ap-safe { font-size: 11px; color: var(--text-muted); }
+        .rb-ap-tools { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+        .rb-ap-list { max-height: 38vh; overflow: auto; border: 1px solid var(--card-border, rgba(0,0,0,0.1)); border-radius: 8px; }
+        .rb-ap-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; font-size: 12px; border-bottom: 1px solid var(--card-border, rgba(0,0,0,0.07)); }
+        .rb-ap-item:last-child { border-bottom: none; }
+        .rb-ap-no { color: var(--accent); flex-shrink: 0; font-size: 11px; }
+        .rb-ap-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+        .rb-ap-w { color: var(--text-muted); flex-shrink: 0; font-size: 11px; }
+        .rb-ap-more { padding: 8px 10px; font-size: 11px; color: var(--text-muted); text-align: center; }
+        .rb-ap-ft { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
         /* 改动记录面板里的一条 */
         .rde-log-item { padding: 9px 2px; border-bottom: 1px solid var(--card-border, rgba(0,0,0,0.1)); font-size: 13px; }
         .rde-log-item:last-child { border-bottom: none; }
@@ -5163,6 +5176,8 @@ body {
                     <button class="rb-btn rb-btn-primary" style="flex-shrink:0" onclick="document.getElementById('rbFileInput').click()">＋ 添加书</button>
                 </div>
                 <input type="file" id="rbFileInput" accept=".txt,.md,.markdown,.text,.epub,.mobi,.azw,.azw3" style="display:none" onchange="rbOnFilePick(this)">
+                <!-- 追加章节（番外）用的另一个文件框：跟「添加书」分开，免得走串把番外导成一本新书 -->
+                <input type="file" id="rbAppendInput" accept=".txt,.md,.markdown,.text" style="display:none" onchange="rbOnAppendPick(this)">
                 <div id="rbShelfList"></div>
             </div>
             <div id="rbChapterView" style="display:none">
@@ -19053,7 +19068,7 @@ body {
         var rbPickForReader = false;   // true=书架是为「阅读器」选书（点章节进阅读器）；false=为「共读」填入输入框
         var RB_PRESETS = {
             markdown: '^#{1,6}\\s+.+',
-            chinese: '^第[一二三四五六七八九十百千零两\\d]+[章节篇部卷回话]\\s*.*',
+            chinese: '^第[一二三四五六七八九十百千零〇两\\d]+[章节篇部卷回话]\\s*.*',
             // 成对符号开头：行首是【】〖〗〔〕（）《》［］之一，如「【无争】（一）天降」
             bracket: '^\\s*[【〖〔（(《［\\[][^\\n]{0,40}?[】〗〕）)》］\\]]',
             // 括号数字：行首是（一）（二）/（1）这类括号包着的序号
@@ -19286,10 +19301,74 @@ body {
                     if (!d || !d.items) { if (cb) cb(); return; }
                     try { localStorage.setItem('books_manifest_cache', JSON.stringify(d.items)); } catch (e) {}
                     var added = bkSyncInjectManifest(d.items);   // 联网结果再刷新一遍（有增删就更新）
+                    bkSyncCheckUpdates(d.items);                 // 本地已有的书：云端更新了就自动拉新正文
                     if (cb) cb(added);
                 })
                 .catch(function () { if (cb) cb(); });   // 联网失败也没关系，缓存那份还在
         }
+        /* ===== 跨设备自动更新（2026-07-28 加）=====
+           起因：改错字/追加番外之后，**别的设备不会跟着变**——书是「本地为主、服务器当镜像」，
+           bkSyncInjectManifest 里一句 `if (localKeys[fk]) return;` 就把已有正本的书整个跳过了，
+           压根没比过时间。而服务器 manifest **早就带着 ts**（books.py 的 /manifest 就返回），牌是现成的。
+
+           做法：本地书记一个 `_ts`（推云成功时/下载时盖上），拉清单时跟服务器的 ts 比，
+           服务器新就自动重下正文、盖掉本地那份，并弹一句「《X》已更新」。
+
+           ⚠️**首次见面不下载，只盖时间戳**：老书本来就没有 `_ts`，当成 0 的话
+           一开书架就会把几百本全重下一遍（几百 MB、还全是无谓的）。所以第一次见到某本书时
+           认作"已同步"、只把服务器的 ts 记下来，**只有此后的改动才会触发更新**。
+
+           ⚠️**只换正文、保住本地 id**：`reading_conv_book`（哪个会话在读哪本书）、
+           `rbActiveBookId`、阅读会话 id 全都记着本地那个 `bk_<时间戳>_<随机>`，
+           整个对象换掉会把这些关联全断了。所以只覆盖 chapters/rawText，id/fileName/fileSize 原样留着。
+           （身份证不动也是改错字那条铁律①的延续——两边靠 fileKey 认的是同一本书。）*/
+        function bkSyncCheckUpdates(items) {
+            if (!items) return;
+            var dirty = false, queue = [];
+            for (var i = 0; i < rbBooks.length; i++) {
+                var b = rbBooks[i];
+                if (b._remote || !b.chapters || !b.chapters.length) continue;   // 占位书走按需下载那条路
+                var m = items[bkSyncKey(b)];
+                if (!m) continue;                                               // 服务器没有这本，不管
+                var srvTs = m.ts || 0;
+                if (b._ts == null) { b._ts = srvTs; dirty = true; continue; }   // 首次见面：认作已同步，只记时间
+                if (srvTs > b._ts) queue.push(b);
+            }
+            if (dirty) { try { rbSave(); } catch (e) {} }
+            if (!queue.length) return;
+            // 一本一本地拉，别一次并发几十个请求把手机的网占满（跟标背景那边限速同一个道理）
+            (function next(k) {
+                if (k >= queue.length) return;
+                bkSyncRefreshOne(queue[k], function () { setTimeout(function () { next(k + 1); }, 300); });
+            })(0);
+        }
+        // 重下一本已有的书，只换正文、保住本地 id 和身份证
+        function bkSyncRefreshOne(book, done) {
+            var cfg = bkSyncCfg(); if (!cfg) { if (done) done(); return; }
+            var fk = bkSyncKey(book);
+            fetch(cfg.url + '/get?key=' + encodeURIComponent(fk), { headers: bkSyncHeaders(cfg) })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (d) {
+                    var full = d && (d.book || d);
+                    if (!full || !full.chapters || !full.chapters.length) { if (done) done(); return; }
+                    var oldN = book.chapters.length;
+                    book.chapters = full.chapters;
+                    if (full.rawText) book.rawText = full.rawText;
+                    book._ts = (d && d.ts) || Date.now();
+                    // ⚠️id / fileName / fileSize 一个都不动（见上面注释）
+                    try { rbSave(); } catch (e) {}
+                    var nm = rbBookDisplayName(book);
+                    var tail = (full.chapters.length !== oldN) ? ('（' + oldN + ' → ' + full.chapters.length + ' 章）') : '';
+                    // 正在读这本书：正文快照是开章那刻拼的，得重开这一章才看得到新内容——说清楚，别让她以为没生效
+                    var reading = false;
+                    try { reading = !!(chatReaderMode && readerBookId === book.id); } catch (e) {}
+                    showToast('《' + nm + '》已更新' + tail + (reading ? '，重开这一章看新内容' : ''));
+                    try { _readingMergeCache = { text: null, ps: null, namesSig: null }; } catch (e) {}   // 正文变了，段落缓存作废
+                    if (done) done();
+                })
+                .catch(function () { if (done) done(); });
+        }
+
         // 按需下载整本：占位书点开时调，成功后用真数据替换占位并落盘。cb(fullBook|false)
         function bkSyncDownload(book, cb) {
             var cfg = bkSyncCfg(); if (!cfg) { if (cb) cb(false); return; }
@@ -19301,6 +19380,7 @@ body {
                     if (!full || !full.chapters || !full.chapters.length) { if (cb) cb(false); return; }
                     full.id = 'bk_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6); // 本地新 id
                     delete full._remote; delete full._fileKey; delete full._nchap;
+                    full._ts = (d && d.ts) || Date.now();   // 刚从云端拿的就是最新版，记下时间，别下一轮又重下一遍
                     if (book && book._folder) full._folder = book._folder;   // 下载后保住服务器给的文件夹，别掉进未分类
                     var replaced = false;
                     for (var i = 0; i < rbBooks.length; i++) {
@@ -19315,9 +19395,15 @@ body {
         // 上传一本（导书自动 / 手动全上传）：静默，失败重试一次
         function bkSyncPush(book, _retry) {
             var cfg = bkSyncCfg(); if (!cfg || !book || book._remote || !book.chapters || !book.chapters.length) return;
-            var payload = { fileKey: bkSyncKey(book), ts: Date.now(), book: book };
+            var ts = Date.now();
+            var payload = { fileKey: bkSyncKey(book), ts: ts, book: book };
             fetch(cfg.url + '/put', { method: 'POST', headers: bkSyncHeaders(cfg, true), body: JSON.stringify(payload) })
-                .then(function (r) { if (!r.ok && !_retry) setTimeout(function () { bkSyncPush(book, true); }, 2000); })
+                .then(function (r) {
+                    if (!r.ok) { if (!_retry) setTimeout(function () { bkSyncPush(book, true); }, 2000); return; }
+                    // ⚠️推成功才盖 _ts：这台机器的正文就是云端那份，下次拉清单不该把自己刚推的当成"别人的更新"再下一遍
+                    book._ts = ts;
+                    try { rbSave(); } catch (e) {}
+                })
                 .catch(function () { if (!_retry) setTimeout(function () { bkSyncPush(book, true); }, 2000); });
         }
         // 手动把本地所有书全上传（配置 UI 里的兜底按钮）
@@ -21163,6 +21249,8 @@ body {
             items += rbIsSocial(b)
                 ? '<div onclick="rbBookMenuAction(\'kind\')">📖 改回小说</div>'
                 : '<div onclick="rbBookMenuAction(\'kind\')">🎓 标为社科书</div>';
+            // 追加章节（番外）：接在全书最后，前面所有章序号一动不动＝读痕零风险
+            if (!b._remote) items += '<div onclick="rbBookMenuAction(\'append\')">➕ 追加章节</div>';
             // 改动记录（改错字的后悔药）：一条都没有就不占位置，别让菜单越长越吓人
             if (!b._remote) {
                 var _nEdit = (typeof rdEditLogCount === 'function') ? rdEditLogCount(rbBookFileKey(b)) : 0;
@@ -21188,6 +21276,7 @@ body {
             else if (action === 'move') rbMoveBookFolder(id);
             else if (action === 'kind') rbToggleBookKind(id);
             else if (action === 'edits') { var _b = rbGetBook(id); if (_b) rdEditShowLog(rbBookFileKey(_b)); }
+            else if (action === 'append') rbAppendStart(id);
             else if (action === 'delete') rbDeleteBook(id);
         }
 
@@ -21558,6 +21647,126 @@ body {
         }
 
         // ===== 上传与拆分 =====
+        /* ================= 追加章节 / 番外（2026-07-28 加） =================
+           用户原话：「添加一些作者新出的番外」。此前只能删书重传，读痕/摘要/背景全部陪葬。
+
+           ⚠️**为什么只做"接到全书最后"、不做"整本换新版"**（用户自己选的，这里记下理由）：
+           读痕/划线/问答/背景全按「第几章·第几段」钉位。接在最后 → 前面每一章的序号
+           一动不动 → 全部原封不动，零风险。而"整本换新版"要重新切章，只要章数或段数
+           跟旧的对不上，前面所有标记就**静默**集体错位——错了还不报错，最难发现。
+
+           ⚠️**去重/修标题只在"新来的这几章"内部跑，绝不碰已有章节**：
+           rbDedupChapters 会合并相邻同标题的章，rbFixChapterTitles 会跨章挪副标题——
+           把它们放到整本上跑，万一动了已有章节的边界，就是上面那类静默错位。
+           所以先在新章数组上单独跑完，再整体 concat 上去。 */
+        var _rbAppendTo = null;      // 正在给哪本书追加
+        var _rbAppendPending = null; // 预览里待确认的 {raw, fileName, chapters, preset}
+
+        function rbAppendStart(bookId) {
+            var b = rbGetBook(bookId);
+            if (!b) return;
+            if (b._remote) { showToast('⚠️ 这本书还没下载下来，先点开它', true); return; }
+            _rbAppendTo = bookId;
+            document.getElementById('rbAppendInput').click();
+        }
+        function rbOnAppendPick(inp) {
+            var f = inp.files && inp.files[0]; inp.value = '';
+            if (!f || !_rbAppendTo) return;
+            var b = rbGetBook(_rbAppendTo); if (!b) return;
+            var reader = new FileReader();
+            reader.onload = function (e) {
+                var raw = String(e.target.result || '');
+                if (!raw.trim()) { showToast('⚠️ 这个文件是空的', true); return; }
+                // 默认按这本书原来的切法切，切出来的形状才跟前面几百章一致
+                rbAppendPreview(raw, f.name, b.preset || 'auto');
+            };
+            reader.onerror = function () { showToast('⚠️ 读不出这个文件', true); };
+            reader.readAsText(f, 'UTF-8');
+        }
+        // 按某种切法把待追加的正文切成章（只切、不落盘）
+        function rbAppendSplit(raw, preset) {
+            var chs = (preset === 'auto') ? rbAutoSplit(raw) : rbSplitByPattern(raw, RB_PRESETS[preset]);
+            if (!chs || !chs.length) chs = [{ title: '番外', body: raw.trim() }];
+            chs = rbDedupChapters(chs).chapters;   // ⚠️只在新章内部跑，不碰已有章节
+            rbFixChapterTitles(chs);
+            return chs;
+        }
+        /* 预览：切成几章、都叫什么、接上去之后从第几章开始。
+           ⚠️必须先看再确认——切章是这个项目历史上最容易出岔子的一步（中文数字标章那次
+           整本切成一坨），而追加进去之后再想撤销就得手动删章。 */
+        function rbAppendPreview(raw, fileName, preset) {
+            var b = rbGetBook(_rbAppendTo); if (!b) return;
+            var chs = rbAppendSplit(raw, preset);
+            _rbAppendPending = { raw: raw, fileName: fileName, chapters: chs, preset: preset };
+            var startNo = b.chapters.length + 1;
+            var opts = [['auto', '自动检测'], ['chinese', '中文章节（第X章）'], ['bracket', '成对符号【】（）'],
+                        ['paren-num', '括号数字（一）（1）'], ['cn-num-dot', '中文数字（一、二、）'],
+                        ['numbered', '数字编号'], ['english', '英文 Chapter'], ['markdown', 'Markdown 标题'],
+                        ['empty-line', '空行分隔']];
+            var selHtml = '<select id="rbAppendPreset" class="rb-select" style="flex:1;min-width:0">' +
+                opts.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === preset ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') +
+                '</select>';
+            var listHtml = chs.slice(0, 40).map(function (c, i) {
+                var words = (c.body || '').replace(/\s/g, '').length;
+                return '<div class="rb-ap-item"><span class="rb-ap-no">第 ' + (startNo + i) + ' 章</span>' +
+                    '<span class="rb-ap-t">' + rbEsc(c.title || '(无标题)') + '</span>' +
+                    '<span class="rb-ap-w">' + words + ' 字</span></div>';
+            }).join('') + (chs.length > 40 ? '<div class="rb-ap-more">…… 还有 ' + (chs.length - 40) + ' 章</div>' : '');
+
+            var old = document.querySelector('.rb-ap-mask'); if (old) old.remove();
+            var mask = document.createElement('div');
+            mask.className = 'chat-summary-modal-mask rb-ap-mask';
+            var modal = document.createElement('div');
+            modal.className = 'chat-summary-modal';
+            modal.innerHTML =
+                '<div class="chat-summary-modal-header"><span>➕ 追加到《' + rbEsc(rbBookDisplayName(b)) + '》</span>' +
+                '<button onclick="this.closest(\'.rb-ap-mask\').remove()">✕</button></div>' +
+                '<div class="chat-summary-modal-body">' +
+                '<div class="rb-ap-sum">「' + rbEsc(fileName) + '」切成 <b id="rbApN">' + chs.length + '</b> 章，' +
+                '接在现有 ' + b.chapters.length + ' 章后面（第 ' + startNo + ' 章起）。<br>' +
+                '<span class="rb-ap-safe">✅ 前面 ' + b.chapters.length + ' 章的读痕、划线、背景一个都不会动</span></div>' +
+                '<div class="rb-ap-tools">切法：' + selHtml + '</div>' +
+                '<div class="rb-ap-list" id="rbApList">' + listHtml + '</div>' +
+                '<div class="rb-ap-ft"><button class="rb-btn" onclick="this.closest(\'.rb-ap-mask\').remove()">取消</button>' +
+                '<button class="rb-btn rb-btn-primary" onclick="rbAppendConfirm()">接到最后</button></div>' +
+                '</div>';
+            mask.appendChild(modal);
+            mask.addEventListener('click', function (ev) { if (ev.target === mask) mask.remove(); });
+            document.body.appendChild(mask);
+            var sel = document.getElementById('rbAppendPreset');
+            if (sel) sel.onchange = function () { rbAppendPreview(raw, fileName, sel.value); };  // 换切法就地重切重画
+        }
+        function rbAppendConfirm() {
+            var b = rbGetBook(_rbAppendTo), pend = _rbAppendPending;
+            if (!b || !pend) return;
+            var before = b.chapters.length;
+            var r = rbAppendChapters(b, pend.chapters, pend.raw);
+            var mask = document.querySelector('.rb-ap-mask'); if (mask) mask.remove();
+            _rbAppendPending = null;
+            if (!r.ok) { showToast('⚠️ ' + r.reason, true); return; }
+            showToast('已接上 ' + r.added + ' 章（第 ' + (before + 1) + '～' + b.chapters.length + ' 章）');
+            // 书架正开着这本书的目录就刷新一下，能当场看到新章
+            try { if (rbActiveBookId === b.id) rbRenderChapters(); } catch (e) {}
+        }
+        /* 真正接上去。⚠️三件事必须同时做对：
+           ① chapters 往后接（前面下标一个不动）
+           ② **rawText 也要接**——「重新拆分」(rbReSplit) 是拿 rawText 重切整本的，
+              不接的话，她哪天点一下重新拆分，番外就没了
+           ③ fileName/fileSize **一个字节都不许动**（身份证，见改错字那一节的铁律①） */
+        function rbAppendChapters(b, newChapters, rawAppend) {
+            if (!b || !newChapters || !newChapters.length) return { ok: false, reason: '没有可追加的章节' };
+            var fkBefore = rbBookFileKey(b);
+            if (!b.rawText) b.rawText = b.chapters.map(function (c) { return c.title + '\n\n' + c.body; }).join('\n\n');
+            b.chapters = b.chapters.concat(newChapters);
+            b.rawText = b.rawText.replace(/\s+$/, '') + '\n\n' +
+                (rawAppend != null ? String(rawAppend) : newChapters.map(function (c) { return c.title + '\n\n' + c.body; }).join('\n\n'));
+            // ⚠️身份证不许动。这里显式断言一下：万一将来有人在上面动了 fileName/fileSize，测试会当场红
+            if (rbBookFileKey(b) !== fkBefore) return { ok: false, reason: '内部错误：书的身份证被改动了' };
+            rbSave();
+            bkSyncPush(b);
+            return { ok: true, added: newChapters.length };
+        }
+
         function rbOnFilePick(inp) { var f = inp.files && inp.files[0]; inp.value = ''; if (f) rbHandleFile(f); }
         function rbHandleFile(file) {
             var fn = file.name.toLowerCase();
@@ -21670,7 +21879,7 @@ body {
             var lines = rawText.split('\n');
             var patterns = [
                 { name: 'markdown', re: /^#{1,6}\s+.+/ },
-                { name: 'chinese', re: /^第[一二三四五六七八九十百千零两\d]+[章节篇部卷回话]\s*/ },
+                { name: 'chinese', re: /^第[一二三四五六七八九十百千零〇两\d]+[章节篇部卷回话]\s*/ },
                 { name: 'bracket', re: /^\s*[【〖〔（(《［\[][^\n]{0,40}?[】〗〕）)》］\]]/ },
                 { name: 'paren-num', re: /^\s*[（(][零〇一二三四五六七八九十百千两\d]+[）)]\s*/ },
                 { name: 'cn-num-dot', re: /^\s*[零〇一二三四五六七八九十百千两]+、/ },
@@ -25349,9 +25558,9 @@ body {
         var _readingMergeCache = { text: null, ps: null, namesSig: null };
         // 章节标题正则：整段以「第〔中文/数字〕章/节/回/篇/卷/话」开头，后面接可选分隔符 + ≤20 字标题，且不含句中标点（，。！？逗号句号等）。
         // 这样「第六百一十七章 寒风岭的玫瑰」「第十回」能命中，正文里「第三章已经写完了，……」这种长句不会误命中。
-        var READING_TITLE_RE = /^\s*第[一二三四五六七八九十百千零两\d]+[章节回篇卷话](?:[\s:：·.\-—　、]+)?[^，。！？、,.!?;；\n]{0,20}\s*$/;
+        var READING_TITLE_RE = /^\s*第[一二三四五六七八九十百千零〇两\d]+[章节回篇卷话](?:[\s:：·.\-—　、]+)?[^，。！？、,.!?;；\n]{0,20}\s*$/;
         // 光秃秃的章节号（只有「第X回」、后面没带标题）
-        function _rbIsBareChapterNum(t) { return /^第[一二三四五六七八九十百千零两\d]+[章节回篇卷话]\s*$/.test((t || '').trim()); }
+        function _rbIsBareChapterNum(t) { return /^第[一二三四五六七八九十百千零〇两\d]+[章节回篇卷话]\s*$/.test((t || '').trim()); }
         // 判断某行是不是紧跟章节号后的「副标题」（如天龙八部「弹指红颜老，刹那芳华」），而非正文首句。
         // 标题短、不以句末标点收尾；含对偶逗号/顿号是强信号，传统回目体(回/篇/卷)的独立短标题行也算。
         function _rbLooksLikeSubtitle(s, marker) {
