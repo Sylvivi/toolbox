@@ -14220,12 +14220,52 @@ body {
             var filter = document.getElementById('chatModelSearch').value;
             chatSheetRenderModels(filter);
         }
+        /* 「请先选择模型」其实有两种情况，得分开说：中转站没选中（多半是收藏里的中转站被删了、
+           或者上次选的那个不在了）时，再怎么重选模型都没用——提示必须点名是中转站。 */
+        function chatNoModelMsg() {
+            var item = getKeyItemById(document.getElementById('chatProviderSelect').value);
+            return item ? '请先选择模型' : '请先选择中转站（上次选的那个可能已经被删掉了）';
+        }
+        /* 收藏条目 → 现在真实存在的中转站 id。
+           ⚠️`fav.providerId` 是中转站的**内部编号**，删掉再重新加同一个中转站编号就变了（空号）；
+           而 `fav.url` 是网址、改不了，才是稳定身份。所以先按编号找、找不到按网址兜底——
+           `chatResolveCompressModel` 早就是这个顺序，收藏这里当初漏了。找不到返回 ''。 */
+        function chatFavProviderId(fav) {
+            var sel = document.getElementById('chatProviderSelect');
+            var has = function (id) {
+                if (!id) return false;
+                for (var i = 0; i < sel.options.length; i++) if (sel.options[i].value === id) return true;
+                return false;
+            };
+            if (has(fav && fav.providerId)) return fav.providerId;
+            if (fav && fav.url) {
+                var all = getKeyData();
+                for (var j = 0; j < all.length; j++) if (all[j].url === fav.url && has(all[j].id)) return all[j].id;
+            }
+            return '';
+        }
+        /* 点收藏里的一个模型。
+           ⚠️2026-07-28 修「明明选了模型却提示没选」：`sel.value = 不存在的编号` 是**静默失败**
+             （下拉框变成空白、不报错、不抛异常）。老代码切完不检查，后面照样把模型名写进
+             chatSelectedModel、点亮发送键、把标签改成那个模型——于是**界面显示已选好、
+             实际中转站是空的**，一点「讨论」就弹「请先选择模型」，而且提示冤枉了模型，
+             她怎么重选模型都没用（用户原话：「我选的是一个，但实际选中的有可能是另外一个」）。
+           ⚠️另外，选中模型原来包在写死的 `setTimeout(…, 100)` 里等模型列表加载——
+             但 `onChatProviderChange` 里改动 chatSelectedModel/KeyStr 的那几条路**全是同步的**
+             （`onChatKeyChange`/`chatLoadModelsForCurrentKey` 都同步跑完，只有 `chatFetchModels`
+             是异步、且它不碰选中的模型）。所以直接切完就选，把这个赌网速的 100ms 拿掉。 */
         function chatPickFavModel(fav) {
             var curProvId = document.getElementById('chatProviderSelect').value;
+            var wantId = chatFavProviderId(fav);
+            if (!wantId) {
+                // 宁可什么都不做，也不能假装选好了——假装的代价是她对着「已选好」的界面反复重选模型
+                showToast('⚠️ 收藏里的「' + ((fav && (fav.providerName || fav.url)) || '这个中转站') + '」已经不在了，去密钥页重新收藏一次这个模型', true);
+                return;
+            }
             // 需要切换中转站
-            if (fav.providerId && fav.providerId !== curProvId) {
+            if (wantId !== curProvId) {
                 var sel = document.getElementById('chatProviderSelect');
-                sel.value = fav.providerId;
+                sel.value = wantId;
                 onChatProviderChange();
                 // 同步底部面板的 provider select
                 var sel2 = document.getElementById('chatProviderSelect2');
@@ -14234,23 +14274,21 @@ body {
                 var keyOld = document.getElementById('chatKeySelect');
                 if (keySel2 && keyOld) { keySel2.innerHTML = keyOld.innerHTML; keySel2.value = keyOld.value; keySel2.style.display = keyOld.style.display; }
             }
-            // 等模型列表加载后再选中
-            setTimeout(function() {
-                chatSelectedModel = fav.model;
-                document.getElementById('chatModelInput').value = fav.model;
-                document.getElementById('chatSendBtn').disabled = false;
-                document.getElementById('chatModelLabel').textContent = fav.model;
-                var provId = document.getElementById('chatProviderSelect').value;
-                if (provId) localStorage.setItem('chat_last_model_' + provId, fav.model);
-                chatCloseModelSheet();
-                // 自动折叠收藏区并更新标题
-                _chatFavExpanded = false;
-                var section = document.getElementById('chatFavSection');
-                var arrow = document.getElementById('chatFavArrow');
-                if (section) section.style.display = 'none';
-                if (arrow) arrow.style.transform = '';
-                chatUpdateFavHeader();
-            }, 100);
+            // 中转站已经切好了（上面那几条路都是同步的），直接选中模型
+            chatSelectedModel = fav.model;
+            document.getElementById('chatModelInput').value = fav.model;
+            document.getElementById('chatSendBtn').disabled = false;
+            document.getElementById('chatModelLabel').textContent = fav.model;
+            var provId = document.getElementById('chatProviderSelect').value;
+            if (provId) localStorage.setItem('chat_last_model_' + provId, fav.model);
+            chatCloseModelSheet();
+            // 自动折叠收藏区并更新标题
+            _chatFavExpanded = false;
+            var section = document.getElementById('chatFavSection');
+            var arrow = document.getElementById('chatFavArrow');
+            if (section) section.style.display = 'none';
+            if (arrow) arrow.style.transform = '';
+            chatUpdateFavHeader();
         }
         function chatSheetRenderModels(filter) {
             var container = document.getElementById('chatModelSheetList');
@@ -16905,7 +16943,7 @@ body {
             if (_chatRebuildingMt) { showToast('正在重建中，请稍候…'); return; }
             if (!chatCompressSummaries || !chatCompressSummaries.length) { showToast('还没有摘要可用'); return; }
             var mc = chatResolveCompressModel();
-            if (!mc) { showToast('请先选择模型'); return; }
+            if (!mc) { showToast(chatNoModelMsg()); return; }
             _chatRebuildingMt = true;
             showToast('正在重建记忆表格…');
             // 按钮变成实时跳秒的「重建中 Xs…」并禁用，让用户看得见它在转、转了多久
@@ -19901,7 +19939,7 @@ body {
             var maxChap = readerMaxSummaryChap(fileKey);
             if (maxChap < 0) { showToast('还没有任何章节摘要可用'); return; }
             var mc = chatResolveCompressModel();
-            if (!mc) { showToast('请先选择模型'); return; }
+            if (!mc) { showToast(chatNoModelMsg()); return; }
             _readerRebuilding = true;
             showToast('正在重建记忆表格…');
             // 按钮变成实时跳秒的「重建中 Xs…」并禁用，让用户看得见它在转、转了多久
@@ -22960,7 +22998,7 @@ body {
             if (!msg || typeof msg.content !== 'string') { readingClearActbar(); return; }
             var provId = document.getElementById('chatProviderSelect').value;
             var item = getKeyItemById(provId);
-            if (!item || !chatSelectedModel) { alert('请先选择模型'); return; }
+            if (!item || !chatSelectedModel) { alert(chatNoModelMsg()); return; }
             var orig = readingModeStripParaNums(readingModeGetOriginalText(msgIdx));
             var lines = orig.split('\n').filter(function(l) { return l.trim().length > 0; });
             if (pNum < 1 || pNum > lines.length) { readingClearActbar(); return; }
@@ -23028,7 +23066,7 @@ body {
             if (!msg || typeof msg.content !== 'string') { readingClearActbar(); return; }
             var provId = document.getElementById('chatProviderSelect').value;
             var item = getKeyItemById(provId);
-            if (!item || !chatSelectedModel) { alert('请先选择模型'); return; }
+            if (!item || !chatSelectedModel) { alert(chatNoModelMsg()); return; }
             var orig = readingModeStripParaNums(readingModeGetOriginalText(msgIdx));
             var lines = orig.split('\n').filter(function(l) { return l.trim().length > 0; });
             if (pNum < 1 || pNum > lines.length) { readingClearActbar(); return; }
@@ -23696,9 +23734,9 @@ body {
             //「留着残缺的几条」和「全推倒重来」之间二选一。已讲过的词会被
             // readerBgDoneTerms 收进第一遍的「请跳过」名单里，所以天然接得上。
             var mainIt = getKeyItemById(document.getElementById('chatProviderSelect').value);
-            if (!mainIt || !chatSelectedModel) { alert('请先选择模型'); return; }
+            if (!mainIt || !chatSelectedModel) { alert(chatNoModelMsg()); return; }
             var scanM = chatResolveCompressModel();
-            if (!scanM) { alert('请先选择模型'); return; }
+            if (!scanM) { alert(chatNoModelMsg()); return; }
             // 两个模型都在开章之前定死（开章会清空 chatSelectedModel，见 _rdBgExplain 上的注释）
             var explainM = chatResolveReadingModel('qa') || {
                 baseUrl: getBaseUrl(mainIt.url),
@@ -24026,7 +24064,7 @@ body {
             if (!msg || typeof msg.content !== 'string') { translateClearSel(); return; }
             var provId = document.getElementById('chatProviderSelect').value;
             var item = getKeyItemById(provId);
-            if (!item || !chatSelectedModel) { alert('请先选择模型'); return; }
+            if (!item || !chatSelectedModel) { alert(chatNoModelMsg()); return; }
             var lo = Math.min(translateSelAnchor, translateSelEnd);
             var hi = Math.max(translateSelAnchor, translateSelEnd);
             var orig = readingModeStripParaNums(readingModeGetOriginalText(msgIdx));
@@ -24135,7 +24173,7 @@ body {
             if (!msg || typeof msg.content !== 'string') { if (bar) bar.remove(); return; }
             var provId = document.getElementById('chatProviderSelect').value;
             var item = getKeyItemById(provId);
-            if (!item || !chatSelectedModel) { alert('请先选择模型'); return; }
+            if (!item || !chatSelectedModel) { alert(chatNoModelMsg()); return; }
             // 取该块原文 + 已有译文（含历史追问），作为追问上下文
             var orig = readingModeStripParaNums(readingModeGetOriginalText(msgIdx));
             var paras = translateModeSplitParas(orig);
