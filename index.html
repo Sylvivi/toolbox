@@ -5205,6 +5205,7 @@ body {
                         <option value="paren-num">括号数字（一）（1）</option>
                         <option value="cn-num-dot">中文数字（一、二、）</option>
                         <option value="numbered">数字编号</option>
+                        <option value="fanwai">番外（番外一、）</option>
                         <option value="english">英文 Chapter</option>
                         <option value="markdown">Markdown 标题</option>
                         <option value="empty-line">空行分隔</option>
@@ -19179,6 +19180,15 @@ body {
             'cn-num-dot': '^\\s*[零〇一二三四五六七八九十百千两]+、\\s*.*',
             numbered: '^\\d+[\\.\\、]\\s*.+',
             english: '^\\s*[Cc]hapter\\s+\\d+\\b.*',
+            /* 番外：行首就是「番外」两个字，如「番外一、」「番外二 相逢」「番外·贾致篇」「番外篇」。
+               ⚠️两道闸都不能少（写测试时当场踩到）：① 整行不超过 22 字（`[^\n]{0,20}$` 收尾）；
+                 ② 「番外」后面**必须跟分隔符/序号，或者到此为止**——只卡长度的话，
+                 「番外正文甲。」这种短句也会被当成章节名，于是真标题下面变空、
+                 被 `chapters.filter(body.length>0)` 静默丢掉，番外反而整个消失。
+               用户 2026-07-28 踩到：她把番外标题写成「番外一、」，`cn-num-dot` 要求
+               **行首第一个字就是中文数字**，前面多了「番外」两字就不认，整篇被切成一坨、
+               兜底命名成「前言 / 引言」。她书库里 `番外·xxx` 有十几本，值得单列一条。 */
+            fanwai: '^\\s*番外(?:$|[篇外\\s·・、：:_\\-—0-9０-９零〇一二三四五六七八九十百千两])[^\\n]{0,20}$',
             'empty-line': '__EMPTY_LINE__'
         };
 
@@ -21887,7 +21897,7 @@ body {
             var startNo = b.chapters.length + 1;
             var opts = [['auto', '自动检测'], ['chinese', '中文章节（第X章）'], ['bracket', '成对符号【】（）'],
                         ['paren-num', '括号数字（一）（1）'], ['cn-num-dot', '中文数字（一、二、）'],
-                        ['numbered', '数字编号'], ['english', '英文 Chapter'], ['markdown', 'Markdown 标题'],
+                        ['numbered', '数字编号'], ['fanwai', '番外（番外一、）'], ['english', '英文 Chapter'], ['markdown', 'Markdown 标题'],
                         ['empty-line', '空行分隔']];
             var selHtml = '<select id="rbAppendPreset" class="rb-select" style="flex:1;min-width:0">' +
                 opts.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === preset ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') +
@@ -22138,7 +22148,8 @@ body {
                 { name: 'paren-num', re: /^\s*[（(][零〇一二三四五六七八九十百千两\d]+[）)]\s*/ },
                 { name: 'cn-num-dot', re: /^\s*[零〇一二三四五六七八九十百千两]+、/ },
                 { name: 'numbered', re: /^\d+[\.\、]\s*.+/ },
-                { name: 'english', re: /^\s*[Cc]hapter\s+\d+/ }
+                { name: 'english', re: /^\s*[Cc]hapter\s+\d+/ },
+                { name: 'fanwai', re: /^\s*番外(?:$|[篇外\s·・、：:_\-—0-9０-９零〇一二三四五六七八九十百千两])[^\n]{0,20}$/ }
             ];
             var best = null, bestCount = 0;
             for (var p = 0; p < patterns.length; p++) {
@@ -22146,12 +22157,23 @@ body {
                 for (var li = 0; li < lines.length; li++) { if (patterns[p].re.test(lines[li].trim())) c++; }
                 if (c > bestCount) { bestCount = c; best = patterns[p].name; }
             }
+            /* 番外单独再数一遍：**不管哪条规则赢，番外都得能切出来**。
+               因为最常见的形状是「正文用第X章标、末尾几篇用番外标」——番外只有两三篇，
+               永远赢不了几百章的正文，按老逻辑就会被整个吞进最后一章。 */
+            var _fwRe = new RegExp(RB_PRESETS.fanwai), _fwCount = 0;
+            for (var fi = 0; fi < lines.length; fi++) if (_fwRe.test(lines[fi].trim())) _fwCount++;
             var pattern;
             if (bestCount >= 2 && best) { pattern = RB_PRESETS[best]; }
+            // 只有一两篇番外的文件（追加番外时最常见）：也该按番外切，别掉进「空行分隔」把每段当一章
+            else if (_fwCount >= 1) { pattern = RB_PRESETS.fanwai; }
             else {
                 var blocks = rawText.split(/\n\s*\n/).filter(function (b) { return b.trim().length > 0; });
                 if (blocks.length >= 2 && blocks.length <= 200) { pattern = '__EMPTY_LINE__'; }
                 else { pattern = '^#{1,6}\\s+.+|^第[一二三四五六七八九十百千\\d]+[章节篇部回]\\s*.*|^[Cc]hapter\\s*\\d+|^\\d+[\\.\\、]\\s*.+'; }
+            }
+            // 正文用别的规则标章、末尾几篇用「番外」标的混排文件：两条规则一起用
+            if (_fwCount >= 1 && pattern !== RB_PRESETS.fanwai && pattern !== '__EMPTY_LINE__') {
+                pattern = pattern + '|' + RB_PRESETS.fanwai;
             }
             return rbSplitByPattern(rawText, pattern);
         }
