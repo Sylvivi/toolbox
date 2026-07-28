@@ -3160,6 +3160,21 @@ body {
             width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0;
             transform: rotate(45deg);
         }
+        /* 提问「带多少材料」的三档小方块（2026-07-28）。用户选的形态：一个圆点，点一下换一档。
+           ⚠️用 CSS 画、不用 ○◐● 这三个字符——半黑圆 ◐ 在部分安卓字体里会掉字或大小不一，
+           而这个控件全靠形状表意，掉一个字就彻底看不懂了。 */
+        .reading-actbar .rp-lv {
+            flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; cursor: pointer;
+            position: relative; box-sizing: border-box; overflow: hidden;
+            border: 1.5px solid var(--accent-mid); background: var(--card-bg);
+            -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+            touch-action: manipulation; transition: background 0.15s, border-color 0.15s;
+        }
+        .reading-actbar .rp-lv[data-lv="1"]::after {
+            content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 50%;
+            background: var(--accent);
+        }
+        .reading-actbar .rp-lv[data-lv="2"] { background: var(--accent); border-color: var(--accent); }
         /* 书签：已标记段落 */
         .reading-merged p[data-p].rp-marked {
             border-left: 3px solid var(--accent); padding-left: 8px; margin-left: -11px;
@@ -3375,6 +3390,21 @@ body {
             width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0;
             transform: rotate(45deg);
         }
+        /* 提问「带多少材料」的三档小方块（2026-07-28）。用户选的形态：一个圆点，点一下换一档。
+           ⚠️用 CSS 画、不用 ○◐● 这三个字符——半黑圆 ◐ 在部分安卓字体里会掉字或大小不一，
+           而这个控件全靠形状表意，掉一个字就彻底看不懂了。 */
+        .reading-actbar .rp-lv {
+            flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; cursor: pointer;
+            position: relative; box-sizing: border-box; overflow: hidden;
+            border: 1.5px solid var(--accent-mid); background: var(--card-bg);
+            -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+            touch-action: manipulation; transition: background 0.15s, border-color 0.15s;
+        }
+        .reading-actbar .rp-lv[data-lv="1"]::after {
+            content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 50%;
+            background: var(--accent);
+        }
+        .reading-actbar .rp-lv[data-lv="2"] { background: var(--accent); border-color: var(--accent); }
         /* 书签：已标记段落 */
         .reading-merged p[data-p].rp-marked {
             border-left: 3px solid var(--accent); padding-left: 8px; margin-left: -11px;
@@ -22202,7 +22232,7 @@ body {
                 '"></textarea>';
             var askHtml = '<button class="rp-ask-send">' + _emptyLabel + '</button>';
             // 极简：输入框 + 讨论按钮，「带前文问答」勾选框紧贴讨论按钮左边（粘性，状态存 localStorage，替代原设置里的全局开关）
-            var ctxHtml = readingAskCtxBoxHtml();
+            var ctxHtml = readingAskCtxBoxHtml(_bgCi != null);   // 背景追问和普通提问各记各的档
             bar.innerHTML = leftSide ? (ctxHtml + askHtml + inputHtml) : (inputHtml + ctxHtml + askHtml);
             anchorEl.insertAdjacentElement('afterend', bar);
             // 一步式：直接出输入框；不自动聚焦弹键盘，等用户点输入框再唤起；点「讨论」发送；再点该段收起
@@ -22435,8 +22465,54 @@ body {
             readingBindAskBox(input);
             readingBindCtxBox(bar);
         }
-        // 共读提问：是否把「本章前面已聊过的问答」一并发给 AI（粘性开关，存 localStorage；在设置面板里切换）
-        function readingAskCtxOn() { return localStorage.getItem('reading_ask_ctx') === '1'; }
+        /* ===== 提问「带多少材料」的三档开关（2026-07-28 加）=====
+         * 用户要自己决定每次提问带不带记忆表和摘要——她实测这两块 6700 字、占一条提问的一多半，
+         * 但砍死了又会让「顺口拐到剧情」时接不上。她选的形态：**一个小方块，点一下换一档**。
+         *
+         * ⚠️档位的梯子是这么排的，别按「轻装／带问答／全带」那套改：
+         *   0 ○ 轻装  = 只有原文（＝背景追问现在的样子）
+         *   1 ◐ 中档  = ＋记忆表和摘要（＝普通提问**一直以来**的默认）
+         *   2 ● 全带  = 再＋本章前文问答（＝以前那个小方块勾上的状态）
+         * 这样三档是单调加码的，而且**现状恰好落在 1 和 2 上**，谁都不会被悄悄改掉行为。
+         * 最初设计成「◐＝带问答、●＝全带」，那样「带表格但不带问答」这个现行默认就无处安放了。
+         *
+         * 两套记忆：普通提问和背景追问各记各的（`_bg` 后缀），默认也不同——
+         * 普通提问默认 1（原样），背景追问默认 0（刚定的轻装）。合成一个键会互相打架。 */
+        var READ_ASK_LV_MAX = 2;
+        function _readAskLvKey(isBg) { return isBg ? 'reading_ask_lv_bg' : 'reading_ask_lv'; }
+        function readingAskLv(isBg) {
+            var raw = localStorage.getItem(_readAskLvKey(isBg));
+            if (raw !== null) { var n = parseInt(raw, 10); return (n >= 0 && n <= READ_ASK_LV_MAX) ? n : (isBg ? 0 : 1); }
+            if (isBg) return 0;
+            // 老开关迁移：以前只有「带不带前文问答」，表格摘要是always on → 勾上＝2、没勾＝1
+            return localStorage.getItem('reading_ask_ctx') === '1' ? 2 : 1;
+        }
+        function readingSetAskLv(isBg, lv) {
+            lv = Math.max(0, Math.min(READ_ASK_LV_MAX, lv | 0));
+            try { localStorage.setItem(_readAskLvKey(isBg), String(lv)); } catch (e) {}
+        }
+        var _RD_LV_TIP = ['只带这一段的原文（最省）', '＋记忆表和前文摘要', '＋本章前面聊过的问答（最全）'];
+        function readingAskLvHtml(isBg) {
+            var lv = readingAskLv(isBg);
+            return '<span class="rp-lv" role="button" tabindex="0" data-lv="' + lv + '" data-bg="' + (isBg ? 1 : 0) +
+                '" title="点一下换一档：' + _RD_LV_TIP[lv] + '"></span>';
+        }
+        function readingBindAskLv(bar) {
+            var el = bar && bar.querySelector('.rp-lv');
+            if (!el) return;
+            el.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var isBg = el.getAttribute('data-bg') === '1';
+                var lv = (parseInt(el.getAttribute('data-lv'), 10) + 1) % (READ_ASK_LV_MAX + 1);
+                el.setAttribute('data-lv', String(lv));
+                el.title = '点一下换一档：' + _RD_LV_TIP[lv];
+                readingSetAskLv(isBg, lv);
+                // 换档没有别的可见反馈（就一个小方块），给一下触感，免得以为没点着
+                try { navigator.vibrate && navigator.vibrate(8); } catch (x) {}
+            });
+        }
+        // 共读提问：是否把「本章前面已聊过的问答」一并发给 AI（＝三档里的第 2 档）
+        function readingAskCtxOn() { return readingAskLv(false) >= 2; }
         function readingSetAskCtx(on) { localStorage.setItem('reading_ask_ctx', on ? '1' : '0'); syncReadingAskCtxToggleStyle(); }
         function syncReadingAskCtxToggleStyle() {
             var cb = document.getElementById('readingAskCtxToggle');
@@ -22447,14 +22523,9 @@ body {
             if (cb.checked) { track.style.background = 'var(--accent)'; thumb.style.transform = 'translateX(18px)'; }
             else { track.style.background = 'var(--input-border)'; thumb.style.transform = 'translateX(0)'; }
         }
-        function readingAskCtxBoxHtml() {
-            return '<label class="rp-ctx" title="勾选后，把本章里这一段之前你问过的问答也一起发给 AI，让它接得上前面聊过的内容（会多用一点 token）">' +
-                '<input type="checkbox" class="rp-ctx-cb"' + (readingAskCtxOn() ? ' checked' : '') + '></label>';
-        }
-        function readingBindCtxBox(bar) {
-            var cb = bar && bar.querySelector('.rp-ctx-cb');
-            if (cb) cb.addEventListener('change', function() { localStorage.setItem('reading_ask_ctx', cb.checked ? '1' : '0'); });
-        }
+        // 旧的勾选框已被三档小方块取代；这两个名字仍被几处调用点用着，直接转过去，免得散着改出漏网的
+        function readingAskCtxBoxHtml(isBg) { return readingAskLvHtml(!!isBg); }
+        function readingBindCtxBox(bar) { readingBindAskLv(bar); }
         // 共读追问输入框：随内容自动长高（换行交给键盘的回车键，发送用按钮）
         function readingBindAskBox(input) {
             if (!input) return;
@@ -22578,6 +22649,8 @@ body {
                 } catch (eBg) {}
                 if (!_bgText) _bgCi = null;   // 捞不着就退回普通提问，别发一份空背景过去
             }
+            // 这一轮带多少材料，由条子上那个三档小方块说了算（背景追问和普通提问各记各的档）
+            var _lv = readingAskLv(_bgCi != null);
             var CTX_CHAR_BUDGET = 8000;
             var ctxLines = [];
             var ctxUsed = 0;
@@ -22613,7 +22686,7 @@ body {
             // 可选（「带前文问答」勾选时）：把本章里这一段「之前」聊过的问答一并带上，
             // 让 AI 接得上前面别的段落的讨论（只取问答块，以「汐：」开头；不含 AI 自动点评）
             var priorQaBlock = '';
-            if (readingAskCtxOn() && Array.isArray(parsedAll)) {
+            if (_lv >= 2 && Array.isArray(parsedAll)) {
                 var _qaPrior = [];
                 for (var qi = 0; qi < parsedAll.length; qi++) {
                     var _c = parsedAll[qi];
@@ -22723,7 +22796,7 @@ body {
                    ② 她实测这两块合计 6700 字、占一整条提问的一多半，砍掉后背景追问从一万多字降到一两千。
                    代价说清楚：她顺口拐到剧情时，模型对前几十章的记忆会糙一点——想认真聊剧情就双击正文段落，
                    那条路一字未改、材料照旧全带。 */
-                if (_bgCi == null && chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length)) {
+                if (_lv >= 1 && chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length)) {
                     var _mtText = '';
                     if (chatMemoryTables.characters.length) _mtText += '【人物表】\n| 人物 | 身份 | 关系 | 当前状态 | 备注 |\n| --- | --- | --- | --- | --- |\n' + chatMemoryTables.characters.map(function(r) { return '| ' + (r['人物']||'') + ' | ' + (r['身份']||'') + ' | ' + (r['关系']||'') + ' | ' + (r['当前状态']||'') + ' | ' + (r['备注']||'') + ' |'; }).join('\n');
                     if (chatMemoryTables.places && chatMemoryTables.places.length) _mtText += (_mtText ? '\n\n' : '') + '【地点表】\n| 地点 | 规模/特征 | 关联 | 简介 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.places.map(function(r) { return '| ' + (r['地点']||'') + ' | ' + (r['规模/特征']||'') + ' | ' + (r['关联']||'') + ' | ' + (r['简介']||'') + ' |'; }).join('\n');
@@ -22734,12 +22807,12 @@ body {
                     var _segs = chatCompressSummaries.slice(-CHAT_SUMMARY_MAX_SEGS);
                     _sumLen = _segs.join('').length;
                     _summaryLines = _summaryLines.concat(_segs);
-                } else if (_bgCi == null && (chatCompressOutline || (chatCompressSummaries && chatCompressSummaries.length))) {
+                } else if (_lv >= 1 && (chatCompressOutline || (chatCompressSummaries && chatCompressSummaries.length))) {
                     _summaryLines = chatCompressSummaries.slice(chatOutlineCovers || 0);
                     if (chatCompressOutline) _summaryLines.unshift('【更早前情的大纲】\n' + chatCompressOutline);
                     // ⚠️这一条也得挡：readerEnsureSummaries 会**现场调 API 生成摘要**，
                     // 背景追问走到这里等于白烧一笔，而且烧的还是它根本不需要的东西。
-                } else if (_bgCi == null && chatReaderMode && readerBookId != null && msg.readerChapter != null) {
+                } else if (_lv >= 1 && chatReaderMode && readerBookId != null && msg.readerChapter != null) {
                     // 阅读模式没有自动压缩摘要：开了「自动总结前情」才按需补摘要（已存的跳过）；没开就只发已备好的，不新烧 API
                     try {
                         var _genOK = readerSummaryEnabled();
@@ -22764,6 +22837,8 @@ body {
                     _parts = {
                         '背景讲解': _bgText.length,
                         '前后三段原文': ctxLines.join('\n').length,
+                        '记忆表': _mtLen,        // 档位调到 ◐ 以上时才有；照实记，才看得出这一档贵多少
+                        '前文摘要': _sumLen,
                         '人设+指令': sysPrompt.length,
                         '我的问题': question.length
                     };

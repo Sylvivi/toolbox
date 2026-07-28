@@ -211,10 +211,95 @@ function bootBook() {
     ok('但仍允许她主动问剧情（不是硬禁令）', D.背景.允许聊剧情);
     ok('背景追问比普通提问省一大截', D.背景.总字数 < D.普通.总字数 * 0.6,
         '背景 ' + D.背景.总字数 + ' 字 / 普通 ' + D.普通.总字数 + ' 字');
-    eq('背景追问的分块照实记（没有记忆表/摘要那两块）', Object.keys(D.背景.分块).sort(),
-        ['人设+指令', '前后三段原文', '我的问题', '背景讲解'].sort());
+    /* 背景追问现在也能自己调档（见 E 组），所以分块里会有「记忆表/前文摘要」两栏；
+     * 默认的 ○ 档下它们必须是 0——照实记，才看得出调高一档到底贵多少。 */
+    eq('背景追问的分块栏目齐全', Object.keys(D.背景.分块).sort(),
+        ['人设+指令', '前后三段原文', '前文摘要', '我的问题', '背景讲解', '记忆表'].sort());
+    eq('默认 ○ 档下，记忆表和摘要记的是 0（确实没发）',
+        [D.背景.分块['记忆表'], D.背景.分块['前文摘要']], [0, 0]);
     eq('双击普通问答块：老路一字不变，仍记「共读提问」', D.普通.环节, '共读提问');
     ok('双击普通问答块：记忆表和摘要照样带（没误伤）', D.普通.带了记忆表或摘要);
+
+    /* ── E 组：「带多少材料」三档小方块 ─────────────────────────────
+     * 用户 2026-07-28：「让我自己来决定要不要带表格和摘要…这个切换走极简风」，
+     * 选的形态是**一个小圆点、点一下换一档**。
+     * ⚠️档位梯子必须是这个顺序，别改成「轻装／带问答／全带」：
+     *   0 只带原文 → 1 ＋记忆表和摘要（普通提问一直以来的默认）→ 2 ＋本章前文问答
+     * 这样现状恰好落在 1 和 2 上，谁的行为都不会被悄悄改掉。 */
+    const E = await page.evaluate(async () => {
+        const body = []; for (let i = 1; i <= 30; i++) body.push('第' + i + '段：' + '正'.repeat(120));
+        const book = { id: 'bk_l', fileName: '书.txt', fileSize: 9, chapters: [{ title: '第一章', body: body.join('\n') }] };
+        window.rbBooks = [book]; window.rbGetBook = (id) => (id === 'bk_l' ? book : null);
+        window.getKeyItemById = () => ({ id: 'p1', url: 'https://x/v1', key: 'k' });
+        window.chatSelectedModel = 'm1'; window.chatResolveReadingModel = () => null;
+        document.getElementById('chatModalOverlay').classList.add('show');
+        window.readerBookId = 'bk_l'; window.readerChapterIdx = 0;
+        window.chatReaderMode = true; window.chatReadingMode = true;
+        window.chatCurrentConvId = 'reader_bk_l';
+        window.chatMessages = readerChapterPair(book.chapters[0], 0);
+        const mi = chatMessages.findIndex(m => m && m.readerChapter === 0);
+        chatMessages[mi].content += '\n[P5] 汐：早先问过的？\n早先答过的。';
+        chatMessages[mi].content += '\n[P17] 汐：背景：绿衣官员\n唐代六七品官员穿绿色官服。🍄';
+        window.chatMemoryTables = { characters: [{ '人物': '甲', '身份': '书生', '关系': '', '当前状态': '', '备注': '' }], places: [], timeline: [], plotlines: [] };
+        window.chatCompressSummaries = ['前情摘要'.repeat(50)];
+        ['reading_ask_lv', 'reading_ask_lv_bg', 'reading_ask_ctx'].forEach(k => localStorage.removeItem(k));
+        chatRenderAllMessages(false);
+
+        const out = {};
+        out.默认档 = { 普通: readingAskLv(false), 背景: readingAskLv(true) };
+        localStorage.setItem('reading_ask_ctx', '1');
+        out.老开关勾上过 = readingAskLv(false);      // 旧数据要落到「全带」
+        localStorage.removeItem('reading_ask_ctx');
+
+        let sent;
+        window.chatStreamChat = async (o) => { sent = o; return '答。'; };
+        const openBar = (bgIdx) => {
+            readingClearActbar();
+            const msgEl = document.querySelector('.chat-msg.ai[data-idx="' + mi + '"]');
+            if (bgIdx != null) readingOnCommentClick([...msgEl.querySelectorAll('blockquote[data-cp="17"]')][bgIdx]);
+            else readingOpenAskBar(mi, 20, msgEl.querySelector('p[data-p="20"]'));
+            return document.querySelector('.reading-actbar');
+        };
+        const askAt = async (bgIdx) => {
+            const bar = openBar(bgIdx);
+            bar.querySelector('.rp-ask').value = '问题？';
+            bar.querySelector('.rp-ask-send').click();
+            await new Promise(r => setTimeout(r, 300));
+            return {
+                表格摘要: sent.messages.some(m => /人物表|前情摘要/.test(m.content)),
+                前文问答: /早先答过的/.test(sent.messages[sent.messages.length - 1].content),
+                字数: sent.messages.map(m => m.content).join('').length
+            };
+        };
+        const el0 = openBar(null).querySelector('.rp-lv');
+        out.控件存在 = !!el0;
+        out.点四下循环 = [el0.getAttribute('data-lv')];
+        for (let i = 0; i < 4; i++) { el0.click(); out.点四下循环.push(el0.getAttribute('data-lv')); }
+
+        readingSetAskLv(false, 0); out.普通_轻装 = await askAt(null);
+        readingSetAskLv(false, 1); out.普通_中档 = await askAt(null);
+        readingSetAskLv(false, 2); out.普通_全带 = await askAt(null);
+        readingSetAskLv(true, 0); out.背景_轻装 = await askAt(0);
+        readingSetAskLv(true, 1); out.背景_中档 = await askAt(0);
+        out.互不干扰 = { 普通: readingAskLv(false), 背景: readingAskLv(true) };
+        return out;
+    });
+    ok('提问条上有那个三档小圆点', E.控件存在);
+    eq('点一下换一档，转一圈回到原处', E.点四下循环, ['1', '2', '0', '1', '2']);
+    /* ⚠️默认值这两条是「不改现状」的保险：普通提问默认 1（一直以来就带表格摘要、不带前文问答），
+     * 背景追问默认 0（刚定的轻装）。改默认＝在用户没要求的情况下动她的行为和花费。 */
+    eq('普通提问默认停在「＋记忆表和摘要」（＝一直以来的样子）', E.默认档.普通, 1);
+    eq('背景追问默认停在「只带原文」（＝刚定的轻装）', E.默认档.背景, 0);
+    eq('老开关勾过的人，迁移成「全带」，行为不变', E.老开关勾上过, 2);
+    ok('第 0 档：表格摘要和前文问答都不带', !E.普通_轻装.表格摘要 && !E.普通_轻装.前文问答, JSON.stringify(E.普通_轻装));
+    ok('第 1 档：带表格摘要，不带前文问答', E.普通_中档.表格摘要 && !E.普通_中档.前文问答, JSON.stringify(E.普通_中档));
+    ok('第 2 档：两样都带', E.普通_全带.表格摘要 && E.普通_全带.前文问答, JSON.stringify(E.普通_全带));
+    ok('档位越高发得越多（梯子是单调的）',
+        E.普通_轻装.字数 < E.普通_中档.字数 && E.普通_中档.字数 < E.普通_全带.字数,
+        [E.普通_轻装.字数, E.普通_中档.字数, E.普通_全带.字数].join(' < '));
+    ok('背景追问也能自己调档：调到 ◐ 就带上表格摘要', E.背景_中档.表格摘要, JSON.stringify(E.背景_中档));
+    ok('背景追问在 ○ 档仍旧不带', !E.背景_轻装.表格摘要, JSON.stringify(E.背景_轻装));
+    eq('两套档各记各的，互不干扰', E.互不干扰, { 普通: 2, 背景: 1 });
 
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' ｜ '));
 
