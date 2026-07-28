@@ -5074,7 +5074,10 @@ body {
             <!-- 列表视图顶栏 -->
             <div class="chat-topbar" id="chatTopbarList" style="display: none;">
                 <div class="chat-handle-bar"></div>
-                <button class="chat-close-btn" onclick="closeChatModal()" title="关闭">✕</button>
+                <!-- 退出对话列表用「←」不用「✕」：对话列表是从工具箱主页推进来的一层，退出＝退回上一层，
+                     跟对话视图的返回键(chatBackBtn)、云端列表的「返回本地」是同一个手势语义。⚠️chatRenderHistoryList
+                     每次重画都会把这个按钮的字重写一遍，改这里必须连那边一起改，否则一刷新就变回叉。 -->
+                <button class="chat-close-btn" onclick="closeChatModal()" title="返回">←</button>
                 <div style="flex:1"></div>
                 <button class="chat-sp-btn" onclick="readerResumeLast()" title="继续阅读"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg></button>
                 <button class="chat-sp-btn" onclick="chatCloudShowList()" title="云端"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg></button>
@@ -13050,9 +13053,10 @@ body {
         function chatRenderHistoryList() {
             var closeBtn = document.querySelector('#chatTopbarList .chat-close-btn');
             if (closeBtn) {
-                closeBtn.textContent = '✕';
+                // 「←」而非「✕」——退回工具箱主页也是退上一层；跟静态 HTML 里 #chatTopbarList 那个初值保持一致
+                closeBtn.textContent = '←';
                 closeBtn.onclick = function() { closeChatModal(); };
-                closeBtn.title = '关闭';
+                closeBtn.title = '返回';
             }
             var topbarBtns = document.querySelectorAll('#chatTopbarList .chat-sp-btn');
             topbarBtns.forEach(function(btn) { btn.style.display = ''; });
