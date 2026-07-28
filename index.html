@@ -11592,6 +11592,18 @@ body {
             '· 不要开场白（别写「好的」「这个背景是」），直接说内容。\n' +
             '· 不要小标题、不要列表、不要 [P] 标记。\n' +
             '· 120 字左右，说完就停。';
+        /* 「双击背景块追问」用的指令（2026-07-28 加）。用户报：双击的明明是背景讲解，
+           AI 却带入人物动机聊起了剧情。根因见 readingOnCommentClick——它只取段号、
+           把「你双击的是哪一块」扔了，于是发出去的跟双击正文段落一模一样：共读点评人设
+           ＋「结合该段原文认真回答」＋记忆表/摘要，全在往剧情上拽。
+           ⚠️不是「禁止聊剧情」：用户明确说「不是说不可以聊正文」，定的是**背景优先、
+           她问到剧情才聊**。所以这里写的是重心而不是禁令——写成禁令她顺口问一句
+           「那他当时是不是在装傻」会被硬拦回去，那就从一个毛病换成了另一个毛病。 */
+        var BG_FOLLOWUP_INSTRUCTION = '【任务】我正在读的这段书里，你之前给我讲过一个背景知识，我现在**针对这个背景**追问你。\n\n' +
+            '· 重心放在**这个背景本身**：那件事、那个制度、那个器物到底是怎么回事，我还没弄懂的地方给我讲透。\n' +
+            '· 原文只是背景出现的场合，**别主动去分析人物动机、伏笔、剧情走向**——我要聊剧情会另外找你。\n' +
+            '· 但如果我问的就是剧情（比如「那他这么做是不是不合规矩」），那就正常聊，别把我拦回去、也别声明「这超出背景范围」。\n' +
+            '· 不要开场白、不要小标题、不要 [P] 标记，像朋友接着上一句往下说。';
 
         var chatTranslateMode = false;  // 剧本翻译模式
         var TRANSLATE_MODE_INSTRUCTION = '作为智能翻译辅助工具，请将用户提交的文本翻译成中文后，就文本中难以理解或具有专业术语性质的单词或短语进行标注，并提供其对应含义、音标以及详细而准确的解释，帮助用户深入理解翻译内容的确切意义。\n注意：仅对专业术语、专有名词、特定文化背景或难以理解的单词或短语进行解释。常见词汇如"table"（桌子）、"book"（书）等无需解释。\n\n【剧本 / 台词的智能处理】如果提交的是剧本、台词或影视对白，先判断它属于哪一种，再按对应方式翻译：\n（1）带说话人标注的台本（每句前带人名或角色名，如「张三：…」「MARY: …」）：保留「说话人：台词」的逐行结构来翻译，按标注给出的人物身份来定人称、性别、语气和口吻，与该角色一致；不要把台词并成段落，也不要删掉或改写说话人。\n（2）纯字幕本 / 无人名的对白（只有一句句台词、没有说话人标注）：\n· 从上下文推断这段对话有几个人、谁在跟谁说话，给每一句都加上推断出的说话人标签，格式为「标签（性别）：台词」。如果台词里透露了人物名字（互相称呼、被叫到名字），优先用真名当标签，如「Jack（男）：…」；认不出名字才退而用「A（男）：…」「B（女）：…」这种代号。同一个人全程固定用同一个标签。\n· 全程锁定每个人的人称（他/她、你/您）、性别、语气和口吻，前后保持一致，绝不中途乱跳。\n· 字幕常把完整的一句话拆成好几行（跨行断句）；翻译前先把这些被拆断的碎行拼回成完整的句子，再翻成通顺自然的一整句，不要逐行硬翻出断裂的半句。\n· 拿不准某句是谁说的时候，宁可用中性标签「？：」老实标注，也绝不要自信地乱安一个说话人——标签只是辅助，标错反而误导。\n· 如果这段是同一个剧本接着前文继续发的，说话人标签要和前面保持一致（同一个人还用同一个标签或名字），不要重新从 A 数起、把人认串。\n剧本情况下，下面第一部分就按「说话人：台词」逐行输出、而不是合成自然段落；分割线与术语解释部分照旧。\n\n【输出格式（必须严格遵守，每次回复都使用完全相同的结构，不要增删小标题、不要改变顺序）】\n第一部分：直接给出原文的中文翻译，作为一个或多个自然段落，不要加"翻译："之类的前缀，不要加任何标题。\n然后另起一行，单独输出一行三个连字符作为分割线：\n---\n第二部分：逐条解释术语。每个术语单独占一行（行与行之间空一行），且每一行都严格使用下面这一种格式，不要使用项目符号、不要使用编号、不要使用小标题：\n**英文单词或短语** [美式音标]：**中文含义** 词根/词缀/词源解释 相关emoji（牛津词典英文释义）\n如果整段没有需要解释的术语，第二部分就只输出一句"本段无需特别解释的术语。"，不要省略分割线。\n\n示例：\n**Cockpit** [ˈkɑːk.pɪt]：**驾驶舱** Cock 这个词根来源于古英语"cocc"，意为公鸡，pit 意为坑、围栏，合起来原指斗鸡场，后引申为狭小的操作空间 🛫🚢（the area in a plane, boat or racing car where the pilot or driver sits）';
@@ -22164,7 +22176,8 @@ body {
 
         // 共读：在 anchorEl 后面插入「问这一段」操作栏（原文段落、AI 回答块都能触发，复用同一套）
         // prefill：可选，预填问题文本（提问失败时用来把原问题塞回输入框，不让用户白打一遍）
-        function readingOpenAskBar(msgIdx, pNum, anchorEl, prefill) {
+        // opts.bgCi：双击的是某条背景讲解时，它在该段问答里的序号。带上它＝这一轮走「背景追问」模式。
+        function readingOpenAskBar(msgIdx, pNum, anchorEl, prefill, opts) {
             // 左右跟随翻页按钮位置：靠左则「提问」在最左、靠右则在最右（贴近拿机手拇指）
             var pos = localStorage.getItem('reading_pagebtn_pos') || 'rb';
             var leftSide = (pos === 'lm' || pos === 'lb');
@@ -22179,9 +22192,13 @@ body {
                  与其空着不如让给背景（用户原话「非社科类的书没有导读，把切换让给标背景」）。
                  所以小说**不需要长按**——留空点一下就是背景。 */
             var _isSocial = rbCurBookIsSocial();
-            var _emptyLabel = _isSocial ? '导读' : '背景';
+            /* 背景追问模式：双击的是某条背景讲解。这里的空态没有意义（「再标一次背景」不是你想要的），
+               所以按钮固定叫「追问」、也不接长按那一手——留空点一下只是把光标放进输入框。 */
+            var _bgCi = (opts && opts.bgCi != null && opts.bgCi >= 0) ? opts.bgCi : null;
+            var _emptyLabel = _bgCi != null ? '追问' : (_isSocial ? '导读' : '背景');
             var inputHtml = '<textarea class="rp-ask" rows="1" placeholder="' +
-                (_isSocial ? '有问题就问…（留空＝导读，长按＝背景）' : '问问这一段…（留空＝背景，打字＝讨论）') +
+                (_bgCi != null ? '问问这个背景…' :
+                 _isSocial ? '有问题就问…（留空＝导读，长按＝背景）' : '问问这一段…（留空＝背景，打字＝讨论）') +
                 '"></textarea>';
             var askHtml = '<button class="rp-ask-send">' + _emptyLabel + '</button>';
             // 极简：输入框 + 讨论按钮，「带前文问答」勾选框紧贴讨论按钮左边（粘性，状态存 localStorage，替代原设置里的全局开关）
@@ -22192,6 +22209,11 @@ body {
             var input = bar.querySelector('.rp-ask');
             var send = bar.querySelector('.rp-ask-send');
             function go() {
+                if (_bgCi != null) {   // 背景追问：空着就把光标放进去，别去重标背景
+                    if (!input.value.trim()) { try { input.focus(); } catch (e) {} return; }
+                    readingAskOne(msgIdx, pNum, input.value, bar, { bgCi: _bgCi });
+                    return;
+                }
                 if (!input.value.trim()) {
                     // 社科书 + 空着 → 整节导读（question 传占位符，函数里会换成「导读：《小节名》」）
                     if (_isSocial) { readingAskOne(msgIdx, pNum, '导读', bar, { guide: true }); return; }
@@ -22215,6 +22237,7 @@ body {
                 if (_bgArmed) { _bgArmed = false; send.textContent = _bgLabel; send.classList.remove('rp-bg-armed'); }
             }
             send.addEventListener('pointerdown', function (e) {
+                if (_bgCi != null) return;          // 背景追问模式没有第三态
                 if (!_isSocial) return;             // 小说留空点一下就是背景，不用长按这一手
                 if (input.value.trim()) return;     // 打了字＝讨论，长按不接管
                 if (readerBgRunning || readingCommenting) return;
@@ -22309,7 +22332,9 @@ body {
             // 该段可能有多条问答，输入框插在最后一条之后，让对话顺着往下接
             var all = msgEl.querySelectorAll('blockquote[data-cp="' + pNum + '"]');
             var anchor = all.length ? all[all.length - 1] : bqEl;
-            readingOpenAskBar(msgIdx, pNum, anchor);
+            // 双击的是背景块 → 走背景模式（把「哪一块」带下去，别只留个段号）
+            var _bgCi = bqEl.hasAttribute('data-bg') ? parseInt(bqEl.getAttribute('data-ci'), 10) : null;
+            readingOpenAskBar(msgIdx, pNum, anchor, '', (_bgCi >= 0) ? { bgCi: _bgCi } : null);
         }
 
         // 长按 AI 回复块：弹出「删除 / 重新回答」操作条（删的就是按住的这一块）
@@ -22541,10 +22566,27 @@ body {
                 pNum = _sec.headP;      // 导读挂在小标题后面（下面的流式锚点、落盘、重渲都用这个 pNum）
                 question = '导读' + (_sec.title ? '：《' + _sec.title + '》' : '');
             }
+            /* 背景追问：把双击的那一条背景讲解捞出来当主料。
+               ⚠️只认这一条，不要把该段所有问答都塞进去——那正是原来跑偏的原因之一。 */
+            var _bgCi = (opts && opts.bgCi != null && opts.bgCi >= 0) ? opts.bgCi : null;
+            var _bgText = '';
+            if (_bgCi != null) {
+                try {
+                    var _all = readingModeParseComments(msg.content).filter(function (c) { return c.p === pNum; });
+                    var _one = _all[_bgCi];
+                    if (_one && _one.text) _bgText = _one.text.replace(/^\s*汐：/, '').trim();
+                } catch (eBg) {}
+                if (!_bgText) _bgCi = null;   // 捞不着就退回普通提问，别发一份空背景过去
+            }
             var CTX_CHAR_BUDGET = 8000;
             var ctxLines = [];
             var ctxUsed = 0;
-            if (!_guide) {
+            if (_bgCi != null) {
+                // 用户定的：前后各三段（跟背景讲解自己用的上下文一个量级，够认场合、又不至于把剧情全铺开）
+                for (var bi = Math.max(1, pNum - 3); bi <= Math.min(lines.length, pNum + 3); bi++) {
+                    ctxLines.push('[P' + bi + '] ' + lines[bi - 1]);
+                }
+            } else if (!_guide) {
                 for (var i = pNum - 1; i >= 0; i--) {
                     var lineStr = '[P' + (i + 1) + '] ' + lines[i];
                     if (i < pNum - 1 && ctxUsed + lineStr.length > CTX_CHAR_BUDGET) break;
@@ -22596,6 +22638,12 @@ body {
                     (_sec.title ? '「' + _sec.title + '」这一小节' : '这一小节') + '的原文' +
                     (_secText.truncated ? '（这节较长，只给了靠后的部分）' : '') + '：\n\n' + _secText.text +
                     '\n\n请按上面的导读要求，把这一节讲给我听。';
+            } else if (_bgCi != null) {
+                // 背景追问：人设仍是同一个蘑菇声音（小说/社科各用各的），指令换成「背景优先」
+                sysPrompt = (rbCurBookIsSocial() ? SOCIAL_MODE_PERSONA : BG_NOVEL_PERSONA) + '\n\n' + BG_FOLLOWUP_INSTRUCTION;
+                userMsg = '你之前给我讲过的这个背景：\n\n' + _bgText +
+                    '\n\n它出现在《' + (rbCurBookName() || '这本书') + '》的这几段里（[P' + pNum + '] 是它挂着的那一段）：\n\n' + ctxLines.join('\n') +
+                    '\n\n我的问题是：' + question;
             } else {
             sysPrompt = (_spAsk || READING_MODE_DEFAULT_PERSONA) + '\n\n' +
                 '你正在和用户一起共读小说。用户指定了某一段，可能就这段向你提问，也可能只是想跟你聊天、吐槽、开脑洞、发散讨论。' +
@@ -22669,7 +22717,13 @@ body {
                    用户量出来 6700 字、正问「该砍哪个」，而这一块恰好糊在一起看不出来——
                    量表在最该分辨的地方失焦，等于没量。⚠️以后再加输入块，宁可拆细别合并。 */
                 var _mtLen = 0, _sumLen = 0;
-                if (chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length)) {
+                /* ⚠️背景追问不带记忆表和摘要（用户 2026-07-28 定）。两个理由，缺一不可：
+                   ① 人物表/伏笔表/前情摘要跟「唐代官服颜色」没关系，带了反而是在把模型往剧情上拽——
+                      这正是她报的那个毛病的一部分；
+                   ② 她实测这两块合计 6700 字、占一整条提问的一多半，砍掉后背景追问从一万多字降到一两千。
+                   代价说清楚：她顺口拐到剧情时，模型对前几十章的记忆会糙一点——想认真聊剧情就双击正文段落，
+                   那条路一字未改、材料照旧全带。 */
+                if (_bgCi == null && chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length)) {
                     var _mtText = '';
                     if (chatMemoryTables.characters.length) _mtText += '【人物表】\n| 人物 | 身份 | 关系 | 当前状态 | 备注 |\n| --- | --- | --- | --- | --- |\n' + chatMemoryTables.characters.map(function(r) { return '| ' + (r['人物']||'') + ' | ' + (r['身份']||'') + ' | ' + (r['关系']||'') + ' | ' + (r['当前状态']||'') + ' | ' + (r['备注']||'') + ' |'; }).join('\n');
                     if (chatMemoryTables.places && chatMemoryTables.places.length) _mtText += (_mtText ? '\n\n' : '') + '【地点表】\n| 地点 | 规模/特征 | 关联 | 简介 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.places.map(function(r) { return '| ' + (r['地点']||'') + ' | ' + (r['规模/特征']||'') + ' | ' + (r['关联']||'') + ' | ' + (r['简介']||'') + ' |'; }).join('\n');
@@ -22680,10 +22734,12 @@ body {
                     var _segs = chatCompressSummaries.slice(-CHAT_SUMMARY_MAX_SEGS);
                     _sumLen = _segs.join('').length;
                     _summaryLines = _summaryLines.concat(_segs);
-                } else if (chatCompressOutline || (chatCompressSummaries && chatCompressSummaries.length)) {
+                } else if (_bgCi == null && (chatCompressOutline || (chatCompressSummaries && chatCompressSummaries.length))) {
                     _summaryLines = chatCompressSummaries.slice(chatOutlineCovers || 0);
                     if (chatCompressOutline) _summaryLines.unshift('【更早前情的大纲】\n' + chatCompressOutline);
-                } else if (chatReaderMode && readerBookId != null && msg.readerChapter != null) {
+                    // ⚠️这一条也得挡：readerEnsureSummaries 会**现场调 API 生成摘要**，
+                    // 背景追问走到这里等于白烧一笔，而且烧的还是它根本不需要的东西。
+                } else if (_bgCi == null && chatReaderMode && readerBookId != null && msg.readerChapter != null) {
                     // 阅读模式没有自动压缩摘要：开了「自动总结前情」才按需补摘要（已存的跳过）；没开就只发已备好的，不新烧 API
                     try {
                         var _genOK = readerSummaryEnabled();
@@ -22703,7 +22759,15 @@ body {
                    导读没必要）。这些块拼起来就是上面 _askMsgs 的全部内容，所以加起来≈整笔输入，
                    看得出该砍谁。⚠️新增块记得同步加进来，否则「加起来对不上总数」会让人白查半天。 */
                 var _parts = null;
-                if (!_guide) {
+                if (_bgCi != null) {
+                    // 背景追问的材料完全是另一套（没有记忆表/摘要/本段其它问答），分块也得照实记
+                    _parts = {
+                        '背景讲解': _bgText.length,
+                        '前后三段原文': ctxLines.join('\n').length,
+                        '人设+指令': sysPrompt.length,
+                        '我的问题': question.length
+                    };
+                } else if (!_guide) {
                     _parts = {
                         '本章原文': ctxLines.join('\n').length,
                         '记忆表': _mtLen,
@@ -22716,7 +22780,8 @@ body {
                 }
                 var answer = (await chatStreamChat({
                     baseUrl: baseUrl, apiKey: apiKey, model: _qaMdl, markUsed: true,
-                    purpose: _guide ? '社科导读' : '共读提问',   // 用量面板里分开记，能看清导读单独花了多少
+                    // 分开记账：背景追问该比普通提问便宜一大截，记成同一个环节就看不出来省没省
+                    purpose: _guide ? '社科导读' : (_bgCi != null ? '背景追问' : '共读提问'),
                     messages: _askMsgs,
                     parts: _parts,
                     signal: readingAbortCtl.signal,
@@ -24963,7 +25028,12 @@ body {
                         } else {
                             _cmtRendered = renderText(_cmtRaw);
                         }
-                        html += '<blockquote data-cp="' + pNum + '" data-ci="' + k + '" style="margin:0.4em 0 0.6em;padding:6px 12px;border-left:3px solid var(--accent);background:var(--quote-bg, var(--accent-light));border-radius:0 8px 8px 0;font-size:0.92em;color:var(--text-sub);line-height:1.6">' + _cmtRendered + '</blockquote>';
+                        /* 标出「这块是背景讲解」，双击追问时才认得出该走背景模式（2026-07-28 加）。
+                           用户报：双击背景块提问，AI 却带入人物动机聊剧情。根因是
+                           readingOnCommentClick 只取段号、把「你双击的是哪一块」直接扔了，
+                           于是双击背景块和双击正文段落发出去的东西一模一样。 */
+                        var _isBg = _qm && _cmtRaw.replace(/^\s*汐：/, '').indexOf(BG_Q_PREFIX) === 0;
+                        html += '<blockquote data-cp="' + pNum + '" data-ci="' + k + '"' + (_isBg ? ' data-bg="1"' : '') + ' style="margin:0.4em 0 0.6em;padding:6px 12px;border-left:3px solid var(--accent);background:var(--quote-bg, var(--accent-light));border-radius:0 8px 8px 0;font-size:0.92em;color:var(--text-sub);line-height:1.6">' + _cmtRendered + '</blockquote>';
                     }
                 }
             }

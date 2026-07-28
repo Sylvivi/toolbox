@@ -128,6 +128,94 @@ function bootBook() {
     ok('展开后箭头翻过来', C.箭头翻了);
     eq('再点一下收起', C.再点一下, 'none');
 
+    /* ── D 组：双击背景块＝背景追问模式 ─────────────────────────────
+     * 用户 2026-07-28 报：「双击的明明是背景知识，AI 却带入正文人物的动机跟我交流」。
+     * 根因是 readingOnCommentClick 只取段号、把「你双击的是哪一块」直接扔了，
+     * 于是双击背景块和双击正文段落发出去的东西**一模一样**——共读点评人设
+     * ＋「结合该段原文认真回答」＋记忆表/摘要，全在往剧情上拽。
+     * ⚠️用户明确说「不是说不可以聊正文」，所以定的是**背景优先**、不是禁止聊剧情。 */
+    const D = await page.evaluate(async () => {
+        const body = []; for (let i = 1; i <= 30; i++) body.push('第' + i + '段：' + '正'.repeat(120));
+        const book = { id: 'bk_b', fileName: '大唐辟珠记.txt', fileSize: 42, chapters: [{ title: '第四十四章', body: body.join('\n') }] };
+        window.rbBooks = [book]; window.rbGetBook = (id) => (id === 'bk_b' ? book : null);
+        window.getKeyItemById = () => ({ id: 'p1', url: 'https://x/v1', key: 'k' });
+        window.chatSelectedModel = 'm1'; window.chatResolveReadingModel = () => null;
+        document.getElementById('chatModalOverlay').classList.add('show');
+        window.readerBookId = 'bk_b'; window.readerChapterIdx = 0;
+        window.chatReaderMode = true; window.chatReadingMode = true;
+        window.chatCurrentConvId = 'reader_bk_b';
+        window.chatMessages = readerChapterPair(book.chapters[0], 0);
+        const mi = chatMessages.findIndex(m => m && m.readerChapter === 0);
+        // 同一段上挂两块：一条普通问答 + 一条背景讲解。双击哪块，行为必须不同。
+        chatMessages[mi].content += '\n[P17] 汐：他为什么这么说？\n因为他在试探。';
+        chatMessages[mi].content += '\n[P17] 汐：背景：绿衣官员\n唐代六七品官员穿绿色官服，见到紫袍红袍就得低头。🍄';
+        window.chatMemoryTables = { characters: [{ '人物': '甲', '身份': '书生', '关系': '', '当前状态': '', '备注': '' }], places: [], timeline: [], plotlines: [] };
+        window.chatCompressSummaries = ['前情摘要'.repeat(50)];
+        chatRenderAllMessages(false);
+
+        const out = {};
+        const bqs = [...document.querySelector('.chat-msg.ai[data-idx="' + mi + '"]').querySelectorAll('blockquote[data-cp="17"]')];
+        out.谁被标成背景 = bqs.map(x => (x.hasAttribute('data-bg') ? 'BG' : '普通'));
+
+        let sent;
+        window.chatStreamChat = async (o) => { sent = o; return '这是回答。'; };
+
+        readingOnCommentClick(bqs[1]);              // ① 双击背景块
+        let bar = document.querySelector('.reading-actbar');
+        out.按钮文字 = bar.querySelector('.rp-ask-send').textContent;
+        out.占位文字 = bar.querySelector('.rp-ask').placeholder;
+        bar.querySelector('.rp-ask').value = '那这个颜色是谁定的？';
+        bar.querySelector('.rp-ask-send').click();
+        await new Promise(r => setTimeout(r, 400));
+        out.背景 = {
+            环节: sent.purpose,
+            带了记忆表或摘要: sent.messages.some(m => /人物表|前情摘要/.test(m.content)),
+            带了背景讲解: /唐代六七品官员穿绿色官服/.test(sent.messages[1].content),
+            带了同段别的问答: /他在试探/.test(sent.messages[1].content),
+            段号: (sent.messages[1].content.match(/\[P(\d+)\]/g) || []).filter((v, i, a) => a.indexOf(v) === i),
+            人设是背景那套: /我在读小说，读到不懂的时代背景来问你/.test(sent.messages[0].content),
+            // ⚠️别拿「伏笔」当标记：背景指令里就有「别主动去分析人物动机、伏笔、剧情走向」，
+            // 会把自己的话当成泄漏。只认共读点评人设独有的那几句。
+            没混进共读点评人设: !/男生子|家族树|像朋友唠嗑，不是文学赏析课/.test(sent.messages[0].content),
+            允许聊剧情: /那就正常聊/.test(sent.messages[0].content),
+            总字数: sent.messages.map(m => m.content).join('').length,
+            分块: sent.parts
+        };
+
+        readingClearActbar();                       // ② 双击普通问答块：老路一字不变
+        const bqs2 = [...document.querySelector('.chat-msg.ai[data-idx="' + mi + '"]').querySelectorAll('blockquote[data-cp="17"]')];
+        readingOnCommentClick(bqs2[0]);
+        bar = document.querySelector('.reading-actbar');
+        bar.querySelector('.rp-ask').value = '他后来怎么了？';
+        bar.querySelector('.rp-ask-send').click();
+        await new Promise(r => setTimeout(r, 400));
+        out.普通 = {
+            环节: sent.purpose,
+            带了记忆表或摘要: sent.messages.some(m => /人物表|前情摘要/.test(m.content)),
+            总字数: sent.messages.map(m => m.content).join('').length
+        };
+        return out;
+    });
+    eq('背景块在渲染时就被标出来（不然双击时认不出）', D.谁被标成背景, ['普通', 'BG']);
+    eq('双击背景块：按钮变「追问」', D.按钮文字, '追问');
+    eq('双击背景块：输入框提示「问问这个背景…」', D.占位文字, '问问这个背景…');
+    eq('单独记账成「背景追问」（记成共读提问就看不出省没省）', D.背景.环节, '背景追问');
+    ok('背景追问带上了那条背景讲解', D.背景.带了背景讲解);
+    ok('背景追问不带同一段里别的问答（那正是跑偏的诱因之一）', !D.背景.带了同段别的问答);
+    eq('背景追问带前后各三段原文', D.背景.段号, ['[P17]', '[P14]', '[P15]', '[P16]', '[P18]', '[P19]', '[P20]']);
+    ok('背景追问不带记忆表和前文摘要', !D.背景.带了记忆表或摘要, JSON.stringify(D.背景));
+    ok('背景追问用的是背景人设（"我在读小说，读到不懂的时代背景"）', D.背景.人设是背景那套);
+    ok('没混进共读点评人设（伏笔/男生子/家族树）', D.背景.没混进共读点评人设);
+    /* ⚠️反向保护：用户原话「不是说不可以聊正文」。写成硬禁令会从一个毛病换成另一个毛病——
+     * 她顺口问一句「那他当时是不是在装傻」会被模型拦回去。 */
+    ok('但仍允许她主动问剧情（不是硬禁令）', D.背景.允许聊剧情);
+    ok('背景追问比普通提问省一大截', D.背景.总字数 < D.普通.总字数 * 0.6,
+        '背景 ' + D.背景.总字数 + ' 字 / 普通 ' + D.普通.总字数 + ' 字');
+    eq('背景追问的分块照实记（没有记忆表/摘要那两块）', Object.keys(D.背景.分块).sort(),
+        ['人设+指令', '前后三段原文', '我的问题', '背景讲解'].sort());
+    eq('双击普通问答块：老路一字不变，仍记「共读提问」', D.普通.环节, '共读提问');
+    ok('双击普通问答块：记忆表和摘要照样带（没误伤）', D.普通.带了记忆表或摘要);
+
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' ｜ '));
 
     await browser.close();
