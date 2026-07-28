@@ -14239,10 +14239,56 @@ body {
             };
             if (has(fav && fav.providerId)) return fav.providerId;
             if (fav && fav.url) {
-                var all = getKeyData();
-                for (var j = 0; j < all.length; j++) if (all[j].url === fav.url && has(all[j].id)) return all[j].id;
+                // ⚠️比网址要用 getBaseUrl 归一化：同步过来的收藏可能差个尾斜杠 / '/v1'，
+                //   精确相等会漏匹配。跟 chatRenderFavSection 里的自愈同一个口径。
+                var all = getKeyData(), base = getBaseUrl(fav.url);
+                for (var j = 0; j < all.length; j++) if (getBaseUrl(all[j].url || '') === base && has(all[j].id)) return all[j].id;
             }
             return '';
+        }
+        /* 中转站掉了（下拉框变空）但模型还在时，把中转站找回来；返回当前中转站条目或 null。
+           ⚠️2026-07-28 加。起因：用户报「明明选了模型却提示没选」，而她的中转站**并没有被删**。
+             查下来是「**模型和中转站没有一起还原**」——`readerOpenChapter` 会记下模型再还原回去，
+             中转站的下拉框却没人管；只要它在别处被清空过一次（比如 `chatLoadConv` 里
+             `if (conv.providerId)` 为空、那段还原被整个跳过），之后就是**模型一直有、中转站一直空**，
+             她怎么重选模型都没用（提示还只说模型，把人往错方向带）。
+           ⚠️只在能**唯一确定**是哪个站时才自动切，绝不瞎猜——猜错＝请求发去别的站、扣别人的钱。
+             认得出就切回去并说一声，认不出就返回 null，由调用方照旧提示。 */
+        function chatEnsureProvider() {
+            var sel = document.getElementById('chatProviderSelect');
+            var item = getKeyItemById(sel.value);
+            if (item) return item;                       // 本来就好好的，什么都不做
+            if (!chatSelectedModel) return null;         // 模型也没有，那是真没选，别自作主张
+            var wantId = '';
+            // ① 收藏里有且只有一个站收藏了这个模型 → 就是它
+            var cands = [];
+            for (var i = 0; i < chatFavModels.length; i++) {
+                if (chatFavModels[i].model !== chatSelectedModel) continue;
+                var id = chatFavProviderId(chatFavModels[i]);
+                if (id && cands.indexOf(id) === -1) cands.push(id);
+            }
+            if (cands.length === 1) wantId = cands[0];
+            // ② 收藏里认不出（没收藏过 / 好几个站都有同名模型）→ 退回「上次用的站」，
+            //    但必须那个站上次用的就是这个模型，否则宁可不猜
+            if (!wantId) {
+                var last = localStorage.getItem('chat_last_provider') || '';
+                if (last && getKeyItemById(last) && localStorage.getItem('chat_last_model_' + last) === chatSelectedModel) wantId = last;
+            }
+            if (!wantId) return null;
+            var keep = chatSelectedModel, keepKey = chatSelectedKeyStr;
+            sel.value = wantId;
+            onChatProviderChange();                      // ⚠️它会把 chatSelectedModel/KeyStr 清空，所以下面要还回去
+            chatSelectedModel = keep;
+            if (!chatSelectedKeyStr && keepKey) chatSelectedKeyStr = keepKey;
+            var mi = document.getElementById('chatModelInput'); if (mi) mi.value = keep;
+            var ml = document.getElementById('chatModelLabel'); if (ml) ml.textContent = keep;
+            var sb = document.getElementById('chatSendBtn'); if (sb) sb.disabled = false;
+            var sel2 = document.getElementById('chatProviderSelect2');
+            if (sel2) { sel2.innerHTML = sel.innerHTML; sel2.value = sel.value; }
+            var back = getKeyItemById(wantId);
+            showToast('中转站掉了，已自动切回「' + ((back && back.name) || wantId) + '」');
+            if (typeof chatUpdateFavHeader === 'function') chatUpdateFavHeader();
+            return back;
         }
         /* 点收藏里的一个模型。
            ⚠️2026-07-28 修「明明选了模型却提示没选」：`sel.value = 不存在的编号` 是**静默失败**
@@ -14445,13 +14491,17 @@ body {
             if (cur) {
                 var curFav = null;
                 var _curProv = (document.getElementById('chatProviderSelect') || {}).value || '';
-                // 先精确匹配「当前站点 + 模型」，没有再退回只按模型名
+                /* ⚠️只认「当前站点 + 模型」的精确匹配（2026-07-28 修）：原来匹配不上时会
+                   **退回只按模型名找**，于是显示成**另一个站的同名模型**——用户看到的「当前:」
+                   压根不是她选的那一条，正是「我选的是一个，但实际选中的有可能是另外一个」。
+                   宁可不显示「当前:」，也不能显示一个错的。 */
                 for (var i = 0; i < chatFavModels.length; i++) { if (chatFavModels[i].model === cur && chatFavModels[i].providerId === _curProv) { curFav = chatFavModels[i]; break; } }
-                if (!curFav) { for (var i = 0; i < chatFavModels.length; i++) { if (chatFavModels[i].model === cur) { curFav = chatFavModels[i]; break; } } }
                 if (curFav) {
                     var prov = curFav.providerName || '';
                     txt += ' · 当前: ' + (prov ? prov + ' / ' : '') + cur;
                     if (curFav.note) txt += '（' + curFav.note + '）';
+                } else if (!_curProv) {
+                    txt += ' · ⚠️ 没选中转站';   // 中转站掉了要看得见，别让她对着一个「看着正常」的界面反复重选模型
                 }
             }
             el.textContent = txt;
@@ -14495,12 +14545,17 @@ body {
             // 按中转站名字分组（不同站点绝不混排）
             var groups = {};
             var groupOrder = [];
+            /* ⚠️分组的键是**网址**不是名字（2026-07-28 修）：原来按 `providerName` 分组，
+               两个**同名**的中转站（同一家站配了两条、或改名撞了）会被并进同一组，
+               用户点的那一行其实属于另一个站——正是她说的「我选的是一个，但实际选中的
+               有可能是另外一个」。名字只拿来当组标题显示。 */
+            var groupLabel = {};
             for (var i = 0; i < chatFavModels.length; i++) {
                 var fav = chatFavModels[i];
-                var gName = fav.providerName || '未知';
-                if (!groups[gName]) { groups[gName] = []; groupOrder.push(gName); }
+                var gKey = fav.url ? getBaseUrl(fav.url) : ('id:' + (fav.providerId || '未知'));
+                if (!groups[gKey]) { groups[gKey] = []; groupOrder.push(gKey); groupLabel[gKey] = fav.providerName || fav.url || '未知'; }
                 fav._origIdx = i; // 记原始收藏顺序，作为「没用过」时的次级排序键
-                groups[gName].push(fav);
+                groups[gKey].push(fav);
             }
             // 组内：最近调用过的排前面；都没用过则维持原收藏顺序。
             var _groupUsed = {};
@@ -14526,7 +14581,7 @@ body {
                 var gn = groupOrder[gi];
                 var gLabel = document.createElement('div');
                 gLabel.style.cssText = 'font-size:11px;color:var(--accent-mid);padding:8px 0 4px;font-weight:600;opacity:0.7;';
-                gLabel.textContent = gn;
+                gLabel.textContent = groupLabel[gn] || gn;   // 分组的键是网址，标题显示中转站名字
                 container.appendChild(gLabel);
                 var _gExpanded = !!_favGroupExpanded[gn];
                 var _gShow = (_gExpanded || groups[gn].length <= 3) ? groups[gn].length : 3;
@@ -21049,6 +21104,18 @@ body {
             var _prevModel = chatSelectedModel, _prevKeyStr = chatSelectedKeyStr;
             chatResetConvState();
             var _rconv = readerFindConv(bookId);
+            /* ⚠️中转站也必须一起还原（2026-07-28 补）：原来这里只管模型，中转站的下拉框一个字没动。
+               于是只要它在别处被清空过一次（`chatLoadConv` 里 `if (conv.providerId)` 为空时，
+               那整段还原会被跳过），之后就是**模型一直有、中转站一直空**——用户报「明明选了模型
+               却提示没选」，而且提示只说模型，她重选多少次都没用。「谁都不许单独还原」。
+               只认下拉框里真有的那一项，认不出就不动（`chatEnsureProvider` 还有一道兜底）。 */
+            var _selP = document.getElementById('chatProviderSelect');
+            if (!getKeyItemById(_selP.value)) {
+                var _wantP = (_rconv && _rconv.providerId) || localStorage.getItem('chat_last_provider') || '';
+                for (var _pi = 0; _pi < _selP.options.length; _pi++) {
+                    if (_selP.options[_pi].value === _wantP && getKeyItemById(_wantP)) { _selP.value = _wantP; break; }
+                }
+            }
             var _provId = document.getElementById('chatProviderSelect').value;
             chatSelectedModel = _prevModel || (_rconv && _rconv.model) || localStorage.getItem('chat_last_model_' + _provId) || '';
             chatSelectedKeyStr = _prevKeyStr || (_rconv && _rconv.keyStr) || '';
@@ -22996,8 +23063,8 @@ body {
             if (readingCommenting) return;
             var msg = chatMessages[msgIdx];
             if (!msg || typeof msg.content !== 'string') { readingClearActbar(); return; }
+            var item = chatEnsureProvider();   // 中转站掉了先自动找回来，认不出才提示（见函数注释）
             var provId = document.getElementById('chatProviderSelect').value;
-            var item = getKeyItemById(provId);
             if (!item || !chatSelectedModel) { alert(chatNoModelMsg()); return; }
             var orig = readingModeStripParaNums(readingModeGetOriginalText(msgIdx));
             var lines = orig.split('\n').filter(function(l) { return l.trim().length > 0; });
@@ -23064,8 +23131,8 @@ body {
             if (!question) { if (input) input.focus(); return; }
             var msg = chatMessages[msgIdx];
             if (!msg || typeof msg.content !== 'string') { readingClearActbar(); return; }
+            var item = chatEnsureProvider();   // 中转站掉了先自动找回来，认不出才提示（见函数注释）
             var provId = document.getElementById('chatProviderSelect').value;
-            var item = getKeyItemById(provId);
             if (!item || !chatSelectedModel) { alert(chatNoModelMsg()); return; }
             var orig = readingModeStripParaNums(readingModeGetOriginalText(msgIdx));
             var lines = orig.split('\n').filter(function(l) { return l.trim().length > 0; });
@@ -23733,7 +23800,7 @@ body {
             // 再点＝接着标，不清空。跑到一半失败/中断是常事，不该让用户在
             //「留着残缺的几条」和「全推倒重来」之间二选一。已讲过的词会被
             // readerBgDoneTerms 收进第一遍的「请跳过」名单里，所以天然接得上。
-            var mainIt = getKeyItemById(document.getElementById('chatProviderSelect').value);
+            var mainIt = chatEnsureProvider();   // 同上：先自动找回中转站
             if (!mainIt || !chatSelectedModel) { alert(chatNoModelMsg()); return; }
             var scanM = chatResolveCompressModel();
             if (!scanM) { alert(chatNoModelMsg()); return; }
@@ -24062,8 +24129,8 @@ body {
             var msgIdx = translateSelMsgIdx;
             var msg = chatMessages[msgIdx];
             if (!msg || typeof msg.content !== 'string') { translateClearSel(); return; }
+            var item = chatEnsureProvider();   // 中转站掉了先自动找回来，认不出才提示（见函数注释）
             var provId = document.getElementById('chatProviderSelect').value;
-            var item = getKeyItemById(provId);
             if (!item || !chatSelectedModel) { alert(chatNoModelMsg()); return; }
             var lo = Math.min(translateSelAnchor, translateSelEnd);
             var hi = Math.max(translateSelAnchor, translateSelEnd);
@@ -24171,8 +24238,8 @@ body {
             if (!question) { if (input) input.focus(); return; }
             var msg = chatMessages[msgIdx];
             if (!msg || typeof msg.content !== 'string') { if (bar) bar.remove(); return; }
+            var item = chatEnsureProvider();   // 中转站掉了先自动找回来，认不出才提示（见函数注释）
             var provId = document.getElementById('chatProviderSelect').value;
-            var item = getKeyItemById(provId);
             if (!item || !chatSelectedModel) { alert(chatNoModelMsg()); return; }
             // 取该块原文 + 已有译文（含历史追问），作为追问上下文
             var orig = readingModeStripParaNums(readingModeGetOriginalText(msgIdx));

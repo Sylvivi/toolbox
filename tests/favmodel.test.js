@@ -121,6 +121,83 @@ function probe() {
     ok('切中转站之前先把编号验一遍', E.切之前先验中转站);
     ok('验不过就提示并停下，不往下走', E.找不到就直接返回);
 
+
+    /* ===== F 组：中转站掉了要自动找回来（她真正遇到的那个）=====
+       她的中转站并没有被删——是「模型和中转站没有一起还原」，模型一直有、中转站一直空。 */
+    const F = await page.evaluate(async () => {
+        window._boot();
+        chatFavModels = [{ url: 'https://b.example.com', model: 'claude-y', providerId: 'prov_B', providerName: '乙站' }];
+        chatPickFavModel(chatFavModels[0]);
+        await new Promise(r => setTimeout(r, 300));
+        // 模拟「中转站被清空、模型还在」这个坏状态
+        document.getElementById('chatProviderSelect').value = '';
+        const 坏掉时 = window._probe();
+        const back = chatEnsureProvider();
+        return { 坏掉时, 找回的站: back ? back.id : null, 找回后: window._probe(), toasts: window._toasts };
+    });
+    ok('先造出坏状态：模型还在、中转站空了（她的症状）', F.坏掉时.中转站 === '(空)' && F.坏掉时.内部模型 === 'claude-y' && F.坏掉时.弹没选模型);
+    eq('⭐自动按「这个模型属于哪个站」找回中转站', F.找回的站, 'prov_B');
+    eq('找回后模型没被弄丢', F.找回后.内部模型, 'claude-y');
+    ok('找回后点讨论不再弹「没选模型」', !F.找回后.弹没选模型);
+    ok('找回时告诉她一声', F.toasts.some(t => t.indexOf('已自动切回') !== -1));
+
+    /* ===== G 组：认不出是哪个站就绝不瞎猜（猜错＝请求发去别的站、扣错钱）===== */
+    const G = await page.evaluate(async () => {
+        window._boot();
+        // 两个站都收藏了同名模型 → 无法唯一确定
+        chatFavModels = [
+            { url: 'https://a.example.com', model: 'same-model', providerId: 'prov_A', providerName: '甲站' },
+            { url: 'https://b.example.com', model: 'same-model', providerId: 'prov_B', providerName: '乙站' }
+        ];
+        chatSelectedModel = 'same-model';
+        document.getElementById('chatProviderSelect').value = '';
+        localStorage.removeItem('chat_last_provider');
+        const back = chatEnsureProvider();
+        return { 猜了吗: !!back, 中转站: document.getElementById('chatProviderSelect').value || '(空)' };
+    });
+    ok('两个站都有同名模型时不瞎猜', !G.猜了吗);
+    eq('也不会乱切中转站', G.中转站, '(空)');
+
+    /* ===== H 组：收藏区分组按网址，同名不同站不许混 ===== */
+    const H = await page.evaluate(async () => {
+        window._boot();
+        // 两个**真的同名**的中转站（同一家配了两条、或改名撞了），收藏区自愈会把站名按网址修正回来
+        idbSet('api_manager_data', [
+            { id: 'prov_A', name: '同名站', url: 'https://a.example.com', key: 'sk-aaa' },
+            { id: 'prov_B', name: '同名站', url: 'https://b.example.com', key: 'sk-bbb' }
+        ]);
+        populateChatProviders();
+        chatFavModels = [
+            { url: 'https://a.example.com', model: 'gpt-x', providerId: 'prov_A', providerName: '同名站' },
+            { url: 'https://b.example.com', model: 'claude-y', providerId: 'prov_B', providerName: '同名站' }
+        ];
+        _chatFavExpanded = true;
+        chatRenderFavSection();
+        const box = document.getElementById('chatFavSection');
+        // 组标题的那几行（字号 11px 那种）
+        const labels = Array.from(box.querySelectorAll('div')).filter(d => /font-size:\s*11px/.test(d.getAttribute('style') || '')).map(d => d.textContent);
+        return { 组数: labels.length, 标题: labels };
+    });
+    eq('两个同名中转站分成两组（不再混排）', H.组数, 2);
+    ok('组标题显示的仍是中转站名字、不是网址', H.标题.every(t => t === '同名站'));
+
+    /* ===== I 组：收藏区标题的「当前:」不许瞎猜 ===== */
+    const I = await page.evaluate(async () => {
+        window._boot();
+        chatFavModels = [{ url: 'https://b.example.com', model: 'claude-y', providerId: 'prov_B', providerName: '乙站' }];
+        // 当前站是甲站，选中的模型却是乙站那条 → 不该显示「当前:」
+        document.getElementById('chatProviderSelect').value = 'prov_A';
+        chatSelectedModel = 'claude-y';
+        chatUpdateFavHeader();
+        const 对不上时 = document.getElementById('chatFavHeaderText').textContent;
+        document.getElementById('chatProviderSelect').value = '';
+        chatUpdateFavHeader();
+        const 没中转站时 = document.getElementById('chatFavHeaderText').textContent;
+        return { 对不上时, 没中转站时 };
+    });
+    ok('站和模型对不上时不显示「当前:」（宁可不显示也不能显示错的）', I.对不上时.indexOf('当前') === -1);
+    ok('中转站空了要在标题上看得见', I.没中转站时.indexOf('没选中转站') !== -1);
+
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' ｜ '));
 
     await browser.close();
