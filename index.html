@@ -19331,26 +19331,45 @@ body {
                 var m = items[bkSyncKey(b)];
                 if (!m) continue;                                               // 服务器没有这本，不管
                 var srvTs = m.ts || 0;
-                if (b._ts == null) { b._ts = srvTs; dirty = true; continue; }   // 首次见面：认作已同步，只记时间
+                if (b._ts == null) {
+                    /* 首次见面（老书本来就没 _ts）。默认认作"已同步"、只记时间——否则一开书架
+                       几百本全重下一遍。**但章数对不上是例外**：那说明两边结构确实不一样
+                       （服务器上那本被修过章、合并过、补过番外），这时候不下就永远差着，
+                       用户只能一本本手动删了重下。章数是 manifest 里现成的字段，比对不花钱。
+                       ⚠️只认"章数不同"，不拿字数猜——改错字不会动章数，那种情况本来就该等
+                       下一次真更新，不值得为它把整个书库重下一遍。 */
+                    if (m.nchap && m.nchap !== b.chapters.length) { queue.push(b); continue; }
+                    b._ts = srvTs; dirty = true; continue;
+                }
                 if (srvTs > b._ts) queue.push(b);
             }
             if (dirty) { try { rbSave(); } catch (e) {} }
             if (!queue.length) return;
             // 一本一本地拉，别一次并发几十个请求把手机的网占满（跟标背景那边限速同一个道理）
+            // ⚠️量大时别一本弹一条 toast——修完一批书可能是几十本，几十条提示会把屏幕刷爆。
+            //   超过 3 本就闷声下、末尾报一个总数。
+            var quiet = queue.length > 3, doneN = 0;
             (function next(k) {
-                if (k >= queue.length) return;
-                bkSyncRefreshOne(queue[k], function () { setTimeout(function () { next(k + 1); }, 300); });
+                if (k >= queue.length) {
+                    if (quiet) showToast('已更新 ' + doneN + ' 本书（书架里是最新的了）');
+                    return;
+                }
+                bkSyncRefreshOne(queue[k], function (ok) {
+                    if (ok !== false) doneN++;
+                    setTimeout(function () { next(k + 1); }, 300);
+                }, quiet);
             })(0);
         }
         // 重下一本已有的书，只换正文、保住本地 id 和身份证
-        function bkSyncRefreshOne(book, done) {
-            var cfg = bkSyncCfg(); if (!cfg) { if (done) done(); return; }
+        // quiet=true：批量更新时不逐本弹提示（调用方末尾报一个总数），done(ok) 回报这本成没成
+        function bkSyncRefreshOne(book, done, quiet) {
+            var cfg = bkSyncCfg(); if (!cfg) { if (done) done(false); return; }
             var fk = bkSyncKey(book);
             fetch(cfg.url + '/get?key=' + encodeURIComponent(fk), { headers: bkSyncHeaders(cfg) })
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (d) {
                     var full = d && (d.book || d);
-                    if (!full || !full.chapters || !full.chapters.length) { if (done) done(); return; }
+                    if (!full || !full.chapters || !full.chapters.length) { if (done) done(false); return; }
                     var oldN = book.chapters.length;
                     book.chapters = full.chapters;
                     if (full.rawText) book.rawText = full.rawText;
@@ -19362,11 +19381,13 @@ body {
                     // 正在读这本书：正文快照是开章那刻拼的，得重开这一章才看得到新内容——说清楚，别让她以为没生效
                     var reading = false;
                     try { reading = !!(chatReaderMode && readerBookId === book.id); } catch (e) {}
-                    showToast('《' + nm + '》已更新' + tail + (reading ? '，重开这一章看新内容' : ''));
+                    // 正在读这本的话，哪怕批量也要单独说一声——她眼前那一章得重开才看得到新内容
+                    if (!quiet || reading) showToast('《' + nm + '》已更新' + tail + (reading ? '，重开这一章看新内容' : ''));
                     try { _readingMergeCache = { text: null, ps: null, namesSig: null }; } catch (e) {}   // 正文变了，段落缓存作废
-                    if (done) done();
+                    try { if (typeof rbRenderShelf === 'function') { var sv = document.getElementById('rbShelfView'); if (sv && sv.style.display !== 'none') rbRenderShelf(); } } catch (e) {}
+                    if (done) done(true);
                 })
-                .catch(function () { if (done) done(); });
+                .catch(function () { if (done) done(false); });
         }
 
         // 按需下载整本：占位书点开时调，成功后用真数据替换占位并落盘。cb(fullBook|false)

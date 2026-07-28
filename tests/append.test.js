@@ -186,6 +186,27 @@ function bootShelf() {
     eq('F1 ⚠️首次见面不下载（否则一开书架几百本全重下）', F.下载次数, 0);
     eq('F2 但把服务器的时间戳记下来了', F.记下的ts, 999999);
 
+    /* ── F2 组：首次见面但「章数对不上」→ 必须下载 ──────────────────
+       用户问「改了字后怎么在别的地方同步呢」时发现的：别的设备都还没"见过"任何书，
+       第一次打开书架只会盖时间戳、不下载——于是服务器上刚修好的 90 本书，
+       她得一本本手动删了重下。章数是 manifest 现成字段，比对不花钱，用它当例外。 */
+    const F2 = await page.evaluate(() => {
+        const book = window._bootShelf();          // 本地 3 章
+        delete book._ts;
+        const hits = [];
+        window.bkSyncRefreshOne = (b, done) => { hits.push(b.id); if (done) done(true); };
+        window.bkSyncCfg = () => ({ url: 'https://x', token: 't' });
+        const key = '长篇.txt|54321';
+        bkSyncCheckUpdates({ [key]: { ts: 999, nchap: 3 } });     // 章数一样 → 只盖时间戳
+        const 章数相同 = { 下载: hits.length, ts: book._ts };
+        const b2 = window._bootShelf(); delete b2._ts;
+        bkSyncCheckUpdates({ [key]: { ts: 999, nchap: 70 } });    // 章数不同 → 该下
+        return { 章数相同, 章数不同下载: hits.length - 章数相同.下载, ts2: b2._ts };
+    });
+    eq('F3 首次见面且章数一样 → 不下载，只记时间', F2.章数相同, { 下载: 0, ts: 999 });
+    eq('F4 ⚠️首次见面但章数对不上 → 下载（否则修好的书永远同步不过去）', F2.章数不同下载, 1);
+    ok('F5 章数不对时不能提前把时间戳盖上（盖了就再也不会下了）', F2.ts2 == null, '实际 ' + F2.ts2);
+
     /* ── G 组：此后云端更新才触发下载 ───────────────────────────── */
     const G = await page.evaluate(() => {
         const book = window._bootShelf();
@@ -269,6 +290,27 @@ function bootShelf() {
         return { 提示: toast, 缓存清了: window._readingMergeCache && window._readingMergeCache.text === null };
     });
     ok('I1 正在读这本书时提示「重开这一章」', /重开这一章/.test(I.提示), '实际：' + I.提示);
+
+    /* ── I3 组：批量更新只报一个总数，不刷屏 ────────────────────── */
+    const Q = await page.evaluate(async () => {
+        const toasts = [];
+        window.showToast = (m) => toasts.push(m);
+        window.bkSyncCfg = () => ({ url: 'https://x', token: 't' });
+        window.bkSyncRefreshOne = window._origRefresh;
+        window.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({ ts: 5, book: { chapters: [{ title: 'a', body: 'b' }] } }) });
+        // 5 本待更新的书（超过 3 本就该闷声下、末尾报总数）
+        window.rbBooks = [];
+        for (let i = 0; i < 5; i++) window.rbBooks.push({ id: 'b' + i, fileName: 'x' + i + '.txt', fileSize: i, _ts: 1, chapters: [{ title: 't', body: 'y' }] });
+        window.rbGetBook = (id) => window.rbBooks.find(b => b.id === id) || null;
+        window.rbSave = () => {};
+        window.chatReaderMode = false; window.readerBookId = null;
+        const items = {}; window.rbBooks.forEach(b => { items[b.fileName + '|' + b.fileSize] = { ts: 99, nchap: 1 }; });
+        bkSyncCheckUpdates(items);
+        await new Promise(r => setTimeout(r, 2600));
+        return { 条数: toasts.length, 最后一条: toasts[toasts.length - 1] || '' };
+    });
+    ok('I3 五本一起更新时不刷屏（不是 5 条提示）', Q.条数 <= 2, '实际弹了 ' + Q.条数 + ' 条：' + Q.最后一条);
+    ok('I4 末尾报一个总数', /已更新\s*5\s*本/.test(Q.最后一条), '实际：' + Q.最后一条);
     ok('I2 段落渲染缓存作废（正文变了不能再用旧的）', I.缓存清了, JSON.stringify(I));
 
     /* ── I2 组：改了书就必须推服务器 ────────────────────────────────
