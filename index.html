@@ -1008,6 +1008,12 @@ body {
             color: #fff; padding: 10px 20px; border-radius: 10px; font-size: 14px;
             opacity: 0; transition: all 0.3s; z-index: 1000; pointer-events: none;
         }
+        /* 常驻提示（sticky）：不会自己消失，所以**必须能点掉**。
+           ⚠️基础 .toast 是 pointer-events:none（不挡下面的操作），常驻态要单独打开，
+           否则它会一直杵在屏幕上、连点都点不着（2026-07-28 用户报「一直不消失，咋办」）。
+           右边用 ::after 画个 ✕ 当"可以点"的提示——不用 innerHTML，免得提示文字里的字符被当标签。 */
+        .toast.sticky { pointer-events: auto; cursor: pointer; padding-right: 16px; }
+        .toast.sticky::after { content: '✕'; margin-left: 10px; opacity: 0.75; font-size: 13px; }
         .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
         .tab-content { display: none; }
@@ -5868,6 +5874,9 @@ body {
             var t = document.getElementById('toast');
             t.textContent = msg; t.classList.add('show');
             if (t._t) clearTimeout(t._t);
+            // 常驻提示：点一下收起。⚠️不给关闭方式的话它就永远杵在那儿（用户实测报的）
+            t.classList.toggle('sticky', !!sticky);
+            if (!t._bound) { t._bound = 1; t.addEventListener('click', function () { t.classList.remove('show', 'sticky'); }); }
             if (!sticky) t._t = setTimeout(function() { t.classList.remove('show'); }, 2000);
         }
         function fmtTime(iso) {
@@ -21272,6 +21281,11 @@ body {
                 : '<div onclick="rbBookMenuAction(\'kind\')">🎓 标为社科书</div>';
             // 追加章节（番外）：接在全书最后，前面所有章序号一动不动＝读痕零风险
             if (!b._remote) items += '<div onclick="rbBookMenuAction(\'append\')">➕ 追加章节</div>';
+            // 清理重复段落：只有这本书真的中招才显示，干净的书不该看见这一项
+            if (!b._remote) {
+                var _dup = rbCountDups(b);
+                if (_dup.total) items += '<div onclick="rbBookMenuAction(\'dedup\')">🧹 清理重复段落（' + _dup.total + '）</div>';
+            }
             // 改动记录（改错字的后悔药）：一条都没有就不占位置，别让菜单越长越吓人
             if (!b._remote) {
                 var _nEdit = (typeof rdEditLogCount === 'function') ? rdEditLogCount(rbBookFileKey(b)) : 0;
@@ -21298,7 +21312,48 @@ body {
             else if (action === 'kind') rbToggleBookKind(id);
             else if (action === 'edits') { var _b = rbGetBook(id); if (_b) rdEditShowLog(rbBookFileKey(_b)); }
             else if (action === 'append') rbAppendStart(id);
+            else if (action === 'dedup') rbDedupBook(id);
             else if (action === 'delete') rbDeleteBook(id);
+        }
+
+        /* 清理这本书的重复段落（2026-07-28 加）。
+           ⚠️必须推服务器：手机才是正本，只改本地的话服务器那份仍是脏的，
+             而且清理**不改章数**，别的设备靠「章数对不上」那条捡不到，会一直停在脏版本。
+           ⚠️正在读的那一章不会自己变干净——共读会话里的正文是开章那刻拼进消息里的快照，
+             改书改不到它，得重开这一章。这句一定要说，否则她会以为没生效（真踩过）。 */
+        function rbDedupBook(id) {
+            var b = rbGetBook(id); if (!b) return;
+            var c = rbCountDups(b);
+            if (!c.total) { showToast('这本书没有重复段落'); return; }
+            var msg = '《' + rbBookDisplayName(b) + '》里找到：\n'
+                + (c.half ? '· ' + c.half + ' 处多出来的半截段\n' : '')
+                + (c.title ? '· ' + c.title + ' 章的章节名在正文里又重复了一遍\n' : '')
+                + '\n只删重复的那份，原文一个字不动。要清理吗？';
+            if (!confirm(msg)) return;
+            var st = rbFixBookDups(b);
+            rbSave(); bkSyncPush(b);
+            try { _readingMergeCache = { text: null, ps: null, namesSig: null }; } catch (e) {}   // 正文变了，段落缓存作废
+            try { if (rbActiveBookId === id) rbRenderChapters(); } catch (e) {}
+            try { var sv = document.getElementById('rbShelfView'); if (sv && sv.style.display !== 'none') rbRenderShelf(); } catch (e) {}
+            var reading = false;
+            try { reading = !!(chatReaderMode && readerBookId === id) || (rbGetConvBook() && rbGetConvBook().id === id); } catch (e) {}
+            showToast('已清理 ' + (st.half + st.title) + ' 处' + (reading ? '，重开这一章看干净的正文' : ''), reading);
+            // 书架上别的书多半也中了同一招（同一批导进来的），顺手问一句，省得她一本本点
+            var others = [];
+            for (var i = 0; i < rbBooks.length; i++) {
+                var x = rbBooks[i];
+                if (x === b || x._remote || !x.chapters || !x.chapters.length) continue;
+                if (rbCountDups(x).total) others.push(x);
+            }
+            if (others.length && confirm('书架上还有 ' + others.length + ' 本有同样的重复，一起清理吗？')) {
+                var tot = 0;
+                others.forEach(function (x, i) {
+                    var s = rbFixBookDups(x); tot += s.half + s.title;
+                    setTimeout(function () { bkSyncPush(x); }, i * 300);   // 别一次并发几十个请求把手机的网占满
+                });
+                rbSave();
+                showToast('又清理了 ' + others.length + ' 本、共 ' + tot + ' 处');
+            }
         }
 
         function rbOpenBook(id) {
@@ -21535,7 +21590,7 @@ body {
             var b = rbGetBook(id); if (!b || !b.chapters[i]) return;
             var ch = b.chapters[i];
             var input = document.getElementById('chatInput');
-            input.value = ch.title + '\n\n' + ch.body;
+            input.value = rbChapRaw(ch);
             if (typeof chatAutoGrow === 'function') chatAutoGrow(input);
             if (typeof chatUpdateTokenHint === 'function') chatUpdateTokenHint();
             b.lastChapter = i; rbSave();
@@ -21552,7 +21607,7 @@ body {
             var ch = b.chapters[i];
             var input = document.getElementById('chatInput');
             var cur = (input.value || '');
-            var add = ch.title + '\n\n' + ch.body;
+            var add = rbChapRaw(ch);
             input.value = cur.trim() ? (cur.replace(/\s+$/, '') + '\n\n' + add) : add;
             if (typeof chatAutoGrow === 'function') chatAutoGrow(input);
             if (typeof chatUpdateTokenHint === 'function') chatUpdateTokenHint();
@@ -21782,10 +21837,10 @@ body {
         function rbAppendChapters(b, newChapters, rawAppend) {
             if (!b || !newChapters || !newChapters.length) return { ok: false, reason: '没有可追加的章节' };
             var fkBefore = rbBookFileKey(b);
-            if (!b.rawText) b.rawText = b.chapters.map(function (c) { return c.title + '\n\n' + c.body; }).join('\n\n');
+            if (!b.rawText) b.rawText = b.chapters.map(rbChapRaw).join('\n\n');
             b.chapters = b.chapters.concat(newChapters);
             b.rawText = b.rawText.replace(/\s+$/, '') + '\n\n' +
-                (rawAppend != null ? String(rawAppend) : newChapters.map(function (c) { return c.title + '\n\n' + c.body; }).join('\n\n'));
+                (rawAppend != null ? String(rawAppend) : newChapters.map(rbChapRaw).join('\n\n'));
             // ⚠️身份证不许动。这里显式断言一下：万一将来有人在上面动了 fileName/fileSize，测试会当场红
             if (rbBookFileKey(b) !== fkBefore) return { ok: false, reason: '内部错误：书的身份证被改动了' };
             rbSave();
@@ -21870,7 +21925,7 @@ body {
             if (!chapters || !chapters.length) { chapters = [{ title: '全文', body: (rawText || '').trim() }]; }
             chapters = rbDedupChapters(chapters).chapters;  // 先并掉「同一章拆成多条」的重复，再修标题
             rbFixChapterTitles(chapters);
-            if (!rawText) rawText = chapters.map(function (c) { return c.title + '\n\n' + c.body; }).join('\n\n');
+            if (!rawText) rawText = chapters.map(rbChapRaw).join('\n\n');
             var book = {
                 id: 'bk_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
                 fileName: fileName, fileSize: fileSize, fileType: fileType,
@@ -21890,7 +21945,7 @@ body {
         }
         function rbReSplit() {
             var b = rbGetBook(rbActiveBookId); if (!b) return;
-            if (!b.rawText) { b.rawText = b.chapters.map(function (c) { return c.title + '\n\n' + c.body; }).join('\n\n'); }
+            if (!b.rawText) { b.rawText = b.chapters.map(rbChapRaw).join('\n\n'); }
             var preset = document.getElementById('rbPresetSelect').value;
             b.preset = preset;
             b.chapters = (preset === 'auto') ? rbAutoSplit(b.rawText) : rbSplitByPattern(b.rawText, RB_PRESETS[preset]);
@@ -21901,6 +21956,72 @@ body {
             bkSyncPush(b);   // ⚠️同上：改了书就要推服务器，否则删了重下拿回来的还是旧切法
             rbRenderChapters();
             showToast('重新拆分完成，共 ' + b.chapters.length + ' 章');
+        }
+
+        /* ===== 重复段落清理（2026-07-28）=====
+           书里两种「看着像重复了两遍」的东西，都是当初拆章留下的：
+           ① 章节名在正文开头又重复一遍——`__EMPTY_LINE__` 那条路把每块首行当章节名，
+              却没把它从正文里拿掉，阅读时标题显示一遍、正文开头又一遍；
+           ② 每个长段落前面躺着一条「它自己的前 80 字」——①的章节名是截前 80 字来的，
+              之后书在「合并回 rawText（title + '\n\n' + body）→ 重新拆分」里转一圈，
+              那条半截话就被**写死进正文**，再也拆不掉了。
+           清理只做删、不新增：②只认「正好 80 字、且是下一段的前缀」这一刀，
+           免得误伤作者真写的重复句（复读、回声那种写法是有的）。 */
+        var RB_TITLE_CUT = 80;
+        function rbCleanDupParas(text) {
+            var lines = String(text || '').split('\n');
+            var idx = [];
+            for (var i = 0; i < lines.length; i++) if (lines[i].trim()) idx.push(i);   // 只看有字的行
+            var drop = {}, n = 0, k = 0;
+            while (k < idx.length - 1) {
+                var a = lines[idx[k]], b = lines[idx[k + 1]];
+                if (a.trim().length === RB_TITLE_CUT && b.indexOf(a) === 0 && b.length > a.length) {
+                    drop[idx[k]] = 1; n++; k += 2;    // 这一对处理完，完整的那段跳过别再拿去比
+                } else k++;
+            }
+            if (!n) return { text: String(text || ''), n: 0 };
+            var out = [];
+            for (var j = 0; j < lines.length; j++) if (!drop[j]) out.push(lines[j]);
+            return { text: out.join('\n'), n: n };
+        }
+        // 正文开头那行就是章节名 → 从正文里删掉，交给章节名去显示
+        function rbStripTitleInBody(title, body) {
+            var t = String(title || '').trim();
+            if (!t) return { body: String(body || ''), hit: false };
+            var lines = String(body || '').split('\n'), i = 0;
+            while (i < lines.length && !lines[i].trim()) i++;
+            if (i >= lines.length || lines[i].trim() !== t) return { body: String(body || ''), hit: false };
+            lines.splice(0, i + 1);
+            while (lines.length && !lines[0].trim()) lines.shift();
+            return { body: lines.join('\n'), hit: true };
+        }
+        // 数一本书有多少处重复（菜单里决定显不显示「清理」用；只数不改）
+        function rbCountDups(b) {
+            var half = 0, tit = 0, chs = (b && b.chapters) || [];
+            for (var i = 0; i < chs.length; i++) {
+                half += rbCleanDupParas(chs[i].body || '').n;
+                if (rbStripTitleInBody(chs[i].title, chs[i].body || '').hit) tit++;
+            }
+            return { half: half, title: tit, total: half + tit };
+        }
+        // 就地清理一本书（chapters + rawText），返回删了多少处。存盘/推服务器由调用方负责
+        function rbFixBookDups(b) {
+            var st = { half: 0, title: 0 }, chs = (b && b.chapters) || [];
+            for (var i = 0; i < chs.length; i++) {
+                var r = rbCleanDupParas(chs[i].body || ''); st.half += r.n;
+                var s = rbStripTitleInBody(chs[i].title, r.text); if (s.hit) st.title++;
+                chs[i].body = s.body;
+            }
+            // rawText 也得清——否则她哪天点一下「重新拆分」，半截段又原样长回来了
+            if (b && b.rawText) b.rawText = rbCleanDupParas(b.rawText).text;
+            return st;
+        }
+        /* 章节拼回 rawText 专用：正文开头已经是章节名了就别再拼一遍。
+           ⚠️当初就是这一步（title + '\n\n' + body）把重复写死进正文的，所有回拼都得走这里。 */
+        function rbChapRaw(c) {
+            var t = String((c && c.title) || '').trim(), body = String((c && c.body) || '');
+            if (!t) return body;
+            return rbStripTitleInBody(t, body).hit ? body : (t + '\n\n' + body);
         }
 
         function rbAutoSplit(rawText) {
@@ -21935,8 +22056,14 @@ body {
                 var blocks = rawText.split(/\n\s*\n/).filter(function (b) { return b.trim().length > 0; });
                 blocks.forEach(function (block, i) {
                     var lines = block.trim().split('\n');
-                    var title = (lines[0].substring(0, 80).trim()) || ('段落 ' + (i + 1));
-                    chapters.push({ title: title, body: block.trim() });
+                    var first = (lines[0] || '').trim();
+                    var rest = lines.slice(1).join('\n').trim();
+                    /* 首行短、后面还有正文 → 拿首行当章节名，并从正文里删掉它。
+                       ⚠️首行本身就是一整段（超过 80 字）→ **绝不能截前 80 字当章节名**：
+                       那条半截话会在「回拼 rawText → 重新拆分」时被写死进正文，
+                       变成每个长段落前面多出一截重复（2026-07-28 修的就是它）。这种老实叫「段落 N」。 */
+                    if (first && first.length <= RB_TITLE_CUT && rest) chapters.push({ title: first, body: rest });
+                    else chapters.push({ title: '段落 ' + (i + 1), body: block.trim() });
                 });
             } else {
                 var regex; try { regex = new RegExp(pattern); } catch (e) { return [{ title: '全文', body: rawText }]; }
