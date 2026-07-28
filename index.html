@@ -3252,6 +3252,42 @@ body {
         /* 条上的「样式」按钮：底色 ↔ 划线，当场切，不进设置 */
         .rd-hl-bar button.rd-style { font-size: 12px; color: var(--text); border: 1px solid var(--card-border, rgba(0,0,0,0.18)); }
         @keyframes rdDockIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+        /* ===== 正文改错字：选中几个字 → 划线小条「✏️ 改」→ 这个小编辑框 =====
+           跟划线小条同款停靠底部（拇指区好按、躲开系统选区气泡）。z-index 比小条再高一档，
+           因为它是从小条上点出来的、必须盖住它。 */
+        .rd-edit-box {
+            position: fixed; z-index: 4010; left: 50%; transform: translateX(-50%);
+            bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+            width: min(92vw, 460px); box-sizing: border-box;
+            padding: 10px 12px 9px; border-radius: 12px;
+            background: var(--card-bg, #fff); border: 1px solid var(--card-border, rgba(0,0,0,0.12));
+            box-shadow: 0 8px 28px rgba(0,0,0,0.28); animation: rdDockIn 0.16s ease;
+        }
+        .rd-edit-box .rde-hd { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+        .rd-edit-box .rde-hd .rde-old {
+            flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            text-decoration: line-through; opacity: 0.75;
+        }
+        .rd-edit-box textarea.rde-in {
+            width: 100%; box-sizing: border-box; resize: none; font: inherit; font-size: 15px; line-height: 1.5;
+            padding: 7px 9px; border-radius: 8px; color: var(--text);
+            border: 1px solid var(--card-border, rgba(0,0,0,0.18)); background: var(--input-bg, transparent);
+            max-height: 34vh; overflow-y: auto;
+        }
+        .rd-edit-box .rde-ft { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+        .rd-edit-box .rde-tip { flex: 1; font-size: 10px; color: var(--text-muted); line-height: 1.35; }
+        .rd-edit-box button { border: none; border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
+        .rd-edit-box button.rde-cancel { background: transparent; color: var(--text-muted); padding: 7px 8px; }
+        .rd-edit-box button.rde-save { background: var(--accent); color: #fff; }
+        .rd-edit-box button.rde-save:disabled { opacity: 0.5; cursor: default; }
+        /* 改动记录面板里的一条 */
+        .rde-log-item { padding: 9px 2px; border-bottom: 1px solid var(--card-border, rgba(0,0,0,0.1)); font-size: 13px; }
+        .rde-log-item:last-child { border-bottom: none; }
+        .rde-log-hd { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+        .rde-log-hd .rde-log-undo { margin-left: auto; background: transparent; border: 1px solid var(--card-border, rgba(0,0,0,0.2)); color: var(--accent); border-radius: 6px; padding: 3px 9px; font-size: 11px; cursor: pointer; }
+        .rde-log-txt { word-break: break-word; line-height: 1.5; }
+        .rde-log-txt .rde-b { text-decoration: line-through; color: var(--text-muted); }
+        .rde-log-txt .rde-a { color: var(--accent); }
         /* ===== 剧本翻译模式 ===== */
         .translate-merged p[data-p].tp-sel {
             background: var(--accent-light);
@@ -21127,6 +21163,11 @@ body {
             items += rbIsSocial(b)
                 ? '<div onclick="rbBookMenuAction(\'kind\')">📖 改回小说</div>'
                 : '<div onclick="rbBookMenuAction(\'kind\')">🎓 标为社科书</div>';
+            // 改动记录（改错字的后悔药）：一条都没有就不占位置，别让菜单越长越吓人
+            if (!b._remote) {
+                var _nEdit = (typeof rdEditLogCount === 'function') ? rdEditLogCount(rbBookFileKey(b)) : 0;
+                if (_nEdit) items += '<div onclick="rbBookMenuAction(\'edits\')">📝 改动记录（' + _nEdit + '）</div>';
+            }
             if (!b._remote) items += '<div class="danger" onclick="rbBookMenuAction(\'delete\')">🗑️ 删除</div>';
             else items += '<div class="danger" onclick="rbBookMenuAction(\'delete\')">🗑️ 从云端删除</div>';
             menu.innerHTML = items;
@@ -21146,6 +21187,7 @@ body {
             if (action === 'rename') rbRenameBook(id);
             else if (action === 'move') rbMoveBookFolder(id);
             else if (action === 'kind') rbToggleBookKind(id);
+            else if (action === 'edits') { var _b = rbGetBook(id); if (_b) rdEditShowLog(rbBookFileKey(_b)); }
             else if (action === 'delete') rbDeleteBook(id);
         }
 
@@ -24009,6 +24051,8 @@ body {
         function rdHlShowSelBar(ctx) {
             rdHlHideBar();
             if (!chatCurrentConvId) return;
+            // 改错字的编辑框开着时别再冒这条：它是从这条上点出来的，冒出来会盖在它上面抢注意力
+            if (document.getElementById('rdEditBox')) return;
             var off = rdHlOffsets(ctx.p, ctx.range);
             if (!(off.end > off.start)) return;
             var full = ctx.range.toString().trim();
@@ -24019,6 +24063,10 @@ body {
             bar.innerHTML = rdHlSwatchHtml('') +
                 '<span class="rd-sep"></span>' +
                 rdHlStyleBtnHtml() +
+                /* 「✏️ 改」＝改正文错字。为什么挂在这条上：改错字的第一步本来就是「选中那个错字」，
+                   手势天生就对上了，零新增手势、零新增图标。（长按段落不行——手机上长按＝系统选词，
+                   而选词正是划线的入口，两者会正面打架。） */
+                '<button class="rd-act" data-act="edit">✏️ 改</button>' +
                 '<button class="rd-act" data-act="ask">💬 问</button>';
             // 按住小条不丢选区
             bar.addEventListener('mousedown', function(e) { e.preventDefault(); });
@@ -24029,6 +24077,12 @@ body {
                 var act = e.target.closest('.rd-act'); if (!act) return;
                 var a = act.getAttribute('data-act');
                 if (a === 'style') { rdHlToggleStyle(); return; }   // 切样式，条不收，继续选色
+                if (a === 'edit') {
+                    // ⚠️先把 _rdHlPending 抄下来：rdEditOpen 里会 rdHlHideBar()，那会把它清成 null
+                    var pe = _rdHlPending;
+                    if (pe) rdEditOpen({ msgIdx: pe.msgIdx, pNum: pe.pNum, start: pe.start, end: pe.end, text: pe.text });
+                    return;
+                }
                 if (a === 'ask') {
                     var pend = _rdHlPending;
                     rdHlHideBar();
@@ -24155,6 +24209,378 @@ body {
                 ta.focus();
                 try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (x) {}
             }
+        }
+
+        /* ================= 正文改错字（2026-07-28 加） =================
+           用户原话：「我现在上传的书籍，我希望能够编辑……我需要改里面的一些错字」。
+           在此之前唯一的办法是删书重传，读痕/摘要/背景全部陪葬。
+
+           ⚠️⚠️ 这个功能最大的风险不是"改不动"，是"改完把别的东西弄错位"。三条铁律：
+
+           ① **书的身份证 `fileName|fileSize` 全程一个字节都不许动。**
+              读痕、划线、问答、背景、名单、书籍类型、文件夹、阅读进度、云同步，
+              全部按 `fileKey` 认书（见 readerBookKey / rbBookFileKey）。它是导书那天
+              记下的一个**标签**、不是拿正文现算的哈希，所以只要不碰这俩字段，
+              编辑正文对上面每一样都是完全透明的。照抄「改书名」的先例（19053 行注释）。
+              旁证：书架界面根本不显示文件大小（本地书显示阅读进度、远程占位显示章数、
+              字数是按实际内容现算的），所以"大小跟真实内容对不上"在界面上无处露馅。
+
+           ② **段落数量永远不变。** 读痕/划线/问答/背景块全按「第几章·第几段」钉位，
+              段号＝正文里第几个非空行（readingModeRenderMerged / readingModeAddParaNums
+              是同一个算法）。所以编辑框里**禁止换行**（回车＝保存，粘进来的换行转空格），
+              且改完不许把整段清空——一拆一删，这一章后面所有标记集体错位，
+              跟「34 章的背景插进 33 章」是同一类事故，而且更难发现。
+
+           ③ **四份要一起改。** 同一本书的正文在四个地方各有一份：
+              眼前的 DOM / 会话消息(chatMessages) / 书架那本书(book.chapters) / 云端书库。
+              只改会话＝书还是错的（下次重读、换设备照样错）；只改书＝眼前不变（很怪）。
+              阅读模式每次开章从 book.chapters 现拼，共读模式的章节正文是
+              rbInsertChapter 填进输入框发出去的**独立副本**——正因如此才必须两边都写。 */
+
+        /* ⚠️正文躺在哪条消息里？——**不是**你点的那一条。
+           共读/阅读的正文渲染走 readingModeGetOriginalText(msgIdx)：从这条往前找最近的 **user**
+           消息，正文在那里；你点的那条（.chat-msg.ai）装的是点评/问答/背景块。
+           划线、书签、问答记的 msgIdx 都是 AI 那条（渲染容器），所以改正文前必须先往前挪一格。
+           写这个功能时第一版就直接改了 AI 那条 → 每次都报「找不到这一段」，回归测试 C 组当场逮到。 */
+        function _rdEditOrigMsgIdx(msgIdx) {
+            for (var i = msgIdx; i >= 0; i--) {
+                if (chatMessages[i] && chatMessages[i].role === 'user') return i;
+            }
+            return -1;
+        }
+
+        // 取一条消息的正文字符串 + 写回器（content 可能是多模态数组，文本躺在某个 {type:'text'} 里）
+        function _rdEditMsgText(msg) {
+            if (!msg) return null;
+            var c = msg.content;
+            if (Array.isArray(c)) {
+                for (var i = 0; i < c.length; i++) {
+                    if (c[i] && c[i].type === 'text') {
+                        return { text: c[i].text || '', set: (function (k) { return function (v) { msg.content[k].text = v; }; })(i) };
+                    }
+                }
+                return null;
+            }
+            return { text: (typeof c === 'string' ? c : ''), set: function (v) { msg.content = v; } };
+        }
+
+        /* 把「第 pNum 段」定位回原始文本的第几行。
+           ⚠️必须跟 readingModeRenderMerged 的数法完全一致：先剥 [Pn] 前缀，再 trim，非空才算一段。
+           共读的会话消息带 [Pn] 前缀且每行已 trim（readingModeAddParaNums 干的），
+           阅读模式的消息和书里的章节都不带——所以两边都要能认。 */
+        function _rdEditFindLine(rawText, pNum) {
+            var lines = String(rawText == null ? '' : rawText).split('\n');
+            var n = 0;
+            for (var i = 0; i < lines.length; i++) {
+                var m = /^\[P\d+\] /.exec(lines[i]);
+                var body = m ? lines[i].slice(m[0].length) : lines[i];
+                if (body.trim().length === 0) continue;
+                n++;
+                if (n === pNum) return { lines: lines, li: i, prefix: m ? m[0] : '', para: body.trim() };
+            }
+            return null;
+        }
+
+        // 章节文本归一化（剥段号前缀、逐行 trim、丢空行）——用来把会话里的一章跟书里的一章对上号
+        function _rdEditNormText(s) {
+            return String(s == null ? '' : s).replace(/^\[P\d+\] /gm, '').split('\n')
+                .map(function (x) { return x.trim(); })
+                .filter(function (x) { return x.length > 0; }).join('\n');
+        }
+
+        /* 这条消息对应书架上哪本书的第几章？
+           · 阅读模式：消息自带 readerChapter，100% 准。
+           · 共读模式：会话只记了书(rbGetConvBook)、没记章号 —— 靠正文内容反查。
+             先整章精确比对（rbInsertChapter 填的就是 title+'\n\n'+body，正常情况一定命中），
+             不中再退回「按章标题唯一匹配」。都不中就返回 null，调用方降级成"只改眼前"并明说。 */
+        function _rdEditBookTarget(msgIdx) {
+            try {
+                var msg = chatMessages[msgIdx]; if (!msg) return null;
+                if (chatReaderMode && msg.readerChapter != null) {
+                    var rb = rbGetBook(readerBookId);
+                    if (rb && rb.chapters && rb.chapters[msg.readerChapter]) return { book: rb, idx: msg.readerChapter, how: 'reader' };
+                    return null;
+                }
+                var bid = (typeof rbGetConvBook === 'function') ? rbGetConvBook() : null;
+                var b = bid ? rbGetBook(bid) : null;
+                if (!b || !b.chapters || !b.chapters.length) return null;
+                var oi = _rdEditOrigMsgIdx(msgIdx); if (oi < 0) return null;   // 正文在前面那条 user 消息里
+                var mt = _rdEditMsgText(chatMessages[oi]); if (!mt) return null;
+                var want = _rdEditNormText(mt.text);
+                if (!want) return null;
+                for (var i = 0; i < b.chapters.length; i++) {
+                    var ch = b.chapters[i];
+                    if (_rdEditNormText((ch.title ? ch.title + '\n\n' : '') + (ch.body || '')) === want) return { book: b, idx: i, how: 'exact' };
+                }
+                // 退一步：按标题认。标题重名（网文常见「第一章」重复）就放弃，宁可不改也不能改错章
+                var firstLine = want.split('\n')[0];
+                var hit = -1;
+                for (var j = 0; j < b.chapters.length; j++) {
+                    if ((b.chapters[j].title || '').trim() === firstLine) { if (hit >= 0) { hit = -1; break; } hit = j; }
+                }
+                if (hit >= 0) return { book: b, idx: hit, how: 'title' };
+                return null;
+            } catch (e) { return null; }
+        }
+
+        /* 把书里第 chapIdx 章的第 pNum 段换成 newPara。
+           ⚠️改之前先核对「书里这一段」跟「会话里这一段」是不是同一段（expectOld）——
+           对不上说明章号认错了或正文被人动过，这时**宁可不改书**也不能写到别的地方去。
+           返回 true=书改了 / false=没动。 */
+        function _rdEditWriteBook(book, chapIdx, pNum, expectOld, newPara) {
+            var ch = book && book.chapters && book.chapters[chapIdx];
+            if (!ch) return false;
+            var pre = ch.title ? (ch.title + '\n\n') : '';
+            var loc = _rdEditFindLine(pre + (ch.body || ''), pNum);
+            if (!loc || loc.para !== expectOld) return false;
+            if (pre && loc.li === 0) { ch.title = newPara; }
+            else {
+                var bodyLines = String(ch.body || '').split('\n');
+                var bi = loc.li - (pre ? 2 : 0);          // 'T\n\n'+B → ['T','',B…]，正文从第 2 行起
+                if (bi < 0 || bi >= bodyLines.length) return false;
+                bodyLines[bi] = newPara;
+                ch.body = bodyLines.join('\n');
+            }
+            return true;
+        }
+
+        /* 同段划线跟着挪位置。段内改了 [start,end) 这一截、长度变化 delta：
+           · 完全在改动左边  → 不动
+           · 完全在改动右边  → 整体平移 delta
+           · 压在改动上/交叉 → 撑开到把新文字整个包住（用户划的是"这句话"，不该因为改了个错字就断掉） */
+        function _rdEditShiftHl(msgIdx, pNum, start, end, delta, newParaText) {
+            var list = readingGetConvHl();
+            if (!list.length) return;
+            var chap = _readerChapOf(msgIdx), touched = false;
+            for (var i = 0; i < list.length; i++) {
+                var h = list[i];
+                if (!_markMatchesMsg(h, msgIdx, chap) || h.p !== pNum) continue;
+                var s = h.start, e = h.end;
+                if (e <= start) { /* 左边，不动 */ }
+                else if (s >= end) { h.start = s + delta; h.end = e + delta; touched = true; }
+                else { h.start = Math.min(s, start); h.end = Math.max(e, end) + delta; touched = true; }
+                if (h.start < 0) h.start = 0;
+                if (h.end > newParaText.length) h.end = newParaText.length;
+                if (h.end <= h.start) { h.end = h.start; }
+                // 读痕面板显示的是 text/preview，不跟着更新就会一直显示改之前的错字
+                var t = newParaText.slice(h.start, h.end);
+                h.text = t; h.preview = t.length > 60 ? t.slice(0, 60) + '…' : t;
+                touched = true;
+            }
+            if (touched) readingSaveConvHl(list);
+        }
+
+        /* ---- 改动记录（后悔药）----
+           存 reading_book_edits = { fileKey: [ {id,chap,title,p,before,after,ts} ] }，每本封顶 200 条。
+           ⚠️本地存、**不进云同步**：正文本身已经跟着书同步了，这张表只是"当场/当天反悔"用的操作痕迹；
+           挂进 manifest 就得处理多设备并集合并（整块覆盖会把另一台的记录整块盖没，见 CLAUDE.md 同步心法），
+           为一个后悔药付这个复杂度不值。真要跨设备还原，以后改成"逐条并集"再挂。 */
+        var RDE_LOG_MAX = 200;
+        function rdEditLogAll() { try { var o = JSON.parse(localStorage.getItem('reading_book_edits') || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }
+        function rdEditLogSaveAll(o) { try { localStorage.setItem('reading_book_edits', JSON.stringify(o)); } catch (e) {} }
+        function rdEditLogGet(fileKey) { var a = rdEditLogAll()[fileKey]; return Array.isArray(a) ? a : []; }
+        function rdEditLogAdd(fileKey, rec) {
+            if (!fileKey) return;
+            var all = rdEditLogAll();
+            var list = Array.isArray(all[fileKey]) ? all[fileKey] : [];
+            list.unshift(rec);                       // 新的在最前，面板不用再排一次
+            if (list.length > RDE_LOG_MAX) list.length = RDE_LOG_MAX;
+            all[fileKey] = list; rdEditLogSaveAll(all);
+        }
+        function rdEditLogDrop(fileKey, id) {
+            var all = rdEditLogAll();
+            var list = Array.isArray(all[fileKey]) ? all[fileKey] : [];
+            all[fileKey] = list.filter(function (r) { return r.id !== id; });
+            rdEditLogSaveAll(all);
+        }
+        function rdEditLogCount(fileKey) { return rdEditLogGet(fileKey).length; }
+
+        /* ---- 真正干活的那一下 ----
+           opts.silent：还原时用，不再往记录里写新的一条（否则"还原"自己也会变成一条改动，越还原越多）。
+           返回 {ok, bookChanged, reason} */
+        function rdEditApply(msgIdx, pNum, start, end, expectOld, newFrag, opts) {
+            opts = opts || {};
+            // 正文在前面那条 user 消息里（见 _rdEditOrigMsgIdx 的注释），不是 msgIdx 这条
+            var origIdx = _rdEditOrigMsgIdx(msgIdx);
+            if (origIdx < 0) return { ok: false, reason: '这条消息没有可编辑的正文' };
+            var mt = _rdEditMsgText(chatMessages[origIdx]);
+            if (!mt) return { ok: false, reason: '这条消息没有可编辑的正文' };
+            var loc = _rdEditFindLine(mt.text, pNum);
+            if (!loc) return { ok: false, reason: '找不到这一段了（第 ' + pNum + ' 段）' };
+            // 防错位：从选中到点保存这中间，正文可能已经被别处改过（比如另一处编辑、或章节被换掉）
+            if (loc.para.slice(start, end) !== expectOld) return { ok: false, reason: '这一段刚刚变过了，请重新选中再改' };
+            var newPara = loc.para.slice(0, start) + newFrag + loc.para.slice(end);
+            // ⚠️铁律②：段数不许变。换行早在输入框就转成空格了，这里是最后一道闸
+            if (/[\r\n]/.test(newPara)) return { ok: false, reason: '一段里不能换行（换行会把这一章后面的读痕全部错位）' };
+            if (!newPara.trim()) return { ok: false, reason: '不能把整段清空（段落数一变，后面的读痕就全错位了）' };
+            if (newPara === loc.para) return { ok: false, reason: '没有改动' };
+
+            var delta = newFrag.length - expectOld.length;
+
+            // ① 会话消息（眼前这份 + 存档）
+            loc.lines[loc.li] = loc.prefix + newPara;
+            mt.set(loc.lines.join('\n'));
+
+            // ② 书架那本书 + ③ 云端；对不上章就只改会话，并如实告诉用户"书没改"
+            var tgt = _rdEditBookTarget(msgIdx);
+            var bookChanged = false, fileKey = '', chapTitle = '', chapIdx = -1;
+            if (tgt) {
+                chapIdx = tgt.idx;
+                chapTitle = (tgt.book.chapters[chapIdx] && tgt.book.chapters[chapIdx].title) || ('第 ' + (chapIdx + 1) + ' 章');
+                bookChanged = _rdEditWriteBook(tgt.book, chapIdx, pNum, loc.para, newPara);
+                if (bookChanged) {
+                    fileKey = rbBookFileKey(tgt.book);     // ⚠️铁律①：只读，绝不重算 fileName/fileSize
+                    try { rbSave(); } catch (e) {}
+                    try { if (typeof bkSyncPush === 'function') bkSyncPush(tgt.book); } catch (e) {}
+                }
+            }
+
+            // 划线跟着挪（放在写完之后：要用新段文本重算 text/preview）
+            try { _rdEditShiftHl(msgIdx, pNum, start, end, delta, newPara); } catch (e) {}
+
+            // 落盘会话。true = 强制标脏，否则这次改动不会被同步出去
+            try { chatSaveCurrentConv(true); } catch (e) {}
+
+            // 记一条后悔药（只在书真的改了时记——记录是挂在书上的，书没改就无从还原）
+            if (bookChanged && !opts.silent) {
+                rdEditLogAdd(fileKey, {
+                    id: Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+                    chap: chapIdx, title: chapTitle, p: pNum,
+                    start: start, before: expectOld, after: newFrag, ts: Date.now()
+                });
+            }
+
+            // 重渲染这一条。⚠️不传 focusP —— 那会 scrollIntoView 把正在读的人拽走；
+            // 用 _rdKeepScroll 兜住视口，改完眼睛还停在原地（照抄标背景那条路的做法）。
+            try {
+                _rdKeepScroll(msgIdx, function () { readingRerenderMsg(msgIdx); });
+            } catch (e) { try { readingRerenderMsg(msgIdx); } catch (x) {} }
+
+            return { ok: true, bookChanged: bookChanged, fileKey: fileKey, newPara: newPara };
+        }
+
+        /* ---- 小编辑框 ---- */
+        function rdEditClose() {
+            var b = document.getElementById('rdEditBox'); if (b) b.remove();
+        }
+        function rdEditOpen(pend) {
+            if (!pend) return;
+            rdHlHideBar();
+            rdEditClose();
+            var box = document.createElement('div');
+            box.className = 'rd-edit-box'; box.id = 'rdEditBox';
+            box.innerHTML =
+                '<div class="rde-hd">✏️ 改成：<span class="rde-old">' + esc(pend.text || '') + '</span></div>' +
+                '<textarea class="rde-in" rows="1"></textarea>' +
+                '<div class="rde-ft">' +
+                '<span class="rde-tip">只改选中的这几个字，段落不会拆开</span>' +
+                '<button class="rde-cancel">取消</button>' +
+                '<button class="rde-save">存</button>' +
+                '</div>';
+            document.body.appendChild(box);
+            var ta = box.querySelector('.rde-in');
+            var save = box.querySelector('.rde-save');
+            ta.value = pend.text || '';
+            function grow() { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, Math.round(innerHeight * 0.34)) + 'px'; }
+            function sync() { save.disabled = (ta.value === (pend.text || '')) || !ta.value.trim(); grow(); }
+            // ⚠️禁止换行：粘进来的换行/回车一律转空格（铁律②，段落一拆后面的读痕全错位）
+            ta.addEventListener('input', function () {
+                if (/[\r\n]/.test(ta.value)) ta.value = ta.value.replace(/[\r\n]+/g, ' ');
+                sync();
+            });
+            ta.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') { e.preventDefault(); if (!save.disabled) doSave(); }   // 回车＝存，不是换行
+                if (e.key === 'Escape') { e.preventDefault(); rdEditClose(); }
+            });
+            box.querySelector('.rde-cancel').onclick = function () { rdEditClose(); try { getSelection().removeAllRanges(); } catch (e) {} };
+            function doSave() {
+                var v = ta.value;
+                var r = rdEditApply(pend.msgIdx, pend.pNum, pend.start, pend.end, pend.text || '', v);
+                if (!r.ok) { showToast('⚠️ ' + r.reason, true); return; }   // sticky：改不成必须说清为什么
+                rdEditClose();
+                try { getSelection().removeAllRanges(); } catch (e) {}
+                if (r.bookChanged) showToast('已改好（书也一起改了）');
+                // 对不上章＝只改了眼前这一份，书还是错的。这必须明说，否则她以为改好了、换设备一看又是错字
+                else showToast('只改了眼前这一份：没对上书里是哪一章，书没改', true);
+            }
+            save.onclick = doSave;
+            sync();
+            setTimeout(function () { try { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {} }, 30);
+        }
+
+        /* ---- 改动记录面板 + 逐条还原 ---- */
+        function rdEditUndo(fileKey, id) {
+            var rec = null, list = rdEditLogGet(fileKey);
+            for (var i = 0; i < list.length; i++) if (list[i].id === id) { rec = list[i]; break; }
+            if (!rec) return;
+            var b = readerBookByKey(fileKey);
+            if (!b) { showToast('⚠️ 这本书不在本机上，没法还原', true); return; }
+            // 直接改书（不经过会话——那一章此刻多半没打开）。反向替换：after → before
+            var ch = b.chapters && b.chapters[rec.chap];
+            if (!ch) { showToast('⚠️ 找不到那一章了（第 ' + (rec.chap + 1) + ' 章）', true); return; }
+            var pre = ch.title ? (ch.title + '\n\n') : '';
+            var loc = _rdEditFindLine(pre + (ch.body || ''), rec.p);
+            if (!loc) { showToast('⚠️ 找不到那一段了', true); return; }
+            var cur = loc.para.slice(rec.start, rec.start + (rec.after || '').length);
+            if (cur !== rec.after) { showToast('⚠️ 这一段后来又被改过，没法自动还原', true); return; }
+            var restored = loc.para.slice(0, rec.start) + rec.before + loc.para.slice(rec.start + rec.after.length);
+            if (!_rdEditWriteBook(b, rec.chap, rec.p, loc.para, restored)) { showToast('⚠️ 还原失败', true); return; }
+            try { rbSave(); } catch (e) {}
+            try { if (typeof bkSyncPush === 'function') bkSyncPush(b); } catch (e) {}
+            rdEditLogDrop(fileKey, id);
+            showToast('已还原');
+            // 正在读这本书就顺手把眼前刷新掉（阅读模式重开该章最省事，共读那份是独立副本、改不到）
+            try {
+                if (chatReaderMode && readerBookId && rbBookFileKey(rbGetBook(readerBookId) || {}) === fileKey && readerChapterIdx === rec.chap) {
+                    readerOpenChapter(readerBookId, rec.chap);
+                }
+            } catch (e) {}
+            rdEditShowLog(fileKey);
+        }
+        function rdEditShowLog(fileKey) {
+            var list = rdEditLogGet(fileKey);
+            var b = readerBookByKey(fileKey);
+            var name = b ? rbBookDisplayName(b) : (fileKey.split('|')[0] || '这本书');
+            var h = '';
+            if (!list.length) {
+                h = '<div style="padding:26px 6px;text-align:center;color:var(--text-muted);font-size:13px">还没有改过这本书</div>';
+            } else {
+                for (var i = 0; i < list.length; i++) {
+                    var r = list[i];
+                    h += '<div class="rde-log-item">' +
+                        '<div class="rde-log-hd"><span>' + esc(r.title || ('第 ' + (r.chap + 1) + ' 章')) + ' · P' + r.p + '</span>' +
+                        '<span>' + rdEditFmtTime(r.ts) + '</span>' +
+                        '<button class="rde-log-undo" data-id="' + esc(r.id) + '">↩️ 还原</button></div>' +
+                        '<div class="rde-log-txt"><span class="rde-b">' + esc(r.before) + '</span> → <span class="rde-a">' + esc(r.after) + '</span></div>' +
+                        '</div>';
+                }
+            }
+            // 壳照抄读痕面板（chat-summary-modal），不另起一套样式
+            var old = document.querySelector('.rde-log-mask'); if (old) old.remove();
+            var mask = document.createElement('div');
+            mask.className = 'chat-summary-modal-mask rde-log-mask';
+            var modal = document.createElement('div');
+            modal.className = 'chat-summary-modal';
+            modal.innerHTML = '<div class="chat-summary-modal-header"><span>📝 ' + esc(name) + ' 的改动</span>' +
+                '<button onclick="this.closest(\'.rde-log-mask\').remove()">✕</button></div>' +
+                '<div class="chat-summary-modal-body">' + h + '</div>';
+            mask.appendChild(modal);
+            mask.addEventListener('click', function (ev) { if (ev.target === mask) mask.remove(); });
+            document.body.appendChild(mask);
+            var btns = modal.querySelectorAll('.rde-log-undo');
+            for (var i = 0; i < btns.length; i++) {
+                btns[i].onclick = (function (id) { return function () { rdEditUndo(fileKey, id); }; })(btns[i].getAttribute('data-id'));
+            }
+        }
+        function rdEditFmtTime(ts) {
+            try {
+                var d = new Date(ts), now = new Date();
+                var hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+                if (d.toDateString() === now.toDateString()) return '今天 ' + hm;
+                var y = new Date(now.getTime() - 86400000);
+                if (d.toDateString() === y.toDateString()) return '昨天 ' + hm;
+                return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + hm;
+            } catch (e) { return ''; }
         }
 
         function readingToggleBookmark(msgIdx, p) {
@@ -24707,6 +25133,9 @@ body {
                     if (Date.now() < _readingTapSuppressUntil) return;
                     // 这一下点击刚把划线小条等浮层收掉了（pointerdown 阶段）→ 只收浮层，不翻页/不提问
                     if (Date.now() - _rdOverlayClosedAt < 400) { clearTimeout(_readingTapTimer); _pTapCount = 0; _pTapEl = null; return; }
+                    // 改错字的编辑框开着：点正文既不翻页也不提问（免得改到一半被翻走）。
+                    // 故意**不自动关掉它**——手一抖就把打了一半的字弄没太亏，收起走「取消」。
+                    if (document.getElementById('rdEditBox')) { clearTimeout(_readingTapTimer); _pTapCount = 0; _pTapEl = null; return; }
                     if (e.target.closest('button, input, textarea, a, svg, img, .reading-actbar, .chat-thinking')) return;
                     var sel = window.getSelection && window.getSelection();
                     if (sel && String(sel).length > 0) return;

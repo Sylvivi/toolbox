@@ -54,5 +54,9 @@ mkdir -p ~/.toolbox-test && cd ~/.toolbox-test && npm i playwright && npx playwr
 
 ## 覆盖范围
 
-- `bg.test.js`（61 条）——「标背景」
+- `bg.test.js`（95 条）——「标背景」
 - `names.test.js`（18 条）——名单的云同步（按 fileKey 存、旧数据搬家、时间戳护栏）
+- `askcost.test.js`（47 条）——共读提问的输入分块量表 + 「带多少材料」三档
+- `edit.test.js`（71 条）——正文「改错字」。守三条铁律：书的身份证 `文件名|大小`
+  一个字节都不许动、段落数量永远不变、会话和书架那本书要一起改。
+  另外钉住「正文不在你点的那条消息里」（在前面那条 user 消息里）——第一版就栽在这。
