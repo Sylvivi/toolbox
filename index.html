@@ -11800,7 +11800,11 @@ body {
         }
         function apiAggSave(o) { try { localStorage.setItem('toolbox_api_agg', JSON.stringify(o)); } catch (e) {} }
         // 记一笔调用：写明细（超 API_LOG_CAP 截断）+ 累加聚合；面板开着就重渲
-        function apiLogRecord(purpose, model, inTok, outTok, est, station, cacheTok) {
+        /* parts：这一笔的**输入分块字数**（可选，目前只有共读提问传）。
+           用户 2026-07-28 问「共读提问一次上万 token，怎么优化」——总数看得见、构成看不见，
+           砍哪一块全靠猜。所以先量再砍：{原文:7200, 记忆表:1600, ...}，明细里点开就看得到。
+           ⚠️记的是**字数不是 token**（token 只有整笔的真实值，拆不到块），比例够用来做决定。 */
+        function apiLogRecord(purpose, model, inTok, outTok, est, station, cacheTok, parts) {
             inTok = Math.max(0, Math.round(inTok || 0));
             outTok = Math.max(0, Math.round(outTok || 0));
             cacheTok = Math.max(0, Math.round(cacheTok || 0));  // 这笔里命中缓存的输入 token（已含在 inTok 内）
@@ -11810,7 +11814,14 @@ body {
             station = station || '';
             var mkey = _mkey(model, station);  // 按「模型+站点」聚合，让不同站的同名模型各按各价、不互相串价
             var log = apiLogLoad();
-            log.push({ ts: Date.now(), purpose: purpose, model: model, station: station, inTok: inTok, outTok: outTok, est: !!est, cacheTok: cacheTok });
+            var _rec = { ts: Date.now(), purpose: purpose, model: model, station: station, inTok: inTok, outTok: outTok, est: !!est, cacheTok: cacheTok };
+            if (parts && typeof parts === 'object') {
+                // 只留有字数的块，省地方也省得展开时一排 0
+                var _pp = {}, _pk = Object.keys(parts);
+                for (var _pi = 0; _pi < _pk.length; _pi++) if (parts[_pk[_pi]] > 0) _pp[_pk[_pi]] = parts[_pk[_pi]];
+                if (Object.keys(_pp).length) _rec.parts = _pp;
+            }
+            log.push(_rec);
             log = apiLogPrune(log);
             apiLogSave(log);
             var agg = apiAggLoad();
@@ -12501,6 +12512,37 @@ body {
             document.body.appendChild(mask);
             apiLogRenderBody();
         }
+        /* 把输入分块画成「名字 —— 条 —— 字数 占比」。用条形是有意的：
+           用户不看代码也不算百分比，一眼要看出「哪根最长就砍哪根」。按字数从大到小排。 */
+        function _apiPartsHtml(parts) {
+            var keys = Object.keys(parts || {});
+            if (!keys.length) return '';
+            var total = 0;
+            keys.forEach(function (k) { total += parts[k] || 0; });
+            if (!total) return '';
+            keys.sort(function (a, b) { return parts[b] - parts[a]; });
+            var out = '<div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">这次输入 ' + _apiNum(total) + ' 字，构成：</div>';
+            keys.forEach(function (k) {
+                var pct = Math.round(parts[k] / total * 100);
+                out += '<div style="display:flex;align-items:center;gap:6px;font-size:10px;padding:1px 0">'
+                    + '<span style="color:var(--text-sub);width:5.2em;flex-shrink:0">' + _apiEsc(k) + '</span>'
+                    + '<span style="flex:1;min-width:0;height:5px;background:var(--card-border);border-radius:3px;overflow:hidden">'
+                    + '<span style="display:block;height:100%;width:' + pct + '%;background:var(--accent);border-radius:3px"></span></span>'
+                    + '<span style="color:var(--text-muted);flex-shrink:0;width:5.6em;text-align:right">' + _apiNum(parts[k]) + ' 字 ' + pct + '%</span>'
+                    + '</div>';
+            });
+            return out;
+        }
+        // 展开/收起某一条的分块明细。⚠️不能整块重渲（apiLogRenderBody 会把展开状态冲掉），就地切显示。
+        function apiLogToggleParts(row) {
+            var box = row && row.querySelector('.api-parts');
+            if (!box) return;
+            var open = box.style.display === 'none';
+            box.style.display = open ? 'block' : 'none';
+            var caret = row.querySelector('span[style*="font-weight:400"]');
+            if (caret) caret.textContent = open ? '▴' : '▾';
+        }
+
         function apiLogRenderBody() {
             var bodyEl = document.getElementById('apiLogBody');
             if (!bodyEl) return;
@@ -12661,11 +12703,15 @@ body {
                         rc = (r.inTok || 0) / 1e6 * pi2 + (r.outTok || 0) / 1e6 * po2;
                     }
                     var detailLabel = isCall ? '按次' : (mp2 ? '按量' : '默认');
-                    html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;padding:5px 0;border-bottom:1px solid var(--card-border)">'
+                    // 有分块数据的（目前只有共读提问）整行可点，展开看输入是怎么堆起来的
+                    var _hasParts = r.parts && Object.keys(r.parts).length;
+                    html += '<div' + (_hasParts ? ' onclick="apiLogToggleParts(this)" style="cursor:pointer;' : ' style="')
+                        + 'display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;padding:5px 0;border-bottom:1px solid var(--card-border)">'
                         + '<div style="min-width:0;flex:1">'
-                        + '<span style="color:var(--text);font-weight:600">' + _apiEsc(r.purpose) + '</span>'
+                        + '<span style="color:var(--text);font-weight:600">' + _apiEsc(r.purpose) + (_hasParts ? ' <span style="color:var(--text-muted);font-weight:400">▾</span>' : '') + '</span>'
                         + '<span style="color:var(--text-muted);font-size:10px"> · ' + _apiTime(r.ts) + '</span>'
                         + '<div style="color:var(--text-muted);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">[' + detailLabel + '] ' + _apiEsc(r.model) + ' · ↑' + _apiNum(r.inTok) + ' ↓' + _apiNum(r.outTok) + (r.est ? ' · 约' : '') + '</div>'
+                        + (_hasParts ? '<div class="api-parts" style="display:none;margin-top:4px">' + _apiPartsHtml(r.parts) + '</div>' : '')
                         + '</div>'
                         + '<span style="color:var(--accent);flex-shrink:0">' + (hasAnyPrice ? '￥' + _apiMoney(rc) : '') + '</span>'
                         + '</div>';
@@ -12734,10 +12780,10 @@ body {
             // 记账：有真实 usage 用真实值，否则按 messages / 回复文本估算
             try {
                 if (_usage) {
-                    apiLogRecord(opts.purpose, opts.model, _usage.inTok, _usage.outTok, false, opts.baseUrl || '', _usage.cacheTok);
+                    apiLogRecord(opts.purpose, opts.model, _usage.inTok, _usage.outTok, false, opts.baseUrl || '', _usage.cacheTok, opts.parts);
                 } else {
                     var _inStr = (opts.messages || []).map(function (m) { return typeof m.content === 'string' ? m.content : ''; }).join('\n');
-                    apiLogRecord(opts.purpose, opts.model, estTokens(_inStr), estTokens(full), true, opts.baseUrl || '');
+                    apiLogRecord(opts.purpose, opts.model, estTokens(_inStr), estTokens(full), true, opts.baseUrl || '', 0, opts.parts);
                 }
             } catch (e) { /* 记账失败不影响主流程 */ }
             // 挂在返回值上：字符串照常用，需要时才去问它思考了多少（不影响任何既有调用点）
@@ -22644,10 +22690,25 @@ body {
                         : ('以下是本书前文已读章节的摘要（剧情核心、人物姓名、关键伏笔），请据此理解上下文；但绝不要剧透摘要之后、用户尚未读到的情节：\n' + _summaryLines.join('\n\n---\n\n')) });
                 }
                 _askMsgs.push({ role: 'user', content: userMsg });
+                /* 输入分块字数：只给共读提问记（用户 2026-07-28：「主要是共读提问花得多」，
+                   导读没必要）。这些块拼起来就是上面 _askMsgs 的全部内容，所以加起来≈整笔输入，
+                   看得出该砍谁。⚠️新增块记得同步加进来，否则「加起来对不上总数」会让人白查半天。 */
+                var _parts = null;
+                if (!_guide) {
+                    _parts = {
+                        '本章原文': ctxLines.join('\n').length,
+                        '记忆表+摘要': _summaryLines.join('').length,
+                        '人设+指令': sysPrompt.length,
+                        '本段已有问答': commentBlock.length,
+                        '前文问答': priorQaBlock.length,
+                        '我的问题': question.length
+                    };
+                }
                 var answer = (await chatStreamChat({
                     baseUrl: baseUrl, apiKey: apiKey, model: _qaMdl, markUsed: true,
                     purpose: _guide ? '社科导读' : '共读提问',   // 用量面板里分开记，能看清导读单独花了多少
                     messages: _askMsgs,
+                    parts: _parts,
                     signal: readingAbortCtl.signal,
                     onDelta: function (full) {
                         var now = Date.now();
