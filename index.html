@@ -22665,6 +22665,10 @@ body {
                 // 带上前文已读章节的摘要，否则双击提问时 AI 看不到被压缩掉的前情（剧情/人物/伏笔）
                 var _askMsgs = [{ role: 'system', content: sysPrompt }];
                 var _summaryLines = [];
+                /* 记忆表和摘要分开计数（2026-07-28 拆）。原来合成一块「记忆表+摘要」，
+                   用户量出来 6700 字、正问「该砍哪个」，而这一块恰好糊在一起看不出来——
+                   量表在最该分辨的地方失焦，等于没量。⚠️以后再加输入块，宁可拆细别合并。 */
+                var _mtLen = 0, _sumLen = 0;
                 if (chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length)) {
                     var _mtText = '';
                     if (chatMemoryTables.characters.length) _mtText += '【人物表】\n| 人物 | 身份 | 关系 | 当前状态 | 备注 |\n| --- | --- | --- | --- | --- |\n' + chatMemoryTables.characters.map(function(r) { return '| ' + (r['人物']||'') + ' | ' + (r['身份']||'') + ' | ' + (r['关系']||'') + ' | ' + (r['当前状态']||'') + ' | ' + (r['备注']||'') + ' |'; }).join('\n');
@@ -22672,7 +22676,10 @@ body {
                     if (chatMemoryTables.timeline && chatMemoryTables.timeline.length) _mtText += (_mtText ? '\n\n' : '') + '【大事年表】\n| 时间 | 事件 |\n| --- | --- |\n' + chatMemoryTables.timeline.map(function(r) { return '| ' + (r['时间']||'') + ' | ' + (r['事件']||'') + ' |'; }).join('\n');
                     if (chatMemoryTables.plotlines.length) _mtText += (_mtText ? '\n\n' : '') + '【主线/伏笔表】\n| 章节 | 事件 | 细节 | 已解决 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.plotlines.map(function(r) { return '| ' + (r['章节']||'') + ' | ' + (r['事件']||'') + ' | ' + (r['细节']||'') + ' | ' + (r['已解决']||'') + ' |'; }).join('\n');
                     _summaryLines.push(_mtText);
-                    _summaryLines = _summaryLines.concat(chatCompressSummaries.slice(-CHAT_SUMMARY_MAX_SEGS));
+                    _mtLen = _mtText.length;
+                    var _segs = chatCompressSummaries.slice(-CHAT_SUMMARY_MAX_SEGS);
+                    _sumLen = _segs.join('').length;
+                    _summaryLines = _summaryLines.concat(_segs);
                 } else if (chatCompressOutline || (chatCompressSummaries && chatCompressSummaries.length)) {
                     _summaryLines = chatCompressSummaries.slice(chatOutlineCovers || 0);
                     if (chatCompressOutline) _summaryLines.unshift('【更早前情的大纲】\n' + chatCompressOutline);
@@ -22683,6 +22690,8 @@ body {
                         _summaryLines = await readerEnsureSummaries(readerBookId, msg.readerChapter, READER_SUMMARY_LOOKBACK, readingAbortCtl.signal, _genOK);
                     } catch (eSum) { if (eSum && eSum.name === 'AbortError') throw eSum; _summaryLines = []; }
                 }
+                // 走的是另外两条分支（没有记忆表）时，整份都算「前文摘要」
+                if (!_mtLen && !_sumLen) _sumLen = _summaryLines.join('').length;
                 if (_summaryLines.length) {
                     // 社科书没有情节可剧透，摘要是论点脉络；小说才需要「别剧透后文」那道保险
                     _askMsgs.push({ role: 'system', content: (_guide || rbCurBookIsSocial())
@@ -22697,7 +22706,8 @@ body {
                 if (!_guide) {
                     _parts = {
                         '本章原文': ctxLines.join('\n').length,
-                        '记忆表+摘要': _summaryLines.join('').length,
+                        '记忆表': _mtLen,
+                        '前文摘要': _sumLen,
                         '人设+指令': sysPrompt.length,
                         '本段已有问答': commentBlock.length,
                         '前文问答': priorQaBlock.length,

@@ -49,6 +49,9 @@ function bootBook() {
     const A = await page.evaluate(async () => {
         const mi = window._bootBook();
         window.chatMemoryTables = { characters: [{ '人物': '甲', '身份': '书生', '关系': '', '当前状态': '', '备注': '' }], places: [], timeline: [], plotlines: [] };
+        // 两样都给上料：用户 2026-07-28 量出「记忆表+摘要 6700 字」，正问该砍哪个，
+        // 而当时它俩被记成一块、恰好看不出来。这里要确认它们各记各的。
+        window.chatCompressSummaries = ['前情摘要甲'.repeat(40), '前情摘要乙'.repeat(40)];
         const out = {};
         window.chatStreamChat = async (o) => {
             out.parts = o.parts;
@@ -72,8 +75,11 @@ function bootBook() {
     ok('分块加起来≈真正发出去的字数（漏记一块＝让用户按错比例砍）',
         Math.abs(A.分块合计 - A.真实字数) / A.真实字数 < 0.05,
         '分块合计 ' + A.分块合计 + ' / 真实 ' + A.真实字数);
-    ok('本章原文确实是大头（>60%）', A.parts['本章原文'] / A.分块合计 > 0.6,
-        '原文 ' + A.parts['本章原文'] + ' / 合计 ' + A.分块合计);
+    /* ⚠️记忆表和摘要必须分开记（2026-07-28 拆）。合成一块时用户量出 6700 字，
+     * 正要决定砍哪个，而量表恰好在这里糊住了——最该分辨的地方失焦，等于没量。 */
+    ok('记忆表单独记（不再和摘要糊成一块）', A.parts['记忆表'] > 0, JSON.stringify(A.parts));
+    ok('前文摘要单独记', A.parts['前文摘要'] > 0, JSON.stringify(A.parts));
+    eq('前文摘要记的是摘要本身的字数', A.parts['前文摘要'], 400);
     ok('分块跟着落进了明细日志', !!A.落盘的, JSON.stringify(A.落盘的));
     ok('字数为 0 的块不落盘（省地方，也省得展开时一排 0）', !('前文问答' in (A.落盘的 || {})), JSON.stringify(A.落盘的));
 
@@ -96,7 +102,7 @@ function bootBook() {
         localStorage.removeItem('toolbox_api_log');
         localStorage.removeItem('toolbox_api_agg');
         apiLogRecord('共读提问', 'm1', 9000, 300, false, 'https://x/v1', 0,
-            { '本章原文': 7900, '记忆表+摘要': 860, '人设+指令': 948, '我的问题': 8, '前文问答': 0 });
+            { '本章原文': 7900, '记忆表': 3400, '前文摘要': 3300, '人设+指令': 948, '我的问题': 8, '前文问答': 0 });
         apiLogRecord('共读点评', 'm1', 3000, 200, false, 'https://x/v1', 0);   // 没分块，不该可点
         if (document.querySelector('.api-log-modal-mask')) document.querySelector('.api-log-modal-mask').remove();
         apiLogShowPanel();
@@ -116,8 +122,8 @@ function bootBook() {
     eq('只有带分块的那一条可以点开（共读点评没被误加）', C.可点的行数, 1);
     eq('默认收着，不打扰', C.展开前, 'none');
     ok('字数为 0 的块不画进条形图', C.零字数的块没画出来);
-    eq('条形按字数从大到小排（最长的那根就是该砍的）', C.条形顺序, ['本章原文', '人设+指令', '记忆表+摘要', '我的问题']);
-    eq('每根条后面写清字数和占比', C.占比文案, ['7,900 字 81%', '948 字 10%', '860 字 9%', '8 字 0%']);
+    eq('条形按字数从大到小排（最长的那根就是该砍的）', C.条形顺序, ['本章原文', '记忆表', '前文摘要', '人设+指令', '我的问题']);
+    eq('每根条后面写清字数和占比', C.占比文案, ['7,900 字 51%', '3,400 字 22%', '3,300 字 21%', '948 字 6%', '8 字 0%']);
     eq('点一下展开', C.点一下, 'block');
     ok('展开后箭头翻过来', C.箭头翻了);
     eq('再点一下收起', C.再点一下, 'none');
