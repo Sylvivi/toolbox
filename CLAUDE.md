@@ -26,7 +26,11 @@
 
 ## 开发工作流
 1. 编辑 `index.html`（仓库在服务器上 `/home/ubuntu/Toolbox`；这台机器同时就是线上宿主机）。
-2. 验证：服务器已装 node + playwright(chromium)。交互类改动写个 headless 脚本跑 `file:///home/ubuntu/Toolbox/index.html` 实测（参考 scratchpad 里的 playwright 用例）；纯静态改动本地 `python3 -m http.server` 起来看即可。
+2. 验证：服务器已装 node + playwright(chromium)。**判断标准是「不真去操作一下能不能知道好没好」，不是「改动大不大」**（用户 2026-07-29 定的尺度，她原话「感觉从你说要弄测试什么的之后，每一轮花的时间都变长了很多」）：
+   - **不写测试、改完直接推**：改颜色/渐变/字体粗细、换图标、改按钮上的字、菜单项挪位置、改提示文案。读代码确认没有别处依赖即可。
+   - **写 headless 脚本实测**（跑 `file:///home/ubuntu/Toolbox/index.html`）：新手势、新按钮的行为、同步/存储/花钱的逻辑、会影响好几处的公用代码。
+   - **⚠️测试脚本自己超过 2 次没跑通就停手**——那说明是在跟工具较劲、不是在验代码（真踩过：找不到 playwright 装哪、被浮层挡住点不到、删了 DOM 反而弄出报错、期望值写错两次，每次都要重来一轮，而改动本身十秒就完了）。当场退回读代码确认，别拿修脚本的时间当验证。
+   - **全套回归 `bash tests/run.sh`（约 3-4 分钟）只在动了公用代码时跑，且只跑一遍**；输出直接完整落盘到文件，别 `| tail -30` 再回头补跑。
 3. 验证通过 → 直接 `git -C /home/ubuntu/Toolbox commit` + `push`。
 4. 凭据存 `~/.git-credentials`（HTTPS + PAT），推送无需交互。
 
