@@ -13213,49 +13213,70 @@ body {
             });
         })();
 
-        // 右滑导航：对话内→返回列表；列表→退回底层标签页（整个 chat-modal 区域，左半屏起手）
-        (function() {
-            var modal = document.querySelector('.chat-modal');
-            if (!modal) return;
-            var startX = 0, startY = 0, swiping = false;
-            var swipeHint = null;
-            function getHint() {
-                if (!swipeHint) {
-                    swipeHint = document.createElement('div');
-                    swipeHint.style.cssText = 'position:fixed;left:0;top:50%;transform:translateY(-50%);width:4px;height:60px;border-radius:0 4px 4px 0;background:var(--accent-mid);opacity:0;transition:opacity 0.15s,width 0.15s;z-index:9999;pointer-events:none';
-                    document.body.appendChild(swipeHint);
-                }
-                return swipeHint;
+        /* ===== 右滑返回手势（聊天面板 + 书架/目录面板共用）=====
+           手感参数只在这一处：左半屏起手、往右划够 80px 触发、左边缘那条主题色提示。
+           ⚠️只认「从左半屏起手 + 往右划」，跟手机系统的返回手势同向（用户 2026-07-29 确认要这个方向）。
+           往左划、或竖向偏移超 60px，一律当成滚动/翻页立刻放弃——否则上下滚动时会误触发返回。
+           ⚠️提示条是全局共用的一个节点（懒创建），别改成每个面板各建一个：两个面板不会同时在滑。 */
+        var _swipeBackHint = null;
+        function _swipeBackGetHint() {
+            if (!_swipeBackHint) {
+                _swipeBackHint = document.createElement('div');
+                _swipeBackHint.style.cssText = 'position:fixed;left:0;top:50%;transform:translateY(-50%);width:4px;height:60px;border-radius:0 4px 4px 0;background:var(--accent-mid);opacity:0;transition:opacity 0.15s,width 0.15s;z-index:9999;pointer-events:none';
+                document.body.appendChild(_swipeBackHint);
             }
-            modal.addEventListener('touchstart', function(e) {
-                if (chatStreaming) return;
-                if (chatView !== 'conv' && chatView !== 'list') return;
-                // 忽略在输入框内的滑动（避免干扰文本选择）
+            return _swipeBackHint;
+        }
+        // el=在哪块区域上滑；canStart(e)=返回 false 就整趟不认（流式中、面板没开着等）；onBack()=划够了做什么（由它自己判断该退哪一层）
+        function attachSwipeBack(el, canStart, onBack) {
+            if (!el) return;
+            var startX = 0, startY = 0, swiping = false;
+            el.addEventListener('touchstart', function(e) {
+                if (canStart && !canStart(e)) return;
+                // 忽略在输入框内的滑动（避免干扰文本选择）——目录里的「搜索章节」框也靠这条
                 if (e.target.closest('textarea, input')) return;
                 var t = e.touches[0];
-                if (t.clientX > window.innerWidth * 0.45) return;
+                if (t.clientX > window.innerWidth * 0.45) return;   // 只认左半屏起手
                 startX = t.clientX; startY = t.clientY; swiping = true;
             }, { passive: true });
-            modal.addEventListener('touchmove', function(e) {
+            el.addEventListener('touchmove', function(e) {
                 if (!swiping) return;
                 var dx = e.touches[0].clientX - startX;
                 var dy = Math.abs(e.touches[0].clientY - startY);
-                if (dy > 60 || dx < 0) { swiping = false; getHint().style.opacity = '0'; return; }
+                if (dy > 60 || dx < 0) { swiping = false; _swipeBackGetHint().style.opacity = '0'; return; }
                 var progress = Math.min(dx / 80, 1);
-                var h = getHint();
+                var h = _swipeBackGetHint();
                 h.style.opacity = String(progress * 0.7);
                 h.style.width = (4 + progress * 4) + 'px';
                 if (dx > 80) {
                     swiping = false;
                     h.style.opacity = '0';
-                    // 对话内→返回列表；列表→退回底层标签页（收藏/密钥/日历等）
-                    if (chatView === 'conv') chatBackToList();
-                    else closeChatModal();
+                    onBack();
                 }
             }, { passive: true });
-            modal.addEventListener('touchend', function() { swiping = false; if (swipeHint) swipeHint.style.opacity = '0'; });
-            modal.addEventListener('touchcancel', function() { swiping = false; if (swipeHint) swipeHint.style.opacity = '0'; });
-        })();
+            var cancel = function() { swiping = false; if (_swipeBackHint) _swipeBackHint.style.opacity = '0'; };
+            el.addEventListener('touchend', cancel);
+            el.addEventListener('touchcancel', cancel);
+        }
+
+        // 聊天面板：对话内→返回列表；列表→退回底层标签页（收藏/密钥/日历等）
+        attachSwipeBack(document.querySelector('.chat-modal'),
+            function() { return !chatStreaming && (chatView === 'conv' || chatView === 'list'); },
+            function() { if (chatView === 'conv') chatBackToList(); else closeChatModal(); });
+
+        /* 书架/目录面板：一次退一层 —— 目录 → 书架(某文件夹里) → 文件夹列表 → 关掉面板。
+           用户 2026-07-29 要的：「不然老是要用手去点」，且明确文件夹那层也要算一层。
+           ⚠️判「在不在目录里」只能看 #rbChapterView 的 display，不能看 rbActiveBookId：
+           远程占位书正在下载时 rbActiveBookId 已经有值、但界面还停在目录（下载失败那个提示也在目录里），
+           那时候滑一下就该退回书架。 */
+        attachSwipeBack(document.getElementById('rbModal'),
+            function() { return document.getElementById('rbModal').classList.contains('show'); },
+            function() {
+                var chapView = document.getElementById('rbChapterView');
+                if (chapView && chapView.style.display !== 'none') { rbBackToShelf(); return; }  // ① 某本书的目录 → 回书架
+                if (rbCurrentFolder !== null) { rbFolderBack(); return; }                        // ② 某个文件夹里 → 回文件夹列表
+                rbCloseShelf();                                                                  // ③ 已在最外层 → 关掉面板
+            });
 
         // 空白处双击退出聊天
         (function() {
