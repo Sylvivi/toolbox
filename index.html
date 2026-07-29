@@ -2893,6 +2893,11 @@ body {
             transition: opacity 0.15s;
         }
         .rfont-sync:disabled { opacity: 0.55; cursor: default; }
+        .rfont-syncstatus {
+            margin-top: 6px; padding: 7px 9px; border-radius: 7px; font-size: 11px; line-height: 1.5;
+            background: var(--card-inner); color: var(--text-muted); word-break: break-all;
+        }
+        .rfont-syncstatus.bad { background: var(--accent-light); color: var(--accent); }
         .rfont-save {
             width: 100%; padding: 8px; font-size: 12px; font-weight: 600;
             border: none; border-radius: 8px; background: var(--accent);
@@ -5373,6 +5378,9 @@ body {
                         <div class="rfont-slot-row" style="justify-content:flex-end">
                             <button class="rfont-sync" onclick="readingSyncFontsNow()">🔄 立即同步字体</button>
                         </div>
+                        <!-- 同步结果**留在这儿不走**。光靠 toast 不行：它只显示 2 秒、还在屏幕最底下，
+                             用户在面板中间点按钮、眼睛盯着按钮，底下那条闪一下就没了，看起来就是「点了没反应」。 -->
+                        <div id="readingFontSyncStatus" class="rfont-syncstatus" style="display:none"></div>
                         <div class="rfont-add">
                             <div class="rfont-add-label" onclick="readingToggleAddFont()">
                                 <span>＋ 添加字体</span>
@@ -19121,6 +19129,11 @@ body {
             var btn = document.querySelector('.rfont-sync');
             if (btn) { btn.disabled = true; btn.textContent = '⏳ 正在同步…'; }
             try { showToast('⏳ 正在同步字体，十几 MB 要等一会儿…'); } catch (e) {}
+            // 状态行也当场写上，作为「你确实点到了」的凭据——不然按钮上那点变化太容易被忽略
+            try {
+                var st0 = document.getElementById('readingFontSyncStatus');
+                if (st0) { st0.textContent = '⏳ 正在同步字体，十几 MB 要等一会儿…'; st0.className = 'rfont-syncstatus'; st0.style.display = ''; }
+            } catch (e) {}
             var restored = false;
             function restore() { if (restored) return; restored = true; if (btn) { btn.disabled = false; btn.textContent = '🔄 立即同步字体'; } }
             setTimeout(restore, 60000);   // 万一哪条分支没回调，按钮不能永远卡在「正在同步」上
@@ -19725,9 +19738,23 @@ body {
         // 点得慢、躲开了 4 秒窗口，所以一切正常，两台设备表现不一致更让人摸不着头脑）。
         function bkSyncPullFonts(cb, force) {
             var cfg = bkSyncCfg();
-            function say(msg) { try { showToast(msg); } catch (e) {} }
+            // 结果同时写进面板里的状态行（留着不走）和 toast（2 秒就没、还在屏幕最底下，只能当辅助）。
+            // 出错时 toast 用常驻式（点一下才消失），别让用户为了看清一句错误反复重试。
+            function say(msg, bad) {
+                try { showToast(msg, !!bad); } catch (e) {}
+                try {
+                    var el = document.getElementById('readingFontSyncStatus');
+                    if (el) {
+                        var d = new Date();
+                        var hhmm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2);
+                        el.textContent = hhmm + '  ' + msg;
+                        el.className = 'rfont-syncstatus' + (bad ? ' bad' : '');
+                        el.style.display = '';
+                    }
+                } catch (e) {}
+            }
             if (!cfg) {
-                if (force) say('⚠️ 这台设备还没配书籍服务器（设置里填地址和令牌），字体没法同步');
+                if (force) say('⚠️ 这台设备还没配书籍服务器（设置里填地址和令牌），字体没法同步', true);
                 if (cb) cb(); return;
             }
             var _now = Date.now();
@@ -19774,12 +19801,12 @@ body {
                                 // 落盘失败：当次内存里是好的、看着已经生效，重启就没了。必须当场说清楚。
                                 var why = (err && (err.name || err.message)) || '未知原因';
                                 say('⚠️ 字体「' + names + '」下载成功但存不进本机（' + why + '），重启就会没'
-                                    + (/quota|Quota/.test(why) ? '——存储空间满了，删几本书或几个字体再试' : ''));
+                                    + (/quota|Quota/.test(why) ? '——存储空间满了，删几本书或几个字体再试' : ''), true);
                             });
                             say('✅ 已从服务器补齐字体：' + names);
                         }
                         if (failed.length) {
-                            say('⚠️ ' + failed.length + ' 个字体没拉下来：' + failed.join('；') + '。换个网络再打开一次字体面板试试');
+                            say('⚠️ ' + failed.length + ' 个字体没拉下来：' + failed.join('；') + '。换个网络再点一次「立即同步字体」', true);
                         }
                         try { readingRegisterLocalFonts(); readingApplyFonts(); } catch (e) {}
                         if (cb) cb(fetched.length);
@@ -19802,7 +19829,7 @@ body {
                     });
                 })
                 .catch(function (e) {
-                    say('⚠️ 连不上书籍服务器（' + ((e && e.message) || '网络失败') + '），字体没法同步');
+                    say('⚠️ 连不上书籍服务器（' + ((e && e.message) || '网络失败') + '），字体没法同步', true);
                     if (cb) cb();
                 });
         }

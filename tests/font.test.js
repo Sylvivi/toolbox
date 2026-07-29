@@ -298,6 +298,25 @@ function chainOf(varName) {
     ok('结束后按钮恢复可点', M.按钮恢复了 === true);
     ok('按钮真的把字体拉下来了（且不吃节流）', /山茶/.test(M.字体), '实际：' + M.字体);
 
+    /* ===== G 组：结果必须留在面板里，不能只靠 toast =====
+     * toast 只显示 2 秒、还在屏幕最底下。用户在面板中间点按钮、眼睛盯着按钮，
+     * 底下那条闪一下就没了——连着三轮反馈「点了没反应」，实际每次都弹了、只是没看见。*/
+    const N = await page.evaluate(async () => {
+        localStorage.removeItem('books_sync_url');   // 没配服务器：最该说清楚的一种
+        localStorage.removeItem('books_sync_token');
+        const el = document.getElementById('readingFontSyncStatus');
+        if (el) { el.textContent = ''; el.style.display = 'none'; }
+        readingSyncFontsNow();
+        await new Promise(r => setTimeout(r, 600));
+        const s = document.getElementById('readingFontSyncStatus');
+        return { 有状态行: !!s, 显示着: s ? s.style.display !== 'none' : false, 文字: s ? s.textContent : '', 标红: s ? /bad/.test(s.className) : false };
+    });
+    ok('面板里有常驻的同步状态行', N.有状态行);
+    ok('点完之后状态行显示出来了', N.显示着);
+    ok('状态行写清了原因（没配服务器）', /没配书籍服务器/.test(N.文字), '实际：' + N.文字);
+    ok('状态行带时间戳，能看出是不是刚刚那次', /\d\d:\d\d:\d\d/.test(N.文字), '实际：' + N.文字);
+    ok('失败的状态行标成醒目色', N.标红);
+
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' ｜ '));
 
     await browser.close();
