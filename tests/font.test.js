@@ -113,6 +113,39 @@ function chainOf(varName) {
     eq('兜底字体还没下载好时，链上不写它（写了会整条声明失效）', E.不在册时, '"主花体", serif');
     eq('兜底跟主字体是同一个时不重复写', E.撞车时, '"主花体", serif');
 
+    /* ===== C 组：删字体时服务器删不掉，必须吭声 =====
+     * 2026-07-29 真事：手机上把两个字体删了，服务器上那两份还在。因为 bkSyncDelFont 当时把错误整个吞了，
+     * 用户完全不知道只删了一半——而只删一半的下场是下次同步又给拉回来，看起来像「删不掉」。*/
+    const F = await page.evaluate(async () => {
+        localStorage.setItem('books_sync_url', 'https://books.example.com');
+        localStorage.setItem('books_sync_token', 'tok');
+        const toasts = [];
+        const _toast = window.showToast; window.showToast = function (m) { toasts.push(String(m)); };
+        let calls = 0;
+        const _fetch = window.fetch;
+        window.fetch = function () { calls++; return Promise.reject(new Error('断网')); };
+        bkSyncDelFont('要删的字体');
+        await new Promise(r => setTimeout(r, 4000));   // 等重试(1.5s)跑完
+        window.fetch = _fetch; window.showToast = _toast;
+        return { 请求次数: calls, 提示: toasts.join(' ｜ ') };
+    });
+    eq('删除失败会自己重试一次（手机切网瞬断很常见）', F.请求次数, 2);
+    ok('重试还失败就明确告诉用户「只删了本机」', /只删掉了本机/.test(F.提示), '实际提示：' + (F.提示 || '（一声不吭）'));
+
+    const G = await page.evaluate(async () => {
+        const toasts = [];
+        const _toast = window.showToast; window.showToast = function (m) { toasts.push(String(m)); };
+        let calls = 0;
+        const _fetch = window.fetch;
+        window.fetch = function () { calls++; return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) }); };
+        bkSyncDelFont('要删的字体');
+        await new Promise(r => setTimeout(r, 2500));
+        window.fetch = _fetch; window.showToast = _toast;
+        return { 请求次数: calls, 提示条数: toasts.length };
+    });
+    eq('删成功时只发一次、不重试', G.请求次数, 1);
+    eq('删成功时不打扰用户', G.提示条数, 0);
+
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' ｜ '));
 
     await browser.close();

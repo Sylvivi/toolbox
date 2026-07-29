@@ -19743,9 +19743,22 @@ body {
                 .catch(function () { if (cb) cb(); });
         }
         // 删本地字体时同步删服务器（否则下次自动全量拉回、删不掉）。删在线字体时 key 不存在，服务器无操作、无害
+        // 删字体时一并从服务器删。**失败必须说出来**：这里过去是 .catch(function(){}) 整个吞掉的，
+        // 后果特别隐蔽——本机删干净了、服务器那份还在，下次展开字体面板/打开书架时 bkSyncPullFonts
+        // 判定「服务器有、本地没有」＝新字体，又给下回本机。用户看到的是「删掉的字体过几天自己回来了」，
+        // 而且根本不会想到是删除请求当时失败了（2026-07-29 真踩过一次，两个字体删完服务器上还在）。
         function bkSyncDelFont(name) {
             var cfg = bkSyncCfg(); if (!cfg || !name) return;
-            fetch(cfg.url + '/del', { method: 'POST', headers: bkSyncHeaders(cfg, true), body: JSON.stringify({ fileKey: FONT_KEY_PREFIX + name }) }).catch(function () {});
+            var body = JSON.stringify({ fileKey: FONT_KEY_PREFIX + name });
+            function attempt(retriesLeft) {
+                fetch(cfg.url + '/del', { method: 'POST', headers: bkSyncHeaders(cfg, true), body: body })
+                    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); })
+                    .catch(function (e) {
+                        if (retriesLeft > 0) { setTimeout(function () { attempt(retriesLeft - 1); }, 1500); return; }
+                        try { showToast('⚠️「' + name + '」只删掉了本机，服务器那份没删成，下次同步可能又被拉回来'); } catch (_) {}
+                    });
+            }
+            attempt(1);  // 一次重试：手机上最常见的失败是切网/瞬时断流，隔 1.5 秒重发多半就成了
         }
 
         // 记忆：当前对话上次填入的是哪本书（按对话 ID 存）
