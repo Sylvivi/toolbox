@@ -5576,7 +5576,10 @@ body {
         }
 
         function idbGet(key) { return _idbCache[key]; }
-        function idbSet(key, value) {
+        // onErr 可选：落盘真失败时回调（拿到 DOMException）。绝大多数调用点不用管，写失败也无所谓；
+        // 但存字体这种「十几 MB、失败了用户完全看不出来」的地方必须能听见——超配额时事务是 abort，
+        // 内存缓存 _idbCache 却已经写好了，于是当次看着一切正常、一重启全没了，最难查。
+        function idbSet(key, value, onErr) {
             _idbCache[key] = value;
             if (typeof _invalidateIdbSizeCache === 'function') _invalidateIdbSizeCache();
             if (_idb) {
@@ -5585,9 +5588,9 @@ body {
                     var tx = _idb.transaction('data', 'readwrite');
                     tx.objectStore('data').put(value, key);
                     tx.oncomplete = function() { _idbPendingWrites--; };
-                    tx.onerror = function() { _idbPendingWrites--; };
-                    tx.onabort = function() { _idbPendingWrites--; };
-                } catch(e) { _idbPendingWrites--; }
+                    tx.onerror = function() { _idbPendingWrites--; if (onErr) try { onErr(tx.error); } catch (e) {} };
+                    tx.onabort = function() { _idbPendingWrites--; if (onErr) try { onErr(tx.error); } catch (e) {} };
+                } catch(e) { _idbPendingWrites--; if (onErr) try { onErr(e); } catch (e2) {} }
             }
         }
 
@@ -18992,7 +18995,7 @@ body {
             var a = (typeof idbGet === 'function') ? idbGet('reading_local_fonts') : null;
             return Array.isArray(a) ? a : [];
         }
-        function readingLocalFontsSave(arr) { if (typeof idbSet === 'function') idbSet('reading_local_fonts', arr); }
+        function readingLocalFontsSave(arr, onErr) { if (typeof idbSet === 'function') idbSet('reading_local_fonts', arr, onErr); }
 
         // 合并字体清单：[{name, kind:'online'|'local'}]（喂给下拉和字体库列表）
         function readingAllFonts() {
@@ -19695,10 +19698,11 @@ body {
             var _now = Date.now();
             if (_now - _bkFontSyncAt < 4000) { if (cb) cb(); return; }
             _bkFontSyncAt = _now;
+            function say(msg) { try { showToast(msg); } catch (e) {} }
             fetch(cfg.url + '/manifest', { headers: bkSyncHeaders(cfg) })
-                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (r) { if (!r.ok) throw new Error('服务器返回 ' + r.status); return r.json(); })
                 .then(function (d) {
-                    if (!d || !d.items) { if (cb) cb(); return; }
+                    if (!d || !d.items) throw new Error('清单格式不对');
                     var localArr = readingLocalFontsLoad();
                     var local = {}; localArr.forEach(function (f) { local[f.name] = 1; });
                     var serverNames = {}, need = [];
@@ -19713,8 +19717,12 @@ body {
                     localArr.filter(function (f) { return f && f.name && f.buf && !serverNames[f.name]; })
                             .forEach(function (f, i) { setTimeout(function () { bkSyncPushFont(f); }, i * 300); });
                     if (!need.length) { if (cb) cb(0); return; }
-                    var left = need.length, fetched = [];
+                    // 下载结果必须让用户看见。字体动辄十几 MB，失败原因五花八门（断网、超时、内存不够、
+                    // 超存储配额），而这里以前每一种都是静默吞掉的——用户能观察到的只有「字体就是不出现」，
+                    // 无从判断该等一等、该重试、还是该腾空间。2026-07-29 为这个查了很久。
+                    var left = need.length, fetched = [], failed = [], done = false;
                     function finalize() {
+                        if (done) return; done = true;   // finalize 自己抛异常时会被下面的 .catch 兜住并再调一次，挡掉
                         if (fetched.length) {
                             var arr = readingLocalFontsLoad();
                             fetched.forEach(function (nf) {
@@ -19722,28 +19730,44 @@ body {
                                 for (var k = 0; k < arr.length; k++) if (arr[k].name === nf.name) { exists = true; break; }
                                 if (!exists) arr.push(nf);
                             });
-                            readingLocalFontsSave(arr);
+                            var names = fetched.map(function (f) { return f.name; }).join('、');
+                            readingLocalFontsSave(arr, function (err) {
+                                // 落盘失败：当次内存里是好的、看着已经生效，重启就没了。必须当场说清楚。
+                                var why = (err && (err.name || err.message)) || '未知原因';
+                                say('⚠️ 字体「' + names + '」下载成功但存不进本机（' + why + '），重启就会没'
+                                    + (/quota|Quota/.test(why) ? '——存储空间满了，删几本书或几个字体再试' : ''));
+                            });
+                            say('✅ 已从服务器补齐字体：' + names);
+                        }
+                        if (failed.length) {
+                            say('⚠️ ' + failed.length + ' 个字体没拉下来：' + failed.join('；') + '。换个网络再打开一次字体面板试试');
                         }
                         try { readingRegisterLocalFonts(); readingApplyFonts(); } catch (e) {}
                         if (cb) cb(fetched.length);
                     }
                     need.forEach(function (fk) {
+                        var nm = fk.slice(FONT_KEY_PREFIX.length);
                         fetch(cfg.url + '/get?key=' + encodeURIComponent(fk), { headers: bkSyncHeaders(cfg) })
-                            .then(function (r) { return r.ok ? r.json() : null; })
+                            .then(function (r) { if (!r.ok) throw new Error('服务器返回 ' + r.status); return r.json(); })
                             .then(function (dd) {
                                 var b = dd && (dd.book || dd);
-                                if (b && b.b64 && b.fileName) {
-                                    try { fetched.push({ name: b.fileName, mime: b.mime || '', buf: _b642ab(b.b64) }); } catch (e) {}
-                                }
+                                if (!b || !b.b64 || !b.fileName) throw new Error('服务器给的数据不完整');
+                                try { fetched.push({ name: b.fileName, mime: b.mime || '', buf: _b642ab(b.b64) }); }
+                                catch (e) { throw new Error('文件太大，手机内存不够解开'); }
                                 if (--left === 0) finalize();
                             })
-                            .catch(function () { if (--left === 0) finalize(); });
+                            .catch(function (e) {
+                                failed.push(nm + '（' + ((e && e.message) || '网络失败') + '）');
+                                if (--left === 0) finalize();
+                            });
                     });
                 })
-                .catch(function () { if (cb) cb(); });
+                .catch(function (e) {
+                    say('⚠️ 连不上书籍服务器（' + ((e && e.message) || '网络失败') + '），字体没法同步');
+                    if (cb) cb();
+                });
         }
-        // 删本地字体时同步删服务器（否则下次自动全量拉回、删不掉）。删在线字体时 key 不存在，服务器无操作、无害
-        // 删字体时一并从服务器删。**失败必须说出来**：这里过去是 .catch(function(){}) 整个吞掉的，
+        // 删本地字体时同步删服务器（否则下次自动全量拉回、删不掉）。删在线字体时 key 不存在，服务器无操作、无害。**失败必须说出来**：这里过去是 .catch(function(){}) 整个吞掉的，
         // 后果特别隐蔽——本机删干净了、服务器那份还在，下次展开字体面板/打开书架时 bkSyncPullFonts
         // 判定「服务器有、本地没有」＝新字体，又给下回本机。用户看到的是「删掉的字体过几天自己回来了」，
         // 而且根本不会想到是删除请求当时失败了（2026-07-29 真踩过一次，两个字体删完服务器上还在）。

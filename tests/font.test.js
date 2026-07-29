@@ -146,6 +146,70 @@ function chainOf(varName) {
     eq('删成功时只发一次、不重试', G.请求次数, 1);
     eq('删成功时不打扰用户', G.提示条数, 0);
 
+    /* ===== D 组：拉字体失败也必须吭声 =====
+     * 同一天的第二个静默失败：另一台设备怎么都拉不到字体、书却一切正常，用户能观察到的只有
+     * 「字体就是不出现」，没法判断该等一等、该换网络、还是该腾空间。*/
+    const H = await page.evaluate(async () => {
+        localStorage.setItem('books_sync_url', 'https://books.example.com');
+        localStorage.setItem('books_sync_token', 'tok');
+        idbSet('reading_local_fonts', []);   // 本机一个字体都没有 → 服务器上那个就是「要拉的」
+        const toasts = [];
+        const _toast = window.showToast; window.showToast = function (m) { toasts.push(String(m)); };
+        const _fetch = window.fetch;
+        window.fetch = function (u) {
+            if (String(u).indexOf('/manifest') !== -1) {
+                return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, items: { '__font__|山茶': { fileName: '山茶' } } }) });
+            }
+            return Promise.reject(new Error('连接中断'));   // 下载那 19MB 时断了
+        };
+        _bkFontSyncAt = 0;
+        await new Promise(r => bkSyncPullFonts(r));
+        window.fetch = _fetch; window.showToast = _toast;
+        return toasts.join(' ｜ ');
+    });
+    ok('字体没拉下来时说得出是哪个、为什么', /山茶/.test(H) && /连接中断/.test(H), '实际提示：' + (H || '（一声不吭）'));
+
+    const I = await page.evaluate(async () => {
+        localStorage.setItem('books_sync_url', 'https://books.example.com');
+        localStorage.setItem('books_sync_token', 'tok');
+        const toasts = [];
+        const _toast = window.showToast; window.showToast = function (m) { toasts.push(String(m)); };
+        const _fetch = window.fetch;
+        window.fetch = function () { return Promise.reject(new Error('DNS 解析失败')); };
+        _bkFontSyncAt = 0;
+        await new Promise(r => bkSyncPullFonts(r));
+        window.fetch = _fetch; window.showToast = _toast;
+        return toasts.join(' ｜ ');
+    });
+    ok('连不上服务器时也说一声（不是闷头当无事发生）', /连不上书籍服务器/.test(I), '实际提示：' + (I || '（一声不吭）'));
+
+    const J = await page.evaluate(async () => {
+        localStorage.setItem('books_sync_url', 'https://books.example.com');
+        localStorage.setItem('books_sync_token', 'tok');
+        idbSet('reading_local_fonts', []);
+        const toasts = [];
+        const _toast = window.showToast; window.showToast = function (m) { toasts.push(String(m)); };
+        const _fetch = window.fetch;
+        // 下载成功，但落盘时超配额（手机上最难查的那种：当次看着好好的、一重启全没了）
+        const _idbSet = window.idbSet;
+        window.idbSet = function (k, v, onErr) {
+            if (k === 'reading_local_fonts' && onErr) { setTimeout(function () { onErr({ name: 'QuotaExceededError' }); }, 0); return; }
+            return _idbSet.apply(this, arguments);
+        };
+        window.fetch = function (u) {
+            if (String(u).indexOf('/manifest') !== -1) {
+                return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, items: { '__font__|山茶': { fileName: '山茶' } } }) });
+            }
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, book: { fileName: '山茶', mime: 'font/ttf', b64: btoa('fake-font-bytes') } }) });
+        };
+        _bkFontSyncAt = 0;
+        await new Promise(r => bkSyncPullFonts(r));
+        await new Promise(r => setTimeout(r, 200));
+        window.fetch = _fetch; window.showToast = _toast; window.idbSet = _idbSet;
+        return toasts.join(' ｜ ');
+    });
+    ok('存不进本机时讲清「重启就会没」并提示腾空间', /存不进本机/.test(J) && /空间/.test(J), '实际提示：' + (J || '（一声不吭）'));
+
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' ｜ '));
 
     await browser.close();
