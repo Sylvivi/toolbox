@@ -5381,6 +5381,7 @@ body {
                             <div class="rfont-slot-row"><span class="rfont-slot-label">标题</span><select id="readingFontSel_title" class="rfont-select" onchange="readingSetSlotFont('title', this.value)"></select></div>
                             <div class="rfont-slot-row"><span class="rfont-slot-label">人名</span><select id="readingFontSel_person" class="rfont-select" onchange="readingSetSlotFont('person', this.value)"></select></div>
                             <div class="rfont-slot-row"><span class="rfont-slot-label" title="开「精句」时，每段最短的完整句单独用这个字体">精句</span><select id="readingFontSel_keysent" class="rfont-select" onchange="readingSetSlotFont('keysent', this.value)"></select></div>
+                            <div class="rfont-slot-row"><span class="rfont-slot-label" title="上面那些字体没收的生僻字，改用这个字体显示；不选就掉回系统字体">缺字</span><select id="readingFontSel_fallback" class="rfont-select" onchange="readingSetSlotFont('fallback', this.value)"></select></div>
                         </div>
                         <span id="readingFontStatus" class="rfont-status">正文：默认</span>
                     </div>
@@ -10320,7 +10321,11 @@ body {
                     quoteShort: localStorage.getItem('reading_font_quote_short') || '',
                     title: localStorage.getItem('reading_font_title') || '',
                     person: localStorage.getItem('reading_font_person') || '',
-                    keysent: localStorage.getItem('reading_font_keysent') || ''
+                    keysent: localStorage.getItem('reading_font_keysent') || '',
+                    // ⚠️ 这个对象是手写死的，不是从 READING_FONT_SLOTS 推的。加了新槽位一定要同步加在这里：
+                    // readingApplyFontSync 拉取时会遍历槽位表、把 manifest 里没有的槽位 removeItem 掉，
+                    // 漏一个的后果是那个选择「当场好好的、过几小时自己消失」（tests/font.test.js 钉的就是这条）。
+                    fallback: localStorage.getItem('reading_font_fallback') || ''
                 },
                 readerPos: (function () { try { return JSON.parse(localStorage.getItem('reader_pos') || '{}'); } catch (e) { return {}; } })(),
                 readerQA: (function () { try { return JSON.parse(localStorage.getItem('reader_qa') || '{}'); } catch (e) { return {}; } })(),
@@ -18957,7 +18962,11 @@ body {
             { slot: 'quoteShort', key: 'reading_font_quote_short', varName: '--reading-font-quote-short', label: '短句' },
             { slot: 'title',  key: 'reading_font_title',  varName: '--reading-font-title', label: '标题' },
             { slot: 'person', key: 'reading_font_person', varName: '--reading-font-name',  label: '人名' },
-            { slot: 'keysent', key: 'reading_font_keysent', varName: '--reading-font-keysent', label: '精句' }
+            { slot: 'keysent', key: 'reading_font_keysent', varName: '--reading-font-keysent', label: '精句' },
+            // 「缺字」不是一个渲染位置，是接在别人字体链尾巴上的兜底：花体做子集时常漏生僻字
+            // （比如「苼」在 GBK 不在 GB2312，国产花体基本都不收），漏掉的字浏览器会逐字掉回系统字体，
+            // 一个名字里就出现两种笔迹。选了这一项，就用它接住那些字。isFallback 让它跳过「写自己的 CSS 变量」。
+            { slot: 'fallback', key: 'reading_font_fallback', varName: '', label: '缺字', isFallback: true }
         ];
         var _readingFontLinks = {};       // name -> <link>（在线字体 CSS，按需挂载）
         var _readingLocalFontFaces = {};  // name -> true（已注册的本地 FontFace，防重复）
@@ -19023,15 +19032,26 @@ body {
         function readingApplyFonts() {
             var online = {}; readingFontsLoad().forEach(function (f) { online[f.name] = true; });
             var local = {}; readingLocalFontsLoad().forEach(function (f) { local[f.name] = true; });
+            // 「缺字」兜底字体：同样要在册才算数（本地字体开机时可能还没从 IndexedDB 读回来）
+            var fb = localStorage.getItem('reading_font_fallback') || '';
+            if (fb && !online[fb] && !local[fb]) fb = '';
+            if (fb && online[fb]) readingEnsureOnlineFontLink(fb);
             READING_FONT_SLOTS.forEach(function (s) {
+                if (s.isFallback) return;  // 它不占渲染位置，只作为别人链尾出现（见下面 chain）
                 var name = localStorage.getItem(s.key) || '';
                 if (!name) { document.documentElement.style.removeProperty(s.varName); return; }
                 // 找不到字体「先不应用、也绝不删选择」：本地字体要等 IndexedDB 读完才在册，开机这一刻可能还没就绪；
                 // 删除应交给「× 删除字体」(readingDeleteFontAny) 处理，这里乱删会把刷新前选好的本地字体冲成默认。
                 if (!online[name] && !local[name]) { document.documentElement.style.removeProperty(s.varName); return; }
                 if (online[name]) readingEnsureOnlineFontLink(name);
+                // 兜底只接在装饰位置（引号/短句/标题/人名/精句）后面，**正文不接**——用户明确要求正文那一条链不动。
+                // 这不会让装饰位置「变样」：浏览器是逐字回退的，主字体有的字轮不到兜底，只有主字体缺的字才用它，
+                // 而那些字本来就已经掉回系统字体了。槽位选「默认」时照旧不写变量（保持 CSS inherit），
+                // 继承来的是父元素算好的整条链、兜底会跟着继承过来，所以不用也不能在这里补。
+                var useFb = fb && fb !== name && s.slot !== 'body';
+                var chain = '"' + name + '"' + (useFb ? ', "' + fb + '"' : '');
                 // font-family 值里不能放 inherit（会让整条声明失效），只放字体名 + 通用兜底 serif
-                document.documentElement.style.setProperty(s.varName, '"' + name + '", serif');
+                document.documentElement.style.setProperty(s.varName, chain + ', serif');
             });
             // 名词若套了自定义字体，加粗会和花字打架 → 打 rn-has-font 标记让 CSS 在短句里强制不加粗（见 .reading-name 样式）。
             // 短句里名词的实际字体优先级：人名槽 → 短句槽 → 引号槽，任一套了自定义字体都算（之前只查人名槽，套在短句槽时漏判，加粗没被收窄）。
