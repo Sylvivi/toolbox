@@ -210,6 +210,56 @@ function chainOf(varName) {
     });
     ok('存不进本机时讲清「重启就会没」并提示腾空间', /存不进本机/.test(J) && /空间/.test(J), '实际提示：' + (J || '（一声不吭）'));
 
+    /* ===== E 组：用户亲手展开字体面板，绝不许被节流静默吃掉 =====
+     * 2026-07-29 手机上死活拉不到字体的真凶：先打开书架（会同步一次）、4 秒内再展开字体面板，
+     * 节流直接 return——一个请求不发、一句提示没有。而这恰好是最自然的操作顺序。
+     * 电脑上因为点得慢、躲开了 4 秒窗口所以一切正常，两台设备表现不一致更让人摸不着头脑。*/
+    const K = await page.evaluate(async () => {
+        localStorage.setItem('books_sync_url', 'https://books.example.com');
+        localStorage.setItem('books_sync_token', 'tok');
+        idbSet('reading_local_fonts', []);
+        const toasts = []; let hits = 0;
+        const _toast = window.showToast; window.showToast = function (m) { toasts.push(String(m)); };
+        const _fetch = window.fetch;
+        window.fetch = function (u) {
+            hits++;
+            if (String(u).indexOf('/manifest') !== -1) {
+                return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, items: { '__font__|山茶': { fileName: '山茶' } } }) });
+            }
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, book: { fileName: '山茶', mime: 'font/ttf', b64: btoa('fake') } }) });
+        };
+        _bkFontSyncAt = Date.now();           // 模拟「刚刚打开书架同步过」
+        const panel = document.getElementById('readingFontPanel');
+        panel.style.display = 'none';
+        readingToggleFontPanel();             // 用户亲手展开
+        await new Promise(r => setTimeout(r, 800));
+        window.fetch = _fetch; window.showToast = _toast;
+        return { 发了请求: hits, 提示: toasts.join(' ｜ '), 字体: readingAllFonts().map(f => f.name).join('、') };
+    });
+    ok('刚同步过也照拉不误（用户亲手点开＝真要同步，不吃节流）', K.发了请求 >= 2, '实际只发了 ' + K.发了请求 + ' 个请求');
+    ok('拉到了要说一声', /补齐字体/.test(K.提示), '实际提示：' + (K.提示 || '（一声不吭）'));
+    ok('字体真的进了本机字体库', /山茶/.test(K.字体), '实际：' + K.字体);
+
+    const L = await page.evaluate(async () => {
+        localStorage.setItem('books_sync_url', 'https://books.example.com');
+        localStorage.setItem('books_sync_token', 'tok');
+        idbSet('reading_local_fonts', [{ name: '山茶', mime: 'font/ttf', buf: new ArrayBuffer(8) }]);
+        const toasts = [];
+        const _toast = window.showToast; window.showToast = function (m) { toasts.push(String(m)); };
+        const _fetch = window.fetch;
+        window.fetch = function () {
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, items: { '__font__|山茶': { fileName: '山茶' } } }) });
+        };
+        _bkFontSyncAt = 0;
+        const panel = document.getElementById('readingFontPanel');
+        panel.style.display = 'none';
+        readingToggleFontPanel();
+        await new Promise(r => setTimeout(r, 800));
+        window.fetch = _fetch; window.showToast = _toast;
+        return toasts.join(' ｜ ');
+    });
+    ok('本来就没新字体时也回一句「已是最新」（不让用户对着静默干等）', /已是最新/.test(L), '实际提示：' + (L || '（一声不吭）'));
+
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' ｜ '));
 
     await browser.close();

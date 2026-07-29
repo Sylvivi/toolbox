@@ -19099,7 +19099,8 @@ body {
             var open = p.style.display !== 'none';
             p.style.display = open ? 'none' : 'flex';
             if (arrow) arrow.style.transform = open ? '' : 'rotate(90deg)';
-            if (!open) { try { bkSyncPullFonts(); } catch (e) {} }  // 展开字体面板时同步一次（拉服务器新字体 + 补传本地独有）
+            // 展开字体面板＝用户亲手要求同步，所以传 force：不吃 4 秒节流，且必回一句话（拉到了 / 已是最新 / 为什么失败）
+            if (!open) { try { bkSyncPullFonts(null, true); } catch (e) {} }
         }
         // 「＋ 添加字体」：默认收起，点击才展开
         function readingToggleAddFont() {
@@ -19693,12 +19694,21 @@ body {
         // （换设备自动补齐 + 修掉「配服务器前就已存在的字体从没上传」的盲区）。收齐后统一落盘一次，避免并发覆盖。
         // 4 秒轻节流：这函数现在挂在冷启动 + 打开书架 + 展开字体面板三处，防短时间内被反复触发狂拉 manifest。
         var _bkFontSyncAt = 0;
-        function bkSyncPullFonts(cb) {
-            var cfg = bkSyncCfg(); if (!cfg) { if (cb) cb(); return; }
-            var _now = Date.now();
-            if (_now - _bkFontSyncAt < 4000) { if (cb) cb(); return; }
-            _bkFontSyncAt = _now;
+        // force=true 表示「用户亲手要求的同步」（展开字体面板）：不吃节流，而且**没事可做也要回一句话**。
+        // 4 秒节流本来只为了挡住「打开书架」和「展开字体面板」几乎同时触发的重复活儿，但它把用户的主动
+        // 操作也一起吃掉了：先开书架、4 秒内再展开字体面板 → 一个请求不发、一句提示没有、字体永远拉不到，
+        // 而这恰好是最自然的操作顺序。2026-07-29 手机上死活拉不到字体，查到最后就是这个（电脑上因为
+        // 点得慢、躲开了 4 秒窗口，所以一切正常，两台设备表现不一致更让人摸不着头脑）。
+        function bkSyncPullFonts(cb, force) {
+            var cfg = bkSyncCfg();
             function say(msg) { try { showToast(msg); } catch (e) {} }
+            if (!cfg) {
+                if (force) say('⚠️ 这台设备还没配书籍服务器（设置里填地址和令牌），字体没法同步');
+                if (cb) cb(); return;
+            }
+            var _now = Date.now();
+            if (!force && _now - _bkFontSyncAt < 4000) { if (cb) cb(); return; }
+            _bkFontSyncAt = _now;
             fetch(cfg.url + '/manifest', { headers: bkSyncHeaders(cfg) })
                 .then(function (r) { if (!r.ok) throw new Error('服务器返回 ' + r.status); return r.json(); })
                 .then(function (d) {
@@ -19716,7 +19726,12 @@ body {
                     // 本地有、服务器没有的 → 补传（错开发送，别一次性挤爆）。修掉「只有新选文件那刻才上传」的盲区。
                     localArr.filter(function (f) { return f && f.name && f.buf && !serverNames[f.name]; })
                             .forEach(function (f, i) { setTimeout(function () { bkSyncPushFont(f); }, i * 300); });
-                    if (!need.length) { if (cb) cb(0); return; }
+                    if (!need.length) {
+                        // 用户亲手点开面板时，「没什么可拉的」也得说——不然「没反应」到底是同步没跑、
+                        // 还是跑了但本来就没新字体，用户完全没法区分，只能干等。
+                        if (force) say('✅ 字体已是最新，本机 ' + Object.keys(serverNames).length + ' 个字体都齐了');
+                        if (cb) cb(0); return;
+                    }
                     // 下载结果必须让用户看见。字体动辄十几 MB，失败原因五花八门（断网、超时、内存不够、
                     // 超存储配额），而这里以前每一种都是静默吞掉的——用户能观察到的只有「字体就是不出现」，
                     // 无从判断该等一等、该重试、还是该腾空间。2026-07-29 为这个查了很久。
