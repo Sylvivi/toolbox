@@ -260,6 +260,44 @@ function chainOf(varName) {
     });
     ok('本来就没新字体时也回一句「已是最新」（不让用户对着静默干等）', /已是最新/.test(L), '实际提示：' + (L || '（一声不吭）'));
 
+    /* ===== F 组：「🔄 立即同步字体」按钮 =====
+     * 同步以前只绑在「面板从收起变展开」上：面板已经开着时，点一下其实是收起、再点才同步，
+     * 用户的点击在收合之间来回、一半根本不触发，看起来就是「点了没反应」。*/
+    const M = await page.evaluate(async () => {
+        localStorage.setItem('books_sync_url', 'https://books.example.com');
+        localStorage.setItem('books_sync_token', 'tok');
+        idbSet('reading_local_fonts', []);
+        const toasts = [];
+        const _toast = window.showToast; window.showToast = function (m) { toasts.push(String(m)); };
+        const _fetch = window.fetch;
+        window.fetch = function (u) {
+            if (String(u).indexOf('/manifest') !== -1) {
+                return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, items: { '__font__|山茶': { fileName: '山茶' } } }) });
+            }
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, book: { fileName: '山茶', mime: 'font/ttf', b64: btoa('fake') } }) });
+        };
+        _bkFontSyncAt = Date.now();     // 刚同步过：按钮照样得干活
+        const btn = document.querySelector('.rfont-sync');
+        const 有按钮 = !!btn;
+        readingSyncFontsNow();
+        const 点完立刻禁用 = btn ? btn.disabled : null;
+        const 点完立刻的提示 = toasts.slice();
+        await new Promise(r => setTimeout(r, 900));
+        window.fetch = _fetch; window.showToast = _toast;
+        return {
+            有按钮, 点完立刻禁用,
+            立刻说了正在同步: /正在同步/.test(点完立刻的提示.join(' ')),
+            结果提示: toasts.join(' ｜ '),
+            按钮恢复了: btn ? !btn.disabled : null,
+            字体: readingAllFonts().map(f => f.name).join('、')
+        };
+    });
+    ok('字体面板里有「立即同步字体」按钮', M.有按钮);
+    ok('点下去立刻说「正在同步」（十几秒的等待不能一片空白）', M.立刻说了正在同步, '实际：' + M.结果提示);
+    eq('同步中按钮禁用，防止反复点', M.点完立刻禁用, true);
+    ok('结束后按钮恢复可点', M.按钮恢复了 === true);
+    ok('按钮真的把字体拉下来了（且不吃节流）', /山茶/.test(M.字体), '实际：' + M.字体);
+
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' ｜ '));
 
     await browser.close();

@@ -2885,6 +2885,14 @@ body {
             transition: border-color 0.15s;
         }
         .rfont-input:focus { outline: none; border-color: var(--accent-mid); }
+        /* 「立即同步字体」：次要操作，做成描边小按钮，不跟主按钮抢眼。同步中禁用并改字，
+           因为字体动辄十几 MB、要等十几秒，不给「已经在跑了」的迹象用户会反复点。 */
+        .rfont-sync {
+            padding: 5px 10px; font-size: 11px; border-radius: 7px; cursor: pointer;
+            border: 1px solid var(--card-border); background: transparent; color: var(--text-muted);
+            transition: opacity 0.15s;
+        }
+        .rfont-sync:disabled { opacity: 0.55; cursor: default; }
         .rfont-save {
             width: 100%; padding: 8px; font-size: 12px; font-weight: 600;
             border: none; border-radius: 8px; background: var(--accent);
@@ -5360,6 +5368,11 @@ body {
                     </div>
                     <div id="readingFontPanel" style="display:none;flex-direction:column;gap:10px;margin-top:8px">
                         <div id="readingFontList" class="rfont-list"></div>
+                        <!-- 同步以前只绑在「面板从收起变展开」上：面板已经开着时，点一下其实是收起、再点才同步，
+                             用户的点击在收合之间来回、一半根本不触发，看起来就是「点了没反应」。给个明确的按钮。 -->
+                        <div class="rfont-slot-row" style="justify-content:flex-end">
+                            <button class="rfont-sync" onclick="readingSyncFontsNow()">🔄 立即同步字体</button>
+                        </div>
                         <div class="rfont-add">
                             <div class="rfont-add-label" onclick="readingToggleAddFont()">
                                 <span>＋ 添加字体</span>
@@ -19101,6 +19114,17 @@ body {
             if (arrow) arrow.style.transform = open ? '' : 'rotate(90deg)';
             // 展开字体面板＝用户亲手要求同步，所以传 force：不吃 4 秒节流，且必回一句话（拉到了 / 已是最新 / 为什么失败）
             if (!open) { try { bkSyncPullFonts(null, true); } catch (e) {} }
+        }
+        // 「🔄 立即同步字体」：一个确定的入口。点了必有反馈——先说「正在同步」（十几 MB 要等十几秒，
+        // 没有这句用户会以为没点上、反复点），完事由 bkSyncPullFonts 说结果（拉到了／已是最新／为什么失败）。
+        function readingSyncFontsNow() {
+            var btn = document.querySelector('.rfont-sync');
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ 正在同步…'; }
+            try { showToast('⏳ 正在同步字体，十几 MB 要等一会儿…'); } catch (e) {}
+            var restored = false;
+            function restore() { if (restored) return; restored = true; if (btn) { btn.disabled = false; btn.textContent = '🔄 立即同步字体'; } }
+            setTimeout(restore, 60000);   // 万一哪条分支没回调，按钮不能永远卡在「正在同步」上
+            try { bkSyncPullFonts(restore, true); } catch (e) { restore(); }
         }
         // 「＋ 添加字体」：默认收起，点击才展开
         function readingToggleAddFont() {
