@@ -2885,19 +2885,6 @@ body {
             transition: border-color 0.15s;
         }
         .rfont-input:focus { outline: none; border-color: var(--accent-mid); }
-        /* 「立即同步字体」：次要操作，做成描边小按钮，不跟主按钮抢眼。同步中禁用并改字，
-           因为字体动辄十几 MB、要等十几秒，不给「已经在跑了」的迹象用户会反复点。 */
-        .rfont-sync {
-            padding: 5px 10px; font-size: 11px; border-radius: 7px; cursor: pointer;
-            border: 1px solid var(--card-border); background: transparent; color: var(--text-muted);
-            transition: opacity 0.15s;
-        }
-        .rfont-sync:disabled { opacity: 0.55; cursor: default; }
-        .rfont-syncstatus {
-            margin-top: 6px; padding: 7px 9px; border-radius: 7px; font-size: 11px; line-height: 1.5;
-            background: var(--card-inner); color: var(--text-muted); word-break: break-all;
-        }
-        .rfont-syncstatus.bad { background: var(--accent-light); color: var(--accent); }
         .rfont-save {
             width: 100%; padding: 8px; font-size: 12px; font-weight: 600;
             border: none; border-radius: 8px; background: var(--accent);
@@ -5373,14 +5360,6 @@ body {
                     </div>
                     <div id="readingFontPanel" style="display:none;flex-direction:column;gap:10px;margin-top:8px">
                         <div id="readingFontList" class="rfont-list"></div>
-                        <!-- 同步以前只绑在「面板从收起变展开」上：面板已经开着时，点一下其实是收起、再点才同步，
-                             用户的点击在收合之间来回、一半根本不触发，看起来就是「点了没反应」。给个明确的按钮。 -->
-                        <div class="rfont-slot-row" style="justify-content:flex-end">
-                            <button class="rfont-sync" onclick="readingSyncFontsNow()">🔄 立即同步字体</button>
-                        </div>
-                        <!-- 同步结果**留在这儿不走**。光靠 toast 不行：它只显示 2 秒、还在屏幕最底下，
-                             用户在面板中间点按钮、眼睛盯着按钮，底下那条闪一下就没了，看起来就是「点了没反应」。 -->
-                        <div id="readingFontSyncStatus" class="rfont-syncstatus" style="display:none"></div>
                         <div class="rfont-add">
                             <div class="rfont-add-label" onclick="readingToggleAddFont()">
                                 <span>＋ 添加字体</span>
@@ -19123,22 +19102,6 @@ body {
             // 展开字体面板＝用户亲手要求同步，所以传 force：不吃 4 秒节流，且必回一句话（拉到了 / 已是最新 / 为什么失败）
             if (!open) { try { bkSyncPullFonts(null, true); } catch (e) {} }
         }
-        // 「🔄 立即同步字体」：一个确定的入口。点了必有反馈——先说「正在同步」（十几 MB 要等十几秒，
-        // 没有这句用户会以为没点上、反复点），完事由 bkSyncPullFonts 说结果（拉到了／已是最新／为什么失败）。
-        function readingSyncFontsNow() {
-            var btn = document.querySelector('.rfont-sync');
-            if (btn) { btn.disabled = true; btn.textContent = '⏳ 正在同步…'; }
-            try { showToast('⏳ 正在同步字体，十几 MB 要等一会儿…'); } catch (e) {}
-            // 状态行也当场写上，作为「你确实点到了」的凭据——不然按钮上那点变化太容易被忽略
-            try {
-                var st0 = document.getElementById('readingFontSyncStatus');
-                if (st0) { st0.textContent = '⏳ 正在同步字体，十几 MB 要等一会儿…'; st0.className = 'rfont-syncstatus'; st0.style.display = ''; }
-            } catch (e) {}
-            var restored = false;
-            function restore() { if (restored) return; restored = true; if (btn) { btn.disabled = false; btn.textContent = '🔄 立即同步字体'; } }
-            setTimeout(restore, 60000);   // 万一哪条分支没回调，按钮不能永远卡在「正在同步」上
-            try { bkSyncPullFonts(restore, true); } catch (e) { restore(); }
-        }
         // 「＋ 添加字体」：默认收起，点击才展开
         function readingToggleAddFont() {
             var body = document.getElementById('readingFontAddBody');
@@ -19738,21 +19701,9 @@ body {
         // 点得慢、躲开了 4 秒窗口，所以一切正常，两台设备表现不一致更让人摸不着头脑）。
         function bkSyncPullFonts(cb, force) {
             var cfg = bkSyncCfg();
-            // 结果同时写进面板里的状态行（留着不走）和 toast（2 秒就没、还在屏幕最底下，只能当辅助）。
-            // 出错时 toast 用常驻式（点一下才消失），别让用户为了看清一句错误反复重试。
-            function say(msg, bad) {
-                try { showToast(msg, !!bad); } catch (e) {}
-                try {
-                    var el = document.getElementById('readingFontSyncStatus');
-                    if (el) {
-                        var d = new Date();
-                        var hhmm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2);
-                        el.textContent = hhmm + '  ' + msg;
-                        el.className = 'rfont-syncstatus' + (bad ? ' bad' : '');
-                        el.style.display = '';
-                    }
-                } catch (e) {}
-            }
+            // 出错时用常驻 toast（点一下才消失）：普通 toast 只显示 2 秒、又在屏幕最底下，
+            // 用户在面板中间操作时基本看不见，等于没说（2026-07-29 为这个白折腾了好几轮）。
+            function say(msg, bad) { try { showToast(msg, !!bad); } catch (e) {} }
             if (!cfg) {
                 if (force) say('⚠️ 这台设备还没配书籍服务器（设置里填地址和令牌），字体没法同步', true);
                 if (cb) cb(); return;
@@ -19777,12 +19728,9 @@ body {
                     // 本地有、服务器没有的 → 补传（错开发送，别一次性挤爆）。修掉「只有新选文件那刻才上传」的盲区。
                     localArr.filter(function (f) { return f && f.name && f.buf && !serverNames[f.name]; })
                             .forEach(function (f, i) { setTimeout(function () { bkSyncPushFont(f); }, i * 300); });
-                    if (!need.length) {
-                        // 用户亲手点开面板时，「没什么可拉的」也得说——不然「没反应」到底是同步没跑、
-                        // 还是跑了但本来就没新字体，用户完全没法区分，只能干等。
-                        if (force) say('✅ 字体已是最新，本机 ' + Object.keys(serverNames).length + ' 个字体都齐了');
-                        if (cb) cb(0); return;
-                    }
+                    // 没什么可拉的就安静走开：展开字体面板是个高频动作，每次都弹「已是最新」很烦。
+                    // 失败仍然会出声（见下面几处 say），所以「一声不吭」只代表「一切正常且没有变化」。
+                    if (!need.length) { if (cb) cb(0); return; }
                     // 下载结果必须让用户看见。字体动辄十几 MB，失败原因五花八门（断网、超时、内存不够、
                     // 超存储配额），而这里以前每一种都是静默吞掉的——用户能观察到的只有「字体就是不出现」，
                     // 无从判断该等一等、该重试、还是该腾空间。2026-07-29 为这个查了很久。
@@ -19806,7 +19754,7 @@ body {
                             say('✅ 已从服务器补齐字体：' + names);
                         }
                         if (failed.length) {
-                            say('⚠️ ' + failed.length + ' 个字体没拉下来：' + failed.join('；') + '。换个网络再点一次「立即同步字体」', true);
+                            say('⚠️ ' + failed.length + ' 个字体没拉下来：' + failed.join('；') + '。换个网络再收起、展开一次字体面板试试', true);
                         }
                         try { readingRegisterLocalFonts(); readingApplyFonts(); } catch (e) {}
                         if (cb) cb(fetched.length);
