@@ -20066,6 +20066,14 @@ body {
         function readerBgOfChap(fileKey, chap) {
             return readerQAGet(fileKey, chap).filter(function (it) { return (it.q || '').indexOf(BG_Q_PREFIX) === 0; });
         }
+        /* 导读也是一条 reader_qa，问题固定长成「导读」或「导读：《小节名》」
+           （见 readingAskOne 的 _guide 分支）。⚠️别用 indexOf('导读')===0 那种松判——
+           用户自己打的「导读这段讲的是什么」也会中，目录上就会冒出假的导读标记。
+           这里咬死「导读」后面要么跟全角冒号、要么到此为止。 */
+        var GUIDE_Q_RE = /^导读(：|$)/;
+        function readerGuideOfChap(fileKey, chap) {
+            return readerQAGet(fileKey, chap).filter(function (it) { return GUIDE_Q_RE.test(it.q || ''); });
+        }
         // 全书已讲过的背景词——喂给第一遍让它跳过，免得共济会在第 3、7、11 章各讲一遍
         function readerBgDoneTerms(fileKey) {
             var book = readerQAAll()[fileKey] || {}, seen = {}, out = [];
@@ -21789,18 +21797,24 @@ body {
             var _subs = rbPickForReader && rbIsSocial(b);   // 两级目录只在「社科书 + 阅读模式选书」时出现
             // 阅读模式按「阅读器进度」标记当前章；共读模式按 lastChapter 标记
             var markCur = rbPickForReader ? readerGetProgress(b.id).chapter : b.lastChapter;
-            // 每章标过几条背景，显示在字数后面。整本 reader_qa 只读一次——
+            // 每章标过几条背景 / 做过几节导读，显示在字数后面。整本 reader_qa 只读一次——
             // 二三百章的书要是每行各查一次，等于把整个 reader_qa 反复 JSON.parse 几百遍。
-            var _bgMap = {};
+            // ⚠️两样必须在**同一趟**里数出来，别为导读再扫一遍全书。
+            var _bgMap = {}, _gdMap = {};
             if (rbPickForReader) {
                 var _fk = readerBookKey(b.id);
                 var _qaBook = _fk ? (readerQAAll()[_fk] || {}) : {};
                 Object.keys(_qaBook).forEach(function (k) {
                     var l = _qaBook[k] && _qaBook[k].list;
                     if (!Array.isArray(l)) return;
-                    var n = 0;
-                    for (var z = 0; z < l.length; z++) { if ((l[z].q || '').indexOf(BG_Q_PREFIX) === 0) n++; }
+                    var n = 0, g = 0;
+                    for (var z = 0; z < l.length; z++) {
+                        var _q = l[z].q || '';
+                        if (_q.indexOf(BG_Q_PREFIX) === 0) n++;
+                        else if (GUIDE_Q_RE.test(_q)) g++;
+                    }
                     if (n) _bgMap[k] = n;
+                    if (g) _gdMap[k] = g;
                 });
             }
             var html = b.chapters.map(function (ch, i) {
@@ -21813,28 +21827,41 @@ body {
                     var _row = '<div class="' + cls + '" onclick="readerOpenChapter(\'' + b.id + '\',' + i + ')">'
                         + '<div class="rb-chap-info"><div class="rb-chap-title">' + rbEsc(ch.title) + '</div><div class="rb-chap-meta">'
                         + ch.body.length.toLocaleString() + ' 字' + (i === markCur ? ' · 在读' : '')
-                        + (_bgMap[i] ? ' · 🏛 已标 ' + _bgMap[i] + ' 条' : '') + '</div></div>'
+                        + (_bgMap[i] ? ' · 🏛 已标 ' + _bgMap[i] + ' 条' : '')
+                        + (_gdMap[i] ? ' · 📖 已导读 ' + _gdMap[i] + ' 节' : '') + '</div></div>'
                         + '<button class="rb-chap-append" onclick="event.stopPropagation();rbChapMenuOpen(\'' + b.id + '\',' + i + ',event)" title="更多">⋯</button></div>';
                     if (_subs && rbChapterHasSections(b, i)) {
                         var _hs = rbSectionRanges(b, i);
-                        // 这一章每段各标了几条背景，按小节范围分摊（整章只取一次 list，别每节各扫一遍）
-                        var _bgPs = [];
+                        // 这一章每段各标了几条背景 / 哪几段有导读，按小节范围分摊
+                        //（整章只取一次 list，别每节各扫一遍）
+                        var _bgPs = [], _gdPs = [];
                         var _cellL = _qaBook[i] && _qaBook[i].list;
                         if (Array.isArray(_cellL)) {
                             for (var _z = 0; _z < _cellL.length; _z++) {
-                                if ((_cellL[_z].q || '').indexOf(BG_Q_PREFIX) === 0) _bgPs.push(_cellL[_z].p);
+                                var _zq = _cellL[_z].q || '';
+                                if (_zq.indexOf(BG_Q_PREFIX) === 0) _bgPs.push(_cellL[_z].p);
+                                else if (GUIDE_Q_RE.test(_zq)) _gdPs.push(_cellL[_z].p);
                             }
                         }
                         // 搜索时只留标题匹配的小节；没搜索就全列
                         if (q) _hs = _hs.filter(function (h) { return h.title.toLowerCase().indexOf(q) >= 0; });
                         for (var _si = 0; _si < _hs.length; _si++) {
-                            var _sc = _hs[_si], _sn = 0;
+                            var _sc = _hs[_si], _sn = 0, _sgd = false;
                             for (var _y = 0; _y < _bgPs.length; _y++) {
                                 if (_bgPs[_y] >= _sc.startP && _bgPs[_y] <= _sc.endP) _sn++;
                             }
+                            /* ⚠️导读从 _sc.p（小标题那一段）起算，不是 startP：readingAskOne 的
+                               导读分支把 pNum 改写成了 sec.headP，块就挂在小标题后面。
+                               用 startP 起算＝每一节的导读都数不到，标记永远不出现。 */
+                            for (var _w = 0; _w < _gdPs.length; _w++) {
+                                if (_gdPs[_w] >= _sc.p && _gdPs[_w] <= _sc.endP) { _sgd = true; break; }
+                            }
+                            // 右侧那一格：有内容就显示内容，都没有才退回 P段号（跟背景原来的规矩一致）
+                            var _secRight = (_sgd ? '📖' : '')
+                                + (_sn ? (_sgd ? ' ' : '') + '🏛 ' + _sn + ' 条' : (_sgd ? '' : 'P' + _sc.p));
                             _row += '<div class="rb-sec" onclick="rbJumpSection(\'' + b.id + '\',' + i + ',' + _sc.p + ')">'
                                 + '<span class="rb-sec-title">' + rbEsc(_sc.title) + '</span>'
-                                + '<span class="rb-sec-p">' + (_sn ? '🏛 ' + _sn + ' 条' : 'P' + _sc.p) + '</span>'
+                                + '<span class="rb-sec-p">' + _secRight + '</span>'
                                 // 整章三四万字标一次又慢又贵，这里让她只标看不懂的那一节
                                 + '<button class="rb-chap-append" onclick="event.stopPropagation();rbMarkBgSection(\'' + b.id + '\',' + i + ',' + _sc.p + ')" title="只标这一节的背景">🏛</button></div>';
                         }
