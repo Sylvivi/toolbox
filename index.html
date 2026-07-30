@@ -13876,7 +13876,7 @@ body {
                 } else if (_isReadingMsg && (text || _isReaderChap)) {
                     var _orig = readingModeGetOriginalText(msgIdx);
                     _orig = readingModeStripParaNums(_orig);
-                    h += readingModeRenderMerged(_orig, text || '');
+                    h += readingModeRenderMerged(_orig, text || '', msgIdx);
                 } else {
                     h += text ? renderText(text) : '';
                 }
@@ -22918,14 +22918,131 @@ body {
         }
 
         /* ===== 共读：点段评价 ===== */
+        /* ⚠️共读提问/点评是**可并发**的（2026-07-30 改），别退回全局单锁。
+           原样子：一个全局 `readingCommenting` 布尔，`readingOnParaClick` 第一行就
+           「锁着直接 return」——于是**一段在生成时，双击别的段落毫无反应**（用户原话
+           「总是要等它们生成完才可以，像翻译模式就可以同时翻译不同段落」）。
+           更隐蔽的第二半：正在生成的那个小气泡当初是手工 insertBefore 进 DOM 的、
+           **不属于渲染数据**，所以标背景那种「边标边整条重渲」的循环一过，气泡连同
+           你刚双击弹出来的输入条一起被抹掉（这才是「标背景时双击没用」的真因，跟锁无关）。
+           改法照抄翻译模式那套现成的 `translatePending`：每笔生成一条记录、各自带
+           AbortController，占位/流式气泡由 `readingModeRenderMerged` **从数据里画出来**，
+           重渲多少次都还在。`readingCommenting` 保留成**派生量**（有没有在跑），
+           `_waitIfStreaming` 那类旧调用方一个字不用改。 */
         var readingCommenting = false;
-        var readingAbortCtl = null;  // 共读「思考中」可中止
+        var readingAbortCtl = null;  // 兼容旧调用：指向最近一笔的中止器
+        /* 进行中的共读生成：{id,msg,pNum,question,kind,ctl,t0,partial}
+           ⚠️存 msg **对象**而不是 msgIdx：往上滑补上一章会把所有消息下标整体挪位
+           （见 readerMarkBg 里那条「别把 msgIdx 揣在兜里跨过 await」的注释），存下标
+           的话气泡会画到别的章去。渲染时现查 chatMessages.indexOf(msg)。 */
+        var readingPending = [];
+        var readingPendingSeq = 0;
+        var readingPendingTimer = null;
+        function readingSyncBusy() {
+            readingCommenting = readingPending.length > 0;
+            if (!readingCommenting) readingAbortCtl = null;
+        }
+        function readingAddPending(p) {
+            readingPending.push(p);
+            readingAbortCtl = p.ctl;
+            readingSyncBusy();
+            if (!readingPendingTimer) readingPendingTimer = setInterval(readingUpdatePendingTimers, 1000);
+        }
+        function readingRemovePending(id) {
+            for (var i = 0; i < readingPending.length; i++) {
+                if (readingPending[i].id === id) { readingPending.splice(i, 1); break; }
+            }
+            readingSyncBusy();
+            if (!readingPending.length && readingPendingTimer) { clearInterval(readingPendingTimer); readingPendingTimer = null; }
+        }
+        function readingAbortPending(id) {
+            for (var i = 0; i < readingPending.length; i++) {
+                if (readingPending[i].id === id) { try { readingPending[i].ctl.abort(); } catch (e) {} break; }
+            }
+        }
+        // 同一段已经在生成 → 别重复发（双击手滑、或点了「讨论」没立刻反应又点一次）
+        function readingIsPending(msg, pNum) {
+            for (var i = 0; i < readingPending.length; i++) {
+                if (readingPending[i].msg === msg && readingPending[i].pNum === pNum) return true;
+            }
+            return false;
+        }
+        // 首字到之前那个自增秒数：只改那几个字，不整条重渲——重渲会把别的段正在流的答案一起重画
+        function readingUpdatePendingTimers() {
+            var nodes = document.querySelectorAll('.rd-stream-bq.rd-pending[data-pid]');
+            for (var i = 0; i < nodes.length; i++) {
+                var id = parseInt(nodes[i].getAttribute('data-pid'), 10);
+                var pp = null;
+                for (var j = 0; j < readingPending.length; j++) { if (readingPending[j].id === id) { pp = readingPending[j]; break; } }
+                if (!pp) continue;
+                var lbl = nodes[i].querySelector('.rd-stream-sec');
+                if (lbl) lbl.textContent = ' ' + chatFmtElapsed(Math.floor((Date.now() - pp.t0) / 1000));
+            }
+        }
+        /* 气泡的 HTML：占位态和流式态**同一套骨架**，渲染函数和流式增量共用一份，
+           免得两处各写一遍、日子久了长歪（翻译那边就是分两处写的，改一处忘一处过）。 */
+        function readingPendingHtml(pp) {
+            var body = (pp.partial || '').replace(/\[P\d+\]/gi, '');
+            var started = !!body.trim();
+            var h = '<blockquote class="rd-stream-bq' + (started ? '' : ' rd-pending') + '" data-pid="' + pp.id + '"' +
+                ' style="position:relative;margin:0.4em 0 0.6em;padding:6px 12px;border-left:3px solid var(--accent);background:var(--quote-bg, var(--accent-light));border-radius:0 8px 8px 0;font-size:0.92em;color:var(--text-sub);line-height:1.6">' +
+                '<button class="rd-stream-stop" type="button" onclick="readingAbortPending(' + pp.id + ')">停止</button>';
+            if (pp.question) h += '<div class="reading-q"><span class="reading-q-name">汐</span>：' + esc(pp.question) + '</div>';
+            h += '<div class="rd-stream-ans">';
+            h += started
+                ? (renderText(body) + '<span class="rd-stream-cursor">▍</span>')
+                : ('<span class="rd-stream-ph">' + (pp.kind === 'comment' ? '点评中…' : '思考中…') +
+                   '<span class="rd-stream-sec"> ' + chatFmtElapsed(Math.floor((Date.now() - pp.t0) / 1000)) + '</span>' +
+                   '<span class="rd-stream-cursor">▍</span></span>');
+            h += '</div></blockquote>';
+            return h;
+        }
+        /* 流式：把增量就地写进该段的气泡（首帧从「思考中…」切成答案布局）。
+           ⚠️只在气泡**已经露在视口里**时才 scrollIntoView('nearest')：并发之后，
+           你可能问了 P10 又滑到 P30 去问，P10 出字时把你拽回去是最烦人的。
+           'nearest' 对完全可见的元素是空操作，所以「正在看的那条边长边跟」照旧成立。 */
+        function readingRenderStream(pp) {
+            if (!pp) return;
+            var node = document.querySelector('.rd-stream-bq[data-pid="' + pp.id + '"]');
+            if (!node) return;
+            node.classList.remove('rd-pending');
+            var ans = node.querySelector('.rd-stream-ans');
+            if (!ans) return;
+            ans.innerHTML = renderText((pp.partial || '').replace(/\[P\d+\]/gi, '')) + '<span class="rd-stream-cursor">▍</span>';
+            var cont = document.getElementById('chatMessages');
+            if (!cont) return;
+            var r = node.getBoundingClientRect(), c = cont.getBoundingClientRect();
+            if (r.bottom > c.top && r.top < c.bottom) { try { node.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
+        }
 
+        /* 提问条开着时是什么状态。留着它，重渲之后才能把条子（连同打了一半的字）原样接回去
+           ——标背景是每讲完一条就整条重渲的，不接这一手，你双击弹出来的输入框会被下一条抹掉。 */
+        var _rdActbarState = null;   // {msg, pNum, anchor:'q'|'p', opts, text}
         function readingClearActbar() {
+            _rdActbarState = null;
             var bar = document.querySelector('.reading-actbar');
             if (bar) bar.remove();
             var act = document.querySelector('.reading-merged p[data-p].rp-active, .reading-merged blockquote[data-cp].rp-active');
             if (act) act.classList.remove('rp-active');
+        }
+        // 重渲后把提问条接回去（只在重渲前它确实开着时才调，见 readingRerenderMsg）
+        function readingRestoreActbar(msgEl, keep) {
+            if (!msgEl || !keep || !keep.st) return;
+            var st = keep.st;
+            var anchor = null;
+            if (st.anchor === 'q') {
+                var bqs = msgEl.querySelectorAll('.reading-merged blockquote[data-cp="' + st.pNum + '"]');
+                if (bqs.length) anchor = bqs[bqs.length - 1];
+            }
+            if (!anchor) anchor = msgEl.querySelector('.reading-merged p[data-p="' + st.pNum + '"]');
+            if (!anchor) return;
+            var idx = chatMessages.indexOf(st.msg);
+            if (idx < 0) return;
+            anchor.classList.add('rp-active');
+            var o = {};
+            for (var k in st.opts) o[k] = st.opts[k];
+            o.noFocus = true;   // 别把键盘顶起来：用户可能正在读，不是刚点开输入框
+            readingOpenAskBar(idx, st.pNum, anchor, keep.text || '', o);
         }
 
         // 共读：在 anchorEl 后面插入「问这一段」操作栏（原文段落、AI 回答块都能触发，复用同一套）
@@ -22950,6 +23067,12 @@ body {
                所以按钮固定叫「追问」、也不接长按那一手——留空点一下只是把光标放进输入框。 */
             var _bgCi = (opts && opts.bgCi != null && opts.bgCi >= 0) ? opts.bgCi : null;
             var _emptyLabel = _bgCi != null ? '追问' : (_isSocial ? '导读' : '背景');
+            // 记下「条子开在哪」，重渲后由 readingRestoreActbar 原样接回去（标背景边标边重渲时全靠它）
+            _rdActbarState = {
+                msg: chatMessages[msgIdx], pNum: pNum,
+                anchor: (anchorEl && anchorEl.tagName === 'BLOCKQUOTE') ? 'q' : 'p',
+                opts: (_bgCi != null ? { bgCi: _bgCi } : {})
+            };
             var inputHtml = '<textarea class="rp-ask" rows="1" placeholder="' +
                 (_bgCi != null ? '问问这个背景…' :
                  _isSocial ? '有问题就问…（留空＝导读，长按＝背景）' : '问问这一段…（留空＝背景，打字＝讨论）') +
@@ -22994,7 +23117,7 @@ body {
                 if (_bgCi != null) return;          // 背景追问模式没有第三态
                 if (!_isSocial) return;             // 小说留空点一下就是背景，不用长按这一手
                 if (input.value.trim()) return;     // 打了字＝讨论，长按不接管
-                if (readerBgRunning || readingCommenting) return;
+                if (readerBgRunning) return;   // 标背景一次只跑一轮；别的段在提问不影响（可并发）
                 _bgHoldAt = { x: e.clientX, y: e.clientY };
                 _bgHoldTimer = setTimeout(function () {
                     _bgHoldTimer = null; _bgArmed = true;
@@ -23026,7 +23149,12 @@ body {
             send.addEventListener('pointerleave', _bgDisarm);
             readingBindAskBox(input);
             readingBindCtxBox(bar);
-            if (prefill) { input.value = prefill; try { input.dispatchEvent(new Event('input')); } catch (e) {} try { input.focus(); } catch (e) {} }
+            // noFocus＝这是重渲后接回来的条子，只还字不抢焦点（用户多半正在读，不该顶起键盘）
+            if (prefill) {
+                input.value = prefill;
+                try { input.dispatchEvent(new Event('input')); } catch (e) {}
+                if (!(opts && opts.noFocus)) { try { input.focus(); } catch (e) {} }
+            }
         }
         // 提问失败后，把输入框带着原问题重新挂回该段下方（找该段最后一个问答块、没有就贴原文段）
         function readingReopenAskBar(msgIdx, pNum, question) {
@@ -23044,8 +23172,9 @@ body {
                 readingOpenAskBar(msgIdx, pNum, anchor, question);
             } catch (e) {}
         }
+        // ⚠️别在这里加「正在生成就 return」——那正是用户报的「一段在生成时双击别的段落没反应」。
+        // 可并发之后双击随时可用；同一段重复发由 readingIsPending 在 readingAskOne 里挡。
         function readingOnParaClick(pEl) {
-            if (readingCommenting) return;
             var wasActive = pEl.classList.contains('rp-active');
             readingClearActbar();
             if (wasActive) return; // 再点一次收起
@@ -23073,7 +23202,7 @@ body {
 
         // 双击 AI 回答 / 评论块：接着聊同一段，输入框插在该段问答串的最下面（贴着正在看的回答）
         function readingOnCommentClick(bqEl) {
-            if (readingCommenting) return;
+            if (bqEl.classList.contains('rd-stream-bq')) return;   // 正在生成的那个气泡本身不接双击
             var wasActive = bqEl.classList.contains('rp-active');
             readingClearActbar();
             if (wasActive) return; // 再点一次收起
@@ -23093,7 +23222,7 @@ body {
 
         // 长按 AI 回复块：弹出「删除 / 重新回答」操作条（删的就是按住的这一块）
         function readingOnBlockLongPress(bqEl) {
-            if (readingCommenting) return;
+            if (bqEl.classList.contains('rd-stream-bq')) return;   // 正在生成的气泡没什么可删/可重答的
             readingClearActbar();
             var msgEl = bqEl.closest('.chat-msg.ai');
             if (!msgEl || !msgEl.hasAttribute('data-idx')) return;
@@ -23147,8 +23276,8 @@ body {
         }
 
         function readingRegenBlock(msgIdx, pNum, ci) {
-            if (readingCommenting) return;
             var msg = chatMessages[msgIdx];
+            if (msg && readingIsPending(msg, pNum)) { showToast('这一段正在生成，等它完事再重答'); return; }
             if (!msg || typeof msg.content !== 'string') { readingClearActbar(); return; }
             var comments = readingModeParseComments(msg.content);
             var absIdx = readingFindCommentAbsIdx(comments, pNum, ci);
@@ -23175,7 +23304,6 @@ body {
 
         // 点「提问」：把操作条切换成一个小输入框，回车或「发送」提交
         function readingAskPrompt(msgIdx, pNum, btn) {
-            if (readingCommenting) return;
             var bar = btn.closest('.reading-actbar');
             if (!bar) return;
             bar.innerHTML = '<textarea class="rp-ask" rows="1" placeholder="问问这一段…（如：他这句话什么意思？）"></textarea>' +
@@ -23273,9 +23401,9 @@ body {
         }
 
         async function readingCommentOne(msgIdx, pNum, btn) {
-            if (readingCommenting) return;
             var msg = chatMessages[msgIdx];
             if (!msg || typeof msg.content !== 'string') { readingClearActbar(); return; }
+            if (readingIsPending(msg, pNum)) { showToast('这一段正在生成'); return; }
             var item = chatEnsureProvider();   // 中转站掉了先自动找回来，认不出才提示（见函数注释）
             var provId = document.getElementById('chatProviderSelect').value;
             if (!item || !chatSelectedModel) { alert(chatNoModelMsg()); return; }
@@ -23296,7 +23424,12 @@ body {
             var ctxPreface = '以下是小说原文节选' + (ctxTruncated ? '（因前文较长，仅提供距离目标段最近的部分）' : '');
             var userMsg = ctxPreface + '，[P' + pNum + '] 是我现在想听你聊聊的这一段：\n\n' + ctxLines.join('\n') +
                 '\n\n请只针对 [P' + pNum + '] 这一段写评论，格式为：[P' + pNum + '] 你的评论。只输出这一条，不要评论其它段落。';
-            readingCommenting = true;
+            // 一条进行中记录：占位/流式气泡由渲染函数从它画出来，重渲不会把气泡冲掉
+            var _pd = { id: ++readingPendingSeq, msg: msg, pNum: pNum, question: '', kind: 'comment',
+                        ctl: new AbortController(), t0: Date.now(), partial: '' };
+            readingAddPending(_pd);
+            readingClearActbar();
+            readingRerenderMsg(chatMessages.indexOf(msg));   // 画出「点评中…」占位
             if (btn) { btn.disabled = true; btn.textContent = '思考中…'; }
             try {
                 var baseUrl = getBaseUrl(item.url);
@@ -23307,13 +23440,22 @@ body {
                 // 人设：系统提示词框为空时静默兜底用蘑菇默认，使点段评论与主流程风格一致
                 var _spOne = document.getElementById('chatSysPrompt').value.trim();
                 if (!_spOne) _spOne = READING_MODE_DEFAULT_PERSONA;
+                var _clast = 0;
                 var content = (await chatStreamChat({
                     baseUrl: baseUrl, apiKey: apiKey, model: _cMdl, markUsed: true,
                     purpose: '共读点评',
+                    signal: _pd.ctl.signal,
                     messages: [
                         { role: 'system', content: _spOne + '\n\n' + READING_MODE_INSTRUCTION },
                         { role: 'user', content: userMsg }
-                    ]
+                    ],
+                    onDelta: function (full) {
+                        _pd.partial = full;                  // 存一份，并发重渲时不会被占位冲掉
+                        var now = Date.now();
+                        if (now - _clast < 60) return;       // 节流；最终文本由下面整条重渲收尾
+                        _clast = now;
+                        readingRenderStream(_pd);
+                    }
                 })).trim();
                 if (!content) throw new Error('空回复');
                 var parsed = readingModeParseComments(content);
@@ -23323,13 +23465,15 @@ body {
                 if (!commentText) commentText = content.replace(/\[P\d+\]/gi, '').trim();
                 msg.content += '\n[P' + pNum + '] ' + commentText;
                 chatSaveCurrentConv(true);
-                readingClearActbar();
-                readingRerenderMsg(msgIdx, pNum);
+                readingRemovePending(_pd.id);
+                // ⚠️下标现查：这一轮几十秒里用户可能往上滑补了上一章，所有消息整体挪过位
+                readingRerenderMsg(chatMessages.indexOf(msg), pNum);
             } catch (e) {
+                readingRemovePending(_pd.id);
+                readingRerenderMsg(chatMessages.indexOf(msg));   // 收掉占位气泡
+                if (e.name === 'AbortError') return;             // 用户自己按的停止，不弹错
                 if (btn) { btn.disabled = false; btn.textContent = '重试'; }
                 alert('评论失败：' + (e.message || e));
-            } finally {
-                readingCommenting = false;
             }
         }
 
@@ -23337,8 +23481,10 @@ body {
         /* opts.guide = true 时走「社科书整节导读」：pNum 传的是你点的那一段，
            函数内会把它扩成所在的整个小节，并把导读挂到小节的小标题后面（重读时先看导读再看正文）。
            其余一切——流式小气泡、停止按钮、reader_qa 落盘同步、读痕、整条重渲——全部复用，不另起一套。 */
+        /* ⚠️别在这里加「正在生成就 return / 就 abort 上一笔」——可并发之后，中止上一笔要按它
+           自己气泡上的「停止」，这里挡回去等于又把并发焊死了。重复发同一段由下面的
+           readingIsPending 挡（要等 guide 把 pNum 改写成小标题段号之后才判得准）。 */
         async function readingAskOne(msgIdx, pNum, question, bar, opts) {
-            if (readingCommenting) { if (readingAbortCtl) readingAbortCtl.abort(); return; }
             question = (question || '').trim();
             var input = bar && bar.querySelector('.rp-ask');
             if (!question) { if (input) input.focus(); return; }
@@ -23450,57 +23596,17 @@ body {
                 commentBlock + priorQaBlock +
                 '\n\n我的问题是：' + question;
             }
-            readingCommenting = true;
-            readingAbortCtl = new AbortController();
-            readingClearActbar();   // 发出后立刻收起输入小条——答案改为在段落下方流式显示，进度肉眼可见，不再需要输入框占位和「思考中…」正计时
-            // 流式答案小气泡：发出即出现（先显示「思考中…」占位给即时反馈），随后边生成边把答案增量渲染进去；
-            // 只渲染答案本身、不重渲整条消息（长章节防卡）；右上角「停止」可中止；全部到齐后由下方整条重渲替换成正式评论块。
-            var _stm = { node: null, ans: null, follow: true, last: 0, scrollH: null, t0: 0, phTimer: null, started: false };
-            function _stmStopPhTimer() { if (_stm.phTimer) { clearInterval(_stm.phTimer); _stm.phTimer = null; } }
-            function _stmEnsure() {
-                if (_stm.node) return;
-                var msgEl = document.querySelector('.chat-msg.ai[data-idx="' + msgIdx + '"]');
-                var merged = msgEl && msgEl.querySelector('.reading-merged');
-                if (!merged) return;   // 找不到锚点（如翻译模式结构不同）就不流式
-                var anchor = null;
-                var bqs = merged.querySelectorAll('blockquote[data-cp="' + pNum + '"]');
-                if (bqs.length) anchor = bqs[bqs.length - 1];
-                else anchor = merged.querySelector('p[data-p="' + pNum + '"]');
-                if (!anchor) return;
-                var bq = document.createElement('blockquote');
-                bq.setAttribute('style', 'position:relative;margin:0.4em 0 0.6em;padding:6px 12px;border-left:3px solid var(--accent);background:var(--quote-bg, var(--accent-light));border-radius:0 8px 8px 0;font-size:0.92em;color:var(--text-sub);line-height:1.6');
-                bq.innerHTML = '<button class="rd-stream-stop" type="button">停止</button>'
-                    + '<div class="reading-q"><span class="reading-q-name">汐</span>：' + esc(question) + '</div>'
-                    + '<div class="rd-stream-ans"><span class="rd-stream-ph">思考中…<span class="rd-stream-sec"></span><span class="rd-stream-cursor">▍</span></span></div>';
-                anchor.parentNode.insertBefore(bq, anchor.nextSibling);
-                _stm.node = bq; _stm.ans = bq.querySelector('.rd-stream-ans');
-                var stopBtn = bq.querySelector('.rd-stream-stop');
-                if (stopBtn) stopBtn.onclick = function (e) { e.stopPropagation(); if (readingAbortCtl) readingAbortCtl.abort(); };
-                var cont = document.getElementById('chatMessages');
-                if (cont) { _stm.scrollH = function () { _stm.follow = (cont.scrollHeight - cont.scrollTop - cont.clientHeight) < 80; }; cont.addEventListener('scroll', _stm.scrollH, { passive: true }); }
-                try { bq.scrollIntoView({ block: 'nearest' }); } catch (e) {}
-                // 首字出来前，「思考中…」后面挂个自增秒数，减轻干等的感觉；首字一到（_stmRender）就停。
-                _stm.t0 = Date.now();
-                _stm.phTimer = setInterval(function () {
-                    if (_stm.started) { _stmStopPhTimer(); return; }
-                    var sec = _stm.node && _stm.node.querySelector('.rd-stream-sec');
-                    if (sec) sec.textContent = ' ' + chatFmtElapsed(Math.floor((Date.now() - _stm.t0) / 1000));
-                }, 1000);
-            }
-            function _stmRender(full) {
-                _stmEnsure();
-                if (!_stm.ans) return;
-                _stm.started = true; _stmStopPhTimer();   // 首字已到，撤掉「思考中…计时」占位
-                _stm.ans.innerHTML = renderText((full || '').replace(/\[P\d+\]/gi, '')) + '<span class="rd-stream-cursor">▍</span>';
-                if (_stm.follow && _stm.node) { try { _stm.node.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
-            }
-            function _stmKill() {
-                _stmStopPhTimer();
-                if (_stm.scrollH) { var c = document.getElementById('chatMessages'); if (c) c.removeEventListener('scroll', _stm.scrollH); _stm.scrollH = null; }
-                if (_stm.node && _stm.node.parentNode) _stm.node.parentNode.removeChild(_stm.node);
-                _stm.node = null; _stm.ans = null;
-            }
-            _stmEnsure();   // 立刻出占位气泡
+            // 同一段已经在生成 → 别重复发（pNum 这时才定下来：导读会把它改写成小标题段号）
+            if (readingIsPending(msg, pNum)) { showToast('这一段正在生成'); readingClearActbar(); return; }
+            /* 一条进行中记录。气泡（「思考中…」占位 → 流式答案 → 正式问答块）全部由
+               readingModeRenderMerged 从这条记录画出来——**不再手工 insertBefore**。
+               这一条就是并发的关键：标背景边标边整条重渲时，别的段正在流的答案照样还在。 */
+            var _pd = { id: ++readingPendingSeq, msg: msg, pNum: pNum, question: question, kind: 'ask',
+                        ctl: new AbortController(), t0: Date.now(), partial: '' };
+            readingAddPending(_pd);
+            readingClearActbar();   // 发出后立刻收起输入小条——进度在段落下方的气泡里看得见，不用它占位了
+            readingRerenderMsg(chatMessages.indexOf(msg));   // 立刻画出占位气泡
+            var _askLast = 0;
             try {
                 var baseUrl = getBaseUrl(item.url);
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
@@ -23540,7 +23646,7 @@ body {
                     // 阅读模式没有自动压缩摘要：开了「自动总结前情」才按需补摘要（已存的跳过）；没开就只发已备好的，不新烧 API
                     try {
                         var _genOK = readerSummaryEnabled();
-                        _summaryLines = await readerEnsureSummaries(readerBookId, msg.readerChapter, READER_SUMMARY_LOOKBACK, readingAbortCtl.signal, _genOK);
+                        _summaryLines = await readerEnsureSummaries(readerBookId, msg.readerChapter, READER_SUMMARY_LOOKBACK, _pd.ctl.signal, _genOK);
                     } catch (eSum) { if (eSum && eSum.name === 'AbortError') throw eSum; _summaryLines = []; }
                 }
                 // 走的是另外两条分支（没有记忆表）时，整份都算「前文摘要」
@@ -23583,15 +23689,15 @@ body {
                     purpose: _guide ? '社科导读' : (_bgCi != null ? '背景追问' : '共读提问'),
                     messages: _askMsgs,
                     parts: _parts,
-                    signal: readingAbortCtl.signal,
+                    signal: _pd.ctl.signal,
                     onDelta: function (full) {
+                        _pd.partial = full;                 // 存一份，并发重渲时不会被占位冲掉
                         var now = Date.now();
-                        if (now - _stm.last < 60) return;   // 节流：最多约每 60ms 渲一次；最终文本下面会整体重渲，漏掉末段无妨
-                        _stm.last = now;
-                        _stmRender(full);
+                        if (now - _askLast < 60) return;    // 节流：最多约每 60ms 渲一次；最终文本下面会整体重渲，漏掉末段无妨
+                        _askLast = now;
+                        readingRenderStream(_pd);
                     }
                 })).trim();
-                _stmKill();   // 收尾：移除临时气泡 + 滚动监听（下面会整条重渲出正式评论块）
                 // 去掉段落标记，并把答案内部的空行折叠为单换行——
                 // 否则空行会被 readingModeParseComments 当作该段评论的结束，
                 // 导致答案被丢到整条消息末尾的 trailing 区而非贴在本段下方。
@@ -23601,27 +23707,22 @@ body {
                 // 问题与答案之间只用单换行，确保它们仍属于同一个 [Pn] 评论块。
                 msg.content += '\n[P' + pNum + '] 汐：' + question + '\n' + answer;
                 chatSaveCurrentConv(true);
-                readerPersistQA(msgIdx); // 阅读模式：把该章问答整体抽出存进可同步的 reader_qa
-                readingAddQuestionBookmark(msgIdx, pNum, question);
-                readingClearActbar();
-                readingRerenderMsg(msgIdx, pNum);
+                /* ⚠️下标必须现查，别用进函数时那个 msgIdx：这一笔几十秒，期间只要往上滑补了
+                   上一章，所有消息下标就整体挪过位（同 readerMarkBg 里那条注释的坑）。 */
+                var _mi = chatMessages.indexOf(msg);
+                readerPersistQA(_mi); // 阅读模式：把该章问答整体抽出存进可同步的 reader_qa
+                readingAddQuestionBookmark(_mi, pNum, question);
+                readingRemovePending(_pd.id);
+                readingRerenderMsg(_mi, pNum);
             } catch (e) {
+                readingRemovePending(_pd.id);
+                var _mi2 = chatMessages.indexOf(msg);
+                if (_mi2 >= 0) readingRerenderMsg(_mi2);   // 收掉占位/流式气泡
                 if (e.name !== 'AbortError') {
                     alert('提问失败：' + (e.message || e));
                     // 把刚才的问题塞回输入框，别让用户白打一遍（中止是用户主动的，不用恢复）
-                    readingReopenAskBar(msgIdx, pNum, question);
+                    if (_mi2 >= 0) readingReopenAskBar(_mi2, pNum, question);
                 }
-            } finally {
-                // 兜底清理流式气泡 + 滚动监听（中止/报错时正式重渲不会发生，必须自己收尾；成功路径里已 _stmKill 过，这里再清一次也无害）
-                try {
-                    if (_stm) {
-                        if (_stm.phTimer) { clearInterval(_stm.phTimer); _stm.phTimer = null; }
-                        if (_stm.scrollH) { var _sc = document.getElementById('chatMessages'); if (_sc) _sc.removeEventListener('scroll', _stm.scrollH); }
-                        if (_stm.node && _stm.node.parentNode) _stm.node.parentNode.removeChild(_stm.node);
-                    }
-                } catch (e) {}
-                readingCommenting = false;
-                readingAbortCtl = null;
             }
         }
 
@@ -24007,7 +24108,9 @@ body {
                 if (confirm('这一章正在标背景，要停下吗？') && readerBgAbort) readerBgAbort.abort();
                 return;
             }
-            if (readingCommenting) { showToast('正在生成回答，稍等一下'); return; }
+            /* ⚠️这里原来有一句「readingCommenting 就挡回去」，2026-07-30 去掉了：
+               提问改成可并发之后，气泡由渲染函数从数据里画，标背景那一路的整条重渲
+               不再会把正在流的答案冲掉，两件事可以同时跑。 */
             var b = rbGetBook(bookId); if (!b || !b.chapters[chapIdx]) return;
             var fileKey = readerBookKey(bookId); if (!fileKey) return;
             // 再点＝接着标，不清空。跑到一半失败/中断是常事，不该让用户在
@@ -24161,8 +24264,18 @@ body {
             if (!old) return;
             var lastAiIdx = -1;
             for (var i = chatMessages.length - 1; i >= 0; i--) { if (chatMessages[i].role === 'assistant') { lastAiIdx = i; break; } }
+            /* 保住正在开着的提问条：标背景是「每讲完一条就整条重渲」的，不接这一手，
+               你双击弹出来的输入框（连同打了一半的字）会被下一条背景无声抹掉——
+               这正是用户报的「标背景时没法双击别的段落」的另一半。 */
+            var _keepBar = null;
+            var _oldBar = old.querySelector('.reading-actbar');
+            if (_oldBar && _rdActbarState && chatMessages.indexOf(_rdActbarState.msg) === msgIdx) {
+                var _bi = _oldBar.querySelector('.rp-ask');
+                _keepBar = { st: _rdActbarState, text: _bi ? _bi.value : '' };
+            }
             var fresh = chatBuildMsgEl('ai', chatMessages[msgIdx].content, chatMessages[msgIdx].thinking, msgIdx, msgIdx === lastAiIdx);
             old.replaceWith(fresh);
+            if (_keepBar) readingRestoreActbar(fresh, _keepBar);
             if (focusP) {
                 // 多轮共读/翻译后，要定位到「我们刚聊的那条」——也就是该段最后一个问答块，
                 // 而不是上方的原文段落，否则每次生成完都落在原文、还得手动往下翻找。
@@ -26153,7 +26266,9 @@ body {
             var newBody = (cutTo >= 0 || start > 0) ? lines.slice(start).join('\n').replace(/^\s+/, '') : body;
             return { title: title, body: newBody };
         }
-        function readingModeRenderMerged(originalText, aiText) {
+        /* msgIdx（可选）：传了才画「正在生成」的气泡。只有 chatBuildMsgEl 那条路有真下标，
+           章节流式渲染那两处传不了——那会儿这条消息还没进数组，也不会有针对它的点段提问。 */
+        function readingModeRenderMerged(originalText, aiText, msgIdx) {
             // 原文段落的 <p> 串只跟原文有关，与 AI 文本无关 → 同一章流式期间只算一次
             // 人名名单也算进缓存签名：名单改了要重包（名单一直挂 span，亮不亮由 CSS class 管，所以开关切换不必重排）
             var _namesSig = readingGetNames().join('|');
@@ -26199,6 +26314,18 @@ body {
                 }
             }
 
+            /* 进行中的提问/点评（可并发多段），按段号归位。⚠️比对用 chatMessages.indexOf(p.msg)
+               而不是记在记录里的下标——补上一章会让所有下标整体挪位。 */
+            var pendByP = {};
+            if (typeof msgIdx === 'number' && readingPending.length) {
+                for (var pi = 0; pi < readingPending.length; pi++) {
+                    var pp = readingPending[pi];
+                    if (chatMessages.indexOf(pp.msg) !== msgIdx) continue;
+                    if (!pendByP[pp.pNum]) pendByP[pp.pNum] = [];
+                    pendByP[pp.pNum].push(pp);
+                }
+            }
+
             var html = '<div class="reading-merged">';
             for (var j = 0; j < pHtml.length; j++) {
                 var pNum = j + 1;
@@ -26231,6 +26358,10 @@ body {
                         var _isBg = _qm && _cmtRaw.replace(/^\s*汐：/, '').indexOf(BG_Q_PREFIX) === 0;
                         html += '<blockquote data-cp="' + pNum + '" data-ci="' + k + '"' + (_isBg ? ' data-bg="1"' : '') + ' style="margin:0.4em 0 0.6em;padding:6px 12px;border-left:3px solid var(--accent);background:var(--quote-bg, var(--accent-light));border-radius:0 8px 8px 0;font-size:0.92em;color:var(--text-sub);line-height:1.6">' + _cmtRendered + '</blockquote>';
                     }
+                }
+                // 正在生成的气泡接在该段已有问答的最后（与生成完之后的位置一致，不会跳）
+                if (pendByP[pNum]) {
+                    for (var pk = 0; pk < pendByP[pNum].length; pk++) html += readingPendingHtml(pendByP[pNum][pk]);
                 }
             }
             if (trailingComments.length > 0) {
