@@ -105,6 +105,27 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     });
     eq('导进来时就是干净的，不用事后再清一遍', E.body, '太史公的成长之路\n他生在龙门……');
 
+    /* ── F 组：⚠️病根——<head><title> 不许漏进正文 ──────────────────
+     * 用户追问「这是原文带的，还是因为导入 toolbox 才有的问题呀」，查下来是**两边都有份**：
+     * 「未知」这三个字确实是那本 epub 自带的（每页 <head><title>未知</title>，打包工具没填
+     * 标题字段），但它**本不该出现在正文里**——老的 rbHtmlToText 只剥 script/style、没剥 head，
+     * 把网页的「标签页标题」当成正文捞了进来。这一条是本地的 bug，修在这儿才是治根；
+     * 上面那份占位词名单只是给「已经导进来的书」擦屁股用的。 */
+    const F = await page.evaluate(() => {
+        const 带head = '<?xml version="1.0"?><html><head>\n<title>未知</title>\n<link rel="stylesheet" href="a.css"/>\n</head><body><h1> 认识司马迁</h1><p>太史公自序里说……</p></body></html>';
+        const 无head = '<div><h2>某章</h2><p>正文。</p></div>';
+        const 半个head = '<head><title>坏结构</title><body><p>正文还在。</p></body>';   // 只有开标签，缺 </head>
+        return {
+            带head: rbHtmlToText(带head),
+            无head: rbHtmlToText(无head),
+            半个: rbHtmlToText(半个head)
+        };
+    });
+    ok('⚠️<head><title> 不再漏进正文（病根）', !/未知/.test(F.带head), JSON.stringify(F.带head));
+    eq('正文本身一字不差', F.带head, '认识司马迁\n太史公自序里说……');
+    eq('没有 head 的片段照常处理', F.无head, '某章\n正文。');
+    ok('⚠️head 缺一半时不删（宁可留垃圾也别吞正文）', /正文还在/.test(F.半个), JSON.stringify(F.半个));
+
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();

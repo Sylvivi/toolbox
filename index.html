@@ -22455,7 +22455,14 @@ body {
             return chapters.filter(function (c) { return c.body.length > 0; });
         }
         function rbHtmlToText(html) {
-            var text = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+            /* ⚠️先把整个 <head> 剥掉（2026-07-30 加）。它里面的 <title> 是**网页标签页的标题**、
+               不是正文，可老代码只剥了 script/style，于是 <title> 的文字被当成正文第一行捞了进来。
+               用户报的「每一章第二行都有个未知」就是这么来的：那本 epub 每页
+               <head><title>未知</title></head>（打包工具没填标题字段），于是每章正文开头
+               白多一行「未知」。这是**本地这一侧的 bug**，不是书的内容有问题。
+               ⚠️只在 <head> 成对出现时才删，缺一半就不动，免得把正文吞掉。 */
+            var text = html.replace(/<head[\s\S]*?<\/head>/gi, '');
+            text = text.replace(/<script[\s\S]*?<\/script>/gi, '');
             text = text.replace(/<style[\s\S]*?<\/style>/gi, '');
             text = text.replace(/<\/(p|div|h[1-6]|li|tr|blockquote|br\s*\/?)>/gi, '\n');
             text = text.replace(/<br\s*\/?>/gi, '\n');
