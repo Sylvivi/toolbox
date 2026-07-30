@@ -19571,14 +19571,62 @@ body {
         }
 
         // 按需下载整本：占位书点开时调，成功后用真数据替换占位并落盘。cb(fullBook|false)
-        function bkSyncDownload(book, cb) {
-            var cfg = bkSyncCfg(); if (!cfg) { if (cb) cb(false); return; }
+        var BK_DL_STALL_MS = 60000;   // 60 秒没有任何新字节 = 判定卡死（不是"总耗时上限"：慢但在动的网络不该被掐）
+        function _bkMB(n) { return (n / 1048576).toFixed(1) + 'M'; }
+        /* 下载一本书的正文。cb(full | false, 失败原因)；onProg(已下字节, 总字节) 每收到一块回调一次。
+         * 返回 AbortController，调用方可以 .abort() 主动停下（书架上那个「停止」）。
+         *
+         * ⚠️为什么要流式读、不能再用 r.json()（2026-07-30 改）：用户报「大文件手机同步半天下不来」，
+         * 而老代码是 `fetch().then(r => r.json())` —— 三个毛病叠在一起，最难受的不是慢：
+         *   ① 没有进度：r.json() 要等整包下完才动，中间零反馈，分不清在下/卡死/早就失败了；
+         *   ② 没有超时：手机网络一卡那个 fetch 永远挂着（跟 chatStreamChat 那个坑同类）；
+         *   ③ 失败原因全丢：`.catch(function(){ cb(false); })` 一个字都不留，只能看到"下载失败"。
+         * ⚠️总字节必须读 X-Raw-Length，不能读 Content-Length：Caddy 给这条响应开了 gzip，
+         *   Content-Length 是「压缩后」的大小（而且边压边发时干脆没有这个头、走 chunked），
+         *   可 response.body 流里读到的是「解压后」的字节 —— 两个数对不上，进度条会冲过 100%。
+         *   服务端 books.py 的 _json 里专门加了 X-Raw-Length + Access-Control-Expose-Headers（跨域必须显式 expose）。 */
+        function bkSyncDownload(book, cb, onProg) {
+            var cfg = bkSyncCfg(); if (!cfg) { if (cb) cb(false, '没配书籍服务器'); return null; }
             var fk = book._fileKey || bkSyncKey(book);
-            fetch(cfg.url + '/get?key=' + encodeURIComponent(fk), { headers: bkSyncHeaders(cfg) })
-                .then(function (r) { return r.ok ? r.json() : null; })
-                .then(function (d) {
+            var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+            var finished = false, stalled = false, stallTimer = null;
+            function armStall() {   // 每收到一块就重新上闹钟：卡住的判据是「多久没动」，不是「跑了多久」
+                if (!ctl) return;
+                if (stallTimer) clearTimeout(stallTimer);
+                stallTimer = setTimeout(function () {
+                    if (!finished) { stalled = true; try { ctl.abort(); } catch (e) {} }
+                }, BK_DL_STALL_MS);
+            }
+            function disarm() { finished = true; if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; } }
+            var opt = { headers: bkSyncHeaders(cfg) };
+            if (ctl) opt.signal = ctl.signal;
+            armStall();
+            fetch(cfg.url + '/get?key=' + encodeURIComponent(fk), opt)
+                .then(function (r) {
+                    if (!r.ok) throw new Error('服务器返回 ' + r.status);
+                    var total = parseInt(r.headers.get('X-Raw-Length') || r.headers.get('Content-Length') || '0', 10) || 0;
+                    if (onProg) onProg(0, total);
+                    if (!r.body || !r.body.getReader) return r.text();   // 没有流式 API 的环境：退回一次性读，只是没进度
+                    var reader = r.body.getReader(), chunks = [], got = 0;
+                    return (function pump() {
+                        return reader.read().then(function (res) {
+                            if (res.done) {
+                                var buf = new Uint8Array(got), at = 0;
+                                for (var i = 0; i < chunks.length; i++) { buf.set(chunks[i], at); at += chunks[i].length; }
+                                return new TextDecoder('utf-8').decode(buf);
+                            }
+                            chunks.push(res.value); got += res.value.length;
+                            armStall();
+                            if (onProg) onProg(got, total);
+                            return pump();
+                        });
+                    })();
+                })
+                .then(function (txt) {
+                    disarm();
+                    var d = JSON.parse(txt);
                     var full = d && (d.book || d);
-                    if (!full || !full.chapters || !full.chapters.length) { if (cb) cb(false); return; }
+                    if (!full || !full.chapters || !full.chapters.length) { if (cb) cb(false, '服务器上这本书是空的'); return; }
                     full.id = 'bk_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6); // 本地新 id
                     delete full._remote; delete full._fileKey; delete full._nchap;
                     full._ts = (d && d.ts) || Date.now();   // 刚从云端拿的就是最新版，记下时间，别下一轮又重下一遍
@@ -19591,7 +19639,16 @@ body {
                     rbSave();
                     if (cb) cb(full);
                 })
-                .catch(function () { if (cb) cb(false); });
+                .catch(function (e) {
+                    disarm();
+                    // ⚠️三种失败必须分开说：她主动停 / 网络卡死 / 真出错。含糊一句「下载失败」会让她
+                    // 顺着错的方向反复试（跟收藏模型那次「A 坏了却报 B」是同一类账）。
+                    var msg = stalled ? '网络 ' + Math.round(BK_DL_STALL_MS / 1000) + ' 秒没响应'
+                        : ((e && e.name === 'AbortError') ? '已停止'
+                            : ((e && e.message) || '网络错误'));
+                    if (cb) cb(false, msg);
+                });
+            return ctl;
         }
         // 上传一本（导书自动 / 手动全上传）：静默，失败重试一次
         function bkSyncPush(book, _retry) {
@@ -21586,6 +21643,8 @@ body {
             }
         }
 
+        var _bkDlCtl = null;   // 当前正在下载那本书的句柄，供「停止」用
+        function rbCancelDownload() { if (_bkDlCtl) { try { _bkDlCtl.abort(); } catch (e) {} } }
         function rbOpenBook(id) {
             rbActiveBookId = id;
             var b = rbGetBook(id);
@@ -21596,13 +21655,30 @@ body {
                 document.getElementById('rbChapterView').style.display = '';
                 document.getElementById('rbBookTitle').textContent = rbBookNiceName(b);
                 var cl = document.getElementById('rbChapterList');
-                if (cl) cl.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:34px 0">☁️ 正在从服务器下载「' + rbEsc(b.fileName) + '」…</div>';
-                bkSyncDownload(b, function (full) {
+                // 进度条 + 停止：一本大书要几十秒，只写「正在下载…」的话她分不清在动还是卡死（2026-07-30 加）
+                if (cl) cl.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:34px 14px;line-height:1.9">'
+                    + '☁️ 正在从服务器下载<br>「' + rbEsc(b.fileName) + '」'
+                    + '<div style="margin:14px auto 8px;max-width:240px;height:6px;border-radius:3px;background:rgba(128,128,128,.25);overflow:hidden">'
+                    + '<div id="bkDlBar" style="height:100%;width:0;background:var(--accent);transition:width .18s"></div></div>'
+                    + '<div id="bkDlTxt">连接中…</div>'
+                    + '<div onclick="rbCancelDownload()" style="color:var(--accent);cursor:pointer;margin-top:10px">停止</div>'
+                    + '</div>';
+                _bkDlCtl = bkSyncDownload(b, function (full, err) {
+                    _bkDlCtl = null;
                     if (!full) {
-                        if (cl) cl.innerHTML = '<div style="text-align:center;color:var(--red);font-size:13px;padding:34px 0;line-height:1.8">下载失败<br>请检查书籍服务器配置或网络<br><span onclick="rbBackToShelf()" style="color:var(--accent);cursor:pointer">‹ 返回书架</span></div>';
+                        // ⚠️把原因写在脸上（网络没响应 / 已停止 / 服务器 500…），并给「重试」——
+                        // 老版本只说「下载失败，请检查配置或网络」，而配置其实好着，白让她去翻设置。
+                        if (cl) cl.innerHTML = '<div style="text-align:center;color:var(--red);font-size:13px;padding:34px 14px;line-height:1.9">'
+                            + '下载失败：' + rbEsc(err || '未知原因') + '<br>'
+                            + '<span onclick="rbOpenBook(\'' + b.id + '\')" style="color:var(--accent);cursor:pointer">↻ 重试</span>'
+                            + ' &nbsp;·&nbsp; <span onclick="rbBackToShelf()" style="color:var(--accent);cursor:pointer">‹ 返回书架</span></div>';
                         return;
                     }
                     rbOpenBook(full.id);  // 现在是真书，正常打开
+                }, function (got, total) {
+                    var bar = document.getElementById('bkDlBar'), txt = document.getElementById('bkDlTxt');
+                    if (bar && total) bar.style.width = Math.min(100, Math.round(got * 100 / total)) + '%';
+                    if (txt) txt.textContent = total ? ('已下 ' + _bkMB(got) + ' / 共 ' + _bkMB(total)) : ('已下 ' + _bkMB(got));
                 });
                 return;
             }
