@@ -25651,6 +25651,18 @@ body {
         // 收集 → 把提问按「同一段」聚成话题：一段问 1 次=单问(single)，连续追问≥2 次=追问串(thread)；划线(hl) 各自一条。
         // 阅读模式：提问读痕直接从同步可靠的 reader_qa 生成（与正文问答同源——正文里有问答，读痕就一定有），
         // 绕开跨设备易丢的 reading_bookmarks。按「章#段」聚成话题：一段问1次=单问、连续≥2次=追问串。
+        /* 一条读痕算哪一类（2026-07-30 加「导读」这一类）。用户：「能在读痕里的单问、
+           追问、划线里，再加一个导读分类吗，省得我去搜了，背景不用加」。
+           ⚠️导读是**独占**的一类，不再同时出现在单问/追问里——分类要是重叠，
+           「单问」里混着导读，等于这个筛选没起到筛的作用。
+           ⚠️只认真导读（GUIDE_Q_RE，见它上面的注释），别把用户自己打的
+           「导读这段讲的是什么」也归进来。
+           ⚠️背景（BG_Q_PREFIX）**故意不单列**，是用户明说的「背景不用加」——
+           它照旧留在单问/追问里，别顺手也给它开一类。 */
+        function _rdTraceTypeOf(qs, n) {
+            for (var i = 0; i < qs.length; i++) { if (GUIDE_Q_RE.test(qs[i] || '')) return 'guide'; }
+            return n >= 2 ? 'thread' : 'single';
+        }
         function rdTraceReaderAskEntries() {
             var entries = [];
             try {
@@ -25671,7 +25683,7 @@ body {
                     order.forEach(function (p) {
                         var g = groups[p];
                         var qas = g.map(function (it) { return { q: it.q, a: it.a || '' }; });
-                        entries.push({ type: g.length >= 2 ? 'thread' : 'single', msgIdx: null, chap: chap, p: p, qas: qas, count: g.length, sortTs: ts });
+                        entries.push({ type: _rdTraceTypeOf(g.map(function (it) { return it.q; }), g.length), msgIdx: null, chap: chap, p: p, qas: qas, count: g.length, sortTs: ts });
                     });
                 });
             } catch (e) {}
@@ -25701,7 +25713,7 @@ body {
                         return { q: a.q, a: ans, ts: a.ts, raw: a.raw };
                     });
                     var lastTs = g.reduce(function (m, a) { return Math.max(m, a.ts || 0); }, 0);
-                    entries.push({ type: g.length >= 2 ? 'thread' : 'single', msgIdx: g[0].msgIdx, chap: g[0].chap, p: g[0].p, qas: qas, count: g.length, sortTs: lastTs });
+                    entries.push({ type: _rdTraceTypeOf(g.map(function (a) { return a.q; }), g.length), msgIdx: g[0].msgIdx, chap: g[0].chap, p: g[0].p, qas: qas, count: g.length, sortTs: lastTs });
                 });
             }
             // 划线(hl)：两种模式都从 reading_highlights 取（阅读模式已按稳定键存+并集同步）
@@ -25732,10 +25744,10 @@ body {
                 body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">还没有读痕<br><span style="font-size:11px">看书时点一段去问问它、或选中文字划线，都会收进这里</span></div>';
                 return;
             }
-            var totalQ = 0, threadCnt = 0, hlCnt = 0, colorCnt = {};
+            var totalQ = 0, threadCnt = 0, hlCnt = 0, guideCnt = 0, colorCnt = {};
             entries.forEach(function (e) {
                 if (e.type === 'hl') { hlCnt++; colorCnt[e.color] = (colorCnt[e.color] || 0) + 1; }
-                else { totalQ += e.count; if (e.type === 'thread') threadCnt++; }
+                else { totalQ += e.count; if (e.type === 'thread') threadCnt++; if (e.type === 'guide') guideCnt++; }
             });
             var html = '';
             // 概览卡：提问为主角（大卡）；追问串 = 深聊话题数；划线为配角
@@ -25745,7 +25757,13 @@ body {
                 + '<div class="rd-trace-card"><div class="rd-tc-n">' + hlCnt + '</div><div class="rd-tc-l">划线</div></div>'
                 + '</div>';
             // 类型筛选 + 正/倒序
-            var types = [['all', '全部'], ['single', '单问'], ['thread', '追问'], ['hl', '划线']];
+            /* 「导读」这一格**只在真有导读时才出现**（跟下面的划线颜色点一个规矩）：
+               小说压根没有导读功能，常年摆一个点了必空的筛选按钮是纯噪音。
+               ⚠️三个概览卡不动——加第四张会把它们挤到 390px 屏幕上一行放不下，
+               而且导读本来就是问答，算进「提问」那张卡不算错。 */
+            var types = [['all', '全部'], ['single', '单问'], ['thread', '追问']];
+            if (guideCnt) types.push(['guide', '导读']);
+            types.push(['hl', '划线']);
             html += '<div class="rd-trace-chips">';
             types.forEach(function (t) { html += '<button class="rd-trace-chip' + (_rdTraceType === t[0] ? ' on' : '') + '" data-t="' + t[0] + '">' + t[1] + '</button>'; });
             html += '<button class="rd-trace-sort" id="rdTraceSortBtn">' + (_rdTraceDesc ? '↓ 倒序' : '↑ 正序') + '</button>';
@@ -25787,6 +25805,14 @@ body {
             if (e.type === 'thread') {
                 return '<div class="rd-trace-item rd-trace-thread" data-i="' + i + '">' + del
                     + '<div class="rd-trace-badge">🔥 追问 ×' + e.count + '</div>'
+                    + rdTraceQaHtml(e.qas)
+                    + '<div class="rd-trace-meta">' + meta + '</div></div>';
+            }
+            // 导读：给个小标，「全部」视图里也一眼认得出是它而不是自己问的
+            //（后面还追问过就顺带写上几次，跟追问串那条一个信息量）
+            if (e.type === 'guide') {
+                return '<div class="rd-trace-item rd-trace-thread" data-i="' + i + '">' + del
+                    + '<div class="rd-trace-badge">📖 导读' + (e.count > 1 ? ' · 追问 ×' + (e.count - 1) : '') + '</div>'
                     + rdTraceQaHtml(e.qas)
                     + '<div class="rd-trace-meta">' + meta + '</div></div>';
             }
@@ -25855,12 +25881,15 @@ body {
             var qLines = [], hLines = [];
             byRead.forEach(function (e) {
                 if (e.type === 'hl') { hLines.push('- [第 ' + e.p + ' 段] 「' + e.preview + '」' + (e.note ? '　✎ ' + e.note : '')); return; }
-                if (e.type === 'thread') {
-                    qLines.push('### 追问 ×' + e.count + ' · 第 ' + e.p + ' 段');
+                /* ⚠️判据是「这条有几问」，不能写 e.type === 'thread'：导读也是独立一类，
+                   而一条导读后面完全可能追问过好几轮，按 type 判会**只导出第一条、
+                   把追问全丢掉**（且是静默的，导出的文件看着正常）。 */
+                if (e.count >= 2) {
+                    qLines.push('### ' + (e.type === 'guide' ? '📖 导读 · 追问 ×' + (e.count - 1) : '追问 ×' + e.count) + ' · 第 ' + e.p + ' 段');
                     e.qas.forEach(function (x) { qLines.push('- **问：**' + x.q + (x.a ? '\n  **答：**' + x.a.replace(/\n+/g, ' ') : '')); });
                 } else {
                     var x = e.qas[0];
-                    qLines.push('- [第 ' + e.p + ' 段] **问：**' + x.q + (x.a ? '\n  **答：**' + x.a.replace(/\n+/g, ' ') : ''));
+                    qLines.push('- [第 ' + e.p + ' 段] ' + (e.type === 'guide' ? '📖 ' : '') + '**问：**' + x.q + (x.a ? '\n  **答：**' + x.a.replace(/\n+/g, ' ') : ''));
                 }
             });
             var md = '# 读痕 · ' + title + '\n\n';
