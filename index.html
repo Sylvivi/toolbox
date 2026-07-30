@@ -22330,13 +22330,22 @@ body {
             return { text: out.join('\n'), n: n };
         }
         // 正文开头那行就是章节名 → 从正文里删掉，交给章节名去显示
+        /* EPUB 每章开头常带一行元数据占位：「未知」＝作者/标题字段没填，「bookcover」＝封面页。
+           它挡在真标题前面，害得下面那句「正文第一行是不是就是章节名」认不出来——用户 2026-07-30
+           报的「每一章第二行都有个未知」就是它：P1 是阅读器加的章节名、P2 是这行占位、
+           P3 是正文里又重复一遍的章节名。
+           ⚠️名单写死这几个词，**别改成「短行就跳过」**。量过她真实书库：挡在标题前面的行共 111 处，
+           其中只有 31 处是这种占位，剩下 80 处是**真的上级标题**（梁衡那本每章前面的
+           「上篇 我的阅读」「中篇 我的写作」，欧·亨利那本的篇名），跳过就等于删掉真内容。
+           宁可少清，不能误删原文。 */
+        var RB_JUNK_HEAD_RE = /^(未知|unknown|bookcover|book-cover|封面|cover)$/i;
         function rbStripTitleInBody(title, body) {
             var t = String(title || '').trim();
             if (!t) return { body: String(body || ''), hit: false };
             var lines = String(body || '').split('\n'), i = 0;
-            while (i < lines.length && !lines[i].trim()) i++;
+            while (i < lines.length && (!lines[i].trim() || RB_JUNK_HEAD_RE.test(lines[i].trim()))) i++;
             if (i >= lines.length || lines[i].trim() !== t) return { body: String(body || ''), hit: false };
-            lines.splice(0, i + 1);
+            lines.splice(0, i + 1);   // 连同挡在前面的占位行一起删掉
             while (lines.length && !lines[0].trim()) lines.shift();
             return { body: lines.join('\n'), hit: true };
         }
@@ -22357,8 +22366,11 @@ body {
                 var s = rbStripTitleInBody(chs[i].title, r.text); if (s.hit) st.title++;
                 chs[i].body = s.body;
             }
-            // rawText 也得清——否则她哪天点一下「重新拆分」，半截段又原样长回来了
-            if (b && b.rawText) b.rawText = rbCleanDupParas(b.rawText).text;
+            // rawText 也得清——否则她哪天点一下「重新拆分」，半截段和占位行又原样长回来了
+            if (b && b.rawText) {
+                b.rawText = rbCleanDupParas(b.rawText).text
+                    .split('\n').filter(function (l) { return !RB_JUNK_HEAD_RE.test(l.trim()); }).join('\n');
+            }
             return st;
         }
         /* 章节拼回 rawText 专用：正文开头已经是章节名了就别再拼一遍。
@@ -22516,7 +22528,12 @@ body {
                         var firstLine = text.split('\n').find(function (l) { return l.trim().length > 0; });
                         title = (firstLine ? firstLine.substring(0, 80) : '') || fpath.split('/').pop();
                     }
-                    chapters.push({ title: title, body: text.trim() });
+                    /* 正文开头把标题（和挡在它前面的「未知/bookcover」占位行）剥掉，
+                       免得每章一进来就自带「占位行 + 重复一遍的章节名」两行垃圾——
+                       阅读器本来就会把 title 拼在正文最前面（readerChapterPair）。
+                       认不出来时原样保留，绝不瞎删。 */
+                    var _st = rbStripTitleInBody(title, text);
+                    chapters.push({ title: title, body: (_st.hit ? _st.body : text).trim() });
                 }
                 rbAddBook(file.name, file.size, 'epub', chapters, '');
             } catch (err) {
