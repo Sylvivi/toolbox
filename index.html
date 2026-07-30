@@ -21827,8 +21827,17 @@ body {
                     var _row = '<div class="' + cls + '" onclick="readerOpenChapter(\'' + b.id + '\',' + i + ')">'
                         + '<div class="rb-chap-info"><div class="rb-chap-title">' + rbEsc(ch.title) + '</div><div class="rb-chap-meta">'
                         + ch.body.length.toLocaleString() + ' 字' + (i === markCur ? ' · 在读' : '')
-                        + (_bgMap[i] ? ' · 🏛 已标 ' + _bgMap[i] + ' 条' : '')
-                        + (_gdMap[i] ? ' · 📖 已导读 ' + _gdMap[i] + ' 节' : '') + '</div></div>'
+                        /* ⚠️这一格只留「图标＋数字」，别再加「已标」「条」「已导读」「节」这些词
+                           （2026-07-30 瘦身）。原因不是嫌丑：.rb-chap-info 是 flex，标题和这串信息
+                           **同一行**，标题 flex:1 带省略号、这串 flex-shrink:0，所以**这里每多一个字，
+                           标题就被砍掉一个字**。知乎文集那种标题本身就是全部信息量（「【商业经济】
+                           教育家 - 为什么，这几年…？」），加上那四个词后只剩八九个字露在外面。
+                           图标自己已经把意思说完了。 */
+                        + (_bgMap[i] ? ' · 🏛 ' + _bgMap[i] : '')
+                        /* 导读只在「不止一节」时才带数字：没有小标题的书（知乎文集就是）整章
+                           算作一节，rbSectionOf 对无小标题的章返回 headP:1 的整章一节，所以那个
+                           数字永远是 1、一点信息都不带，纯占标题的地方。 */
+                        + (_gdMap[i] ? ' · 📖' + (_gdMap[i] > 1 ? ' ' + _gdMap[i] : '') : '') + '</div></div>'
                         + '<button class="rb-chap-append" onclick="event.stopPropagation();rbChapMenuOpen(\'' + b.id + '\',' + i + ',event)" title="更多">⋯</button></div>';
                     if (_subs && rbChapterHasSections(b, i)) {
                         var _hs = rbSectionRanges(b, i);
@@ -21856,9 +21865,12 @@ body {
                             for (var _w = 0; _w < _gdPs.length; _w++) {
                                 if (_gdPs[_w] >= _sc.p && _gdPs[_w] <= _sc.endP) { _sgd = true; break; }
                             }
-                            // 右侧那一格：有内容就显示内容，都没有才退回 P段号（跟背景原来的规矩一致）
+                            /* 右侧那一格：有内容就显示内容，都没有才退回 P段号（跟背景原来的规矩一致）。
+                               ⚠️「条」字跟着章行一起去掉了——两种行紧挨着，一个写「🏛 8」一个写
+                               「🏛 2 条」会很显眼；而且小节标题跟章标题一样是 flex:1 带省略号的，
+                               这一格每多一个字，标题就少露一个字。 */
                             var _secRight = (_sgd ? '📖' : '')
-                                + (_sn ? (_sgd ? ' ' : '') + '🏛 ' + _sn + ' 条' : (_sgd ? '' : 'P' + _sc.p));
+                                + (_sn ? (_sgd ? ' ' : '') + '🏛 ' + _sn : (_sgd ? '' : 'P' + _sc.p));
                             _row += '<div class="rb-sec" onclick="rbJumpSection(\'' + b.id + '\',' + i + ',' + _sc.p + ')">'
                                 + '<span class="rb-sec-title">' + rbEsc(_sc.title) + '</span>'
                                 + '<span class="rb-sec-p">' + _secRight + '</span>'

@@ -102,9 +102,9 @@ function putQA(fk, chap, items) {
         const meta = document.querySelector('#rbChapterList .rb-chap-meta').textContent;
         return { secs, meta };
     });
-    eq('导读和背景并排显示', C.secs[0], '📖 🏛 2 条');
-    eq('只有背景的那一节还是老样子', C.secs[1], '🏛 1 条');
-    ok('章行 meta 上背景和导读都写了', /🏛 已标 3 条/.test(C.meta) && /📖 已导读 1 节/.test(C.meta), C.meta);
+    eq('导读和背景并排显示', C.secs[0], '📖 🏛 2');
+    eq('只有背景的那一节只剩图标加数字', C.secs[1], '🏛 1');
+    ok('章行 meta 上背景和导读都写了', /🏛 3/.test(C.meta) && /📖/.test(C.meta), C.meta);
 
     /* ── D 组：⚠️导读挂在小标题那一段，不是节内正文 ─────────────────
      * readingAskOne 的导读分支把 pNum 改写成了 sec.headP，块就插在小标题后面。
@@ -137,7 +137,7 @@ function putQA(fk, chap, items) {
     ok('「导读这段讲的是什么？」不算导读', /^P\d+$/.test(E.secs[0]), JSON.stringify(E.secs));
     ok('「导读一下这节吧」也不算', /^P\d+$/.test(E.secs[1]), JSON.stringify(E.secs));
     eq('光秃秃的「导读」是真导读（没小节标题时就长这样）', E.secs[2], '📖');
-    ok('章行只数了那一条真导读', /📖 已导读 1 节/.test(E.meta), E.meta);
+    ok('章行只数了那一条真导读', /📖/.test(E.meta) && !/📖 \d/.test(E.meta), E.meta);
 
     /* ── F 组：一条导读都没有时，一个字都不多冒 ────────────────── */
     const F = await page.evaluate(() => {
@@ -147,7 +147,45 @@ function putQA(fk, chap, items) {
         return document.querySelector('#rbChapterList .rb-chap-meta').textContent;
     });
     ok('没做过导读的章节不显示 📖（极简：没有就不占地方）', !/📖/.test(F), F);
-    ok('背景照旧显示', /🏛 已标 1 条/.test(F), F);
+    ok('背景照旧显示', /🏛 1/.test(F), F);
+
+    /* ── H 组：⚠️章行那串信息要短，因为它直接吃标题的宽度 ──────────
+     * .rb-chap-info 是 flex，标题和这串信息**同一行**：标题 flex:1 带省略号、
+     * 这串 flex-shrink:0。所以这里每多一个字，标题就少露一个字。用户报的正是这个：
+     * 知乎文集标题本身就是全部信息量，加上「已标 N 条 · 已导读 N 节」后只剩八九个字。
+     * 「没小节的书导读数永远是 1」那条尤其要守——那个 1 一点信息都不带，纯占地方。 */
+    const H = await page.evaluate(() => {
+        // 知乎文集那种：长标题、没有任何小标题结构
+        const paras = [];
+        for (let i = 0; i < 12; i++) paras.push('文章正文段落，' + '话'.repeat(90));
+        const book = {
+            id: 'bk_z', fileName: '知乎存档.txt', fileSize: 33,
+            chapters: [{ title: '【商业经济】教育家 - 为什么，这几年民办教育集体退潮了？', body: paras.join('\n') }]
+        };
+        window.rbBooks = [book]; window.rbGetBook = () => book;
+        localStorage.setItem('reading_book_kind', JSON.stringify({ '知乎存档.txt|33': 'social' }));
+        window.rbActiveBookId = 'bk_z'; window.rbPickForReader = true;
+        document.getElementById('rbChapterSearch').value = '';
+        const fk = readerBookKey('bk_z');
+        const all = readerQAAll();
+        // 没小标题的章：rbSectionOf 把整章当作一节，导读挂在 P1，所以只可能有 1 条
+        all[fk] = { 0: { ts: Date.now(), list: [
+            { p: 1, q: '导读', a: '这篇讲的是……' },
+            { p: 4, q: '背景：民办教育促进法', a: '内容' },
+            { p: 7, q: '背景：双减', a: '内容' },
+            { p: 9, q: '背景：VIE 架构', a: '内容' }
+        ] } };
+        localStorage.setItem('reader_qa', JSON.stringify(all));
+        rbRenderChapters();
+        const meta = document.querySelector('#rbChapterList .rb-chap-meta').textContent;
+        return { meta, 有小节行: document.querySelectorAll('#rbChapterList .rb-sec').length };
+    });
+    eq('没小标题的章不展开小节（导读整章算一节）', H.有小节行, 0);
+    ok('⚠️「已标」「条」「已导读」「节」这些词全去掉了（每个字都在吃标题宽度）',
+        !/已标|已导读|条|节/.test(H.meta), H.meta);
+    ok('⚠️没小节的书不显示那个恒为 1 的导读数（纯占地方）', !/📖\s*\d/.test(H.meta), H.meta);
+    ok('背景条数留着（这个数会变，有用）', /🏛 3/.test(H.meta), H.meta);
+    ok('整串信息压到 20 个字符以内（原来 34，标题被砍掉一半）', H.meta.length <= 20, H.meta + ' 共 ' + H.meta.length + ' 字符');
 
     /* ── G 组：小说（非社科书）不受影响 ───────────────────────────
      * 小说压根没有导读这个功能，目录也不展开小节，这一路必须一字未变。 */
