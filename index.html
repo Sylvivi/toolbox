@@ -3070,6 +3070,22 @@ body {
         body.reading-ls-on:not(.reading-ls-pd) .reading-merged .reading-quote.rq-wide .reading-quote-inner { text-decoration: none !important; }
         /* ② 短句被波浪/画框占住(ls-pd)→划线移到长句、跟着色叠，去掉短句的划线。 */
         body.reading-ls-pd .reading-merged .reading-quote:not(.rq-wide) .reading-quote-inner { text-decoration: none !important; }
+        /* ===== 引号套引号：里层只保留字体/颜色，装饰一律不再画第二遍（2026-07-30 加）=====
+           最常见的形状是书名号嵌在对话里——「我读了《红楼梦》」：外层对话铺一条波浪，里层书名又铺一条，
+           「红楼梦」底下就叠出两条波浪线；开「画框」则是框里套个小框（用户 2026-07-30 报「框套框」）。
+           ⚠️一律压里层、不看长短：外层是长句(rq-wide)时它自己的波浪/画框已被分工规则剥掉，此时留着里层的
+           反而变成「长对话里只有书名带波浪」，比叠两条更怪；宁可规则简单可预期。
+           ⚠️text-decoration 只是为了不让里层自己再起一条虚线——外层内层文字上的划线是"传播"下来的、
+           子元素写 none 也擦不掉（正是我们要的：一条线连着穿过书名，不断开）。
+           ⚠️特异性比 body.reading-xxx-on 那几条低，全靠 !important + 排在它们后面才盖得住，别往上挪。
+           ⚠️此规则不碰精句(.reading-keysent 是另一套 class)，精句和引号的互斥仍由上面那几条 strip 管。 */
+        .reading-merged .reading-quote .reading-quote,
+        .reading-merged .reading-quote .reading-quote .reading-quote-inner {
+            background-image: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            text-decoration: none !important;
+        }
         /* ===== 精句：每段里最短的那句完整话（结尾是句号/问号/叹号），套用你在「样式」里选的引号样式 =====
            独立元素 .reading-keysent（外层管着色/画框/字体）+ .reading-keysent-inner（内层管柔光/波浪/划线，铺句底不擦字）。
            跟「长短分工」井水不犯河水——那套只作用在引号(.reading-quote)上，精句用自己的 class，不会打架。
@@ -18905,6 +18921,11 @@ body {
             // 外层 .reading-quote 含符号（管变色加粗）；内层 .reading-quote-inner 只包文字（管下划线，不压符号）
             s = s.replace(/「([^」]*)」/g, function(m, inner) { return rqWrap('「', inner, '」'); });
             s = s.replace(/『([^』]*)』/g, function(m, inner) { return rqWrap('『', inner, '』'); });
+            // 书名号《》也走同一套（2026-07-30 加，用户选的「完全同款」）：字体/着色/画框/柔光/长短分工全跟引号。
+            // ⚠️书名多是 2~6 字，一律落在「短句」那一侧（rq-wide 门槛 16 字），所以分工态下它拿的是短句字体+装饰，这是预期。
+            // ⚠️书名号常嵌在对话里（「我读了《红楼梦》」）→ 会出现 .reading-quote 套 .reading-quote。这不是新问题：
+            // “”嵌在「」里早就是这个形状，装饰叠两层的老行为一并沿用，别为它单独加抑制规则（会和「同款」自相矛盾）。
+            s = s.replace(/《([^》]*)》/g, function(m, inner) { return rqWrap('《', inner, '》'); });
             s = s.replace(/“([^”]*)”/g, function(m, inner) { return rqWrap('“', inner, '”'); });
             s = s.replace(/&quot;([^]*?)&quot;/g, function(m, inner) { return rqWrap('&quot;', inner, '&quot;'); });
             return s;
@@ -18944,8 +18965,9 @@ body {
                 var core = parts[i].replace(/[。！？]+$/, '').trim();
                 if (core.length < _KEYSENT_MIN) continue;
                 completeCnt++;
-                // 含引号的句子让给「长短句/引号」样式，精句不碰它——否则引号自己的波浪/画框会和精句的叠成两条（优先长短句）
-                if (/[「」『』“”"]/.test(parts[i])) continue;
+                // 含引号（含书名号《》，2026-07-30 加）的句子让给「长短句/引号」样式，精句不碰它——
+                // 否则引号自己的波浪/画框会和精句的叠成两条（优先长短句）。⚠️这条正则要跟 readingHighlightQuotes 包的符号一致，漏一种就会叠。
+                if (/[「」『』“”"《》]/.test(parts[i])) continue;
                 if (core.length < shortestLen) { shortestLen = core.length; shortestIdx = i; }
             }
             if (completeCnt < 2 || shortestIdx < 0) return proc(raw);      // 需≥2个完整句才有「最短」可言
