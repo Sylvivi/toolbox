@@ -26077,7 +26077,9 @@ body {
             // 人名名单也算进缓存签名：名单改了要重包（名单一直挂 span，亮不亮由 CSS class 管，所以开关切换不必重排）
             var _namesSig = readingGetNames().join('|');
             var pHtml;
-            if (_readingMergeCache.text === originalText && _readingMergeCache.ps && _readingMergeCache.namesSig === _namesSig) {
+            // ⚠️缓存签名要带 rdMode：下面「第一段＝章节名」那条只在阅读模式成立，
+            // 同一段文字在两种模式下该不该包 .reading-chap-title 是不一样的（不带的话会串出隐形的错样式）
+            if (_readingMergeCache.text === originalText && _readingMergeCache.ps && _readingMergeCache.namesSig === _namesSig && _readingMergeCache.rdMode === !!chatReaderMode) {
                 pHtml = _readingMergeCache.ps;
             } else {
                 var lines = originalText.split('\n');
@@ -26091,10 +26093,18 @@ body {
                 for (var p = 0; p < paras.length; p++) {
                     var _ph = readingBuildParaInner(paras[p], _nre);   // 引号/人名高亮 + 最短完整句包 .reading-keysent
                     // 章节标题识别：整段以「第X章/节/回…」开头且较短 → 包 class，可单独上「标题字体」
-                    var _tcls = READING_TITLE_RE.test(paras[p]) ? ' class="reading-chap-title"' : '';
+                    // ⚠️阅读模式不用猜：readerChapterPair 是把章节标题拼在正文最前面的，第一段就是章名（"标题占掉 P1"）。
+                    // 只靠正则的话，凡是不长成传统章回体的章名一律拿不到标题字体——用户 2026-07-30 报的就是这个：
+                    // 知乎存档那三本章名是「【商业经济】教育家 - 为什么，这几年…？」，正则三条要求（第X章开头 / ≤20字 /
+                    // 不含标点）一条都不满足，连改写成「第一章 为什么，…？」也照样不认（有逗号问号）。数据侧无解：
+                    // 要过正则就得把章名砍到20字内且不带标点，那就既看不出讲什么、也搜不到了。
+                    // ⚠️加 120 字上限是兜底：万一哪本书的 P1 不是章名而是正文首段，别把一整段正文套上花体
+                    //（花体做装饰槽位用，整段铺开会糊）。真章名不会这么长——知乎存档那批生成时就封在 80 字。
+                    var _isRdTitle = !!chatReaderMode && p === 0 && paras[p].length <= 120;
+                    var _tcls = (READING_TITLE_RE.test(paras[p]) || _isRdTitle) ? ' class="reading-chap-title"' : '';
                     pHtml.push('<p data-p="' + (p + 1) + '"' + _tcls + ' style="white-space:pre-wrap;word-break:break-word;margin:0.5em 0">' + _ph + '</p>');
                 }
-                _readingMergeCache = { text: originalText, ps: pHtml, namesSig: _namesSig };
+                _readingMergeCache = { text: originalText, ps: pHtml, namesSig: _namesSig, rdMode: !!chatReaderMode };
             }
             var comments = readingModeParseComments(aiText);
             var commentMap = {};
