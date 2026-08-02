@@ -5284,6 +5284,12 @@ body {
                     <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0">主题</span>
                     <div id="chatThemeList" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end"><button class="pagebtn-pos-opt" data-themeidx="0" onclick="chatSetTheme(0)">蓝金</button><button class="pagebtn-pos-opt" data-themeidx="1" onclick="chatSetTheme(1)">青蓝</button><button class="pagebtn-pos-opt" data-themeidx="2" onclick="chatSetTheme(2)">蓝橙</button><button class="pagebtn-pos-opt" data-themeidx="3" onclick="chatSetTheme(3)">紫粉</button><button class="pagebtn-pos-opt" data-themeidx="4" onclick="chatSetTheme(4)">冰蓝</button><button class="pagebtn-pos-opt active" data-themeidx="5" onclick="chatSetTheme(5)">霞玫</button><button class="pagebtn-pos-opt" data-themeidx="6" onclick="chatSetTheme(6)">粘土</button></div>
                 </div>
+                <div id="chatUserNameRow" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0" title="AI 会这样称呼你；正文里问答块上显示的也是这个名字">昵称</span>
+                    <input id="chatUserNameInput" type="text" maxlength="12" placeholder="汐" autocomplete="off"
+                           onchange="chatOnUserNameInput(this.value)" onblur="chatOnUserNameInput(this.value)"
+                           style="width:110px;padding:6px 10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;outline:none;text-align:right">
+                </div>
                 <div id="chatModeRow" style="display:flex;align-items:center;justify-content:space-between">
                     <span style="font-size:12px;font-weight:600;color:var(--text-muted)">模式</span>
                     <div style="display:flex;gap:6px">
@@ -10304,6 +10310,8 @@ body {
                 bookmarksTs: readingGetBookmarksTs(),
                 highlights: readingGetAllHl(),
                 highlightsTs: readingGetHlTs(),
+                userName: (localStorage.getItem('toolbox_user_name') || ''),
+                userNameTs: (localStorage.getItem('toolbox_user_name_ts') || ''),
                 bookTitles: rbTitlesLoad(),
                 bookTitlesTs: rbTitlesTs(),
                 bookFolders: rbFoldersLoad(),
@@ -10576,6 +10584,17 @@ body {
                         localStorage.setItem('reading_highlights', JSON.stringify(_localHl));
                         localStorage.setItem('reading_highlights_ts', new Date().toISOString());
                         marksDirty = true;
+                    }
+                }
+
+                /* 昵称: 按时间戳后写覆盖。⚠️判在不在用 `!== undefined` 不能用 `if (manifest.userName)`——
+                   空串是合法值（＝用回默认「汐」），用真值判断会让「改回默认」这个动作永远传不到别的设备。 */
+                if (manifest.userName !== undefined) {
+                    var cloudUnTs = manifest.userNameTs || '';
+                    if (cloudUnTs > (localStorage.getItem('toolbox_user_name_ts') || '')) {
+                        localStorage.setItem('toolbox_user_name', manifest.userName || '');
+                        localStorage.setItem('toolbox_user_name_ts', cloudUnTs);
+                        if (typeof chatSyncUserNameInput === 'function') chatSyncUserNameInput();
                     }
                 }
 
@@ -10981,6 +11000,7 @@ body {
                 if (manifest.checkinTasks) { idbSet(CHECKIN_TASKS_KEY, manifest.checkinTasks); if (manifest.checkinTasksTs) idbSet(CHECKIN_TASKS_TS_KEY, manifest.checkinTasksTs); }
                 if (manifest.bookmarks) { localStorage.setItem('reading_bookmarks', JSON.stringify(manifest.bookmarks)); if (manifest.bookmarksTs) localStorage.setItem('reading_bookmarks_ts', manifest.bookmarksTs); }
                 if (manifest.highlights) { localStorage.setItem('reading_highlights', JSON.stringify(manifest.highlights)); if (manifest.highlightsTs) localStorage.setItem('reading_highlights_ts', manifest.highlightsTs); }
+                if (manifest.userName !== undefined) { localStorage.setItem('toolbox_user_name', manifest.userName || ''); if (manifest.userNameTs) localStorage.setItem('toolbox_user_name_ts', manifest.userNameTs); }
                 if (manifest.bookTitles) { localStorage.setItem('reading_book_titles', JSON.stringify(manifest.bookTitles)); if (manifest.bookTitlesTs) localStorage.setItem('reading_book_titles_ts', manifest.bookTitlesTs); }
                 if (manifest.bookFolders) { localStorage.setItem('reading_book_folders', JSON.stringify(manifest.bookFolders)); if (manifest.bookFoldersTs) localStorage.setItem('reading_book_folders_ts', manifest.bookFoldersTs); }
                 if (manifest.bookKinds) { localStorage.setItem('reading_book_kind', JSON.stringify(manifest.bookKinds)); if (manifest.bookKindsTs) localStorage.setItem('reading_book_kind_ts', manifest.bookKindsTs); }
@@ -14175,6 +14195,7 @@ body {
             var pBtn = document.getElementById('sheetTabBtnPreset');
             if (pBody) pBody.classList.toggle('active', tab === 'preset');
             if (pBtn) pBtn.classList.toggle('active', tab === 'preset');
+            if (tab === 'opts') chatSyncUserNameInput();   // 昵称栏每次打开都按当前值回填（可能被别的设备改过）
             if (tab === 'preset') chatRenderSpPresets();
         }
         // 底部面板（设置/模型/预设）左右滑切换，手感对齐摘要弹窗
@@ -14838,6 +14859,67 @@ body {
             }
         }
 
+        /* ===== 你的昵称（2026-08-02 加）=====
+           起因：这工具原来把「汐」写死在代码里（31 处），朋友拿去用，AI 张口就叫她汐。
+
+           ⚠️「汐」在代码里是**两种身份**，改的时候必须分开看：
+           ① **给人看的名字**——AI 该怎么称呼你、问答气泡上的名字、读痕面板里的名字。
+              这些跟着昵称走，就是下面这个 `chatUserName()`。
+           ② **存进数据里的格式标记**——正文问答是以 `[P3] 汐：问题` 这个格式存进
+              msg.content 和 reader_qa 的，`/^汐：/` 那二十来处正则是靠它认出
+              「这一块是问答、不是 AI 点评」（进而决定渲染成问答气泡、双击走追问模式、
+              摘要时整块剔掉）。**这个标记一个字都不能动**：改成别的，用户已有的
+              几千条问答会集体退化成普通点评块，而且是静默的——正文照常显示，
+              只是双击不再是追问、摘要开始把闲聊当剧情压进去。
+              所以标记永远是 `QA_TAG`（'汐：'），只在**渲染那一刻**换成昵称。
+           这也意味着改昵称是**纯显示层**的事：改完老问答立刻跟着显示新名字，
+           不用迁移任何数据，改回去也一样。 */
+        var QA_TAG = '汐：';           // 存储格式标记，永远不变（见上）
+        var USER_NAME_DEFAULT = '汐';
+        function chatUserName() {
+            var v = (localStorage.getItem('toolbox_user_name') || '').trim();
+            return v || USER_NAME_DEFAULT;
+        }
+        function chatSetUserName(v) {
+            v = (v || '').trim().slice(0, 12);   // 名字是要显示在问答气泡上的，太长会把版面挤坏
+            if (v === USER_NAME_DEFAULT) v = '';  // 跟默认一样就不存，免得云同步里多一条没意义的记录
+            localStorage.setItem('toolbox_user_name', v);
+            localStorage.setItem('toolbox_user_name_ts', new Date().toISOString());
+            if (typeof activeSyncProvider !== 'undefined' && activeSyncProvider === 'cf' && typeof syncPushData === 'function') {
+                clearTimeout(chatSetUserName._t); chatSetUserName._t = setTimeout(syncPushData, 1500);
+            }
+            // 已经渲染出来的问答气泡里嵌着旧名字，改完就地刷一遍，别让人以为没生效
+            if (typeof chatRenderAllMessages === 'function' && !chatReaderMode) {
+                try { chatRenderAllMessages(); } catch (e) {}
+            }
+            // 合并渲染有缓存，不作废的话正文里的问答名字不会变
+            if (typeof _readingMergeCache === 'object' && _readingMergeCache) _readingMergeCache.text = null;
+        }
+        // 设置面板里那一栏：改完就地生效（老问答上的名字也跟着变），空着＝用默认「汐」
+        function chatOnUserNameInput(v) {
+            var before = chatUserName();
+            chatSetUserName(v);
+            var now = chatUserName();
+            var el = document.getElementById('chatUserNameInput');
+            if (el) el.value = (now === USER_NAME_DEFAULT ? '' : now);   // 填了默认名等于没填，输入框清空露出灰字占位
+            if (now !== before && typeof showToast === 'function') showToast('以后叫你「' + now + '」');
+        }
+        function chatSyncUserNameInput() {
+            var el = document.getElementById('chatUserNameInput');
+            if (!el) return;
+            var v = (localStorage.getItem('toolbox_user_name') || '').trim();
+            el.value = v;
+        }
+        // 把存储格式里的「汐：」换成当前昵称，只用于**发给 AI 的那份副本**和渲染，绝不写回存储
+        function chatQaTagToName(s) {
+            var n = chatUserName();
+            if (typeof s !== 'string' || !s || n === USER_NAME_DEFAULT) return s;  // 多模态消息 content 是数组，别乱动
+            /* ⚠️ 段号前缀必须一起吃掉再吐回来：存储长的是 `[P2] 汐：问题`，「汐：」**不在行首**。
+               第一版写的 /(^|\n)\s*汐：/ 一条都替换不到，测试当场逮到——而这种漏网在真机上
+               完全看不出来（界面显示的是昵称、只有发出去那份里还是「汐」），只会表现为
+               AI 偶尔管你叫汐。段号形态还有 [P1-P3] 这类区间，所以用 [^\]]* 兜住。 */
+            return s.replace(/(^|\n)(\s*(?:\[P\d+[^\]]*\]\s*)?)汐：/g, '$1$2' + n + '：');
+        }
         function toggleChatMask(on) {
             localStorage.setItem('chat_mask', on ? '1' : '0');
             if (on && !document.body.classList.contains('dark')) {
@@ -15363,7 +15445,7 @@ body {
                     break;
                 }
             }
-            var _uName = '汐'; // 硬编码用户名，让 AI 用名字称呼而非"用户"
+            var _uName = chatUserName(); // 用户昵称（设置里可改），让 AI 用名字称呼而非"用户"
             var _userIdentity = '和你对话的人叫"' + _uName + '"，称呼时直接用名字，不要用"用户"这种说法。';
             // 共读模式且系统提示词框为空时，静默兜底用蘑菇默认人设（仅当为空，绝不与已填内容叠加）
             var _persona = sp;
@@ -15422,6 +15504,7 @@ body {
             for (var i = 0; i < src.length; i++) {
                 if (src[i].genImage) continue; // 独立生图消息不进上下文（无文本内容，纯图）
                 var _mc = _stripGenImgMarkers(src[i].content); // 剥掉内联图标记，绝不把图相关内容带给 AI
+                _mc = chatQaTagToName(_mc);  // 正文里的问答块存的是「汐：」，发出去这份换成当前昵称（存储不动）
                 if (typeof _mc === 'string' && !_mc.trim()) continue; // 剥完空了（整段只有图）就跳过，不发空消息
                 // 时间戳作为 system 提示插入，不污染用户消息原文
                 if (src[i].ts) {
@@ -16754,7 +16837,7 @@ body {
                 if (preview.length > 80) preview = preview.slice(0, 80) + '…';
                 if (!preview) preview = role === 'user' ? '[图片/文件]' : '[回复]';
 
-                var roleLabel = role === 'user' ? '汐' : '🍄';
+                var roleLabel = role === 'user' ? chatUserName() : '🍄';
                 item.innerHTML = '<div class="chat-nav-role ' + role + '">' + roleLabel + '</div>' +
                     '<div class="chat-nav-text">' + esc(preview) + '</div>' +
                     '<div class="chat-nav-idx">#' + msgNum + '</div>';
@@ -23063,7 +23146,7 @@ body {
             var h = '<blockquote class="rd-stream-bq' + (started ? '' : ' rd-pending') + '" data-pid="' + pp.id + '"' +
                 ' style="position:relative;margin:0.4em 0 0.6em;padding:6px 12px;border-left:3px solid var(--accent);background:var(--quote-bg, var(--accent-light));border-radius:0 8px 8px 0;font-size:0.92em;color:var(--text-sub);line-height:1.6">' +
                 '<button class="rd-stream-stop" type="button" onclick="readingAbortPending(' + pp.id + ')">停止</button>';
-            if (pp.question) h += '<div class="reading-q"><span class="reading-q-name">汐</span>：' + esc(pp.question) + '</div>';
+            if (pp.question) h += '<div class="reading-q"><span class="reading-q-name">' + esc(chatUserName()) + '</span>：' + esc(pp.question) + '</div>';
             h += '<div class="rd-stream-ans">';
             h += started
                 ? (renderText(body) + '<span class="rd-stream-cursor">▍</span>')
@@ -23637,7 +23720,9 @@ body {
                 for (var qi = 0; qi < parsedAll.length; qi++) {
                     var _c = parsedAll[qi];
                     if (_c.p > 0 && _c.p < pNum && _c.text && /^\s*汐：/.test(_c.text)) {
-                        _qaPrior.push('[P' + _c.p + '] ' + _c.text.trim());
+                        // 发出去的这份把「汐：」换成当前昵称——系统提示里已经告诉 AI 用户叫什么了，
+                        // 上下文里再冒出另一个名字会让它以为是第三个人（存储那份不动）
+                        _qaPrior.push('[P' + _c.p + '] ' + chatQaTagToName(_c.text.trim()));
                     }
                 }
                 if (_qaPrior.length) {
@@ -25592,7 +25677,7 @@ body {
                     item.className = 'chat-nav-item';
                     var roleHtml = isHl
                         ? '<div class="chat-nav-role" style="background:transparent"><span style="display:inline-block;width:13px;height:13px;border-radius:50%;background:' + (RD_HL_SW[bm.color] || '#f5c842') + '"></span></div>'
-                        : '<div class="chat-nav-role ' + (isAsk ? 'user' : 'ai') + '">' + (isAsk ? '汐' : '🔖') + '</div>';
+                        : '<div class="chat-nav-role ' + (isAsk ? 'user' : 'ai') + '">' + (isAsk ? esc(chatUserName()) : '🔖') + '</div>';
                     var noteHtml = (isHl && bm.note) ? '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">✎ ' + esc(bm.note) + '</div>' : '';
                     item.innerHTML = roleHtml +
                         '<div class="chat-nav-text">' + esc(bm.preview || ('第 ' + bm.p + ' 段')) + noteHtml + '</div>' +
@@ -25826,7 +25911,7 @@ body {
             return qas.map(function (x) {
                 var ans = x.a ? '<div class="rd-trace-a">' + renderText(x.a) + '</div>'
                     : '<div class="rd-trace-a rd-trace-a-empty">（答案不在当前记录里）</div>';
-                return '<div class="rd-trace-qa"><div class="rd-trace-q" data-toggle="1" title="点击跳到原文位置"><span class="rd-trace-qn">汐</span>：' + esc(x.q) + '<span class="rd-trace-qchev" title="展开/收起回答">▾</span></div>' + ans + '</div>';
+                return '<div class="rd-trace-qa"><div class="rd-trace-q" data-toggle="1" title="点击跳到原文位置"><span class="rd-trace-qn">' + esc(chatUserName()) + '</span>：' + esc(x.q) + '<span class="rd-trace-qchev" title="展开/收起回答">▾</span></div>' + ans + '</div>';
             }).join('');
         }
         function rdTraceItemHtml(e, i) {
@@ -26449,7 +26534,8 @@ body {
                             var _nl = _cmtRaw.indexOf('\n');
                             var _qLine = _nl >= 0 ? _cmtRaw.slice(0, _nl) : _cmtRaw;
                             var _aLine = _nl >= 0 ? _cmtRaw.slice(_nl + 1) : '';
-                            _cmtRendered = '<div class="reading-q">' + renderText(_qLine).replace('汐：', '<span class="reading-q-name">汐</span>：') + '</div>';
+                            // 存储里是「汐：问题」，显示时把名字换成当前昵称（存储那份一个字不动，见 chatUserName 上方那段）
+                            _cmtRendered = '<div class="reading-q">' + renderText(_qLine).replace(QA_TAG, '<span class="reading-q-name">' + esc(chatUserName()) + '</span>：') + '</div>';
                             if (_aLine.trim()) {
                                 _cmtRendered += '<div style="margin-top:0.4em">' + renderText(_aLine.replace(/^\n+/, '')) + '</div>';
                             }
@@ -26532,7 +26618,7 @@ body {
                         var parsed = translateBlockSplitQA(blk.text);
                         var body = renderText(parsed.main);
                         for (var q = 0; q < parsed.qas.length; q++) {
-                            body += '<div class="tb-qa"><div class="tb-q"><span class="tb-q-name">汐</span>：' + esc(parsed.qas[q].q) + '</div><div class="tb-a">' + renderText(parsed.qas[q].a) + '</div></div>';
+                            body += '<div class="tb-qa"><div class="tb-q"><span class="tb-q-name">' + esc(chatUserName()) + '</span>：' + esc(parsed.qas[q].q) + '</div><div class="tb-a">' + renderText(parsed.qas[q].a) + '</div></div>';
                         }
                         html += '<div class="translate-block" data-s="' + blk.s + '" data-e="' + blk.e + '">' +
                             '<div class="tb-body">' + body + '</div></div>';
@@ -27846,6 +27932,7 @@ body {
             // 立即用本地缓存渲染（零延迟）
             renderKeyFilters();
             renderKeyCards();
+            chatSyncUserNameInput();   // 昵称栏回填（设置面板默认就停在「选项」页，开机就得是对的）
             initKeyDrag();
             renderSnipFilters();
             renderSnippets();
