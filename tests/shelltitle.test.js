@@ -1,4 +1,5 @@
-/* 「空壳章不许被改名」的回归测试。
+/* 「rbDeriveTitleAndBody 不许把不该改名的章改名」的回归测试。
+ * 同一个函数目前踩过两种坑：A 组＝卷首空壳章（笑傲江湖），D 组＝分册目录页（三体全集）。
  *
  * 起因：2026-08-02 用户报《笑傲江湖（新修版）》目录里「第十回 传剑」排在「第一回 灭门」前面、
  * 「第二十回 探狱」排在「第十一回 聚气」前面。
@@ -18,6 +19,7 @@ const fs = require('fs');
 const APP = 'file://' + require('path').resolve(__dirname, '..', 'index.html');
 // 服务器上那本真书（存在才跑 C 组——换台机器没有这份数据也不该让测试红）
 const REAL = '/home/ubuntu/cc-books/store/d95fefb7c0e7e7e4c08a5a8b9d89661f5a4d3af1deb5bcbb1dbfae6d7b67a8da.body';
+const SANTI = '/home/ubuntu/cc-books/store/b5315ae7a37efbcafcc3ea15664f2a6300917fbc646fb96dd38639d79d333f81.body';
 
 const results = [];
 function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); }
@@ -88,13 +90,58 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
                用户报的错是**倒退**（第十回冒到第一回前面），重复不是。 */
             let ascending = true;
             for (let i = 1; i < nums.length; i++) if (nums[i] < nums[i - 1]) { ascending = false; break; }
-            return { total: c2.length, fake, first20: nums.slice(0, 20), ascending };
+            return { total: c2.length, input: chs.length, fake, first20: nums.slice(0, 20), ascending };
         }, chapters);
         eq('真书跑完管线不产生「0 字的假回目」', C.fake, []);
-        eq('章数不变（51 章，改名逻辑绝不许动章节边界）', C.total, 51);
+        // ⚠️别写死章数：服务器那本已经清过卷首空壳（51→47），写死了数据一变测试就假红。
+        //   要断言的本来就是「改名逻辑不许动章节边界」＝进去多少章、出来多少章。
+        eq('章数不变（改名逻辑绝不许动章节边界）', C.total, C.input);
         ok('回目从头到尾递增，没有第十回插到第一回前面', C.ascending, '实际顺序 ' + JSON.stringify(C.first20));
     } else {
         ok('（跳过 C 组：这台机器上没有那本真书的数据）', true);
+    }
+
+    /* ===== D 组：分册目录页不许被啃 =====
+     * 2026-08-03 用户报《三体全集》「第五章 叶文洁 475字」排在「第一章 科学边界」前面。
+     * 同一个函数的第二种坏法：三本书装一起的 epub，每册前面有一页分册目录，正文就是本册全部章节名。
+     * 它不是空壳（有 600 字），A 组那道「揪完正文空了」的闸拦不住。
+     * ⚠️它每同步一次啃一口：云端下回来的书没有 `_titleFixVer`，rbLoad 每次都重跑一遍标题修复，
+     *   所以只在服务器上把名字改回去是挡不住的，必须在代码里拦。 */
+    const D = await page.evaluate(() => {
+        // 用户那本书里真实的形状（第四章带顿号过不了正则，于是被揪走的是第五章）
+        const toc = '第四章 三体、周文王、长夜\n \n 第五章 叶文洁\n \n 第六章 宇宙闪烁之一\n \n 第七章 疯狂年代\n \n 第八章 寂静的春天\n \n 后 记';
+        const r1 = rbDeriveTitleAndBody('三体I', toc);
+        // 连跑三遍要幂等（模拟反复同步）
+        let x = { title: '三体I', body: toc };
+        for (let i = 0; i < 3; i++) x = rbDeriveTitleAndBody(x.title, x.body);
+        // ⚠️别误伤：只有两行章节名（命中数 <3）不算目录页，照常揪标题
+        //   后面得跟真正文，否则会被 A 组那道「揪完正文空了」的闸先接走，测不到这条
+        const r2 = rbDeriveTitleAndBody('楔子', '第一章 开端\n第二章 承接\n\n那年冬天特别冷，他站在门口等了很久。');
+        // ⚠️别误伤：正常章节正文里偶尔提一句章节名，占比上不来
+        const r3 = rbDeriveTitleAndBody('测试书名', '第三回 救难\n\n他翻到第一章 开端，又翻到第二章 承接，还有第三章 转折。\n\n后面全是正文。');
+        return { t1: r1.title, len1: r1.body.length, tocLen: toc.length, tx: x.title, lenx: x.body.length, t2: r2.title, t3: r3.title };
+    });
+    eq('分册目录页保住原标题，不被里面的章节名顶掉', D.t1, '三体I');
+    eq('分册目录页正文一个字都没少', D.len1, D.tocLen);
+    eq('反复同步跑三遍仍是原样（幂等）', [D.tx, D.lenx], ['三体I', D.tocLen]);
+    eq('只有两行章节名的短章不当目录页（别误伤）', D.t2, '第一章 开端');
+    eq('正常章节里提到章节名不受影响（别误伤）', D.t3, '第三回 救难');
+
+    /* D 组补充：拿服务器上那本真《三体》跑一遍 */
+    let santi = null;
+    try { santi = JSON.parse(fs.readFileSync(SANTI, 'utf8')).book.chapters; } catch (e) { }
+    if (santi) {
+        const D2 = await page.evaluate((chs) => {
+            const before = chs.map(c => c.title + '|' + c.body.length);
+            const after = rbFixChapterTitles(JSON.parse(JSON.stringify(chs))).map(c => c.title + '|' + c.body.length);
+            const changed = [];
+            for (let i = 0; i < before.length; i++) if (before[i] !== after[i]) changed.push(i + ': ' + before[i] + ' → ' + after[i]);
+            return { n: chs.length, changed };
+        }, santi);
+        eq('真《三体》跑一遍标题修复，199 章一个都不动', D2.changed, []);
+        eq('章数还是 199', D2.n, 199);
+    } else {
+        ok('（跳过 D 组真书部分：这台机器上没有《三体》数据）', true);
     }
 
     ok('页面无 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));

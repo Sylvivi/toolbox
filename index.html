@@ -26428,6 +26428,25 @@ body {
         function rbDeriveTitleAndBody(rawTitle, body) {
             var t = (rawTitle || '').trim();
             var lines = (body || '').split('\n');
+            /* ⚠️整章正文本身就是一串章节名 ＝ epub 的「分册目录页」，别碰它。
+               （2026-08-03 用户报《三体》「第五章 叶文洁 475字 排在第一章前面」）：
+               三体全集把三本书装一起，每本书前面有一页分册目录，正文就是本册全部章节名。
+               下面那趟「从正文前 8 行揪章节号」会揪走其中一条当标题、并把它上面几行删掉，
+               于是目录里凭空多出一个又短又靠前的假章节。更坏的是它**每同步一次就啃一口**：
+               rbLoad 的一次性标题修复按 `_titleFixVer` 判，而云端下回来的书身上没这个标记，
+               于是每次重新下载都再跑一遍 —— 我在服务器上把它改回「三体I」，她手机一拉又被啃成
+               「第五章 叶文洁」，604 字掉到 475 字。所以必须在代码里拦，光改数据挡不住。
+               判据要窄：命中 ≥3 行、且占非空行一半以上。拿她库里 367 本书全量扫过，只命中 2 章，
+               都是真目录页（另一本是《肖申克的救赎》，第 1 章早被啃成了「第十章」）。
+               ⚠️别只卡「行数少」：真目录页有 35 行，比很多正常短章都长。 */
+            var _neLines = 0, _titleish = 0;
+            for (var _i = 0; _i < lines.length; _i++) {
+                var _l = lines[_i].trim();
+                if (!_l) continue;
+                _neLines++;
+                if (READING_TITLE_RE.test(_l)) _titleish++;
+            }
+            if (_titleish >= 3 && _titleish * 2 >= _neLines) return { title: t, body: body };
             var headIdx = -1, checked = 0;
             for (var i = 0; i < lines.length && checked < 8; i++) {
                 if (!lines[i].trim()) continue;
