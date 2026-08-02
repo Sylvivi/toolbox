@@ -126,9 +126,12 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         const 改完的值 = chatUserName();
         chatOnUserNameInput('汐');       // 填默认名 → 输入框该清空，露出灰字占位
         const 填默认后输入框 = el ? el.value : null;
-        return { 有输入框, 回填, 改完的值, 填默认后输入框, 占位: el ? el.placeholder : null };
+        // 用户 2026-08-02 要求挪进「预设」页（跟系统提示词放一起，都是「AI 该把我当成谁」）
+        const 在预设页里 = !!(el && el.closest('#sheetTabPreset'));
+        return { 有输入框, 回填, 改完的值, 填默认后输入框, 在预设页里, 占位: el ? el.placeholder : null };
     });
     eq('设置面板里有昵称输入框', G.有输入框, true);
+    eq('昵称栏在「预设」页里（跟系统提示词放一起）', G.在预设页里, true);
     eq('打开时回填当前昵称', G.回填, '小明');
     eq('改完就生效', G.改完的值, '阿泠');
     eq('填成默认名时输入框清空（露出灰字占位，看得出「没设」）', G.填默认后输入框, '');
