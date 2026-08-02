@@ -19450,12 +19450,22 @@ body {
         // 把一份清单(items)注入书架：清掉旧占位，把「服务器有、本地没有」的书作为占位塞进 rbBooks（占位不落盘）
         function bkSyncInjectManifest(items) {
             var localKeys = {};
-            for (var i = 0; i < rbBooks.length; i++) if (!rbBooks[i]._remote) localKeys[bkSyncKey(rbBooks[i])] = 1;
+            for (var i = 0; i < rbBooks.length; i++) if (!rbBooks[i]._remote) localKeys[bkSyncKey(rbBooks[i])] = rbBooks[i];
             rbBooks = rbBooks.filter(function (b) { return !b._remote; });   // 先清掉旧占位，避免重复
-            var added = 0;
+            var added = 0, folderChanged = 0;
             Object.keys(items).forEach(function (fk) {
                 if (fk.indexOf(FONT_KEY_PREFIX) === 0) return; // 字体条目：不当书注入书架
-                if (localKeys[fk]) return;                     // 本地已有正本，跳过
+                if (localKeys[fk]) {
+                    /* 本地已有正本：正文不动（本地为主），但**文件夹分类跟着服务器走**。
+                       原来这里直接 return，于是在服务器上改了文件夹名，只有「还没下载的书」跟着变、
+                       已下载的那几本永远停在下载那天记下的旧名字——书架上两个文件夹并排、同一批书被劈成两半。
+                       分类跟正文不同：它本来就是服务器 manifest 提供的字段，跟回来零风险（不动 fileKey/正文/章数）。
+                       ⚠️ 用户在手机上「移动到文件夹」的本地覆盖表优先级仍然更高，rbBookFolder 里先查覆盖表，
+                       所以这里刷新 _folder 不会把她手动归的类冲掉。 */
+                    var lb = localKeys[fk], sf = (items[fk] || {}).folder || '';
+                    if ((lb._folder || '') !== sf) { lb._folder = sf; folderChanged++; }
+                    return;
+                }
                 var m = items[fk] || {};
                 rbBooks.push({
                     id: 'remote_' + (m.hash || Math.random().toString(36).slice(2)),
@@ -19465,6 +19475,9 @@ body {
                 });
                 added++;
             });
+            // 只有真的改了分类才落盘：rbSave 会把整个书库（含所有正文）写一遍 IndexedDB，
+            // 每次开书架都无脑写太亏；不落盘的话离线打开书架又会退回旧文件夹名。
+            if (folderChanged) rbSave();
             var sv = document.getElementById('rbShelfView');
             if (sv && sv.style.display !== 'none' && typeof rbRenderShelf === 'function') rbRenderShelf();
             return added;
