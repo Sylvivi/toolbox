@@ -19662,6 +19662,14 @@ body {
                     if (!quiet || reading) showToast('《' + nm + '》已更新' + tail + (reading ? '，重开这一章看新内容' : ''));
                     try { _readingMergeCache = { text: null, ps: null, namesSig: null }; } catch (e) {}   // 正文变了，段落缓存作废
                     try { if (typeof rbRenderShelf === 'function') { var sv = document.getElementById('rbShelfView'); if (sv && sv.style.display !== 'none') rbRenderShelf(); } } catch (e) {}
+                    /* ⚠️正开着这本书的目录 → 也要重画（2026-08-03 补）。
+                       老代码只重画书架，人站在目录页时数据换了、屏幕上还是旧章名，
+                       看起来就是「同步了但没修好」。用户报《三体》那次就卡在这一步：
+                       她一直停在目录页反复看，其实新数据早该到了、只是没重画。 */
+                    try {
+                        var cv = document.getElementById('rbChapterView');
+                        if (typeof rbRenderChapters === 'function' && cv && cv.style.display !== 'none' && rbActiveBookId === book.id) rbRenderChapters();
+                    } catch (e) {}
                     if (done) done(true);
                 })
                 .catch(function () { if (done) done(false); });
