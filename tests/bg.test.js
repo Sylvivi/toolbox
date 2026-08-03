@@ -406,11 +406,23 @@ function bootSocial() {
         // ② 长按到位 → 标签就地变
         bar = openBar(); send = bar.querySelector('.rp-ask-send');
         calls.length = 0;
-        pe(send, 'pointerdown'); await wait(600);
+        pe(send, 'pointerdown');
+        /* ⚠️蓄力提示必须在**手指按下的那一刻**就出现，而且浮在按钮上方（2026-08-03 加）。
+           用户原话「我总是忍不住去看看手底下那个按键变化了没有」——反馈画在按钮身上等于没有反馈，
+           手指正压在那儿。这几条钉住「看得见」这件事本身。 */
+        const tipEarly = document.getElementById('rdBgHoldTip');
+        out.按下就出提示 = !!(tipEarly && tipEarly.classList.contains('show'));
+        out.提示在按钮上方 = tipEarly ? (tipEarly.getBoundingClientRect().bottom <= send.getBoundingClientRect().top + 1) : false;
+        out.提示不挡手势 = tipEarly ? getComputedStyle(tipEarly).pointerEvents : '(没有提示)';
+        await wait(600);
         out.蓄力时标签 = send.textContent;
         out.蓄力时高亮 = send.classList.contains('rp-bg-armed');
+        const tipArmed = document.getElementById('rdBgHoldTip');
+        out.到位后提示文字 = tipArmed ? tipArmed.textContent : '';
+        out.到位后提示变色 = !!(tipArmed && tipArmed.classList.contains('armed'));
         pe(send, 'pointerup'); send.click();
         await wait(30);
+        out.松手后提示收了 = !document.getElementById('rdBgHoldTip').classList.contains('show');
         out.松手后 = calls.slice();
 
         // ③ 长按中途滑开 → 反悔
@@ -418,6 +430,7 @@ function bootSocial() {
         calls.length = 0;
         pe(send, 'pointerdown'); await wait(600);
         pe(send, 'pointermove', 40);          // 手指滑开
+        out.滑开后提示收了 = !document.getElementById('rdBgHoldTip').classList.contains('show');
         out.滑开后标签 = send.textContent;
         pe(send, 'pointerup'); send.click();
         await wait(30);
@@ -438,6 +451,14 @@ function bootSocial() {
     });
     eq('社科书双击段落，按钮仍是「导读」', H.按钮初始, '导读');
     ok('提示语告诉你有长按这一手', /长按/.test(H.提示语), H.提示语);
+    // ⚠️「看得见、摸得着」这一组：反馈只要回到按钮身上，用户就得歪头去瞄，等于没有
+    ok('手指一按下，上方立刻出现蓄力提示', H.按下就出提示, JSON.stringify(H.按下就出提示));
+    ok('提示浮在按钮**上方**（手指盖不住）', H.提示在按钮上方, '提示跑到按钮身上或下方了');
+    eq('提示不吃指针事件（别挡住长按本身）', H.提示不挡手势, 'none');
+    ok('蓄力到位，提示文字明说「松手 → 标这一节背景」', /松手/.test(H.到位后提示文字) && /背景/.test(H.到位后提示文字), H.到位后提示文字);
+    ok('蓄力到位，提示整条变强调色（余光也看得见）', H.到位后提示变色, '没变色');
+    ok('松手后提示收掉', H.松手后提示收了, '提示还杵在屏幕上');
+    ok('滑开反悔后提示也收掉', H.滑开后提示收了, '提示还杵在屏幕上');
     eq('短按 → 还是导读，不会误标背景', H.短按, [['ask', '导读']]);
     eq('按住半秒 → 标签就地变「背景」', H.蓄力时标签, '背景');
     ok('蓄力时按钮高亮（告诉你松手就开始）', H.蓄力时高亮);

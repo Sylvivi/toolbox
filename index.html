@@ -3432,6 +3432,25 @@ body {
         .reading-actbar button.rp-del.armed { background: #e5484d; color: #fff; border-color: #e5484d; }
         /* 长按「导读」键蓄力到位：标签就地变「标背景」，底色一并变深，告诉你松手就开始 */
         .reading-actbar button.rp-ask-send.rp-bg-armed { background: var(--accent-mid); box-shadow: 0 0 0 2px var(--accent-light); }
+        /* ⚠️蓄力提示必须浮在按钮**正上方**、而且不属于操作栏（2026-08-03 加）：
+           用户原话「老是忍不住去看看手底下那个按键变化了没有」——手指正压在按钮上，
+           任何画在**按钮身上**的变化她都看不见，只能靠猜、或者歪着头去瞄。
+           所以把「还要按多久」和「松手＝标背景」挪到手指**上方**这块空地上。
+           position:fixed 挂在 body 上（不受操作栏重渲影响），pointer-events:none（别挡住手势）。 */
+        #rdBgHoldTip {
+            position: fixed; z-index: 1001; pointer-events: none; white-space: nowrap;
+            padding: 5px 10px; border-radius: 9px; font-size: 12px; font-weight: 600;
+            background: var(--card-bg); color: var(--text); border: 1px solid var(--accent-mid);
+            box-shadow: 0 3px 12px rgba(0, 0, 0, .18);
+            opacity: 0; transform: translateY(5px); transition: opacity .12s ease, transform .12s ease;
+        }
+        #rdBgHoldTip.show { opacity: 1; transform: translateY(0); }
+        #rdBgHoldTip .rdbg-bar { display: block; height: 3px; margin-top: 5px; border-radius: 2px; background: var(--accent-light); overflow: hidden; }
+        #rdBgHoldTip .rdbg-bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+        /* 进度条一按住就开始走，走满正好是蓄力到位那一刻——「还要按多久」看得见 */
+        #rdBgHoldTip.filling .rdbg-bar i { width: 100%; transition: width .5s linear; }
+        #rdBgHoldTip.armed { background: var(--accent); color: #fff; border-color: var(--accent); }
+        #rdBgHoldTip.armed .rdbg-bar { display: none; }
         .reading-actbar.rp-actions { justify-content: flex-end; }
         /* 删除键顶到最左、跟右侧「重新回答/取消」拉开距离，防误触 */
         .reading-actbar.rp-actions .rp-del { margin-right: auto; }
@@ -23233,6 +23252,52 @@ body {
         // 共读：在 anchorEl 后面插入「问这一段」操作栏（原文段落、AI 回答块都能触发，复用同一套）
         // prefill：可选，预填问题文本（提问失败时用来把原问题塞回输入框，不让用户白打一遍）
         // opts.bgCi：双击的是某条背景讲解时，它在该段问答里的序号。带上它＝这一轮走「背景追问」模式。
+        /* 长按「导读」蓄力时，浮在按钮**正上方**的那条提示。
+           ⚠️为什么非得浮在上方、非得脱离操作栏（2026-08-03 加，见 readingOpenAskBar 里的长注释）：
+           手指正压在按钮上，画在按钮身上的变化用户一个都看不见。放上方是因为拇指是从下往上够的，
+           按钮上方那一小块永远是空的。
+           ⚠️位置每次现算：操作栏挂在被双击的那一段后面，页面滚到哪它就在哪，写死不得。
+           ⚠️顶上放不下（这一段正好在屏幕最上面）时翻到按钮下方去，别浮出屏幕外。
+           单例、懒创建，跟 #rdBgBar 那条进度条一个路子。 */
+        function _rdBgTipEl() {
+            var el = document.getElementById('rdBgHoldTip');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'rdBgHoldTip';
+                document.body.appendChild(el);
+            }
+            return el;
+        }
+        function _rdBgTipShow(btn) {
+            var el = _rdBgTipEl();
+            el.className = '';
+            el.innerHTML = '<span>按住…松手标背景</span><span class="rdbg-bar"><i></i></span>';
+            var r = btn.getBoundingClientRect();
+            el.style.visibility = 'hidden'; el.style.left = '0px'; el.style.top = '0px';
+            el.classList.add('show');
+            var w = el.offsetWidth, h = el.offsetHeight;
+            var left = r.left + r.width / 2 - w / 2;
+            left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+            var top = r.top - h - 8;
+            if (top < 8) top = r.bottom + 8;      // 顶上放不下就翻到按钮下方
+            el.style.left = Math.round(left) + 'px';
+            el.style.top = Math.round(top) + 'px';
+            el.style.visibility = '';
+            // 进度条要在「已经显示出来」之后再起跑，否则 transition 没有起点、会直接跳到满格
+            requestAnimationFrame(function () { requestAnimationFrame(function () { el.classList.add('filling'); }); });
+        }
+        function _rdBgTipArm() {
+            var el = document.getElementById('rdBgHoldTip');
+            if (!el) return;
+            el.classList.remove('filling');
+            el.classList.add('armed');
+            el.innerHTML = '<span>🏛 松手 → 标这一节背景</span>';
+        }
+        function _rdBgTipHide() {
+            var el = document.getElementById('rdBgHoldTip');
+            if (el) el.className = '';
+        }
+
         function readingOpenAskBar(msgIdx, pNum, anchorEl, prefill, opts) {
             // 左右跟随翻页按钮位置：靠左则「提问」在最左、靠右则在最右（贴近拿机手拇指）
             var pos = localStorage.getItem('reading_pagebtn_pos') || 'rb';
@@ -23291,11 +23356,19 @@ body {
                为什么不另加一个按钮：用户明确要「零新增图标」的极简，而她喜欢的正是
                「一个键、标签跟着状态变」那套。可「想听导读」和「想标背景」时输入框都是空的，
                程序猜不出来，所以第三态只能靠手势——按住半秒，标签**就地**变成「标背景」，
-               松手才真开始（长按期间滑开手指＝反悔）。这样手势自己教会自己，也永远不会误点。 */
+               松手才真开始（长按期间滑开手指＝反悔）。这样手势自己教会自己，也永远不会误点。
+               ⚠️**反馈全在手指底下＝等于没有反馈（2026-08-03 修）**：用户原话「我总是忍不住去看看
+               手底下那个按键变化了没有」。手指正压在按钮上，按钮上的文字和底色她一个都看不见，
+               只能靠猜或者歪头瞄；而震动原本只有 15ms，实际摸不出来。手势本身她认可，
+               坏的是反馈，所以交互一字不改，只把反馈搬到**看得见、摸得着**的地方：
+               ① `_rdBgTip*` 在按钮**正上方**浮一条提示，按住就开始走进度条（还要按多久看得见），
+                  走满变成「松手 → 标这一节背景」；
+               ② 震动从 15ms 单下改成 30/70/30 的**双下**（单下太像误触，双下是明确的"到位了"）。 */
             var _bgHoldTimer = null, _bgHoldAt = null, _bgArmed = false, _bgEatClick = false, _bgLabel = send.textContent;
             function _bgDisarm() {
                 if (_bgHoldTimer) { clearTimeout(_bgHoldTimer); _bgHoldTimer = null; }
                 _bgHoldAt = null;
+                _rdBgTipHide();
                 if (_bgArmed) { _bgArmed = false; send.textContent = _bgLabel; send.classList.remove('rp-bg-armed'); }
             }
             send.addEventListener('pointerdown', function (e) {
@@ -23304,15 +23377,19 @@ body {
                 if (input.value.trim()) return;     // 打了字＝讨论，长按不接管
                 if (readerBgRunning) return;   // 标背景一次只跑一轮；别的段在提问不影响（可并发）
                 _bgHoldAt = { x: e.clientX, y: e.clientY };
+                _rdBgTipShow(send);                 // 手指一按下，上方就出现进度条：还要按多久看得见
                 _bgHoldTimer = setTimeout(function () {
                     _bgHoldTimer = null; _bgArmed = true;
                     _bgLabel = send.textContent;
                     send.textContent = '背景';
                     send.classList.add('rp-bg-armed');
+                    _rdBgTipArm();                  // 上方那条变成「松手 → 标这一节背景」
                     // 兜底：万一系统抢在 CSS 之前已经选中了按钮文字（安卓部分机型），就地清掉，
                     // 照抄长按评论块那条路的做法。不清的话选区还会拦住后面的点击。
                     try { window.getSelection().removeAllRanges(); } catch (x) {}
-                    try { navigator.vibrate && navigator.vibrate(15); } catch (x) {}
+                    /* ⚠️别改回单下的 15ms：那个长度实测摸不出来，而"摸不出来"正是她要盯着按钮看的原因。
+                       30/70/30 的双下有节奏，跟误触时偶发的一下明确区分得开。 */
+                    try { navigator.vibrate && navigator.vibrate([0, 30, 70, 30]); } catch (x) {}
                 }, 500);
             });
             send.addEventListener('pointermove', function (e) {
