@@ -420,6 +420,8 @@ function bootSocial() {
         const tipArmed = document.getElementById('rdBgHoldTip');
         out.到位后提示文字 = tipArmed ? tipArmed.textContent : '';
         out.到位后提示变色 = !!(tipArmed && tipArmed.classList.contains('armed'));
+        out.提示右边界 = tipArmed ? Math.round(tipArmed.getBoundingClientRect().right) : 0;
+        out.屏宽 = window.innerWidth;
         pe(send, 'pointerup'); send.click();
         await wait(30);
         out.松手后提示收了 = !document.getElementById('rdBgHoldTip').classList.contains('show');
@@ -455,8 +457,10 @@ function bootSocial() {
     ok('手指一按下，上方立刻出现蓄力提示', H.按下就出提示, JSON.stringify(H.按下就出提示));
     ok('提示浮在按钮**上方**（手指盖不住）', H.提示在按钮上方, '提示跑到按钮身上或下方了');
     eq('提示不吃指针事件（别挡住长按本身）', H.提示不挡手势, 'none');
-    ok('蓄力到位，提示文字明说「松手 → 标这一节背景」', /松手/.test(H.到位后提示文字) && /背景/.test(H.到位后提示文字), H.到位后提示文字);
-    ok('蓄力到位，提示整条变强调色（余光也看得见）', H.到位后提示变色, '没变色');
+    ok('蓄力到位，提示明说「松手＝背景」', /松手/.test(H.到位后提示文字) && /背景/.test(H.到位后提示文字), H.到位后提示文字);
+    // ⚠️用户实测第一版文案「松手 → 标这一节背景」顶出了屏幕。浮层是 nowrap 的，文案必须短。
+    ok('提示条整条在屏幕内（文案不许写长）', H.提示右边界 <= H.屏宽, '右边界 ' + H.提示右边界 + ' > 屏宽 ' + H.屏宽);
+    ok('蓄力到位，提示整条变强调色（没有震动了，全靠这个）', H.到位后提示变色, '没变色');
     ok('松手后提示收掉', H.松手后提示收了, '提示还杵在屏幕上');
     ok('滑开反悔后提示也收掉', H.滑开后提示收了, '提示还杵在屏幕上');
     eq('短按 → 还是导读，不会误标背景', H.短按, [['ask', '导读']]);

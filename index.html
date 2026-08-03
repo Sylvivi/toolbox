@@ -3439,6 +3439,9 @@ body {
            position:fixed 挂在 body 上（不受操作栏重渲影响），pointer-events:none（别挡住手势）。 */
         #rdBgHoldTip {
             position: fixed; z-index: 1001; pointer-events: none; white-space: nowrap;
+            /* ⚠️兜底：nowrap + 文案写长了会顶出屏幕（用户实测第一版就超了）。
+               文案本身要短，这条只是防线——超了宁可截断也不许把条子撑到屏幕外。 */
+            max-width: calc(100vw - 16px); overflow: hidden; text-overflow: ellipsis;
             padding: 5px 10px; border-radius: 9px; font-size: 12px; font-weight: 600;
             background: var(--card-bg); color: var(--text); border: 1px solid var(--accent-mid);
             box-shadow: 0 3px 12px rgba(0, 0, 0, .18);
@@ -23268,13 +23271,15 @@ body {
             }
             return el;
         }
-        function _rdBgTipShow(btn) {
-            var el = _rdBgTipEl();
-            el.className = '';
-            el.innerHTML = '<span>按住…松手标背景</span><span class="rdbg-bar"><i></i></span>';
-            var r = btn.getBoundingClientRect();
-            el.style.visibility = 'hidden'; el.style.left = '0px'; el.style.top = '0px';
-            el.classList.add('show');
+        var _rdBgTipBtn = null;
+        /* ⚠️改完内容**必须**重新定位一次（2026-08-03 修，测试当场逮到）：
+           位置原本只在「按住…」那一刻算一次，可蓄满后文字换成「🏛 松手＝背景」**变宽了**，
+           而这个按钮贴着屏幕右边——元素只会朝右长，于是整条顶出屏幕外
+           （实测右边界 412 > 屏宽 390）。所以定位单独抽出来，显示和蓄满两处都调。 */
+        function _rdBgTipPlace() {
+            var el = document.getElementById('rdBgHoldTip');
+            if (!el || !_rdBgTipBtn) return;
+            var r = _rdBgTipBtn.getBoundingClientRect();
             var w = el.offsetWidth, h = el.offsetHeight;
             var left = r.left + r.width / 2 - w / 2;
             left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
@@ -23282,6 +23287,16 @@ body {
             if (top < 8) top = r.bottom + 8;      // 顶上放不下就翻到按钮下方
             el.style.left = Math.round(left) + 'px';
             el.style.top = Math.round(top) + 'px';
+        }
+        function _rdBgTipShow(btn) {
+            var el = _rdBgTipEl();
+            _rdBgTipBtn = btn;
+            el.className = '';
+            // ⚠️文案要短：浮层是 nowrap 的，写长了会顶出屏幕（用户实测第一版「按住…松手标背景」就超了）
+            el.innerHTML = '<span>按住…</span><span class="rdbg-bar"><i></i></span>';
+            el.style.visibility = 'hidden'; el.style.left = '0px'; el.style.top = '0px';
+            el.classList.add('show');
+            _rdBgTipPlace();
             el.style.visibility = '';
             // 进度条要在「已经显示出来」之后再起跑，否则 transition 没有起点、会直接跳到满格
             requestAnimationFrame(function () { requestAnimationFrame(function () { el.classList.add('filling'); }); });
@@ -23291,11 +23306,13 @@ body {
             if (!el) return;
             el.classList.remove('filling');
             el.classList.add('armed');
-            el.innerHTML = '<span>🏛 松手 → 标这一节背景</span>';
+            el.innerHTML = '<span>🏛 松手＝背景</span>';
+            _rdBgTipPlace();     // 文字变宽了，位置得跟着重算，否则会顶出屏幕
         }
         function _rdBgTipHide() {
             var el = document.getElementById('rdBgHoldTip');
             if (el) el.className = '';
+            _rdBgTipBtn = null;
         }
 
         function readingOpenAskBar(msgIdx, pNum, anchorEl, prefill, opts) {
@@ -23387,9 +23404,9 @@ body {
                     // 兜底：万一系统抢在 CSS 之前已经选中了按钮文字（安卓部分机型），就地清掉，
                     // 照抄长按评论块那条路的做法。不清的话选区还会拦住后面的点击。
                     try { window.getSelection().removeAllRanges(); } catch (x) {}
-                    /* ⚠️别改回单下的 15ms：那个长度实测摸不出来，而"摸不出来"正是她要盯着按钮看的原因。
-                       30/70/30 的双下有节奏，跟误触时偶发的一下明确区分得开。 */
-                    try { navigator.vibrate && navigator.vibrate([0, 30, 70, 30]); } catch (x) {}
+                    /* ⚠️这里原来有一句 navigator.vibrate，2026-08-03 按用户要求去掉了：
+                       「震动可以取消，我不需要，浏览器也不支持」。上方那条浮层已经把
+                       「蓄好力了」说清楚了，别再加回来。 */
                 }, 500);
             });
             send.addEventListener('pointermove', function (e) {
