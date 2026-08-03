@@ -21613,19 +21613,24 @@ body {
                 var f = rbBookFolder(rbBooks[i]) || '';
                 (groups[f] = groups[f] || []).push(rbBooks[i]);
             }
+            /* 一本书的「最近读过」时间戳。信号取两者较新的：rbMarkOpened 记的「打开时间」
+               (共读+阅读器都算) 和 reader_pos 的阅读器进度时间。没读过就是 0。
+               文件夹列表(取组内最大值)和文件夹内书目(直接排序)共用这一套，别再各写一份。 */
+            var rp = (typeof readerPosAll === 'function') ? readerPosAll() : {};
+            var op = rbOpenedLoad();
+            function rbBookLastTs(b) {
+                var k = rbBookEffKey(b);
+                return Math.max((rp[k] || {}).ts || 0, op[k] || 0);
+            }
             if (rbCurrentFolder === null) {
                 // —— 文件夹列表视图 ——
                 setTitle('📚 书架', null);
                 // 每个文件夹取「里面所有书里最近一次阅读/打开时间」，用来把最近读过的文件夹排前面
-                // 信号取两者较新的：rbMarkOpened 记的「打开时间」(共读+阅读器都算) 和 reader_pos 的阅读器进度时间
-                var rp = (typeof readerPosAll === 'function') ? readerPosAll() : {};
-                var op = rbOpenedLoad();
                 var folderTs = {};
                 Object.keys(groups).forEach(function (f) {
                     var mx = 0;
                     groups[f].forEach(function (b) {
-                        var k = rbBookEffKey(b);
-                        var t = Math.max((rp[k] || {}).ts || 0, op[k] || 0);
+                        var t = rbBookLastTs(b);
                         if (t > mx) mx = t;
                     });
                     folderTs[f] = mx;
@@ -21648,7 +21653,13 @@ body {
             } else {
                 // —— 某文件夹内 ——
                 var cur = rbCurrentFolder;
-                var list = groups[cur] || [];
+                var list = (groups[cur] || []).slice();
+                /* 文件夹里也按「最近读过」排，新→旧（2026-08-03 用户要的）。
+                   ⚠️ 用 slice() 拿副本再排：groups[cur] 里装的是 rbBooks 里的同几个对象，
+                   直接 sort 会连带把 rbBooks 的顺序也搅了(数组是同一批引用、但顺序是 rbSave 会存的)。
+                   ⚠️ 没读过的一律 ts=0，靠 sort 的稳定性保持原来的导入顺序，别再按名字重排——
+                   她按顺序传上来的书(比如同一套书的上下册)重排了反而找不着。 */
+                list.sort(function (a, b) { return rbBookLastTs(b) - rbBookLastTs(a); });
                 setTitle('‹ 📁 ' + (cur === '' ? '未分类' : rbEsc(cur)), rbFolderBack);
                 box.innerHTML = list.length
                     ? list.map(rbBookItemHtml).join('')
