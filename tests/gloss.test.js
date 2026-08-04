@@ -364,6 +364,50 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             document.querySelectorAll('.__glt').forEach(n => n.remove());
         }
 
+        /* ── O：引线不许交叉（用户 2026-08-04：「那个缟素舍近求远，导致两条线都交叉了」）──
+           根因：「想放哪儿」只按**第一行片段**算了一份，可小注实际是往下走的、该锚最后一行。
+           跨行的词（缟在行尾最右／素在行首最左）于是标签摆最右、箭头指最左，
+           一条线横穿整段，顺带把旁边那条也叉了。现在 wantUp/wantDown 各算一份。 */
+        {
+            document.querySelectorAll('.__glt').forEach(n => n.remove());
+            document.documentElement.style.setProperty('--reading-pspace', '28px');
+            const box = document.createElement('div');
+            box.className = 'reading-merged'; box.style.cssText = 'font-size:14px;line-height:1.6;width:358px';
+            box.innerHTML =
+                '<blockquote data-cp="1" style="margin:0.4em 0 0;padding:10px">汐：背景：董公遮说</blockquote>' +
+                '<p data-p="2">汉王闻之，袒而大哭。遂为义帝发丧，临三日。发使者告诸侯曰：“天下共立义帝，北面事之。今项羽放杀义帝于江南，大逆无道。寡人亲为发丧，诸侯皆缟素。悉发关内兵，收三河土。”</p>' +
+                '<blockquote data-cp="2" style="margin:0.4em 0 0;padding:10px">汐：背景：三河</blockquote>';
+            const bub = document.createElement('div'); bub.className = 'chat-bubble'; bub.appendChild(box);
+            const msg = document.createElement('div');
+            msg.className = 'chat-msg ai __glt'; msg.setAttribute('data-idx','0'); msg.appendChild(bub);
+            document.body.appendChild(msg);
+            const p2 = box.querySelector('p[data-p="2"]');
+            [['袒','tǎn·脱去上衣露肩膀','o1'],['义帝','yì dì·楚怀王熊心，被项羽尊为义帝','o2'],['缟素','gǎo sù·穿白色丧服','o3']]
+                .forEach(([w, note, id]) => {
+                    const at = p2.textContent.indexOf(w);
+                    rdHlWrapRange(p2, at, at + w.length, 'gold', id, false);
+                    const mk = p2.querySelector('mark[data-hlid="' + id + '"]');
+                    if (mk) mk.setAttribute('data-gl', note);
+                });
+            rdGlLayout(bub);
+            const segs = [...box.querySelectorAll('.rd-gl-svg path')].map(pa => {
+                const m = pa.getAttribute('d').match(/^M([-\d.]+) ([-\d.]+) Q[-\d.]+ [-\d.]+ ([-\d.]+) ([-\d.]+)/);
+                return { id: pa.getAttribute('data-glid'), x1: +m[1], y1: +m[2], x2: +m[3], y2: +m[4] };
+            });
+            const sd = (P, Q, Rr) => Math.sign((Q.x - P.x) * (Rr.y - P.y) - (Q.y - P.y) * (Rr.x - P.x));
+            const cross = (a, c) => {
+                const A = {x:a.x1,y:a.y1}, B = {x:a.x2,y:a.y2}, C = {x:c.x1,y:c.y1}, D = {x:c.x2,y:c.y2};
+                return sd(A,B,C) !== sd(A,B,D) && sd(C,D,A) !== sd(C,D,B);
+            };
+            let n = 0;
+            for (let i = 0; i < segs.length; i++) for (let j = i + 1; j < segs.length; j++) if (cross(segs[i], segs[j])) n++;
+            out.O_三条都有引线 = segs.length === 3;
+            out.O_零交叉 = n === 0;
+            // 舍近求远会拉出一条横穿整段的长线；正常的都在 100px 以内
+            out.O_没有异常长的线 = segs.every(s => Math.hypot(s.x2 - s.x1, s.y2 - s.y1) < 130);
+            document.querySelectorAll('.__glt').forEach(n2 => n2.remove());
+        }
+
         // ── H：按钮挂上去了 ──
         {
             out.H_有注按钮 = rdHlShowSelBar.toString().indexOf('data-act="gloss"') >= 0;
@@ -436,6 +480,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('K4 长意思不被砍（章邯那条完整版）', R.K_长意思没被砍);
     ok('K5 四字词的长拼音不挤掉意思', R.K_四字词也不砍);
     ok('K6 代码上限留了余量（>提示词的 14）', R.K_留了余量);
+    ok('O1 三条引线都画出来了', R.O_三条都有引线);
+    ok('O2 引线之间零交叉', R.O_零交叉);
+    ok('O3 没有舍近求远拉出的长线', R.O_没有异常长的线);
     ok('N1 三条小注都排出来了', R.N_三条都在);
     ok('N2 挤在一起时零重叠', R.N_零重叠);
     ok('N3 前提：它们确实一行放不下', R.N_确实放不下一行);

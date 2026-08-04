@@ -25512,7 +25512,15 @@ body {
                         // 在**实测的**那道缝里居中，别硬用 RD_GL_INSET：缝窄时会顶到隔壁块上
                         lyUp: pTop - Math.max(2, Math.min(RD_GL_INSET, (roomUp - lh) / 2)) - lh,
                         lyDown: pBot + Math.max(2, Math.min(RD_GL_INSET, (roomDown - lh) / 2)),
-                        want: tx + side * RD_GL_DX - lw / 2
+                        /* ⚠️「想放哪儿」必须**跟着方向各算一份**。
+                           只算一份（用第一行片段）时，跨行的词会舍近求远：
+                           「缟素」的缟在第 3 行末尾(最右)、素在第 4 行开头(最左)，
+                           小注放到下面本该锚最左边，却按最右边去排位 ——
+                           标签摆最右、箭头指最左，一条线横穿整段，还把旁边那条也叉了
+                           （用户 2026-08-04 原话：「那个缟素舍近求远，导致两条线都交叉了」）。 */
+                        wantUp: tx + ((tx > pLeft + pr.width / 2) ? -1 : 1) * RD_GL_DX - lw / 2,
+                        wantDown: txDown + ((txDown > pLeft + pr.width / 2) ? -1 : 1) * RD_GL_DX - lw / 2,
+                        want: (nearUp ? tx : txDown) + side * RD_GL_DX - lw / 2   // 仅用于排序
                     });
                 }
             }
@@ -25534,12 +25542,13 @@ body {
                    分成两个队列它俩就互相看不见、照样叠（C2 那条测试就是防这个的，我自己踩回去过一次）。 */
                 var key = String(g);
                 var prev = rowRight[key];
-                var x = Math.max(it.want, left);
+                var wantHere = useUp ? it.wantUp : it.wantDown;   // ⚠️跟着方向取，别用那份只算一次的
+                var x = Math.max(wantHere, left);
                 if (prev != null && x < prev + RD_GL_SEP) x = prev + RD_GL_SEP;
                 if (x + it.lw > right) {
                     if (!force) return false;                  // 这条缝这一行满了 → 交给调用方去试另一边
                     rowNum[key] = (rowNum[key] || 0) + 1;      // 两边都满：只好在首选那边另起一行
-                    x = Math.max(Math.max(it.want, left), left);
+                    x = Math.max(wantHere, left);
                     if (x + it.lw > right) x = Math.max(left, right - it.lw);
                 }
                 it.up = useUp; it.gap = g; it.lx = x;
