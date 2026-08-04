@@ -441,10 +441,14 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.H_已有划线上也没问 = rdHlShowEditBar.toString().indexOf('data-act="ask"') < 0;
             out.H_函数已删干净 = typeof window.rdHlAskClawd === 'undefined';
             out.H_注按钮还在 = rdHlShowSelBar.toString().indexOf('data-act=\"gloss\"') >= 0;
-            /* 「✍️ 注」要排在划线色板**前面**（用户 2026-08-04：「这个是高频功能」）。
-               按源码里两段的先后位置判：gloss 按钮必须出现在 rdHlSwatchHtml 之前。 */
+            /* 顺序是用户 2026-08-04 亲自定的：色板 → ✍️注 → 划线样式 → ✏️改。
+               她先试过「注放最前」，说不对，要在色板后面。按源码里三段的先后位置钉住。 */
             const _src = rdHlShowSelBar.toString();
-            out.H_注排在色板前 = _src.indexOf('data-act="gloss"') < _src.indexOf('rdHlSwatchHtml(');
+            const _iSw = _src.indexOf('rdHlSwatchHtml(');
+            const _iGl = _src.indexOf('data-act="gloss"');
+            const _iSt = _src.indexOf('rdHlStyleBtnHtml(');
+            out.H_注在色板后 = _iSw < _iGl;
+            out.H_注在划线前 = _iGl < _iSt;
             // 已有划线的小条上也要有「✍️ 重注」——否则想重注只能先删划线再重选（用户真踩了）
             out.H_重注按钮 = rdHlShowEditBar.toString().indexOf("data-act=\"gloss\"") >= 0;
             out.H_重注接到rdGlRedo = rdHlShowEditBar.toString().indexOf('rdGlRedo') >= 0;
@@ -531,7 +535,8 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('H3b 点已有划线时也没有「💬 问」了', R.H_已有划线上也没问);
     ok('H3d 死函数已删干净', R.H_函数已删干净);
     ok('H3c 撤「问」没误删「✍️ 注」', R.H_注按钮还在);
-    ok('H3e 「✍️ 注」排在划线色板前面', R.H_注排在色板前);
+    ok('H3e 「✍️ 注」排在色板后面', R.H_注在色板后);
+    ok('H3f 「✍️ 注」排在「划线」前面', R.H_注在划线前);
     ok('H4 已有划线上有「✍️ 重注」', R.H_重注按钮);
     ok('H5 重注接到 rdGlRedo', R.H_重注接到rdGlRedo);
     ok('H6 新建与重注共用同一条 AI 路径', R.H_共用一条路);
