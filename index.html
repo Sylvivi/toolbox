@@ -25583,10 +25583,21 @@ body {
                 var x = Math.max(wantHere, left);
                 if (prev != null && x < prev + RD_GL_SEP) x = prev + RD_GL_SEP;
                 if (x + it.lw > right) {
-                    if (!force) return false;                  // 这条缝这一行满了 → 交给调用方去试另一边
-                    rowNum[key] = (rowNum[key] || 0) + 1;      // 两边都满：只好在首选那边另起一行
-                    x = Math.max(wantHere, left);
-                    if (x + it.lw > right) x = Math.max(left, right - it.lw);
+                    /* ⚠️伸出右边了**先别急着判"这一行满了"**，往左推、贴着右边界再试一次。
+                       想放的位置(want)只是「离目标字 22px」这个手感偏好，本来就允许让步；
+                       真正的"满"是**已经摆好的那条挡住了**，跟右边界够不够无关。
+                       2026-08-05 用户报「上面那条位置又太靠上了」——她那条小注宽 256px、
+                       want 比右边界只多出 3px，于是被判成满 → 另起一行 → 整条抬高约 28px、
+                       直接压进上一段正文里。而这条缝里**只有它一条**，贴右边一放就正好放得下。 */
+                    var xr = Math.max(left, right - it.lw);
+                    if (prev == null || xr >= prev + RD_GL_SEP) {
+                        x = xr;                                // 这一行还容得下，让个位置就行
+                    } else if (!force) {
+                        return false;                          // 真的挤不下了 → 交给调用方去试另一边
+                    } else {
+                        rowNum[key] = (rowNum[key] || 0) + 1;  // 两边都满：只好在首选那边另起一行
+                        x = Math.min(Math.max(wantHere, left), xr);
+                    }
                 }
                 it.up = useUp; it.gap = g; it.lx = x;
                 it.ly = useUp ? it.lyUp : it.lyDown;

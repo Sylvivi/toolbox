@@ -511,6 +511,50 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             document.querySelectorAll('.__glt').forEach(n => n.remove());
         }
 
+        /* ── S：一条缝里只有一条小注时，绝不许另起一行 ──
+           用户 2026-08-05 截图：「上面的那个位置又太靠上了」。那条小注宽 256px，
+           想放的位置(want＝离目标字 22px)比段落右边界只多出 3px，就被判成「这一行满了」，
+           另起一行 → 整条抬高约 28px → 压进上一段正文里。而这条缝**只有它一条**，
+           往左让 3px 贴着右边界一放就正好放得下。
+           ⚠️判「满」的依据只能是「已经摆好的那条挡住了」，不是「够不够右边界」——
+           want 只是手感偏好，本来就该让位。 */
+        {
+            document.querySelectorAll('.__glt').forEach(n => n.remove());
+            const S1 = '力更强。谁掌握了南北军，谁就控制了整个长安的军事力量，等于捏住了皇权的命脉。';
+            const S2 = '于是，丞相就照着张辟疆的建议去跟太后说。果然太后有了反应，这才放心去哭她死去的儿子。'
+                     + '靠着孝惠皇帝死后的转折变化，这些吕家的男人纷纷进入朝廷，获得了重要的位置和权力。';
+            const sbox = document.createElement('div');
+            sbox.className = 'reading-merged';
+            sbox.style.cssText = 'font-size:14px;line-height:1.6;width:358px';
+            // 目标字在第 2 段**第一行偏右**：小注首选往上、want 必然伸出右边界
+            sbox.innerHTML = '<p data-p="1">' + S1 + '</p><p data-p="2">'
+                + S2.replace('去跟太后说', '<mark class="rd-hl rd-hl-sky" data-hlid="s1" data-gl="shà·此处通「喢」，意为杀，杀白马歃血为盟">去跟太后说</mark>')
+                + '</p>';
+            const sbub = document.createElement('div'); sbub.className = 'chat-bubble'; sbub.appendChild(sbox);
+            const smsg = document.createElement('div');
+            smsg.className = 'chat-msg ai __glt'; smsg.setAttribute('data-idx', '0'); smsg.appendChild(sbub);
+            document.body.appendChild(smsg);
+            document.documentElement.style.setProperty('--reading-pspace', '28px');
+            sbox.querySelectorAll('p').forEach((p, i) => { if (i) p.style.marginTop = '28px'; });
+            rdGlLayout(sbub);
+
+            const sc = sbox.getBoundingClientRect();
+            const sl = sbox.querySelector('.rd-gl-label');
+            const sp1 = sbox.querySelector('p[data-p="1"]').getBoundingClientRect();
+            const sp2 = sbox.querySelector('p[data-p="2"]').getBoundingClientRect();
+            const sTop = parseFloat(sl.style.top);
+            out.S_只有一条 = sbox.querySelectorAll('.rd-gl-label').length === 1;
+            // 前提：它想放的位置确实伸出了右边界（不然这组测的就不是同一件事）
+            out.S_确实放不进想要的位置 = sl.offsetWidth + RD_GL_DX > sp2.width / 2;
+            // 落在缝里：标签上边沿不许高过上一段的底
+            out.S_没被抬高一行 = sTop >= (sp1.bottom - sc.top) - 1;
+            out.S_也没掉出缝 = sTop + sl.offsetHeight <= (sp2.top - sc.top) + 1;
+            out.S_内缩 = Math.round((sp2.top - sc.top) - sTop - sl.offsetHeight);
+            // 让位之后必须仍在段落宽度内（贴右边界）
+            out.S_没伸出右边 = sl.getBoundingClientRect().right <= sp2.right + 1;
+            document.querySelectorAll('.__glt').forEach(n => n.remove());
+        }
+
         // ── H：按钮挂上去了 ──
         {
             out.H_有注按钮 = rdHlShowSelBar.toString().indexOf('data-act="gloss"') >= 0;
@@ -598,6 +642,11 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('K4 长意思不被砍（章邯那条完整版）', R.K_长意思没被砍);
     ok('K5 四字词的长拼音不挤掉意思', R.K_四字词也不砍);
     ok('K6 代码上限留了余量（>提示词的 14）', R.K_留了余量);
+    ok('S1 前提：这条缝里只有一条小注', R.S_只有一条);
+    ok('S2 前提：它想放的位置确实伸出了右边界', R.S_确实放不进想要的位置);
+    ok('S3 独占一条缝时不许另起一行（不压上一段）', R.S_没被抬高一行);
+    ok('S4 也没掉到缝外面去', R.S_也没掉出缝, '内缩 ' + R.S_内缩 + 'px');
+    ok('S5 让位之后没伸出段落右边', R.S_没伸出右边);
     ok('R1 前提：紧跟背景块那道缝确实很窄', R.R_下面那道缝很窄);
     ok('R6 宽缝（正常段间距）仍用小内缩，没被误伤', R.R_宽缝仍用小内缩);
     ok('R2 小注没被挤扁（离正文≥6px）', R.R_没被挤扁);
