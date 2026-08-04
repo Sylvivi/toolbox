@@ -3233,9 +3233,65 @@ body {
         body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-green  { text-decoration-color: #5fc46a; }
         body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-sky    { text-decoration-color: #7aa3e8; }
         body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-rose   { text-decoration-color: #ff8aa3; }
-        /* 带批注的划线：右上角缀一个小点提示「这条有笔记」 */
+        /* 带批注的划线：右上角缀一个小点提示「这条有笔记」。
+           ⚠️只留给**长批注**（>RD_GL_MAX 字）——短的已经以手写小注的形式直接写在段间距里了，
+           再缀个 ✎ 就是同一件事说两遍。类名由 readingApplyHighlights 按长度分流决定。 */
         mark.rd-hl.rd-hl-noted { position: relative; }
         mark.rd-hl.rd-hl-noted::after { content: '✎'; font-size: 9px; opacity: 0.6; vertical-align: super; margin-left: 1px; }
+
+        /* ===== 手写小注（2026-08-04 加）=====
+           用途：读小说碰到不会读/不懂的字，选中 →「✍️ 注」→ AI 给一句「拼音·意思」，
+           以手写体挂在**段间距**里、用一根手绘引线指回那个字。
+
+           为什么挂段间距而不是行间：正文行距 1.6、字号 14px，两行之间只有 8.4px，
+           而一条小注连引线要 50px 上下——塞不进去。段间距（--reading-pspace，用户设 28px）
+           才有容身之地。⚠️这也意味着**段间距调太小（<20px）时小注会挤**，那是物理限制。
+
+           零新增存储：一条小注就是一条划线（reading_highlights）的 note 字段，
+           云同步/换设备/删除/读痕面板全部白拿。颜色也复用划线那 5 个色。 */
+        .rd-gl-label {
+            position: absolute;
+            font-family: '溪涧山雪璞玉浑金', cursive;   /* 5 个花体里唯一拼音声调齐全的，见 SERVER-OPS/记忆 */
+            font-size: 13px; line-height: 1.05;
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0.94;
+            transform: rotate(-2.5deg);
+            transform-origin: left center;
+            z-index: 2;
+        }
+        /* ⚠️引线是 SVG，拿不到 mark 上那个颜色类的变量，stroke 由 JS 用 style.stroke 刷。
+           别改成 setAttribute('stroke')——表现属性优先级最低，会被下面这条整个盖掉。 */
+        .rd-gl-svg {
+            position: absolute; left: 0; top: 0;
+            overflow: visible; pointer-events: none;
+            z-index: 1;
+        }
+        /* ⚠️⚠️小注和引线必须挂在**整个正文容器**上、单独一层，**绝不能挂进 <p> 里面**。
+           原因：点击翻页(readingPageDown)靠 `range.selectNodeContents(p).getClientRects()`
+           逐行量位置来对齐，塞进段落里的绝对定位元素会被它当成"一行"，翻页就会翻歪——
+           而那是读小说时每分钟都在用的手势。挂在容器上，selectNodeContents(p) 就看不见它们。
+           （阅读位置记忆量的是段落自身的框，不受绝对定位子元素影响，那条路本来就安全。） */
+        .rd-gl-layer {
+            position: absolute; inset: 0;
+            overflow: visible; pointer-events: none;
+        }
+        .rd-gl-svg path {
+            fill: none; stroke-width: 1.4;
+            stroke-linecap: round; stroke-linejoin: round;
+            opacity: 0.82;
+        }
+        /* 小注的墨色 = 划线色的「深」那一套（原本只用在下划线样式上，正好当笔迹色） */
+        .rd-gl-gold   { color: #d9a400; }
+        .rd-gl-orange { color: #e8722a; }
+        .rd-gl-green  { color: #3a9a4a; }
+        .rd-gl-sky    { color: #1E50A2; }
+        .rd-gl-rose   { color: #e85f7f; }
+        body.dark .rd-gl-gold   { color: #ffcf2e; }
+        body.dark .rd-gl-orange { color: #ff9a52; }
+        body.dark .rd-gl-green  { color: #5fc46a; }
+        body.dark .rd-gl-sky    { color: #7aa3e8; }
+        body.dark .rd-gl-rose   { color: #ff8aa3; }
 
         /* 划线浮动小条：选中文字 / 点已有划线时冒出 */
         .rd-hl-bar {
@@ -18365,6 +18421,8 @@ body {
             document.documentElement.style.setProperty('--reading-fs', s + 'em');
             var lbl = document.getElementById('readingFontVal');
             if (lbl) lbl.textContent = Math.round(s * 100) + '%';
+            // 字号一变，每行的位置全变 → 手写小注的引线长度要重量（漏了就会满屏歪线）
+            if (typeof rdGlRelayoutSoon === 'function') rdGlRelayoutSoon();
         }
         function readingStepFontScale(delta) {
             var s = parseFloat(localStorage.getItem('reading_font_scale') || '1') || 1;
@@ -18382,6 +18440,8 @@ body {
             document.documentElement.style.setProperty('--reading-pspace', s + 'px');
             var lbl = document.getElementById('readingParaVal');
             if (lbl) lbl.textContent = s + 'px';
+            // 小注就住在段间距里，这个值一改它的容身之地就变了，必须重排
+            if (typeof rdGlRelayoutSoon === 'function') rdGlRelayoutSoon();
         }
         function readingStepParaSpace(delta) {
             var s = parseInt(localStorage.getItem('reading_para_space') || '8', 10);
@@ -19185,6 +19245,8 @@ body {
                 || rs.getPropertyValue('--reading-font-quote'));
             if (document.body) document.body.classList.toggle('rn-has-font', personFontOn);
             readingRenderFontUI();
+            // 换正文字体会让每行的位置整体偏移 → 小注引线重量（同 readingApplyFontScale）
+            if (typeof rdGlRelayoutSoon === 'function') rdGlRelayoutSoon();
         }
         // 兼容旧调用名（同步拉取等处仍在用）
         function readingApplyFont() { readingApplyFonts(); }
@@ -25217,8 +25279,213 @@ body {
                 if (!_markMatchesMsg(hl, msgIdx, chap)) continue;
                 var p = bubble.querySelector('.reading-merged p[data-p="' + hl.p + '"]');
                 if (!p || p.closest('.translate-merged')) continue;
-                rdHlWrapRange(p, hl.start, hl.end, hl.color, hl.id, !!(hl.note && hl.note.trim()));
+                /* 批注长短分流（用户 2026-08-04 选的）：
+                   短的（≤RD_GL_MAX 字）以**手写小注**直接写在段间距里；
+                   长的塞不进 28px 的缝，保留原来那个 ✎ 小点、点开看。
+                   ⚠️两者互斥，别同时挂——同一件事说两遍。 */
+                var _note = (hl.note || '').trim();
+                var _short = _note && _note.length <= RD_GL_MAX;
+                rdHlWrapRange(p, hl.start, hl.end, hl.color, hl.id, !!_note && !_short);
+                if (_short) {
+                    // 小注的文字挂在这条划线的**第一个** mark 上（长划线可能被拆成多个 mark）
+                    var _mk = p.querySelector('mark.rd-hl[data-hlid="' + hl.id + '"]');
+                    if (_mk) _mk.setAttribute('data-gl', _note);
+                }
             }
+            /* ⚠️必须 try 住：这里在**正文渲染的主路径**上（chatRenderMessage → 每条共读消息都走），
+               小注排版一旦抛异常，整篇正文就渲染不出来了。小注只是装饰，坏了顶多不显示，
+               绝不能连累正文。（同理，rdGlLayoutAll 里也逐条 try。） */
+            try { rdGlLayout(bubble); } catch (eGl) { console.warn('[手写小注] 排版失败：', eGl); }
+        }
+
+        /* ===================== 手写小注：排版引擎 =====================
+           一条小注 = 一个绝对定位的手写标签（落在段间距里）+ 一根手绘引线（SVG）。
+           两者都是**段落的子元素**，不进正文流 —— 所以不影响行高、不触发重排，
+           「记住阅读位置」那套按段落量位置的逻辑完全不受影响（这是选这个做法的主要原因）。
+
+           ⚠️几何上的硬约束（实测量出来的，别再试图绕）：
+           · 正文行距 1.6 × 14px = 每行 22.4px，行间只有 8.4px —— 小注放不进行间。
+           · 小注落在段间距（28px）里，**离正文的垂直距离只有 4~7px**。
+             所以引线长度只能靠**横向偏移**换；纯往下拉是拉不动的。
+           · 用户实测定的手感：引线约 23px、只带一点点斜度。
+             拉到 44~112px（"保证最短长度 + 从标签远端出发"那版）她的原话是
+             「为了倾斜而倾斜，斜线拉的过长，显得很花里胡哨」。**别再往长了调。** */
+        var RD_GL_MAX   = 14;   // 超过这么多字就不当手写小注（塞不进 28px 的缝）
+        var RD_GL_PAD   = 60;   // SVG 上下预留（引线要画到段落框外面去）
+        var RD_GL_INSET = 7;    // 小注在段间距里的上下留白
+        var RD_GL_SEP   = 8;    // 两条小注之间最小水平间隔
+        var RD_GL_DX    = 22;   // 引线横向偏移（唯一的手感旋钮，调大就开始花）
+        var RD_GL_TIP   = 3;    // 引线端点离标签/目标字的留缝
+
+        // 手绘感引线：二次贝塞尔 + 末端箭头（末端切线 = 终点 - 控制点）
+        function rdGlPath(sx, sy, ex, ey, bow) {
+            var mx = (sx + ex) / 2, my = (sy + ey) / 2;
+            var dx = ex - sx, dy = ey - sy;
+            var len = Math.sqrt(dx * dx + dy * dy) || 1;
+            var cx = mx + (-dy / len) * bow, cy = my + (dx / len) * bow;
+            var d = 'M' + sx.toFixed(1) + ' ' + sy.toFixed(1) +
+                    ' Q' + cx.toFixed(1) + ' ' + cy.toFixed(1) + ' ' + ex.toFixed(1) + ' ' + ey.toFixed(1);
+            var tx = ex - cx, ty = ey - cy;
+            var tl = Math.sqrt(tx * tx + ty * ty) || 1;
+            tx /= tl; ty /= tl;
+            var A = 0.42, HL = 6.5, c = Math.cos(A), s = Math.sin(A);
+            var b1x = ex - (tx * c - ty * s) * HL, b1y = ey - (tx * s + ty * c) * HL;
+            var b2x = ex - (tx * c + ty * s) * HL, b2y = ey - (-tx * s + ty * c) * HL;
+            return d + ' M' + b1x.toFixed(1) + ' ' + b1y.toFixed(1) +
+                   ' L' + ex.toFixed(1) + ' ' + ey.toFixed(1) +
+                   ' L' + b2x.toFixed(1) + ' ' + b2y.toFixed(1);
+        }
+
+        function rdGlClear(root) {
+            var old = (root || document).querySelectorAll('.rd-gl-layer');
+            for (var i = 0; i < old.length; i++) old[i].parentNode.removeChild(old[i]);
+        }
+
+        // 给一条消息（bubble）里的所有小注重新排版
+        function rdGlLayout(bubble) {
+            if (!bubble) return;
+            rdGlClear(bubble);
+            var box = bubble.querySelector('.reading-merged');
+            if (!box || box.closest('.translate-merged')) return;
+            if (!box.querySelector('mark.rd-hl[data-gl]')) return;
+
+            // 坐标全部相对**容器**算（小注不进段落，见 .rd-gl-layer 上那条 ⚠️）
+            if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
+            var cr = box.getBoundingClientRect();
+            var layer = document.createElement('div');
+            layer.className = 'rd-gl-layer';
+            box.appendChild(layer);
+
+            var paras = box.querySelectorAll('p[data-p]');
+            var all = [];
+
+            // 1) 量目标、建标签（要真实宽高才能排布）
+            for (var j = 0; j < paras.length; j++) {
+                var pa = paras[j];
+                var ms = pa.querySelectorAll('mark.rd-hl[data-gl]');
+                if (!ms.length) continue;
+                var pr = pa.getBoundingClientRect();
+                var pTop = pr.top - cr.top, pBot = pr.bottom - cr.top;
+                var pLeft = pr.left - cr.left;
+
+                for (var k = 0; k < ms.length; k++) {
+                    var m = ms[k], r = m.getBoundingClientRect();
+                    if (!r.width) continue;
+                    var tTop = r.top - cr.top, tBot = r.bottom - cr.top;
+                    // 就近选空当；第一段上面没有段间距，只能往下
+                    var up = (j > 0) && ((tTop - pTop) < (pBot - tBot));
+
+                    var lab = document.createElement('div');
+                    var col = (m.className.match(/rd-hl-(gold|orange|green|sky|rose)/) || [0, 'sky'])[1];
+                    lab.className = 'rd-gl-label rd-gl-' + col;
+                    lab.textContent = m.getAttribute('data-gl');
+                    lab.setAttribute('data-glid', m.getAttribute('data-hlid') || '');
+                    layer.appendChild(lab);
+
+                    var lw = lab.offsetWidth, lh = lab.offsetHeight;
+                    var tx = r.left + r.width / 2 - cr.left;
+                    var side = (tx > pLeft + pr.width / 2) ? -1 : 1;   // 往宽敞的那半边推
+                    all.push({
+                        pIdx: j, pLeft: pLeft, pW: pr.width, lab: lab,
+                        tx: tx,
+                        ty: up ? (tTop - RD_GL_TIP) : (tBot + RD_GL_TIP),
+                        ly: up ? (pTop - RD_GL_INSET - lh) : (pBot + RD_GL_INSET),
+                        up: up, lw: lw, lh: lh,
+                        want: tx + side * RD_GL_DX - lw / 2,
+                        // ⚠️防撞按「空当」分组，不是按段落：第 N 段往下 和 第 N+1 段往上，
+                        // 落进的是同一条 28px 的缝，必须一起排。
+                        gap: up ? (j - 1) : j
+                    });
+                }
+            }
+            if (!all.length) { layer.parentNode.removeChild(layer); return; }
+
+            // 2) 同一条缝里的按 x 排开，重叠往右推，右边溢出再整组左移
+            var byGap = {};
+            for (var a = 0; a < all.length; a++) (byGap[all[a].gap] = byGap[all[a].gap] || []).push(all[a]);
+            Object.keys(byGap).forEach(function (g) {
+                var grp = byGap[g];
+                grp.sort(function (x, y) { return x.want - y.want; });
+                var left = grp[0].pLeft, right = left + grp[0].pW, prev = -Infinity;
+                for (var i2 = 0; i2 < grp.length; i2++) {
+                    var it = grp[i2], x = it.want;
+                    if (x < prev + RD_GL_SEP) x = prev + RD_GL_SEP;
+                    if (x < left) x = left;
+                    it.lx = x; prev = x + it.lw;
+                }
+                var over = prev - right;
+                if (over > 0) for (var j2 = grp.length - 1; j2 >= 0; j2--) grp[j2].lx = Math.max(left, grp[j2].lx - over);
+            });
+
+            // 3) 落位 + 画引线（整篇共用一个 SVG，比每段一个省）
+            var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('class', 'rd-gl-svg');
+            svg.style.top = (-RD_GL_PAD) + 'px';
+            svg.setAttribute('width', String(Math.round(cr.width)));
+            svg.setAttribute('height', String(Math.round(cr.height + RD_GL_PAD * 2)));
+            layer.appendChild(svg);
+
+            for (var n = 0; n < all.length; n++) {
+                var it2 = all[n];
+                it2.lab.style.left = it2.lx.toFixed(1) + 'px';
+                it2.lab.style.top = it2.ly.toFixed(1) + 'px';
+
+                /* ⚠️引线起点取「标签边上、距目标字 RD_GL_DX 的那个点」，不是标签正中。
+                   标签有七八十像素宽，这个点几乎总落在标签范围内，所以**防撞怎么推、横向偏移都保得住**。
+                   取标签正中试过：防撞把标签排紧后中心正好落在目标字上方，引线塌到 6px。 */
+                var labMid = it2.lx + it2.lw / 2;
+                var sd = (labMid >= it2.tx) ? 1 : -1;
+                var sx = Math.max(it2.lx, Math.min(it2.lx + it2.lw, it2.tx + sd * RD_GL_DX));
+                var sy = it2.up ? (it2.ly + it2.lh + 1) : (it2.ly - 1);
+                var bow = Math.min(9, 2 + Math.abs(it2.ty - sy) * 0.05) * (n % 2 === 0 ? 1 : -1);
+
+                var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', rdGlPath(sx, sy + RD_GL_PAD, it2.tx, it2.ty + RD_GL_PAD, bow));
+                path.setAttribute('data-glid', it2.lab.getAttribute('data-glid'));
+                var ink = getComputedStyle(it2.lab).color;
+                if (ink) path.style.stroke = ink;   // ⚠️必须 style，见上面注释
+                svg.appendChild(path);
+            }
+        }
+
+        // 全屏重排（换字号/段间距/字体、转屏时用）。逐条消息重排，不碰正文本身。
+        function rdGlLayoutAll() {
+            var bubbles = document.querySelectorAll('.chat-msg.ai .chat-bubble');
+            for (var i = 0; i < bubbles.length; i++) {
+                if (!bubbles[i].querySelector('.reading-merged mark.rd-hl[data-gl]')) continue;
+                try { rdGlLayout(bubbles[i]); } catch (e) { console.warn('[手写小注] 排版失败：', e); }
+            }
+        }
+        var _rdGlReT = null;
+        function rdGlRelayoutSoon() {
+            if (_rdGlReT) clearTimeout(_rdGlReT);
+            _rdGlReT = setTimeout(rdGlLayoutAll, 60);
+        }
+
+        /* 转屏 / 窗口变宽变窄 → 每行重新折行，引线全得重量。
+           ⚠️用 window.resize 而不是 visualViewport.resize：后者键盘弹出也会触发，
+           而键盘不改变正文排版，白重排一遍还可能在打字时闪。 */
+        window.addEventListener('resize', function () {
+            if (typeof rdGlRelayoutSoon === 'function') rdGlRelayoutSoon();
+        });
+
+        /* 某条划线的批注/颜色变了 → 就地更新它的小注并重排那条消息。
+           ⚠️所有改 note 的地方都要走这里，否则会出现「存进去了但屏幕上没变」，
+           而且长短分流（data-gl vs rd-hl-noted）只有一处维护、不会两边打架。 */
+        function rdGlSync(id, note) {
+            var note2 = (note || '').trim();
+            var isShort = !!note2 && note2.length <= RD_GL_MAX;
+            var marks = document.querySelectorAll('mark.rd-hl[data-hlid="' + id + '"]');
+            var bubble = null;
+            for (var i = 0; i < marks.length; i++) {
+                var m = marks[i];
+                if (!bubble) bubble = m.closest('.chat-bubble');
+                // 小注只挂在第一个 mark 上（长划线会被拆成多个），其余的一律清掉
+                if (i === 0 && isShort) m.setAttribute('data-gl', note2);
+                else m.removeAttribute('data-gl');
+                m.classList.toggle('rd-hl-noted', !!note2 && !isShort);
+            }
+            if (bubble) rdGlLayout(bubble);
         }
         // 拆掉某条划线的所有 mark（删除/重描时用），还原成纯文字
         function rdHlUnwrap(id) {
@@ -25300,6 +25567,10 @@ body {
                    手势天生就对上了，零新增手势、零新增图标。（长按段落不行——手机上长按＝系统选词，
                    而选词正是划线的入口，两者会正面打架。） */
                 '<button class="rd-act" data-act="edit">✏️ 改</button>' +
+                /* 「✍️ 注」＝给不会读/不懂的字要一句「拼音·意思」，以手写小注挂在段间距里。
+                   和「💬 问」的分工：问＝自己打字、出一整段回答；注＝不用打字、只要一行短注。
+                   用户原话：「有些可能个别的字我不会读，或者我不知道他的意思，不需要用一整段话来介绍」。 */
+                '<button class="rd-act" data-act="gloss">✍️ 注</button>' +
                 '<button class="rd-act" data-act="ask">💬 问</button>';
             // 按住小条不丢选区
             bar.addEventListener('mousedown', function(e) { e.preventDefault(); });
@@ -25314,6 +25585,13 @@ body {
                     // ⚠️先把 _rdHlPending 抄下来：rdEditOpen 里会 rdHlHideBar()，那会把它清成 null
                     var pe = _rdHlPending;
                     if (pe) rdEditOpen({ msgIdx: pe.msgIdx, pNum: pe.pNum, start: pe.start, end: pe.end, text: pe.text });
+                    return;
+                }
+                if (a === 'gloss') {
+                    // ⚠️同「✏️ 改」：rdHlHideBar() 会把 _rdHlPending 清成 null，先抄下来
+                    var pg = _rdHlPending;
+                    rdHlHideBar();
+                    if (pg) rdGlMake(pg);
                     return;
                 }
                 if (a === 'ask') {
@@ -25332,6 +25610,8 @@ body {
             var hl = { id: id, msgIdx: pend.msgIdx, chap: _readerChapOf(pend.msgIdx), p: pend.pNum, start: pend.start, end: pend.end,
                 color: color, note: '', text: full, preview: full.length > 60 ? full.slice(0, 60) + '…' : full, ts: Date.now() };
             var list = readingGetConvHl(); list.push(hl); readingSaveConvHl(list);
+            // 记下最近用的颜色：「✍️ 注」没有色板可点，就跟着她划线的习惯走
+            try { localStorage.setItem('reading_hl_last_color', color); } catch (eC) {}
             try { window.getSelection().removeAllRanges(); } catch (e) {}
             var p = document.querySelector('.chat-msg.ai[data-idx="' + hl.msgIdx + '"] .reading-merged p[data-p="' + hl.p + '"]');
             if (p) rdHlWrapRange(p, hl.start, hl.end, hl.color, hl.id, false);
@@ -25339,6 +25619,113 @@ body {
             if (typeof showToast === 'function') showToast('已划线');
             readingRefreshBookmarkUI && readingRefreshBookmarkUI();
         }
+        /* ===== 「✍️ 注」：选中一两个字 → AI 给一句「拼音·意思」→ 存进 hl.note =====
+           为什么不复用「💬 问」那条路：它只是把选中的字填进提问框、等用户自己打字，
+           出来的是一整段回答落进 reader_qa。这里要的是**不打字、一行短注**，是另一件事。
+
+           ⚠️零新增存储：结果写进划线的 note 字段，云同步/换设备/删除/读痕面板全部白拿。 */
+        var RD_GL_SYS = '你在帮读者读中文书。用户给你一段原文和其中一个词，你只回一行「拼音·意思」。'
+            + '硬性要求：①拼音小写、带声调符号（如 shēng、yīn yūn），多字词的拼音之间留一个空格；'
+            + '②拼音和意思之间用「·」隔开；③意思要贴着它在这段原文里的实际用法讲，不超过 8 个字；'
+            + '④整行连拼音带意思不超过 14 个字；⑤只输出这一行，不要引号、句号、换行、解释、也不要重复那个词。'
+            + '示例：氤氲 → yīn yūn·雾气弥漫；踟蹰 → chí chú·犹豫不前。';
+
+        // 带超时的单次调用（chatStreamChat 本身没有任何超时，中转站卡住会永远挂着）
+        function rdGlTimed(opts, ms, who) {
+            var ctl = new AbortController(), timedOut = false;
+            var timer = setTimeout(function () { timedOut = true; ctl.abort(); }, ms);
+            opts.signal = ctl.signal;
+            return chatStreamChat(opts).then(function (r) { clearTimeout(timer); return r; }, function (e) {
+                clearTimeout(timer);
+                if (timedOut) throw new Error('等了 ' + Math.round(ms / 1000) + ' 秒没响应（' + (who || '中转站') + ' 没回）');
+                throw e;
+            });
+        }
+
+        // 把模型回的东西收拾成一行干净的小注
+        function rdGlClean(raw) {
+            var s = (raw || '').replace(/\r/g, '').split('\n').filter(function (l) { return l.trim(); })[0] || '';
+            s = s.replace(/^[\s"'「『《（(\[【]+|[\s"'」』》）)\]】。，、；;]+$/g, '').trim();
+            s = s.replace(/^(拼音|读音|注)\s*[:：]\s*/, '').trim();
+            if (s.length > RD_GL_MAX) s = s.slice(0, RD_GL_MAX);
+            return s;
+        }
+
+        async function rdGlMake(pend) {
+            var word = (pend.text || '').trim();
+            if (!word) return;
+            /* 「注」是给一两个字用的。选一整句还硬要塞进 28px 的缝，结果只能是截断，
+               不如当场说清楚该用哪个功能——别让她花了钱才发现走错门。 */
+            if (word.length > 8) {
+                showToast('「✍️ 注」是给一两个字用的。想问一整句请用「💬 问」', true);
+                return;
+            }
+            var item = chatEnsureProvider();   // 中转站掉了先自动找回来（见 chatEnsureProvider 注释）
+            if (!item || !chatSelectedModel) { alert(chatNoModelMsg()); return; }
+            var baseUrl = getBaseUrl(item.url);
+            var apiKey = chatSelectedKeyStr || getActiveKey(item);
+
+            // 先把划线建出来：手机上点完立刻有反馈，AI 失败了这条也还在（可自己补批注或删掉）
+            var color = localStorage.getItem('reading_hl_last_color') || 'sky';
+            var id = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+            var hl = {
+                id: id, msgIdx: pend.msgIdx, chap: _readerChapOf(pend.msgIdx), p: pend.pNum,
+                start: pend.start, end: pend.end, color: color, note: '', text: word,
+                preview: word, ts: Date.now()
+            };
+            var list = readingGetConvHl(); list.push(hl); readingSaveConvHl(list);
+            try { window.getSelection().removeAllRanges(); } catch (e) {}
+            var pEl = document.querySelector('.chat-msg.ai[data-idx="' + hl.msgIdx + '"] .reading-merged p[data-p="' + hl.p + '"]');
+            if (pEl) rdHlWrapRange(pEl, hl.start, hl.end, hl.color, hl.id, false);
+            readingRefreshBookmarkUI && readingRefreshBookmarkUI();
+
+            // 上下文＝这一段原文（贴着用法解释才准；整段几百字，比全章便宜得多）
+            var ctxText = '';
+            try { ctxText = (pEl ? pEl.textContent : '').replace(/^\s*\[P\d+\]\s*/, '').trim(); } catch (e2) {}
+            if (ctxText.length > 400) {
+                var at = ctxText.indexOf(word);
+                var from = Math.max(0, at - 150);
+                ctxText = (from ? '…' : '') + ctxText.slice(from, from + 400);
+            }
+
+            var mdl = { model: chatSelectedModel, baseUrl: baseUrl };
+            showToast('✍️ 正在查「' + word + '」…');
+            try {
+                /* ⚠️max_tokens 给足 2000，别按「才输出 14 个字」去压。
+                   chatStreamChat 只收 delta.content，**思考型模型的推理过程不算在内**，
+                   压太低会出现「思考把额度吃光、正文一个字没吐」——钱照扣、什么都没有。
+                   （标背景那个功能为这条坑返工过两轮，700 和 800 都栽过。） */
+                var out = await rdGlTimed({
+                    baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel,
+                    purpose: '手写小注', markUsed: true,
+                    messages: [
+                        { role: 'system', content: RD_GL_SYS },
+                        { role: 'user', content: '原文：' + ctxText + '\n\n要注的词：' + word }
+                    ],
+                    max_tokens: 2000
+                }, 45000, _rdMdlName(mdl));
+
+                var note = rdGlClean(out);
+                if (!note) {
+                    // 空回复分两种，处置完全不同——含糊一句会害她白点好几轮（同标背景那条教训）
+                    var tk = 0; try { tk = chatStreamChat._lastThinkLen || 0; } catch (e3) {}
+                    throw new Error(tk
+                        ? ('只吐了思考过程（约 ' + tk + ' 字），正文是空的 —— 换一个不思考的模型试试')
+                        : '一个字都没回（' + _rdMdlName(mdl) + '）');
+                }
+
+                var l2 = readingGetConvHl();
+                for (var i = 0; i < l2.length; i++) { if (l2[i].id === id) { l2[i].note = note; break; } }
+                readingSaveConvHl(l2);
+                rdGlSync(id, note);
+                readingRefreshBookmarkUI && readingRefreshBookmarkUI();
+            } catch (err) {
+                if (err && err.name === 'AbortError') return;
+                // ⚠️失败一律 sticky：这是「钱花了却什么都没拿到」时唯一的解释，2 秒飘走等于没说
+                showToast('没注成：' + ((err && err.message) || '未知错误') + '（划线还在，可长按自己写）', true);
+            }
+        }
+
         // 点已有划线的小条：换色 / 批注 / 问 clawd / 删除
         function rdHlShowEditBar(markEl) {
             rdHlHideBar();
@@ -25375,17 +25762,26 @@ body {
             var list = readingGetConvHl();
             for (var i = 0; i < list.length; i++) { if (list[i].id === id) { list[i].color = color; break; } }
             readingSaveConvHl(list);
+            try { localStorage.setItem('reading_hl_last_color', color); } catch (eC) {}   // 「✍️ 注」跟着它走
             var marks = document.querySelectorAll('mark.rd-hl[data-hlid="' + id + '"]');
+            var _bub = null;
             for (var j = 0; j < marks.length; j++) {
+                if (!_bub) _bub = marks[j].closest('.chat-bubble');
                 marks[j].className = marks[j].className.replace(/rd-hl-(gold|orange|green|sky|rose)/g, 'rd-hl-' + color);
             }
+            // 手写小注的墨色跟着划线色走，换色要重画（引线的 stroke 是 JS 刷上去的，不会自己变）
+            if (_bub) rdGlLayout(_bub);
             rdHlHideBar();
             readingRefreshBookmarkUI && readingRefreshBookmarkUI();
         }
         function rdHlDelete(id) {
             var list = readingGetConvHl().filter(function(h) { return h.id !== id; });
             readingSaveConvHl(list);
+            // ⚠️先记下所在消息再拆 mark——拆完就找不到它属于哪条了，小注会变成孤儿留在屏幕上
+            var _m0 = document.querySelector('mark.rd-hl[data-hlid="' + id + '"]');
+            var _bub = _m0 && _m0.closest('.chat-bubble');
             rdHlUnwrap(id);
+            if (_bub) rdGlLayout(_bub);
             rdHlHideBar();
             if (typeof showToast === 'function') showToast('已删除划线');
             readingRefreshBookmarkUI && readingRefreshBookmarkUI();
@@ -25417,8 +25813,7 @@ body {
                 var l2 = readingGetConvHl();
                 for (var k = 0; k < l2.length; k++) { if (l2[k].id === id) { l2[k].note = v; break; } }
                 readingSaveConvHl(l2);
-                var marks = document.querySelectorAll('mark.rd-hl[data-hlid="' + id + '"]');
-                for (var m = 0; m < marks.length; m++) { marks[m].classList.toggle('rd-hl-noted', !!v); }
+                rdGlSync(id, v);   // 短批注就地变成手写小注，长的挂 ✎；两者互斥由它统一决定
                 readingClearActbar();
                 if (typeof showToast === 'function') showToast(v ? '已记下批注' : '已清空批注');
                 readingRefreshBookmarkUI && readingRefreshBookmarkUI();
