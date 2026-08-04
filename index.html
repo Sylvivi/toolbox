@@ -25537,12 +25537,56 @@ body {
            ⚠️改之前先核对「书里这一段」跟「会话里这一段」是不是同一段（expectOld）——
            对不上说明章号认错了或正文被人动过，这时**宁可不改书**也不能写到别的地方去。
            返回 true=书改了 / false=没动。 */
+        /* 把这次改动同步进 rawText（原文备份）。返回值记在 _rdEditRawOK 里给上层报信。
+           ⚠️2026-08-04 补（用户报「我手动给章节标题补上漏掉的顿号，目录却不认」时查出来的）：
+             `_rdEditWriteBook` 原来只写 chapters、**一个字都不碰 rawText**，而目录里的
+             「重新拆分」(`rbReSplit`) 是拿 rawText 重切整本的。后果不止「改完标题重切还是老样子」，
+             更重的是——**她平时改的每一个错字，只要哪天点一下「重新拆分」就全部打回原形**。
+             「追加章节」那条早写了「rawText 必须一起接，不接的话哪天点一下番外就没了」，
+             改错字当初漏了同一件事。实测复现：改完 chapters 里是「二、」、rawText 里还是「二」，
+             重切出来的目录一模一样。
+           定位＝**整行精确匹配 + 唯一性**：改错字改的是具体某一段，绝大多数情况下这段文字全书唯一。
+             不唯一时用**前后相邻的非空段**消歧；还是拿不准就**放弃、返回 false**，由调用方
+             如实告诉用户「原文没同步」——绝不瞎猜替换到别的段落上去（同「认不出是哪一章就只改
+             会话、宁可不改也不能改错章」那条铁律）。
+           ⚠️别改成「整本回拼 rawText」（`chapters.map(rbChapRaw).join('\n\n')`）：
+             **rawText 是正本、chapters 可能是残缺的**——`rbSplitByPattern` 末尾那句
+             `filter(c => c.body.length > 0)` 会把「标题行下面没正文」的章连内容一起静默丢掉
+             （实测《重生之寒秋寄北》有 245 字这样的「作者有话说」只在 rawText 里、不在 chapters 里）。
+             回拼＝把那些内容永久抹掉。 */
+        var _rdEditRawOK = false;
+        function _rdRawNeighbor(lines, i, dir) {
+            for (var j = i + dir; j >= 0 && j < lines.length; j += dir) if (lines[j].trim()) return lines[j].trim();
+            return '';
+        }
+        function _rdEditWriteRaw(book, oldPara, newPara, prevPara, nextPara) {
+            if (!book || !book.rawText || !oldPara || oldPara === newPara) return false;
+            var lines = String(book.rawText).split('\n'), hits = [];
+            for (var i = 0; i < lines.length; i++) if (lines[i].trim() === oldPara) hits.push(i);
+            if (!hits.length) return false;
+            if (hits.length > 1) {
+                var narrowed = hits.filter(function (i) {
+                    return (!prevPara || _rdRawNeighbor(lines, i, -1) === prevPara) &&
+                        (!nextPara || _rdRawNeighbor(lines, i, 1) === nextPara);
+                });
+                if (narrowed.length !== 1) return false;   // 拿不准就不动，绝不瞎猜
+                hits = narrowed;
+            }
+            // ⚠️保留原行首尾的空白：有的书正文行首带两个全角空格，剥掉会让这一段跟别的段对不齐
+            var line = lines[hits[0]];
+            lines[hits[0]] = line.match(/^\s*/)[0] + newPara + line.match(/\s*$/)[0];
+            book.rawText = lines.join('\n');
+            return true;
+        }
         function _rdEditWriteBook(book, chapIdx, pNum, expectOld, newPara) {
             var ch = book && book.chapters && book.chapters[chapIdx];
             if (!ch) return false;
             var pre = ch.title ? (ch.title + '\n\n') : '';
             var loc = _rdEditFindLine(pre + (ch.body || ''), pNum);
             if (!loc || loc.para !== expectOld) return false;
+            // 相邻的非空段，留着给 rawText 消歧用（必须在改之前取，改完就对不上了）
+            var prevP = _rdRawNeighbor(loc.lines, loc.li, -1);
+            var nextP = _rdRawNeighbor(loc.lines, loc.li, 1);
             if (pre && loc.li === 0) { ch.title = newPara; }
             else {
                 var bodyLines = String(ch.body || '').split('\n');
@@ -25551,6 +25595,8 @@ body {
                 bodyLines[bi] = newPara;
                 ch.body = bodyLines.join('\n');
             }
+            // ⚠️rawText 必须一起改，否则「重新拆分」会把这次改动打回原形。见上面那条注释
+            _rdEditRawOK = _rdEditWriteRaw(book, expectOld, newPara, prevP, nextP);
             return true;
         }
 
@@ -25634,6 +25680,7 @@ body {
             // ② 书架那本书 + ③ 云端；对不上章就只改会话，并如实告诉用户"书没改"
             var tgt = _rdEditBookTarget(msgIdx);
             var bookChanged = false, fileKey = '', chapTitle = '', chapIdx = -1;
+            _rdEditRawOK = false;
             if (tgt) {
                 chapIdx = tgt.idx;
                 chapTitle = (tgt.book.chapters[chapIdx] && tgt.book.chapters[chapIdx].title) || ('第 ' + (chapIdx + 1) + ' 章');
@@ -25666,7 +25713,7 @@ body {
                 _rdKeepScroll(msgIdx, function () { readingRerenderMsg(msgIdx); });
             } catch (e) { try { readingRerenderMsg(msgIdx); } catch (x) {} }
 
-            return { ok: true, bookChanged: bookChanged, fileKey: fileKey, newPara: newPara };
+            return { ok: true, bookChanged: bookChanged, rawSynced: _rdEditRawOK, fileKey: fileKey, newPara: newPara };
         }
 
         /* ---- 小编辑框 ---- */
@@ -25709,7 +25756,10 @@ body {
                 if (!r.ok) { showToast('⚠️ ' + r.reason, true); return; }   // sticky：改不成必须说清为什么
                 rdEditClose();
                 try { getSelection().removeAllRanges(); } catch (e) {}
-                if (r.bookChanged) showToast('已改好（书也一起改了）');
+                // ⚠️原文备份没同步也必须明说：不说的话她哪天点一下「重新拆分」，改的字变回去、
+                //   还完全不知道为什么（同下面那条「书没改」的道理）
+                if (r.bookChanged && r.rawSynced) showToast('已改好（书也一起改了）');
+                else if (r.bookChanged) showToast('已改好，但原文备份没同步：这段文字在书里不止一处、认不准是哪一处。点「重新拆分」的话这个字会变回去', true);
                 // 对不上章＝只改了眼前这一份，书还是错的。这必须明说，否则她以为改好了、换设备一看又是错字
                 else showToast('只改了眼前这一份：没对上书里是哪一章，书没改', true);
             }
