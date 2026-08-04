@@ -25794,8 +25794,7 @@ body {
                     if (pg) rdGlMake(pg);
                     return;
                 }
-                // 'ask' 那个分支跟着按钮一起撤了（见上面注释）；rdHlAskClawd 本身还在，
-                // 点已有划线的小条仍在用它，别顺手删掉那个函数。
+                // 'ask' 分支和它调的那个函数都随按钮一起撤了（见上面注释）
             });
             document.body.appendChild(bar);   // 位置交给 CSS（固定底部），不按选区 rect 摆
         }
@@ -25971,8 +25970,8 @@ body {
                    结果划线还在、批注空了（她报「之前的那些痕迹咋都不见了」）。
                    有了这颗键，重注是就地覆盖，划线、颜色、位置全都不动。 */
                 '<button class="rd-act" data-act="gloss">' + (hl.note ? '✍️ 重注' : '✍️ 注') + '</button>' +
+                // 「问」两条小条上都撤了（2026-08-04，用户几乎不用）。真要问，双击段落就有。
                 '<button class="rd-act" data-act="note">✎ 批注</button>' +
-                '<button class="rd-act" data-act="ask">💬 问</button>' +
                 '<button class="rd-act rd-del" data-act="del">删除</button>';
             bar.addEventListener('mousedown', function(e) { e.preventDefault(); });
             bar.addEventListener('click', function(e) {
@@ -25983,7 +25982,6 @@ body {
                 if (a === 'style') { rdHlToggleStyle(); return; }
                 if (a === 'note') { rdHlOpenNote(id); return; }
                 if (a === 'gloss') { rdHlHideBar(); rdGlRedo(id); return; }
-                if (a === 'ask') { rdHlHideBar(); rdHlAskClawd({ msgIdx: hl.msgIdx, p: hl.p, text: hl.text || hl.preview || '' }); return; }
                 if (a === 'del') {
                     if (act.classList.contains('armed')) { rdHlDelete(id); return; }
                     act.classList.add('armed'); act.textContent = '确认删除';
@@ -26054,23 +26052,10 @@ body {
             readingBindAskBox(input);   // 自适应高度 + 回车保存
             input.focus();              // 在点击手势内同步聚焦，移动端才会弹键盘
         }
-        // 把所选内容拿去问 clawd：复用「点段提问」那套（带前文上下文开关一并生效），只是把所选句子引上
-        function rdHlAskClawd(hl) {
-            var p = document.querySelector('.chat-msg.ai[data-idx="' + hl.msgIdx + '"] .reading-merged p[data-p="' + hl.p + '"]');
-            if (!p) { if (typeof showToast === 'function') showToast('找不到这一段了'); return; }
-            try { window.getSelection().removeAllRanges(); } catch (e) {}
-            readingClearActbar();
-            p.classList.add('rp-active');
-            readingOpenAskBar(hl.msgIdx, hl.p, p);
-            var bar = document.querySelector('.reading-actbar');
-            var ta = bar && bar.querySelector('.rp-ask');
-            if (ta) {
-                var q = (hl.text || '').trim();
-                ta.value = q ? ('「' + q + '」 ') : '';
-                ta.focus();
-                try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (x) {}
-            }
-        }
+        /* 「把所选内容拿去问」那个函数(rdHlAskClawd)已随两条小条上的「💬 问」一起删掉
+           （2026-08-04，用户：「我几乎不用」）。它只是把选中的字填进提问框、等用户自己打字，
+           而双击段落本来就能提问、手势更顺，属于重复入口。
+           ⚠️要是哪天想加回来：它当年是复用 readingOpenAskBar 的，别另起一套。 */
 
         /* ================= 正文改错字（2026-07-28 加） =================
            用户原话：「我现在上传的书籍，我希望能够编辑……我需要改里面的一些错字」。

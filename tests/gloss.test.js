@@ -437,7 +437,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             // ⚠️查 data-act="ask" 这个按钮标记，别查函数名或 emoji ——
             //   toString() 连注释一起返回，注释里提一嘴就会假红（第一版就这么红的）。
             out.H_选中条上没有问 = rdHlShowSelBar.toString().indexOf('data-act="ask"') < 0;
-            out.H_已有划线上还有问 = rdHlShowEditBar.toString().indexOf('rdHlAskClawd') >= 0;
+            // 两条小条上都撤了（用户 2026-08-04 两次要求），函数本体也一并删了
+            out.H_已有划线上也没问 = rdHlShowEditBar.toString().indexOf('data-act="ask"') < 0;
+            out.H_函数已删干净 = typeof window.rdHlAskClawd === 'undefined';
             out.H_注按钮还在 = rdHlShowSelBar.toString().indexOf('data-act=\"gloss\"') >= 0;
             // 已有划线的小条上也要有「✍️ 重注」——否则想重注只能先删划线再重选（用户真踩了）
             out.H_重注按钮 = rdHlShowEditBar.toString().indexOf("data-act=\"gloss\"") >= 0;
@@ -522,7 +524,8 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('H1 小条上有「✍️ 注」按钮', R.H_有注按钮);
     ok('H2 按钮接到 rdGlMake', R.H_接到rdGlMake);
     ok('H3a 选中小条上已经没有「💬 问」', R.H_选中条上没有问);
-    ok('H3b 点已有划线时仍然有「💬 问」', R.H_已有划线上还有问);
+    ok('H3b 点已有划线时也没有「💬 问」了', R.H_已有划线上也没问);
+    ok('H3d 死函数已删干净', R.H_函数已删干净);
     ok('H3c 撤「问」没误删「✍️ 注」', R.H_注按钮还在);
     ok('H4 已有划线上有「✍️ 重注」', R.H_重注按钮);
     ok('H5 重注接到 rdGlRedo', R.H_重注接到rdGlRedo);
