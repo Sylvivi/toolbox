@@ -25534,9 +25534,14 @@ body {
                         txUp: tx, txDown: txDown,
                         tyUp: (rTop.top - cr.top) - RD_GL_TIP,
                         tyDown: (rBot.bottom - cr.top) + RD_GL_TIP,
-                        // 在**实测的**那道缝里居中，别硬用 RD_GL_INSET：缝窄时会顶到隔壁块上
-                        lyUp: pTop - Math.max(2, Math.min(RD_GL_INSET, (roomUp - lh) / 2)) - lh,
-                        lyDown: pBot + Math.max(2, Math.min(RD_GL_INSET, (roomDown - lh) / 2)),
+                        /* ⚠️离正文的距离**固定 7px，不随缝宽缩**（2026-08-04 用户报「杯葛显得很挤」）。
+                           原来写的是 min(7, (缝宽-标签高)/2)：紧跟背景块的段落那道缝只有 0.4em≈5.6px、
+                           比标签还窄，算下来取到下限 2px，小注就贴在正文屁股上，看着憋屈。
+                           而缩这一下换来的只是「不压到背景块」——她明确说过不介意压。
+                           顺带：段间距最大 28px、标签高 14px，(28-14)/2 正好也是 7，
+                           所以缝够宽时这个值跟居中是一回事，简化掉不损失什么。 */
+                        lyUp: pTop - RD_GL_INSET - lh,
+                        lyDown: pBot + RD_GL_INSET,
                         /* ⚠️「想放哪儿」必须**跟着方向各算一份**。
                            只算一份（用第一行片段）时，跨行的词会舍近求远：
                            「缟素」的缟在第 3 行末尾(最右)、素在第 4 行开头(最左)，

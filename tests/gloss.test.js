@@ -451,6 +451,41 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
                                 && RD_GL_SYS.indexOf('生僻字') >= 0;
         }
 
+        /* ── R：紧跟背景块的段落，小注不许被挤扁（用户 2026-08-04：「杯葛显得很挤」）──
+           blockquote[data-cp] 只吃 0.4em 上边距，那道缝比标签还窄；
+           老代码 min(7,(缝宽-标签高)/2) 会取到下限 2px，小注贴在正文屁股上。
+           ⚠️离正文的距离固定 7px、**不随缝宽缩**，宁可压到背景块上——她明确说不介意压。 */
+        {
+            document.querySelectorAll('.__glt').forEach(n => n.remove());
+            const box = document.createElement('div');
+            box.className = 'reading-merged'; box.style.cssText = 'font-size:14px;line-height:1.6;width:358px';
+            box.innerHTML = '<p data-p="1">占位段落。</p>'
+                + '<p data-p="2">这就意味着，如果这个时候换太子，必然要面对这个势力可能对他的杯葛或反抗。</p>'
+                + '<blockquote data-cp="2" style="margin:0.4em 0 0;padding:10px">汐：背景：商山四皓</blockquote>';
+            const bub = document.createElement('div'); bub.className = 'chat-bubble'; bub.appendChild(box);
+            const msg = document.createElement('div');
+            msg.className = 'chat-msg ai __glt'; msg.setAttribute('data-idx','0'); msg.appendChild(bub);
+            document.body.appendChild(msg);
+            box.querySelectorAll('p').forEach((p, i) => { if (i) p.style.marginTop = '28px'; });
+            const p2 = box.querySelector('p[data-p="2"]');
+            const at = p2.textContent.indexOf('杯葛');
+            rdHlWrapRange(p2, at, at + 2, 'rose', 'r1', false);
+            p2.querySelector('mark[data-hlid="r1"]').setAttribute('data-gl', 'bèi gé·音译自英语boycott，意为抵制');
+            rdGlLayout(bub);
+            const lab = box.querySelector('.rd-gl-label');
+            const pr = p2.getBoundingClientRect();
+            const bq = box.querySelector('blockquote').getBoundingClientRect();
+            /* ⚠️style.top 是相对**容器**的（小注挂在容器级的图层上），不是相对段落。
+               要跟「段落底边在容器里的位置」比，别拿 offsetHeight 直接减（第一版就这么假红的）。 */
+            const cr2 = box.getBoundingClientRect();
+            const pBot = pr.bottom - cr2.top;
+            const inset = parseFloat(lab.style.top) - pBot;
+            out.R_下面那道缝很窄 = (bq.top - pr.bottom) < 12;          // 前提成立
+            out.R_没被挤扁 = inset >= 6;                                // 老代码这里会缩到 2
+            out.R_用的是固定内缩 = Math.abs(inset - RD_GL_INSET) < 1.5;
+            document.querySelectorAll('.__glt').forEach(n => n.remove());
+        }
+
         // ── H：按钮挂上去了 ──
         {
             out.H_有注按钮 = rdHlShowSelBar.toString().indexOf('data-act="gloss"') >= 0;
@@ -538,6 +573,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('K4 长意思不被砍（章邯那条完整版）', R.K_长意思没被砍);
     ok('K5 四字词的长拼音不挤掉意思', R.K_四字词也不砍);
     ok('K6 代码上限留了余量（>提示词的 14）', R.K_留了余量);
+    ok('R1 前提：紧跟背景块那道缝确实很窄', R.R_下面那道缝很窄);
+    ok('R2 小注没被挤扁（离正文≥6px）', R.R_没被挤扁);
+    ok('R3 用的是固定内缩，不随缝宽缩', R.R_用的是固定内缩);
     ok('Q1 没拼音时整条走中文字体（不掉回溪涧）', R.Q_无拼音走中文字体);
     ok('Q2 没拼音时按「意思」的额度截断', R.Q_无拼音按意思额度截);
     ok('Q3 有拼音的那一路没被改坏', R.Q_有拼音的照旧);
