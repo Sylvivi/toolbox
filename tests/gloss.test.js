@@ -136,8 +136,8 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         // ── D：长短分流（RD_GL_MAX 字） ──
         {
             out.D_上限 = typeof RD_GL_MAX === 'number' ? RD_GL_MAX : null;
-            const shortNote = '一'.repeat(RD_GL_MAX);
-            const longNote = '一'.repeat(RD_GL_MAX + 1);
+            const shortNote = '一'.repeat(RD_GL_MAX);            // 全汉字 = 正好 RD_GL_MAX 当量
+            const longNote = '一'.repeat(RD_GL_MAX + 1);        // 超一个当量
             // rdGlSync 是所有改 note 的地方的唯一入口，直接考它
             const b = build([{ para: 1, word: '雾气氤氲', note: 'x' }]);
             const mk = b.box.querySelector('mark[data-hlid="h1雾气氤氲"]');
@@ -181,8 +181,15 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.G_去引号句号 = rdGlClean('「yīn yūn·雾气弥漫」。') === 'yīn yūn·雾气弥漫';
             out.G_只取第一行 = rdGlClean('yīn yūn·雾气弥漫\n还有别的废话') === 'yīn yūn·雾气弥漫';
             out.G_去前缀 = rdGlClean('拼音：yīn yūn·雾气弥漫') === 'yīn yūn·雾气弥漫';
-            out.G_超长截断 = rdGlClean('一'.repeat(40)).length === RD_GL_MAX;
+            out.G_超长截断 = rdGlWidth(rdGlClean('一'.repeat(40))) === RD_GL_MAX;
             out.G_空的还是空 = rdGlClean('') === '' && rdGlClean('\n\n') === '';
+            /* ⚠️用户 2026-08-04 截图报的那条：`zhāng hán·秦将，后` 被砍在半句上。
+               根因是额度按**字符个数**算，光拼音就吃掉 9 个，意思只剩 4 个字。
+               改成按「汉字当量」算（拉丁/空格算半个）之后，同样的话就放得下了。 */
+            const REAL = 'zhāng hán·秦朝名将，后降项羽';
+            out.G_拼音不吃额度 = rdGlClean(REAL) === REAL;
+            out.G_当量算法 = rdGlWidth('zhāng hán') === 4.5 && rdGlWidth('秦将') === 2;
+            out.G_截断不留半截标点 = !/[，、；：]$/.test(rdGlCut('秦朝的名将，后来投降了项羽啊', 8));
         }
 
         // ── H：按钮挂上去了 ──
@@ -226,6 +233,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('G3 清洗：去「拼音：」前缀', R.G_去前缀);
     ok('G4 清洗：超长截断到上限', R.G_超长截断);
     ok('G5 清洗：空的还是空', R.G_空的还是空);
+    ok('G6 拼音不吃意思的额度（章邯那条）', R.G_拼音不吃额度);
+    ok('G7 汉字当量算法正确', R.G_当量算法);
+    ok('G8 截断不留半截标点', R.G_截断不留半截标点);
     ok('H1 小条上有「✍️ 注」按钮', R.H_有注按钮);
     ok('H2 按钮接到 rdGlMake', R.H_接到rdGlMake);
     ok('H3 「💬 问」那条路没被动', R.H_问还在);

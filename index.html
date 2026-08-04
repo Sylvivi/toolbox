@@ -25284,7 +25284,7 @@ body {
                    长的塞不进 28px 的缝，保留原来那个 ✎ 小点、点开看。
                    ⚠️两者互斥，别同时挂——同一件事说两遍。 */
                 var _note = (hl.note || '').trim();
-                var _short = _note && _note.length <= RD_GL_MAX;
+                var _short = _note && rdGlWidth(_note) <= RD_GL_MAX;
                 rdHlWrapRange(p, hl.start, hl.end, hl.color, hl.id, !!_note && !_short);
                 if (_short) {
                     // 小注的文字挂在这条划线的**第一个** mark 上（长划线可能被拆成多个 mark）
@@ -25310,7 +25310,27 @@ body {
            · 用户实测定的手感：引线约 23px、只带一点点斜度。
              拉到 44~112px（"保证最短长度 + 从标签远端出发"那版）她的原话是
              「为了倾斜而倾斜，斜线拉的过长，显得很花里胡哨」。**别再往长了调。** */
-        var RD_GL_MAX   = 14;   // 超过这么多字就不当手写小注（塞不进 28px 的缝）
+        /* ⚠️额度必须按**宽度**算，不能按字符个数（2026-08-04 用户实测报「显示不全」）。
+           初版写死「不超过 14 个字」，而拼音是拉丁字母：`zhāng hán·秦将，后` 里
+           光拼音就占掉 9 个额度，留给意思的只剩 4 个字，两字词一律被砍在半句上。
+           实际限制排版的是宽度，而拉丁字母只有汉字一半宽 —— 所以按「汉字当量」算。 */
+        var RD_GL_MAX   = 16;   // 小注宽度预算，单位＝汉字当量（拉丁/拼音/空格算半个）
+        function rdGlWidth(s) {
+            var w = 0;
+            for (var i = 0; i < (s || '').length; i++) w += (s.charCodeAt(i) > 0x2E80) ? 1 : 0.5;
+            return w;
+        }
+        // 按宽度截断，并且不留下半截的标点（「秦将，」这种收尾很难看）
+        function rdGlCut(s, budget) {
+            if (rdGlWidth(s) <= budget) return s;
+            var w = 0, out = '';
+            for (var i = 0; i < s.length; i++) {
+                var d = (s.charCodeAt(i) > 0x2E80) ? 1 : 0.5;
+                if (w + d > budget) break;
+                w += d; out += s[i];
+            }
+            return out.replace(/[\s，,、。．.；;：:·\-—]+$/, '');
+        }
         var RD_GL_PAD   = 60;   // SVG 上下预留（引线要画到段落框外面去）
         var RD_GL_INSET = 7;    // 小注在段间距里的上下留白
         var RD_GL_SEP   = 8;    // 两条小注之间最小水平间隔
@@ -25474,7 +25494,7 @@ body {
            而且长短分流（data-gl vs rd-hl-noted）只有一处维护、不会两边打架。 */
         function rdGlSync(id, note) {
             var note2 = (note || '').trim();
-            var isShort = !!note2 && note2.length <= RD_GL_MAX;
+            var isShort = !!note2 && rdGlWidth(note2) <= RD_GL_MAX;
             var marks = document.querySelectorAll('mark.rd-hl[data-hlid="' + id + '"]');
             var bubble = null;
             for (var i = 0; i < marks.length; i++) {
@@ -25624,11 +25644,15 @@ body {
            出来的是一整段回答落进 reader_qa。这里要的是**不打字、一行短注**，是另一件事。
 
            ⚠️零新增存储：结果写进划线的 note 字段，云同步/换设备/删除/读痕面板全部白拿。 */
+        /* ⚠️「不超过 N 个字」这句只约束**意思那一半**，别把拼音算进去。
+           初版写「整行不超过 14 个字」，模型把拼音也算进额度，两字词的意思就只剩三四个字，
+           出来全是「秦将，后」这种半句话（用户 2026-08-04 实测截图报的）。 */
         var RD_GL_SYS = '你在帮读者读中文书。用户给你一段原文和其中一个词，你只回一行「拼音·意思」。'
             + '硬性要求：①拼音小写、带声调符号（如 shēng、yīn yūn），多字词的拼音之间留一个空格；'
-            + '②拼音和意思之间用「·」隔开；③意思要贴着它在这段原文里的实际用法讲，不超过 8 个字；'
-            + '④整行连拼音带意思不超过 14 个字；⑤只输出这一行，不要引号、句号、换行、解释、也不要重复那个词。'
-            + '示例：氤氲 → yīn yūn·雾气弥漫；踟蹰 → chí chú·犹豫不前。';
+            + '②拼音和意思之间用「·」隔开；③意思要贴着它在这段原文里的实际用法讲，'
+            + '**不超过 10 个汉字，拼音不算在这 10 个字里**；④意思必须是说完整的一句，'
+            + '宁可概括得更粗，也不要写半句话然后断掉；⑤只输出这一行，不要引号、句号、换行、解释，也不要重复那个词。'
+            + '示例：氤氲 → yīn yūn·雾气弥漫；踟蹰 → chí chú·犹豫不前；章邯 → zhāng hán·秦朝名将，后降项羽。';
 
         // 带超时的单次调用（chatStreamChat 本身没有任何超时，中转站卡住会永远挂着）
         function rdGlTimed(opts, ms, who) {
@@ -25647,8 +25671,7 @@ body {
             var s = (raw || '').replace(/\r/g, '').split('\n').filter(function (l) { return l.trim(); })[0] || '';
             s = s.replace(/^[\s"'「『《（(\[【]+|[\s"'」』》）)\]】。，、；;]+$/g, '').trim();
             s = s.replace(/^(拼音|读音|注)\s*[:：]\s*/, '').trim();
-            if (s.length > RD_GL_MAX) s = s.slice(0, RD_GL_MAX);
-            return s;
+            return rdGlCut(s, RD_GL_MAX);   // ⚠️按宽度截，别按字符数（拼音会把额度吃光）
         }
 
         async function rdGlMake(pend) {
