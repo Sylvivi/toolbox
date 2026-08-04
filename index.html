@@ -19194,7 +19194,9 @@ body {
                 try {
                     var face = new FontFace(f.name, f.buf);
                     _readingLocalFontFaces[f.name] = true;
-                    face.load().then(function (loaded) { document.fonts.add(loaded); try { readingApplyFonts(); } catch (e) {} })
+                    // ⚠️本地花体是从 IndexedDB 异步加载的，到货前小注标签是按兜底字体量的宽度，
+                    //   位置会偏；而且重进时它常常比正文渲染晚 —— 到货后必须重排一次。
+                    face.load().then(function (loaded) { document.fonts.add(loaded); try { readingApplyFonts(); } catch (e) {} try { rdGlRelayoutSoon(60); } catch (e) {} })
                                .catch(function () { delete _readingLocalFontFaces[f.name]; });
                 } catch (e) {}
             });
@@ -25296,6 +25298,10 @@ body {
                小注排版一旦抛异常，整篇正文就渲染不出来了。小注只是装饰，坏了顶多不显示，
                绝不能连累正文。（同理，rdGlLayoutAll 里也逐条 try。） */
             try { rdGlLayout(bubble); } catch (eGl) { console.warn('[手写小注] 排版失败：', eGl); }
+            /* 再补一次（延迟的）。渲染这一刻浏览器未必已经完成排版——窗口化是分批渲染的，
+               重进时尤其明显。第一次量不到就靠这一次兜住。 */
+            _rdGlRetry = 0;
+            rdGlRelayoutSoon(80);
         }
 
         /* ===================== 手写小注：排版引擎 =====================
@@ -25394,6 +25400,8 @@ body {
             // 坐标全部相对**容器**算（小注不进段落，见 .rd-gl-layer 上那条 ⚠️）
             if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
             var cr = box.getBoundingClientRect();
+            // 还没排好版（宽度量不出来）→ 别硬画，排队等一会儿再来（见 rdGlRetryLater 上的注释）
+            if (cr.width < 1) { rdGlRetryLater(); return; }
             var layer = document.createElement('div');
             layer.className = 'rd-gl-layer';
             box.appendChild(layer);
@@ -25438,7 +25446,8 @@ body {
                         var rl = _sibs[z].getClientRects();
                         for (var y = 0; y < rl.length; y++) if (rl[y].width > 0) frags.push(rl[y]);
                     }
-                    if (!frags.length) continue;
+                    // 这个字量不出位置＝还没排好版，别悄悄跳过（老代码就是这么把小注弄丢的）
+                    if (!frags.length) { rdGlRetryLater(); continue; }
                     frags.sort(function (a, b) { return (a.top - b.top) || (a.left - b.left); });
                     var lineGroups = [];
                     for (var f = 0; f < frags.length; f++) {
@@ -25555,9 +25564,23 @@ body {
             }
         }
         var _rdGlReT = null;
-        function rdGlRelayoutSoon() {
+        function rdGlRelayoutSoon(delay) {
             if (_rdGlReT) clearTimeout(_rdGlReT);
-            _rdGlReT = setTimeout(rdGlLayoutAll, 60);
+            _rdGlReT = setTimeout(rdGlLayoutAll, delay || 60);
+        }
+
+        /* ⚠️⚠️「退出重进后手写体全不见了」就是在这儿治的（2026-08-04 用户报，我一开始误判成数据丢失）。
+           排版靠 getBoundingClientRect() 量位置，而**重进时消息未必已经排好版**
+           （窗口化渲染分批出、花字体还在从 IndexedDB 异步加载、容器可能瞬时 0 宽）。
+           量出来是 0 宽时老代码直接 continue 跳过 —— 一条都不画，而且**悄无声息**，
+           之后再没有任何东西会回来重排，于是永远不出现。实测：藏起来时排版得 0 条，
+           显示出来后不重排还是 0 条，重排一次就回来了。
+           现在：量不到就排队重试（次数有限，别死循环），另有 fonts.ready 和渲染后各补一次。 */
+        var _rdGlRetry = 0;
+        function rdGlRetryLater() {
+            if (_rdGlRetry >= 6) return;          // 6 次约 3 秒，还不行就是真没内容，别空转
+            _rdGlRetry++;
+            rdGlRelayoutSoon(_rdGlRetry * 120);
         }
 
         /* 转屏 / 窗口变宽变窄 → 每行重新折行，引线全得重量。
@@ -25780,6 +25803,23 @@ body {
             if (pEl) rdHlWrapRange(pEl, hl.start, hl.end, hl.color, hl.id, false);
             readingRefreshBookmarkUI && readingRefreshBookmarkUI();
 
+            await rdGlFetch(hl);
+        }
+
+        /* 给一条**已存在**的划线（重新）要一句小注。
+           两个入口共用：新建走 rdGlMake（先建划线再调它），重注走 rdGlRedo（直接调）。
+           ⚠️别把这段逻辑复制两份——提示词、清洗、超时、空回复分类都在这里，
+           复制出去必然有一份会漏掉后来的修补。 */
+        async function rdGlFetch(hl) {
+            var word = (hl.text || hl.preview || '').trim();
+            if (!word) return;
+            var item = chatEnsureProvider();
+            if (!item || !chatSelectedModel) { alert(chatNoModelMsg()); return; }
+            var baseUrl = getBaseUrl(item.url);
+            var apiKey = chatSelectedKeyStr || getActiveKey(item);
+            var id = hl.id;
+
+            var pEl = document.querySelector('.chat-msg.ai[data-idx="' + hl.msgIdx + '"] .reading-merged p[data-p="' + hl.p + '"]');
             // 上下文＝这一段原文（贴着用法解释才准；整段几百字，比全章便宜得多）
             var ctxText = '';
             try { ctxText = (pEl ? pEl.textContent : '').replace(/^\s*\[P\d+\]\s*/, '').trim(); } catch (e2) {}
@@ -25823,8 +25863,17 @@ body {
             } catch (err) {
                 if (err && err.name === 'AbortError') return;
                 // ⚠️失败一律 sticky：这是「钱花了却什么都没拿到」时唯一的解释，2 秒飘走等于没说
-                showToast('没注成：' + ((err && err.message) || '未知错误') + '（划线还在，可长按自己写）', true);
+                showToast('没注成：' + ((err && err.message) || '未知错误') + '（划线还在，点它可以「✍️ 重注」）', true);
             }
+        }
+
+        // 已有划线 →「✍️ 重注」：就地覆盖，划线/颜色/位置一概不动，不用先删再选
+        function rdGlRedo(id) {
+            var list = readingGetConvHl();
+            for (var i = 0; i < list.length; i++) {
+                if (list[i].id === id) { rdGlFetch(list[i]); return; }
+            }
+            showToast('找不到这条划线了');
         }
 
         // 点已有划线的小条：换色 / 批注 / 问 clawd / 删除
@@ -25840,6 +25889,12 @@ body {
             bar.innerHTML = rdHlSwatchHtml(hl.color) +
                 '<span class="rd-sep"></span>' +
                 rdHlStyleBtnHtml() +
+                /* 「✍️ 注」也要挂在这条上（2026-08-04 补）。
+                   原来它只在「选中文字」那条小条上，于是**已经划过线的字想重注就没门**——
+                   得先把整条划线删掉、再重新选字。用户正是照着这个笨办法删了一批，
+                   结果划线还在、批注空了（她报「之前的那些痕迹咋都不见了」）。
+                   有了这颗键，重注是就地覆盖，划线、颜色、位置全都不动。 */
+                '<button class="rd-act" data-act="gloss">' + (hl.note ? '✍️ 重注' : '✍️ 注') + '</button>' +
                 '<button class="rd-act" data-act="note">✎ 批注</button>' +
                 '<button class="rd-act" data-act="ask">💬 问</button>' +
                 '<button class="rd-act rd-del" data-act="del">删除</button>';
@@ -25851,6 +25906,7 @@ body {
                 var a = act.getAttribute('data-act');
                 if (a === 'style') { rdHlToggleStyle(); return; }
                 if (a === 'note') { rdHlOpenNote(id); return; }
+                if (a === 'gloss') { rdHlHideBar(); rdGlRedo(id); return; }
                 if (a === 'ask') { rdHlHideBar(); rdHlAskClawd({ msgIdx: hl.msgIdx, p: hl.p, text: hl.text || hl.preview || '' }); return; }
                 if (a === 'del') {
                     if (act.classList.contains('armed')) { rdHlDelete(id); return; }

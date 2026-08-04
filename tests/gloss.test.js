@@ -286,12 +286,47 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             document.querySelectorAll('.__glt').forEach(n => n.remove());
         }
 
+        /* ── M：「退出重进后手写体全不见了」（用户 2026-08-04 报，我一度误判成数据丢失）──
+           排版靠 getBoundingClientRect()，而重进时消息未必已经排好版（窗口化分批渲染、
+           花字体还在从 IndexedDB 异步加载、容器可能瞬时 0 宽）。老代码量到 0 宽就 continue，
+           一条不画且悄无声息，之后再没东西回来重排 → 永远不出现。
+           现在量不到会排队重试。⚠️别把 rdGlRetryLater 那几处 continue 改回裸 continue。 */
+        {
+            // ⚠️用 __glm 而不是 __glt：evaluate 末尾那句统一清理会把 __glt 全删掉，
+            //   而 M 组要活到 1200ms 的重试跑完之后才查得到。
+            document.querySelectorAll('.__glt, .__glm').forEach(n => n.remove());
+            const box = document.createElement('div');
+            box.className = 'reading-merged'; box.style.cssText = 'font-size:14px;line-height:1.6;width:358px';
+            box.innerHTML = '<p data-p="1">占位段落。</p><p data-p="2">汉王闻之，袒而大哭，诸侯皆缟素。</p>';
+            const bub = document.createElement('div'); bub.className = 'chat-bubble'; bub.appendChild(box);
+            const msg = document.createElement('div');
+            msg.className = 'chat-msg ai __glm'; msg.setAttribute('data-idx','0'); msg.appendChild(bub);
+            msg.style.display = 'none';            // ← 排版那一刻还看不见
+            document.body.appendChild(msg);
+            box.querySelectorAll('p').forEach((p, i) => { if (i) p.style.marginTop = '28px'; });
+            const p2 = box.querySelector('p[data-p="2"]');
+            const at = p2.textContent.indexOf('缟素');
+            rdHlWrapRange(p2, at, at + 2, 'rose', 'gs', false);
+            p2.querySelector('mark[data-hlid="gs"]').setAttribute('data-gl', 'gǎo sù·穿白色丧服');
+            try { rdGlLayout(bub); } catch (e) {}
+            out.M_看不见时确实画不出 = box.querySelectorAll('.rd-gl-label').length === 0;
+            _rdGlRetry = 0; rdGlRelayoutSoon(80);
+            msg.style.display = '';                // 现在才可见
+            window.__mBox = box;                   // 交给外面等一会儿再查
+        }
+
         // ── H：按钮挂上去了 ──
         {
             out.H_有注按钮 = rdHlShowSelBar.toString().indexOf('data-act="gloss"') >= 0;
             out.H_接到rdGlMake = rdHlShowSelBar.toString().indexOf('rdGlMake') >= 0;
             // 「问」那条路一个字没动
             out.H_问还在 = rdHlShowSelBar.toString().indexOf('rdHlAskClawd') >= 0;
+            // 已有划线的小条上也要有「✍️ 重注」——否则想重注只能先删划线再重选（用户真踩了）
+            out.H_重注按钮 = rdHlShowEditBar.toString().indexOf("data-act=\"gloss\"") >= 0;
+            out.H_重注接到rdGlRedo = rdHlShowEditBar.toString().indexOf('rdGlRedo') >= 0;
+            // 新建和重注必须共用同一条 AI 调用路径，别复制两份
+            out.H_共用一条路 = rdGlMake.toString().indexOf('rdGlFetch') >= 0
+                             && rdGlRedo.toString().indexOf('rdGlFetch') >= 0;
         }
 
         // ── I：重排触发点都接上了（漏一个就会「改完字号线全歪」）──
@@ -334,6 +369,18 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('L2 跨行时箭头仍精确指对', R.L_指对了, '偏差 ' + R.L_箭头偏差 + 'px');
     ok('L3 箭头落在离小注最近的那一行', R.L_落在目标那一行);
     ok('L4 前提：旧算法确实会指飞', R.L_确实是个真bug, '旧算法偏 ' + R.L_旧算法偏差 + 'px');
+    // M 组要等重试跑完才查得到（重试是 setTimeout 排的）
+    await page.waitForTimeout(1200);
+    const M = await page.evaluate(() => {
+        const box = window.__mBox;
+        const r = { 小注: box.querySelectorAll('.rd-gl-label').length,
+                    引线: box.querySelectorAll('.rd-gl-svg path').length };
+        document.querySelectorAll('.__glt, .__glm').forEach(n => n.remove());
+        return r;
+    });
+    ok('M1 看不见时确实画不出来（前提成立）', R.M_看不见时确实画不出);
+    ok('M2 可见后自动补回小注', M.小注 === 1, '实测 ' + M.小注 + ' 条');
+    ok('M3 引线也补回来了', M.引线 === 1);
     ok('K1 前提：人名高亮确实把 mark 拆开了', R.K_人名把mark拆开了);
     ok('K2 小注没压到紧跟的背景块上', R.K_没压到背景块);
     ok('K3 箭头指整词中心（不是前半截）', R.K_箭头指整词中心);
@@ -343,6 +390,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('H1 小条上有「✍️ 注」按钮', R.H_有注按钮);
     ok('H2 按钮接到 rdGlMake', R.H_接到rdGlMake);
     ok('H3 「💬 问」那条路没被动', R.H_问还在);
+    ok('H4 已有划线上有「✍️ 重注」', R.H_重注按钮);
+    ok('H5 重注接到 rdGlRedo', R.H_重注接到rdGlRedo);
+    ok('H6 新建与重注共用同一条 AI 路径', R.H_共用一条路);
     ok('I1 改字号会重排', R.I_字号);
     ok('I2 改段间距会重排', R.I_段间距);
     ok('I3 改字体会重排', R.I_字体);
