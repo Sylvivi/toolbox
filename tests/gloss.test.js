@@ -408,6 +408,26 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             document.querySelectorAll('.__glt').forEach(n2 => n2.remove());
         }
 
+        /* ── P：拼音和中文用两种花体（用户 2026-08-04 要求，她中文更喜欢「青春」）──
+           ⚠️不能靠「青春优先、溪涧兜底」的逐字回退：青春**有** a~z，只缺 ā ǎ ē ě 等 17 个，
+           那样 shēng 会变成 sh(青春)+ē(溪涧)+ng(青春)，一个词三种笔迹。必须按「·」切开。 */
+        {
+            const lab = document.createElement('div');
+            lab.className = 'rd-gl-label';
+            const t = 'gǎo sù·穿白色丧服', d = t.indexOf('·');
+            lab.innerHTML = '<span class="rd-gl-py">' + t.slice(0, d) + '</span>·<span class="rd-gl-cn">' + t.slice(d + 1) + '</span>';
+            document.body.appendChild(lab);
+            const f = el => getComputedStyle(el).fontFamily.split(',')[0].replace(/["']/g, '').trim();
+            const py = lab.querySelector('.rd-gl-py'), cn = lab.querySelector('.rd-gl-cn');
+            out.P_拼音用溪涧 = f(py) === '溪涧山雪璞玉浑金';
+            out.P_中文用青春 = f(cn) === '青春例外你是偏爱';
+            out.P_两半不同字体 = f(py) !== f(cn);
+            // 中文那半要有回退（青春只到 GB2312，缺字得接得住）
+            out.P_中文有回退 = getComputedStyle(cn).fontFamily.indexOf('溪涧') >= 0;
+            out.P_文字没丢 = lab.textContent === t;
+            lab.remove();
+        }
+
         // ── H：按钮挂上去了 ──
         {
             out.H_有注按钮 = rdHlShowSelBar.toString().indexOf('data-act="gloss"') >= 0;
@@ -480,6 +500,11 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('K4 长意思不被砍（章邯那条完整版）', R.K_长意思没被砍);
     ok('K5 四字词的长拼音不挤掉意思', R.K_四字词也不砍);
     ok('K6 代码上限留了余量（>提示词的 14）', R.K_留了余量);
+    ok('P1 拼音用溪涧山雪（声调齐全）', R.P_拼音用溪涧);
+    ok('P2 中文用青春例外（她偏爱的）', R.P_中文用青春);
+    ok('P3 两半确实是不同字体', R.P_两半不同字体);
+    ok('P4 中文那半有缺字回退', R.P_中文有回退);
+    ok('P5 拆开后文字一个不少', R.P_文字没丢);
     ok('O1 三条引线都画出来了', R.O_三条都有引线);
     ok('O2 引线之间零交叉', R.O_零交叉);
     ok('O3 没有舍近求远拉出的长线', R.O_没有异常长的线);

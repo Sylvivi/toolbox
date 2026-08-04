@@ -3249,9 +3249,16 @@ body {
 
            零新增存储：一条小注就是一条划线（reading_highlights）的 note 字段，
            云同步/换设备/删除/读痕面板全部白拿。颜色也复用划线那 5 个色。 */
+        /* 拼音和中文分开用两种花体（用户 2026-08-04 要求：中文她更喜欢「青春」，
+           但青春没有带声调的元音）。⚠️**不能**简单写成「青春优先、溪涧兜底」靠逐字回退：
+           青春是**有** a~z 的，只缺 ā ǎ ē ě ī ǐ ō ǒ ū ǔ 那 17 个，
+           那样 shēng 会变成 sh(青春)+ē(溪涧)+ng(青春)，一个词三种笔迹，比不换还难看。
+           所以按「·」切开，整段拼音锁死用溪涧、中文那半用青春（青春缺的字再回退溪涧）。 */
         .rd-gl-label {
             position: absolute;
-            font-family: '溪涧山雪璞玉浑金', cursive;   /* 5 个花体里唯一拼音声调齐全的，见 SERVER-OPS/记忆 */
+            --gl-font-py: '溪涧山雪璞玉浑金', cursive;                        /* 拼音：唯一声调齐全的 */
+            --gl-font-cn: '青春例外你是偏爱', '溪涧山雪璞玉浑金', cursive;      /* 中文：她偏爱的，缺字回退 */
+            font-family: '溪涧山雪璞玉浑金', cursive;   /* 没有「·」时的兜底，覆盖最全 */
             font-size: 13px; line-height: 1.05;
             white-space: nowrap;
             pointer-events: none;
@@ -3276,6 +3283,8 @@ body {
             position: absolute; inset: 0;
             overflow: visible; pointer-events: none;
         }
+        .rd-gl-py { font-family: var(--gl-font-py); }
+        .rd-gl-cn { font-family: var(--gl-font-cn); }
         .rd-gl-svg path {
             fill: none; stroke-width: 1.4;
             stroke-linecap: round; stroke-linejoin: round;
@@ -25482,7 +25491,16 @@ body {
                     var lab = document.createElement('div');
                     var col = (m.className.match(/rd-hl-(gold|orange|green|sky|rose)/) || [0, 'sky'])[1];
                     lab.className = 'rd-gl-label rd-gl-' + col;
-                    lab.textContent = m.getAttribute('data-gl');
+                    /* 按「·」切成拼音／中文两段，各挂各的字体（见 .rd-gl-label 上那条注释）。
+                       没有「·」就整条按兜底字体走，不硬拆。 */
+                    var _txt = m.getAttribute('data-gl') || '';
+                    var _dot = _txt.indexOf('·');
+                    if (_dot > 0 && _dot < _txt.length - 1) {
+                        lab.innerHTML = '<span class="rd-gl-py">' + esc(_txt.slice(0, _dot)) + '</span>·'
+                                      + '<span class="rd-gl-cn">' + esc(_txt.slice(_dot + 1)) + '</span>';
+                    } else {
+                        lab.textContent = _txt;
+                    }
                     lab.setAttribute('data-glid', m.getAttribute('data-hlid') || '');
                     layer.appendChild(lab);
 
