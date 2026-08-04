@@ -240,6 +240,52 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             document.querySelectorAll('.__glt').forEach(n => n.remove());
         }
 
+        /* ── L：目标词**跨行折断**时箭头指对（用户 2026-08-04 报「缟素的箭头没指对」）──
+           「诸侯皆缟 / 素。」这种折行的词，哪怕只有一个 mark，
+           getBoundingClientRect() 返回的也是罩住两行的大框，中心落在两行之间的空白里。
+           实测旧算法偏 161px（正好指到半行开外的地方），必须按 getClientRects() 的行片段锚。 */
+        {
+            const TXT = '使者告诸侯曰：“天下共立义帝，北面事之。今项羽放杀义帝于江南，大逆无道。寡人亲为发丧，诸侯皆缟素。悉发关内兵，收三河土，南浮江汉以下。”';
+            let hit = null;
+            for (let w = 300; w <= 400 && !hit; w += 2) {
+                document.querySelectorAll('.__glt').forEach(n => n.remove());
+                const box = document.createElement('div');
+                box.className = 'reading-merged'; box.style.cssText = 'font-size:14px;line-height:1.6;width:' + w + 'px';
+                box.innerHTML = '<p data-p="1">占位段落，给上面留出空当。</p><p data-p="2">' + TXT + '</p>';
+                const bub = document.createElement('div'); bub.className = 'chat-bubble'; bub.appendChild(box);
+                const msg = document.createElement('div');
+                msg.className = 'chat-msg ai __glt'; msg.setAttribute('data-idx','0'); msg.appendChild(bub);
+                document.body.appendChild(msg);
+                box.querySelectorAll('p').forEach((p, i) => { if (i) p.style.marginTop = '28px'; });
+                const p2 = box.querySelector('p[data-p="2"]');
+                const at = p2.textContent.indexOf('缟素');
+                rdHlWrapRange(p2, at, at + 2, 'rose', 'gs', false);
+                const mk = p2.querySelector('mark[data-hlid="gs"]');
+                if ([...mk.getClientRects()].filter(r => r.width > 0).length === 2) hit = { box, bub, mk };
+            }
+            out.L_造出了折行 = !!hit;
+            if (hit) {
+                hit.mk.setAttribute('data-gl', 'gǎo sù·穿白色丧服');
+                const rects = [...hit.mk.getClientRects()].filter(r => r.width > 0);
+                const bb = hit.mk.getBoundingClientRect();
+                rdGlLayout(hit.bub);
+                const lab = hit.box.querySelector('.rd-gl-label'), lr = lab.getBoundingClientRect();
+                const path = hit.box.querySelector('.rd-gl-svg path');
+                const mm = path.getAttribute('d').match(/Q[-\d.]+ [-\d.]+ ([-\d.]+) ([-\d.]+)/);
+                const svgR = path.ownerSVGElement.getBoundingClientRect();
+                const ax = svgR.left + (+mm[1]), ay = svgR.top + (+mm[2]);
+                const up = lr.bottom <= rects[0].top;
+                const t = up ? rects[0] : rects[rects.length - 1];
+                const good = t.left + t.width / 2;
+                out.L_箭头偏差 = Math.round(Math.abs(ax - good));
+                out.L_指对了 = out.L_箭头偏差 <= 2;
+                out.L_旧算法偏差 = Math.round(Math.abs((bb.left + bb.width / 2) - good));
+                out.L_确实是个真bug = out.L_旧算法偏差 > 20;   // 旧算法真的会偏，不是白测
+                out.L_落在目标那一行 = Math.abs(ay - (t.top + t.height / 2)) < 20;
+            }
+            document.querySelectorAll('.__glt').forEach(n => n.remove());
+        }
+
         // ── H：按钮挂上去了 ──
         {
             out.H_有注按钮 = rdHlShowSelBar.toString().indexOf('data-act="gloss"') >= 0;
@@ -284,6 +330,10 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('G6 拼音不吃意思的额度（章邯那条）', R.G_拼音不吃额度);
     ok('G7 汉字当量算法正确', R.G_当量算法);
     ok('G8 截断不留半截标点', R.G_截断不留半截标点);
+    ok('L1 造出了跨行折断的词', R.L_造出了折行);
+    ok('L2 跨行时箭头仍精确指对', R.L_指对了, '偏差 ' + R.L_箭头偏差 + 'px');
+    ok('L3 箭头落在离小注最近的那一行', R.L_落在目标那一行);
+    ok('L4 前提：旧算法确实会指飞', R.L_确实是个真bug, '旧算法偏 ' + R.L_旧算法偏差 + 'px');
     ok('K1 前提：人名高亮确实把 mark 拆开了', R.K_人名把mark拆开了);
     ok('K2 小注没压到紧跟的背景块上', R.K_没压到背景块);
     ok('K3 箭头指整词中心（不是前半截）', R.K_箭头指整词中心);

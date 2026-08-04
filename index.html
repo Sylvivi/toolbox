@@ -25423,29 +25423,41 @@ body {
 
                 for (var k = 0; k < ms.length; k++) {
                     var m = ms[k];
-                    /* ⚠️取这条划线在本段所有 mark 的**并集**，不能只用第一个。
-                       rdHlWrapRange 是逐文本节点建 mark 的，选中的字一旦跨过人名高亮
-                       (.reading-name) 之类的行内标签，就会被拆成好几个 mark ——
-                       只认第一个的话，箭头会指到词的前半截上去（用户 2026-08-04 问到这一点）。 */
+                    /* ⚠️⚠️锚点必须按「行片段」算，getBoundingClientRect() 在这里是错的。
+                       两个坑叠在一起（都是用户 2026-08-04 实测报的）：
+                       ① 选中的字跨过人名高亮(.reading-name) → rdHlWrapRange 逐文本节点建 mark，
+                          会被拆成好几个 mark，只认第一个箭头就指到词的前半截。
+                       ② 词本身**跨行折断**（「诸侯皆缟 / 素」）→ 这时哪怕只有一个 mark，
+                          getBoundingClientRect() 返回的也是**罩住两行的大框**，
+                          它的中心落在两行之间的空白里，箭头直接指飞（她原话「缟素的箭头没指对」）。
+                       所以：把所有 mark 的所有 getClientRects() 片段收齐 → 按行分组 →
+                       小注往上就锚第一行、往下就锚最后一行（箭头从最近的那一侧过来）。 */
                     var _sibs = pa.querySelectorAll('mark.rd-hl[data-hlid="' + (m.getAttribute('data-hlid') || '') + '"]');
-                    var r = m.getBoundingClientRect();
-                    if (_sibs.length > 1) {
-                        var L = r.left, R = r.right, T = r.top, B = r.bottom;
-                        for (var z = 0; z < _sibs.length; z++) {
-                            var zr = _sibs[z].getBoundingClientRect();
-                            if (!zr.width) continue;
-                            // 只并同一行的（跨行的词并起来会得到一个横跨整行的怪框）
-                            if (Math.abs(zr.top - r.top) > 2) continue;
-                            L = Math.min(L, zr.left); R = Math.max(R, zr.right);
-                            T = Math.min(T, zr.top); B = Math.max(B, zr.bottom);
-                        }
-                        r = { left: L, right: R, top: T, bottom: B, width: R - L };
+                    var frags = [];
+                    for (var z = 0; z < _sibs.length; z++) {
+                        var rl = _sibs[z].getClientRects();
+                        for (var y = 0; y < rl.length; y++) if (rl[y].width > 0) frags.push(rl[y]);
                     }
-                    if (!r.width) continue;
-                    var tTop = r.top - cr.top, tBot = r.bottom - cr.top;
+                    if (!frags.length) continue;
+                    frags.sort(function (a, b) { return (a.top - b.top) || (a.left - b.left); });
+                    var lineGroups = [];
+                    for (var f = 0; f < frags.length; f++) {
+                        var g = lineGroups[lineGroups.length - 1];
+                        if (g && Math.abs(g[0].top - frags[f].top) <= 2) g.push(frags[f]);
+                        else lineGroups.push([frags[f]]);
+                    }
+                    var _uni = function (grp) {
+                        var L = Infinity, R = -Infinity, T = Infinity, B = -Infinity;
+                        for (var q = 0; q < grp.length; q++) {
+                            L = Math.min(L, grp[q].left); R = Math.max(R, grp[q].right);
+                            T = Math.min(T, grp[q].top);  B = Math.max(B, grp[q].bottom);
+                        }
+                        return { left: L, right: R, top: T, bottom: B, width: R - L };
+                    };
+                    var rTop = _uni(lineGroups[0]), rBot = _uni(lineGroups[lineGroups.length - 1]);
 
                     // 就近选空当，但**放不下就换一边**；两边都放不下就选宽的那边
-                    var nearUp = (tTop - pTop) < (pBot - tBot);
+                    var nearUp = ((rTop.top - cr.top) - pTop) < (pBot - (rBot.bottom - cr.top));
                     var need = 21;                      // 小注一行 ≈14px + 上下留白
                     var okUp = roomUp >= need, okDown = roomDown >= need;
                     var up;
@@ -25453,6 +25465,11 @@ body {
                     else if (okUp) up = true;
                     else if (okDown) up = false;
                     else up = roomUp >= roomDown;
+
+                    /* 方向定了才知道锚哪一行：往上就锚**第一行**、往下就锚**最后一行**，
+                       引线永远从离小注最近的那一段字过来。跨行的词（缟／素）正是靠这一步治好的。 */
+                    var r = up ? rTop : rBot;
+                    var tTop = r.top - cr.top, tBot = r.bottom - cr.top;
 
                     var lab = document.createElement('div');
                     var col = (m.className.match(/rd-hl-(gold|orange|green|sky|rose)/) || [0, 'sky'])[1];
