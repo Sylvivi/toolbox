@@ -192,6 +192,54 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.G_截断不留半截标点 = !/[，、；：]$/.test(rdGlCut('秦朝的名将，后来投降了项羽啊', 8));
         }
 
+        /* ── K：用户 2026-08-04 截图报的两条现场问题 ──
+           K1 小注压在「汐：背景：故道」那块上面：紧跟段落的 blockquote[data-cp]
+              **不吃段间距**、只吃自身 0.4em 上边距，那道缝只有 ≈5.6px 而小注要 21px。
+              上下空当必须实测兄弟节点位置，放不下就翻到另一边。
+           K2 目标字被人名高亮拆开：rdHlWrapRange 逐文本节点建 mark，
+              选中的字跨过 .reading-name 就会拆成多个 mark，只认第一个会让箭头指到词的前半截。 */
+        {
+            document.querySelectorAll('.__glt').forEach(n => n.remove());
+            const box = document.createElement('div');
+            box.className = 'reading-merged';
+            box.style.cssText = 'font-size:14px;line-height:1.6;width:358px';
+            box.innerHTML = '<p data-p="1">经过战国时期就开始的纷争，好不容易秦统一了六国。</p>'
+                + '<p data-p="2">当时<span class="reading-name">项羽</span>任命了三个王防守关中，'
+                + '<span class="reading-name">雍王</span><span class="reading-name">章邯</span>在毫无防备的情况下战败。</p>'
+                + '<blockquote data-cp="2" style="margin:0.4em 0 0;padding:10px">汐：背景：故道</blockquote>';
+            const bub = document.createElement('div'); bub.className = 'chat-bubble'; bub.appendChild(box);
+            const msg = document.createElement('div');
+            msg.className = 'chat-msg ai __glt'; msg.setAttribute('data-idx','0'); msg.appendChild(bub);
+            document.body.appendChild(msg);
+            box.querySelectorAll('p').forEach((p, i) => { if (i) p.style.marginTop = '28px'; });
+
+            const p2 = box.querySelector('p[data-p="2"]');
+            const at = p2.textContent.indexOf('雍王章邯');
+            rdHlWrapRange(p2, at, at + 4, 'gold', 'zz', false);
+            const mks = p2.querySelectorAll('mark[data-hlid="zz"]');
+            mks[0].setAttribute('data-gl', 'zhāng hán·秦朝名将，此时为项羽所封的雍王');
+            rdGlLayout(bub);
+
+            const lab = box.querySelector('.rd-gl-label');
+            const lr = lab.getBoundingClientRect();
+            const bq = box.querySelector('blockquote').getBoundingClientRect();
+            const path = box.querySelector('.rd-gl-svg path');
+            const mm = path.getAttribute('d').match(/Q[-\d.]+ [-\d.]+ ([-\d.]+) /);
+            const svgR = path.ownerSVGElement.getBoundingClientRect();
+            let L = Infinity, Rr = -Infinity;
+            mks.forEach(m => { const r = m.getBoundingClientRect(); L = Math.min(L, r.left); Rr = Math.max(Rr, r.right); });
+
+            out.K_人名把mark拆开了 = mks.length > 1;              // 前提成立才谈得上后面两条
+            out.K_没压到背景块 = !(lr.top < bq.bottom && lr.bottom > bq.top);
+            out.K_箭头指整词中心 = Math.abs(svgR.left + (+mm[1]) - (L + Rr) / 2) <= 2;
+            out.K_长意思没被砍 = rdGlClean('zhāng hán·秦朝名将，此时为项羽所封的雍王')
+                                  === 'zhāng hán·秦朝名将，此时为项羽所封的雍王';
+            out.K_四字词也不砍 = rdGlClean('míng xiū zhàn dào·表面做假动作暗中行事')
+                                  === 'míng xiū zhàn dào·表面做假动作暗中行事';
+            out.K_留了余量 = RD_GL_MEAN > 14;   // 提示词要 14，代码得留富余，否则模型多写一字就被砍
+            document.querySelectorAll('.__glt').forEach(n => n.remove());
+        }
+
         // ── H：按钮挂上去了 ──
         {
             out.H_有注按钮 = rdHlShowSelBar.toString().indexOf('data-act="gloss"') >= 0;
@@ -236,6 +284,12 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('G6 拼音不吃意思的额度（章邯那条）', R.G_拼音不吃额度);
     ok('G7 汉字当量算法正确', R.G_当量算法);
     ok('G8 截断不留半截标点', R.G_截断不留半截标点);
+    ok('K1 前提：人名高亮确实把 mark 拆开了', R.K_人名把mark拆开了);
+    ok('K2 小注没压到紧跟的背景块上', R.K_没压到背景块);
+    ok('K3 箭头指整词中心（不是前半截）', R.K_箭头指整词中心);
+    ok('K4 长意思不被砍（章邯那条完整版）', R.K_长意思没被砍);
+    ok('K5 四字词的长拼音不挤掉意思', R.K_四字词也不砍);
+    ok('K6 代码上限留了余量（>提示词的 14）', R.K_留了余量);
     ok('H1 小条上有「✍️ 注」按钮', R.H_有注按钮);
     ok('H2 按钮接到 rdGlMake', R.H_接到rdGlMake);
     ok('H3 「💬 问」那条路没被动', R.H_问还在);

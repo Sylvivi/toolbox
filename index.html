@@ -25310,17 +25310,29 @@ body {
            · 用户实测定的手感：引线约 23px、只带一点点斜度。
              拉到 44~112px（"保证最短长度 + 从标签远端出发"那版）她的原话是
              「为了倾斜而倾斜，斜线拉的过长，显得很花里胡哨」。**别再往长了调。** */
-        /* ⚠️额度必须按**宽度**算，不能按字符个数（2026-08-04 用户实测报「显示不全」）。
-           初版写死「不超过 14 个字」，而拼音是拉丁字母：`zhāng hán·秦将，后` 里
-           光拼音就占掉 9 个额度，留给意思的只剩 4 个字，两字词一律被砍在半句上。
-           实际限制排版的是宽度，而拉丁字母只有汉字一半宽 —— 所以按「汉字当量」算。 */
-        var RD_GL_MAX   = 16;   // 小注宽度预算，单位＝汉字当量（拉丁/拼音/空格算半个）
+        /* ⚠️⚠️「显示不全」返工过两轮，两次都是**限错了对象**，别再往回改：
+           第一轮：按字符个数算额度（14 个字）→ 拼音是拉丁字母，`zhāng hán` 一个词
+                   就吃掉 9 个，意思只剩 4 个字，出来是「秦将，后」。
+           第二轮：改成按宽度当量算总长（16 当量）→ **仍然错**，因为拼音长度根本
+                   不由我们控制：词越长拼音越长，意思的额度被越挤越少。
+                   「明修栈道」的拼音 `míng xiū zhàn dào` 就占 8.5 当量，
+                   总共 19 超了 16，被砍成「表面做假动作暗」。
+           正确做法（现在这版）：**拼音有多长是多长，只限制「意思」那一半**；
+           总长度只用「一行放不放得下」来兜底 —— 实测标签才 175px、容器有 358px，
+           原来的额度连一半宽度都没用到，纯属自己吓自己。 */
+        /* ⚠️关键结构：**给 AI 的目标值(14) < 代码的上限值(16)**，中间那 2 个字是余量。
+           两个数写成一样等于零余量——模型稍微多写一个字就被砍，用户看到的还是半句话。
+           截断只该在模型明显跑飞时兜底，不该在它「基本听话」时发作。
+           别为了「怕太宽」把它调小：实测 2 字词 ≈273px、4 字词 ≈325px，容器有 358px，放得下。
+           这条为「显示不全」返工过三轮，宁可标签宽一点，也别再让她看半句话。 */
+        var RD_GL_MEAN  = 16;   // 「意思」那一半的**代码上限**（提示词里只要 14，留 2 字余量）
+        var RD_GL_MAX   = 26;   // 整条小注的宽度上限，单位＝汉字当量（≈338px，一行放得下）
         function rdGlWidth(s) {
             var w = 0;
             for (var i = 0; i < (s || '').length; i++) w += (s.charCodeAt(i) > 0x2E80) ? 1 : 0.5;
             return w;
         }
-        // 按宽度截断，并且不留下半截的标点（「秦将，」这种收尾很难看）
+        // 按宽度当量截断，并且不留下半截的标点（「秦将，」这种收尾很难看）
         function rdGlCut(s, budget) {
             if (rdGlWidth(s) <= budget) return s;
             var w = 0, out = '';
@@ -25330,6 +25342,16 @@ body {
                 w += d; out += s[i];
             }
             return out.replace(/[\s，,、。．.；;：:·\-—]+$/, '');
+        }
+        /* 只裁「意思」那一半，拼音原样保留。
+           以「·」分界（提示词要求模型用它隔开）；模型没给「·」时退回整条按总宽兜底。 */
+        function rdGlFit(s) {
+            var i = s.indexOf('·');
+            if (i > 0) {
+                var head = s.slice(0, i + 1), mean = s.slice(i + 1);
+                s = head + rdGlCut(mean, RD_GL_MEAN);
+            }
+            return rdGlCut(s, RD_GL_MAX);   // 兜底：整行别超过一行放得下的宽度
         }
         var RD_GL_PAD   = 60;   // SVG 上下预留（引线要画到段落框外面去）
         var RD_GL_INSET = 7;    // 小注在段间距里的上下留白
@@ -25388,12 +25410,49 @@ body {
                 var pTop = pr.top - cr.top, pBot = pr.bottom - cr.top;
                 var pLeft = pr.left - cr.left;
 
+                /* ⚠️上下有多少空当**必须实测**，不能假设就是段间距（2026-08-04 用户截图报
+                   「小注压在『汐：背景：故道』那块上面」）。原因见 CSS 里那条注释：
+                   紧跟段落的批注框 blockquote[data-cp] **不吃段间距**、只吃自身 0.4em 上边距，
+                   所以段落底下跟着背景/点评块时那道缝只有 ≈5.6px，而小注要 21px。
+                   量真实的兄弟节点位置，才知道这一侧到底放不放得下。 */
+                var _prev = pa.previousElementSibling, _next = pa.nextElementSibling;
+                while (_prev && _prev.classList && _prev.classList.contains('rd-gl-layer')) _prev = _prev.previousElementSibling;
+                while (_next && _next.classList && _next.classList.contains('rd-gl-layer')) _next = _next.nextElementSibling;
+                var roomUp = _prev ? (pr.top - _prev.getBoundingClientRect().bottom) : (pr.top - cr.top);
+                var roomDown = _next ? (_next.getBoundingClientRect().top - pr.bottom) : (cr.bottom - pr.bottom);
+
                 for (var k = 0; k < ms.length; k++) {
-                    var m = ms[k], r = m.getBoundingClientRect();
+                    var m = ms[k];
+                    /* ⚠️取这条划线在本段所有 mark 的**并集**，不能只用第一个。
+                       rdHlWrapRange 是逐文本节点建 mark 的，选中的字一旦跨过人名高亮
+                       (.reading-name) 之类的行内标签，就会被拆成好几个 mark ——
+                       只认第一个的话，箭头会指到词的前半截上去（用户 2026-08-04 问到这一点）。 */
+                    var _sibs = pa.querySelectorAll('mark.rd-hl[data-hlid="' + (m.getAttribute('data-hlid') || '') + '"]');
+                    var r = m.getBoundingClientRect();
+                    if (_sibs.length > 1) {
+                        var L = r.left, R = r.right, T = r.top, B = r.bottom;
+                        for (var z = 0; z < _sibs.length; z++) {
+                            var zr = _sibs[z].getBoundingClientRect();
+                            if (!zr.width) continue;
+                            // 只并同一行的（跨行的词并起来会得到一个横跨整行的怪框）
+                            if (Math.abs(zr.top - r.top) > 2) continue;
+                            L = Math.min(L, zr.left); R = Math.max(R, zr.right);
+                            T = Math.min(T, zr.top); B = Math.max(B, zr.bottom);
+                        }
+                        r = { left: L, right: R, top: T, bottom: B, width: R - L };
+                    }
                     if (!r.width) continue;
                     var tTop = r.top - cr.top, tBot = r.bottom - cr.top;
-                    // 就近选空当；第一段上面没有段间距，只能往下
-                    var up = (j > 0) && ((tTop - pTop) < (pBot - tBot));
+
+                    // 就近选空当，但**放不下就换一边**；两边都放不下就选宽的那边
+                    var nearUp = (tTop - pTop) < (pBot - tBot);
+                    var need = 21;                      // 小注一行 ≈14px + 上下留白
+                    var okUp = roomUp >= need, okDown = roomDown >= need;
+                    var up;
+                    if (okUp && okDown) up = nearUp;
+                    else if (okUp) up = true;
+                    else if (okDown) up = false;
+                    else up = roomUp >= roomDown;
 
                     var lab = document.createElement('div');
                     var col = (m.className.match(/rd-hl-(gold|orange|green|sky|rose)/) || [0, 'sky'])[1];
@@ -25409,7 +25468,9 @@ body {
                         pIdx: j, pLeft: pLeft, pW: pr.width, lab: lab,
                         tx: tx,
                         ty: up ? (tTop - RD_GL_TIP) : (tBot + RD_GL_TIP),
-                        ly: up ? (pTop - RD_GL_INSET - lh) : (pBot + RD_GL_INSET),
+                        // 在**实测的**那道缝里居中，别硬用 RD_GL_INSET：缝窄时会顶到隔壁块上
+                        ly: up ? (pTop - Math.max(2, Math.min(RD_GL_INSET, (roomUp - lh) / 2)) - lh)
+                               : (pBot + Math.max(2, Math.min(RD_GL_INSET, (roomDown - lh) / 2))),
                         up: up, lw: lw, lh: lh,
                         want: tx + side * RD_GL_DX - lw / 2,
                         // ⚠️防撞按「空当」分组，不是按段落：第 N 段往下 和 第 N+1 段往上，
@@ -25650,7 +25711,7 @@ body {
         var RD_GL_SYS = '你在帮读者读中文书。用户给你一段原文和其中一个词，你只回一行「拼音·意思」。'
             + '硬性要求：①拼音小写、带声调符号（如 shēng、yīn yūn），多字词的拼音之间留一个空格；'
             + '②拼音和意思之间用「·」隔开；③意思要贴着它在这段原文里的实际用法讲，'
-            + '**不超过 10 个汉字，拼音不算在这 10 个字里**；④意思必须是说完整的一句，'
+            + '**不超过 14 个汉字，拼音不算在这 14 个字里**；④意思必须是说完整的一句，'
             + '宁可概括得更粗，也不要写半句话然后断掉；⑤只输出这一行，不要引号、句号、换行、解释，也不要重复那个词。'
             + '示例：氤氲 → yīn yūn·雾气弥漫；踟蹰 → chí chú·犹豫不前；章邯 → zhāng hán·秦朝名将，后降项羽。';
 
@@ -25671,7 +25732,7 @@ body {
             var s = (raw || '').replace(/\r/g, '').split('\n').filter(function (l) { return l.trim(); })[0] || '';
             s = s.replace(/^[\s"'「『《（(\[【]+|[\s"'」』》）)\]】。，、；;]+$/g, '').trim();
             s = s.replace(/^(拼音|读音|注)\s*[:：]\s*/, '').trim();
-            return rdGlCut(s, RD_GL_MAX);   // ⚠️按宽度截，别按字符数（拼音会把额度吃光）
+            return rdGlFit(s);   // ⚠️只裁「意思」那一半，拼音有多长是多长（见 RD_GL_MEAN 那条注释）
         }
 
         async function rdGlMake(pend) {
