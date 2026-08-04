@@ -481,8 +481,33 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             const pBot = pr.bottom - cr2.top;
             const inset = parseFloat(lab.style.top) - pBot;
             out.R_下面那道缝很窄 = (bq.top - pr.bottom) < 12;          // 前提成立
+            // 宽缝（正常段间距）那一路必须还用小内缩，别被这次改动误伤
+            {
+                const b2box = document.createElement('div');
+                b2box.className = 'reading-merged'; b2box.style.cssText = 'font-size:14px;line-height:1.6;width:358px';
+                b2box.innerHTML = '<p data-p="1">第一段占位。</p><p data-p="2">必然要面对这个势力可能对他的杯葛或反抗。</p>';
+                const b2bub = document.createElement('div'); b2bub.className = 'chat-bubble'; b2bub.appendChild(b2box);
+                const b2msg = document.createElement('div');
+                b2msg.className = 'chat-msg ai __glt'; b2msg.setAttribute('data-idx','0'); b2msg.appendChild(b2bub);
+                document.body.appendChild(b2msg);
+                b2box.querySelectorAll('p').forEach((p, i) => { if (i) p.style.marginTop = '28px'; });
+                const q1 = b2box.querySelector('p[data-p="1"]');
+                const qa = q1.textContent.indexOf('占位');
+                rdHlWrapRange(q1, qa, qa + 2, 'gold', 'r9', false);
+                q1.querySelector('mark[data-hlid="r9"]').setAttribute('data-gl', '测试用');
+                rdGlLayout(b2bub);
+                const l9 = b2box.querySelector('.rd-gl-label');
+                const c9 = b2box.getBoundingClientRect();
+                const p9 = q1.getBoundingClientRect();
+                const in9 = parseFloat(l9.style.top) - (p9.bottom - c9.top);
+                out.R_宽缝仍用小内缩 = Math.abs(in9 - RD_GL_INSET) < 1.5;
+            }
+            /* 缝装不下时用更大的 RD_GL_INSET_OVER，让小注整个落进隔壁块的留白带里。
+               ⚠️别以为「越远越好」：渲过 7/12/16 三版，16px 会直接撞上块里的第一行字。 */
             out.R_没被挤扁 = inset >= 6;                                // 老代码这里会缩到 2
-            out.R_用的是固定内缩 = Math.abs(inset - RD_GL_INSET) < 1.5;
+            out.R_窄缝用大内缩 = Math.abs(inset - RD_GL_INSET_OVER) < 1.5;
+            out.R_大内缩比小的大 = RD_GL_INSET_OVER > RD_GL_INSET;
+            out.R_大内缩没大过头 = RD_GL_INSET_OVER <= 14;              // 再大就撞块里的字了
             document.querySelectorAll('.__glt').forEach(n => n.remove());
         }
 
@@ -574,8 +599,11 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('K5 四字词的长拼音不挤掉意思', R.K_四字词也不砍);
     ok('K6 代码上限留了余量（>提示词的 14）', R.K_留了余量);
     ok('R1 前提：紧跟背景块那道缝确实很窄', R.R_下面那道缝很窄);
+    ok('R6 宽缝（正常段间距）仍用小内缩，没被误伤', R.R_宽缝仍用小内缩);
     ok('R2 小注没被挤扁（离正文≥6px）', R.R_没被挤扁);
-    ok('R3 用的是固定内缩，不随缝宽缩', R.R_用的是固定内缩);
+    ok('R3 窄缝时用更大的内缩（落进隔壁块留白带）', R.R_窄缝用大内缩);
+    ok('R4 大内缩确实比常规大', R.R_大内缩比小的大);
+    ok('R5 大内缩没大到撞上块里的字', R.R_大内缩没大过头);
     ok('Q1 没拼音时整条走中文字体（不掉回溪涧）', R.Q_无拼音走中文字体);
     ok('Q2 没拼音时按「意思」的额度截断', R.Q_无拼音按意思额度截);
     ok('Q3 有拼音的那一路没被改坏', R.Q_有拼音的照旧);
