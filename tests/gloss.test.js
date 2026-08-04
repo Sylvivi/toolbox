@@ -181,7 +181,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.G_去引号句号 = rdGlClean('「yīn yūn·雾气弥漫」。') === 'yīn yūn·雾气弥漫';
             out.G_只取第一行 = rdGlClean('yīn yūn·雾气弥漫\n还有别的废话') === 'yīn yūn·雾气弥漫';
             out.G_去前缀 = rdGlClean('拼音：yīn yūn·雾气弥漫') === 'yīn yūn·雾气弥漫';
-            out.G_超长截断 = rdGlWidth(rdGlClean('一'.repeat(40))) === RD_GL_MAX;
+            // ⚠️纯中文（没有「·」）＝整条都是「意思」，按 RD_GL_MEAN 截，不是整行的 RD_GL_MAX。
+            //   2026-08-04 加「常见字不写拼音」后改的，别改回 RD_GL_MAX。
+            out.G_超长截断 = rdGlWidth(rdGlClean('一'.repeat(40))) === RD_GL_MEAN;
             out.G_空的还是空 = rdGlClean('') === '' && rdGlClean('\n\n') === '';
             /* ⚠️用户 2026-08-04 截图报的那条：`zhāng hán·秦将，后` 被砍在半句上。
                根因是额度按**字符个数**算，光拼音就吃掉 9 个，意思只剩 4 个字。
@@ -428,6 +430,27 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             lab.remove();
         }
 
+        /* ── Q：常见字不写拼音（用户 2026-08-04：「有时候我只是想让AI解释一下」）──
+           ⚠️没有「·」的那一路有两个坑，都在这儿钉住：
+           ① 字体：不能掉回标签的兜底字体（那是溪涧），整条都是中文就该走青春；
+           ② 长度：不能按整行的 RD_GL_MAX(26) 截，整条就是「意思」，该按 RD_GL_MEAN(16)。 */
+        {
+            const lab = document.createElement('div');
+            lab.className = 'rd-gl-label';
+            lab.innerHTML = '<span class="rd-gl-cn">河东河内河南三郡</span>';
+            document.body.appendChild(lab);
+            const f = el => getComputedStyle(el).fontFamily.split(',')[0].replace(/["']/g, '').trim();
+            out.Q_无拼音走中文字体 = f(lab.querySelector('.rd-gl-cn')) === '青春例外你是偏爱';
+            lab.remove();
+            // 截断：无拼音时按「意思」的额度，不是整行的额度
+            const longCn = '这是一句非常非常长的解释一直写下去停不下来';
+            out.Q_无拼音按意思额度截 = rdGlWidth(rdGlClean(longCn)) <= RD_GL_MEAN;
+            out.Q_有拼音的照旧 = rdGlClean('yīn yūn·雾气弥漫') === 'yīn yūn·雾气弥漫';
+            // 提示词里要写清楚两种情况
+            out.Q_提示词分了两路 = RD_GL_SYS.indexOf('只写意思，不要拼音') >= 0
+                                && RD_GL_SYS.indexOf('生僻字') >= 0;
+        }
+
         // ── H：按钮挂上去了 ──
         {
             out.H_有注按钮 = rdHlShowSelBar.toString().indexOf('data-act="gloss"') >= 0;
@@ -515,6 +538,10 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('K4 长意思不被砍（章邯那条完整版）', R.K_长意思没被砍);
     ok('K5 四字词的长拼音不挤掉意思', R.K_四字词也不砍);
     ok('K6 代码上限留了余量（>提示词的 14）', R.K_留了余量);
+    ok('Q1 没拼音时整条走中文字体（不掉回溪涧）', R.Q_无拼音走中文字体);
+    ok('Q2 没拼音时按「意思」的额度截断', R.Q_无拼音按意思额度截);
+    ok('Q3 有拼音的那一路没被改坏', R.Q_有拼音的照旧);
+    ok('Q4 提示词里分了「注音/不注音」两路', R.Q_提示词分了两路);
     ok('P1 拼音用溪涧山雪（声调齐全）', R.P_拼音用溪涧);
     ok('P2 中文用青春例外（她偏爱的）', R.P_中文用青春);
     ok('P3 两半确实是不同字体', R.P_两半不同字体);
