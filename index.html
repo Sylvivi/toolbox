@@ -5237,6 +5237,8 @@ body {
                 <div class="rb-split-tools" id="rbSplitTools" style="display:none">
                     <select id="rbPresetSelect" class="rb-select">
                         <option value="auto">自动检测</option>
+                        <!-- 只对存了 book.splitPattern 的书显示（rbRenderChapters 里控制），见 rbReSplit 的注释 -->
+                        <option value="custom" id="rbPresetCustomOpt" style="display:none">这本书的专用切法</option>
                         <option value="chinese">中文章节（第X章）</option>
                         <option value="bracket">成对符号【】（）</option>
                         <option value="paren-num">括号数字（一）（1）</option>
@@ -19738,6 +19740,11 @@ body {
                     var oldN = book.chapters.length;
                     book.chapters = full.chapters;
                     if (full.rawText) book.rawText = full.rawText;
+                    /* ⚠️切法也得带回来（2026-08-04 补）：`preset`/`splitPattern` 是「这本书该怎么切」，
+                       跟正文一样属于书的内容、不是本机身份。漏带的后果很隐蔽——正文和目录都更新了，
+                       但她一点「重新拆分」，手工切法没跟过来，目录当场被通用规则打回原形。 */
+                    if (full.preset) book.preset = full.preset;
+                    if (full.splitPattern) book.splitPattern = full.splitPattern;
                     book._ts = (d && d.ts) || Date.now();
                     // ⚠️id / fileName / fileSize 一个都不动（见上面注释）
                     try { rbSave(); } catch (e) {}
@@ -21898,7 +21905,11 @@ body {
             document.getElementById('rbChapterView').style.display = '';
             document.getElementById('rbBookTitle').textContent = rbBookNiceName(b);
             rbMarkOpened(rbBookEffKey(b));   // 记「最近打开」时间，供书架文件夹按最近阅读排序
-            var ps = document.getElementById('rbPresetSelect'); if (ps) ps.value = b.preset || 'auto';
+            // 「这本书的专用切法」只对真存了 splitPattern 的书露出来，别的书看见了也没用
+            var co = document.getElementById('rbPresetCustomOpt');
+            if (co) co.style.display = b.splitPattern ? '' : 'none';
+            var ps = document.getElementById('rbPresetSelect');
+            if (ps) ps.value = (b.preset === 'custom' && !b.splitPattern) ? 'auto' : (b.preset || 'auto');
             var cs = document.getElementById('rbChapterSearch'); if (cs) cs.value = '';
             // 阅读模式下「发下一章」是共读专用，隐藏掉
             var nb = document.getElementById('rbNextBtn'); if (nb) nb.style.display = rbPickForReader ? 'none' : '';
@@ -22488,6 +22499,8 @@ body {
             document.getElementById('rbShelfView').style.display = 'none';
             document.getElementById('rbChapterView').style.display = '';
             document.getElementById('rbBookTitle').textContent = rbBookNiceName(book);
+            var _co = document.getElementById('rbPresetCustomOpt');
+            if (_co) _co.style.display = 'none';   // 刚导进来的书还没有专用切法（上一本可能露着这项）
             document.getElementById('rbPresetSelect').value = 'auto';
             document.getElementById('rbChapterSearch').value = '';
             rbRenderChapters();
@@ -22497,8 +22510,18 @@ body {
             var b = rbGetBook(rbActiveBookId); if (!b) return;
             if (!b.rawText) { b.rawText = b.chapters.map(rbChapRaw).join('\n\n'); }
             var preset = document.getElementById('rbPresetSelect').value;
+            /* 「这本书的专用切法」（2026-08-04 加）：有些书的章节标记**没有任何一条通用规则认得**，
+               只能一本一本手工定切法。以前这种书是**一点「重新拆分」就毁**——auto 按通用规则重切，
+               手工切出来的目录当场没了（用户报《悠哉日常大王之罗熏篇》：前半用光秃秃的「01 02 03」
+               分节、后半用「【三个月】」，我按两种标记一起切成 23 章，她改了个错字点一下重新拆分，
+               立刻掉回 12 章、7 万字又缩成一坨）。
+               ⚠️别改成「往 RB_PRESETS 里加一条纯数字规则」——`rbAutoSplit` 是**打分选一条**，
+                 加进探测表就会影响全库（epub 的页码就是光秃秃一行数字），风险远大于收益。
+                 专用切法只存在这一本书身上，auto 一个字都不受影响。 */
+            var pat = (preset === 'custom') ? b.splitPattern : RB_PRESETS[preset];
+            if (preset === 'custom' && !pat) { showToast('这本书没有存专用切法'); return; }
             b.preset = preset;
-            b.chapters = (preset === 'auto') ? rbAutoSplit(b.rawText) : rbSplitByPattern(b.rawText, RB_PRESETS[preset]);
+            b.chapters = (preset === 'auto') ? rbAutoSplit(b.rawText) : rbSplitByPattern(b.rawText, pat);
             b.chapters = rbDedupChapters(b.chapters).chapters;  // 并掉同章多条的重复
             if (!b.chapters.length) b.chapters = [{ title: '全文', body: b.rawText.trim() }];
             b.lastChapter = null;
