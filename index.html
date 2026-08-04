@@ -26541,6 +26541,31 @@ body {
                 _rdOverlayClosedAt = Date.now();   // 标记：这一下是用来收浮层的，随后的 click 别翻页
                 rdHlHideBar();
             }, true);
+            /* ⚠️同一道理，但不止划线小条：共读时飘在页面上的菜单/面板**全都是靠 document 上的
+               `click` 自己关的**，而「点屏幕往下翻一屏」听的也是 `click`——于是想收菜单的那一下
+               点击，菜单关了、页也翻了（用户 2026-08-04 报：「点了 clawd 的菜单，我点屏幕是想让
+               它关闭，这时候也已触发了下滑」）。所以点在这些浮层**外面**时，跟划线小条一样标一下
+               `_rdOverlayClosedAt`，让上面那道 400ms 闸把这次翻页吃掉。
+               ⚠️判「开着没」用 `getClientRects().length` 而不是各自的 `.show` / `display:block`：
+                 这几个菜单的开关写法本来就不统一，以后新加菜单只要往选择器里补一个 id 就行。
+               ⚠️别把 `#readingPanelMask`（面板背后那层暗幕）列进来：它铺满整屏，点它时
+                 `el.contains(target)` 恒为真，会被当成「在用这个浮层」反而不标记。
+                 暗幕亮着时它前面的面板本来就在名单里，照样管用。 */
+            var RD_OVERLAY_SEL = '#clawdReadingMenu, #chatTopMenu, #chatNavPanel, #chatBookmarkPanel, #chatModelDropdown, #chatAttachMenu';
+            function _rdIsOverlayDismissTap(target) {
+                var list = document.querySelectorAll(RD_OVERLAY_SEL), open = false;
+                for (var i = 0; i < list.length; i++) {
+                    var el = list[i];
+                    if (!el.getClientRects().length) continue;      // 没显示出来的不算
+                    if (target && el.contains(target)) return false;  // 点在浮层里面 → 是在用它，不是收它
+                    open = true;
+                }
+                return open;
+            }
+            document.addEventListener('pointerdown', function(e) {
+                if (!chatReadingMode || !e.target) return;
+                if (_rdIsOverlayDismissTap(e.target)) _rdOverlayClosedAt = Date.now();
+            }, true);
             // 滚动时跟手收起小条，免得它飘在错位置（批注框是流内元素，跟着滚，不在此列）
             var sc = document.getElementById('chatMessages');
             if (sc) sc.addEventListener('scroll', function() { if (document.getElementById('rdHlBar')) rdHlHideBar(); }, { passive: true });
