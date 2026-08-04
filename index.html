@@ -25768,8 +25768,10 @@ body {
                 /* 「✍️ 注」＝给不会读/不懂的字要一句「拼音·意思」，以手写小注挂在段间距里。
                    和「💬 问」的分工：问＝自己打字、出一整段回答；注＝不用打字、只要一行短注。
                    用户原话：「有些可能个别的字我不会读，或者我不知道他的意思，不需要用一整段话来介绍」。 */
-                '<button class="rd-act" data-act="gloss">✍️ 注</button>' +
-                '<button class="rd-act" data-act="ask">💬 问</button>';
+                /* 「💬 问」2026-08-04 从这条上撤了（用户：「把那个问去掉吧，我几乎不用」）。
+                   它做的事是把选中的字填进提问框、等你自己打字——而真要问，双击段落就有，
+                   手势更顺。点已有划线的那条小条上仍然留着。 */
+                '<button class="rd-act" data-act="gloss">✍️ 注</button>';
             // 按住小条不丢选区
             bar.addEventListener('mousedown', function(e) { e.preventDefault(); });
             bar.addEventListener('touchstart', function(e) { e.stopPropagation(); }, { passive: true });
@@ -25792,11 +25794,8 @@ body {
                     if (pg) rdGlMake(pg);
                     return;
                 }
-                if (a === 'ask') {
-                    var pend = _rdHlPending;
-                    rdHlHideBar();
-                    if (pend) rdHlAskClawd({ msgIdx: pend.msgIdx, p: pend.pNum, text: pend.text });
-                }
+                // 'ask' 那个分支跟着按钮一起撤了（见上面注释）；rdHlAskClawd 本身还在，
+                // 点已有划线的小条仍在用它，别顺手删掉那个函数。
             });
             document.body.appendChild(bar);   // 位置交给 CSS（固定底部），不按选区 rect 摆
         }

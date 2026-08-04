@@ -432,8 +432,13 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         {
             out.H_有注按钮 = rdHlShowSelBar.toString().indexOf('data-act="gloss"') >= 0;
             out.H_接到rdGlMake = rdHlShowSelBar.toString().indexOf('rdGlMake') >= 0;
-            // 「问」那条路一个字没动
-            out.H_问还在 = rdHlShowSelBar.toString().indexOf('rdHlAskClawd') >= 0;
+            /* 「💬 问」2026-08-04 从**选中小条**上撤了（用户：「我几乎不用」），
+               但点已有划线的那条小条上仍然保留 —— 两边别搞混。 */
+            // ⚠️查 data-act="ask" 这个按钮标记，别查函数名或 emoji ——
+            //   toString() 连注释一起返回，注释里提一嘴就会假红（第一版就这么红的）。
+            out.H_选中条上没有问 = rdHlShowSelBar.toString().indexOf('data-act="ask"') < 0;
+            out.H_已有划线上还有问 = rdHlShowEditBar.toString().indexOf('rdHlAskClawd') >= 0;
+            out.H_注按钮还在 = rdHlShowSelBar.toString().indexOf('data-act=\"gloss\"') >= 0;
             // 已有划线的小条上也要有「✍️ 重注」——否则想重注只能先删划线再重选（用户真踩了）
             out.H_重注按钮 = rdHlShowEditBar.toString().indexOf("data-act=\"gloss\"") >= 0;
             out.H_重注接到rdGlRedo = rdHlShowEditBar.toString().indexOf('rdGlRedo') >= 0;
@@ -516,7 +521,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('N6 没给段落写行内 --reading-pspace', R.N_没设行内间距变量);
     ok('H1 小条上有「✍️ 注」按钮', R.H_有注按钮);
     ok('H2 按钮接到 rdGlMake', R.H_接到rdGlMake);
-    ok('H3 「💬 问」那条路没被动', R.H_问还在);
+    ok('H3a 选中小条上已经没有「💬 问」', R.H_选中条上没有问);
+    ok('H3b 点已有划线时仍然有「💬 问」', R.H_已有划线上还有问);
+    ok('H3c 撤「问」没误删「✍️ 注」', R.H_注按钮还在);
     ok('H4 已有划线上有「✍️ 重注」', R.H_重注按钮);
     ok('H5 重注接到 rdGlRedo', R.H_重注接到rdGlRedo);
     ok('H6 新建与重注共用同一条 AI 路径', R.H_共用一条路);
