@@ -25363,6 +25363,7 @@ body {
         var RD_GL_INSET = 7;    // 小注在段间距里的上下留白
         var RD_GL_SEP   = 8;    // 两条小注之间最小水平间隔
         var RD_GL_DX    = 22;   // 引线横向偏移（唯一的手感旋钮，调大就开始花）
+        var RD_GL_ROT_SIN = 0.0436;   // sin(2.5°)：标签是斜的，越宽转完外框越高，排行距要算上
         var RD_GL_TIP   = 3;    // 引线端点离标签/目标字的留缝
 
         // 手绘感引线：二次贝塞尔 + 末端箭头（末端切线 = 终点 - 控制点）
@@ -25428,6 +25429,16 @@ body {
                 while (_next && _next.classList && _next.classList.contains('rd-gl-layer')) _next = _next.nextElementSibling;
                 var roomUp = _prev ? (pr.top - _prev.getBoundingClientRect().bottom) : (pr.top - cr.top);
                 var roomDown = _next ? (_next.getBoundingClientRect().top - pr.bottom) : (cr.bottom - pr.bottom);
+                // 缝的编号＝容器里的兄弟序号（见下面 gapUp/gapDown 那条 ⚠️）
+                var _kids = box.children;
+                var _selfIdx = -1, _prevIdx = -1;
+                for (var ki = 0; ki < _kids.length; ki++) {
+                    if (_kids[ki] === pa) _selfIdx = ki;
+                    if (_kids[ki] === _prev) _prevIdx = ki;
+                }
+                // 上面确实有容身之地才算「有上缝」（首段顶上没地方时 roomUp 会很小）
+                if (_prevIdx < 0 && roomUp < 18) _prevIdx = -1;
+                else if (_prevIdx < 0) _prevIdx = -2;   // 没有兄弟但有空间：给个独立编号，别跟 -1 混
 
                 for (var k = 0; k < ms.length; k++) {
                     var m = ms[k];
@@ -25465,20 +25476,8 @@ body {
                     };
                     var rTop = _uni(lineGroups[0]), rBot = _uni(lineGroups[lineGroups.length - 1]);
 
-                    // 就近选空当，但**放不下就换一边**；两边都放不下就选宽的那边
+                    // 就近为**首选**方向；真正用哪一边等下面排位时定（挤不下会挪到另一条缝）
                     var nearUp = ((rTop.top - cr.top) - pTop) < (pBot - (rBot.bottom - cr.top));
-                    var need = 21;                      // 小注一行 ≈14px + 上下留白
-                    var okUp = roomUp >= need, okDown = roomDown >= need;
-                    var up;
-                    if (okUp && okDown) up = nearUp;
-                    else if (okUp) up = true;
-                    else if (okDown) up = false;
-                    else up = roomUp >= roomDown;
-
-                    /* 方向定了才知道锚哪一行：往上就锚**第一行**、往下就锚**最后一行**，
-                       引线永远从离小注最近的那一段字过来。跨行的词（缟／素）正是靠这一步治好的。 */
-                    var r = up ? rTop : rBot;
-                    var tTop = r.top - cr.top, tBot = r.bottom - cr.top;
 
                     var lab = document.createElement('div');
                     var col = (m.className.match(/rd-hl-(gold|orange|green|sky|rose)/) || [0, 'sky'])[1];
@@ -25488,41 +25487,88 @@ body {
                     layer.appendChild(lab);
 
                     var lw = lab.offsetWidth, lh = lab.offsetHeight;
-                    var tx = r.left + r.width / 2 - cr.left;
+                    // 锚点：往上就锚**第一行**、往下就锚**最后一行**（跨行的词靠这个治好的）
+                    var tx = ((rTop.left + rTop.right) / 2) - cr.left;
+                    var txDown = ((rBot.left + rBot.right) / 2) - cr.left;
                     var side = (tx > pLeft + pr.width / 2) ? -1 : 1;   // 往宽敞的那半边推
+                    /* ⚠️上下两套坐标都先算好，**方向留到排位时再定**。
+                       用户 2026-08-04 明确要求：宁可把小注挪到另一条缝，也别把缝撑高
+                       （「不要把那个缝撑高好吗？我担心会影响到行号什么的，其实可以让缟素的那个从下往上画呀」）。
+                       撑高＝改段落 margin＝真实重排，确实会动到按段落量位置的那一套（阅读进度/翻页对齐）。
+                       挪边则完全不碰排版，代价只是偶尔压到紧跟的批注框上——她说过那个不介意。 */
                     all.push({
-                        pIdx: j, pLeft: pLeft, pW: pr.width, lab: lab,
-                        tx: tx,
-                        ty: up ? (tTop - RD_GL_TIP) : (tBot + RD_GL_TIP),
+                        pIdx: j, pLeft: pLeft, pW: pr.width, lab: lab, lw: lw, lh: lh,
+                        prefUp: nearUp,
+                        /* ⚠️缝的编号要按**容器里的兄弟节点**算，不能按「第几个段落」。
+                           写成 j-1 时，凡是段落上面隔着背景/点评块(blockquote)的，
+                           都会因为「它是第 0 个段落」被判成"上面没有缝"，小注全被赶到下面去。
+                           而她的书里段落前面跟着背景块非常常见（实测就是这么发作的）。
+                           用兄弟序号还顺带保证：p_j 的下缝 和 p_{j+1} 的上缝 在相邻时是同一个号，
+                           隔着 blockquote 时是不同的号——正好是物理事实。 */
+                        gapUp: _prevIdx, gapDown: _selfIdx,
+                        txUp: tx, txDown: txDown,
+                        tyUp: (rTop.top - cr.top) - RD_GL_TIP,
+                        tyDown: (rBot.bottom - cr.top) + RD_GL_TIP,
                         // 在**实测的**那道缝里居中，别硬用 RD_GL_INSET：缝窄时会顶到隔壁块上
-                        ly: up ? (pTop - Math.max(2, Math.min(RD_GL_INSET, (roomUp - lh) / 2)) - lh)
-                               : (pBot + Math.max(2, Math.min(RD_GL_INSET, (roomDown - lh) / 2))),
-                        up: up, lw: lw, lh: lh,
-                        want: tx + side * RD_GL_DX - lw / 2,
-                        // ⚠️防撞按「空当」分组，不是按段落：第 N 段往下 和 第 N+1 段往上，
-                        // 落进的是同一条 28px 的缝，必须一起排。
-                        gap: up ? (j - 1) : j
+                        lyUp: pTop - Math.max(2, Math.min(RD_GL_INSET, (roomUp - lh) / 2)) - lh,
+                        lyDown: pBot + Math.max(2, Math.min(RD_GL_INSET, (roomDown - lh) / 2)),
+                        want: tx + side * RD_GL_DX - lw / 2
                     });
                 }
             }
             if (!all.length) { layer.parentNode.removeChild(layer); return; }
 
-            // 2) 同一条缝里的按 x 排开，重叠往右推，右边溢出再整组左移
-            var byGap = {};
-            for (var a = 0; a < all.length; a++) (byGap[all[a].gap] = byGap[all[a].gap] || []).push(all[a]);
-            Object.keys(byGap).forEach(function (g) {
-                var grp = byGap[g];
-                grp.sort(function (x, y) { return x.want - y.want; });
-                var left = grp[0].pLeft, right = left + grp[0].pW, prev = -Infinity;
-                for (var i2 = 0; i2 < grp.length; i2++) {
-                    var it = grp[i2], x = it.want;
-                    if (x < prev + RD_GL_SEP) x = prev + RD_GL_SEP;
-                    if (x < left) x = left;
-                    it.lx = x; prev = x + it.lw;
+            /* 2) 排位：先按就近那条缝放，**放不下就挪到另一条缝**（用户 2026-08-04 定的）。
+               她的原话：「不要把那个缝撑高好吗？我担心会影响到行号什么的，
+               其实可以让缟素的那个从下往上画呀」——她是对的，而且这个办法更好：
+               撑高＝改段落 margin＝真实重排，会动到「按段落量位置」的那一套（阅读进度、翻页对齐）；
+               挪边则一个像素的排版都不动，代价只是偶尔压到紧跟的批注框上，那个她说不介意。
+               ⚠️别再加「把缝撑高」那套逻辑回来。 */
+            var rowRight = {}, rowNum = {};       // 每条缝：当前行的右边界 / 已经用到第几行
+            function _gl_try(it, useUp, force) {
+                var g = useUp ? it.gapUp : it.gapDown;
+                if (g < 0) return false;                       // 第一段上面没有缝
+                var left = it.pLeft, right = left + it.pW;
+                /* ⚠️排队的键**只能按缝号**，绝不能带上下方向。
+                   「第 N 段往下」和「第 N+1 段往上」落进的是**同一条物理缝**，
+                   分成两个队列它俩就互相看不见、照样叠（C2 那条测试就是防这个的，我自己踩回去过一次）。 */
+                var key = String(g);
+                var prev = rowRight[key];
+                var x = Math.max(it.want, left);
+                if (prev != null && x < prev + RD_GL_SEP) x = prev + RD_GL_SEP;
+                if (x + it.lw > right) {
+                    if (!force) return false;                  // 这条缝这一行满了 → 交给调用方去试另一边
+                    rowNum[key] = (rowNum[key] || 0) + 1;      // 两边都满：只好在首选那边另起一行
+                    x = Math.max(Math.max(it.want, left), left);
+                    if (x + it.lw > right) x = Math.max(left, right - it.lw);
                 }
-                var over = prev - right;
-                if (over > 0) for (var j2 = grp.length - 1; j2 >= 0; j2--) grp[j2].lx = Math.max(left, grp[j2].lx - over);
-            });
+                it.up = useUp; it.gap = g; it.lx = x;
+                it.ly = useUp ? it.lyUp : it.lyDown;
+                it.ty = useUp ? it.tyUp : it.tyDown;
+                it.tx = useUp ? it.txUp : it.txDown;
+                it.row = rowNum[key] || 0;
+                rowRight[key] = x + it.lw;
+                return true;
+            }
+            all.sort(function (x, y) { return x.want - y.want; });
+            for (var a2 = 0; a2 < all.length; a2++) {
+                var it0 = all[a2];
+                if (_gl_try(it0, it0.prefUp, false)) continue;      // ① 就近那条缝
+                if (_gl_try(it0, !it0.prefUp, false)) continue;     // ② 挪到另一条缝
+                // ③ 都满了，另起一行。⚠️首选那侧可能压根没有缝（第一段上面），要能退到另一侧，
+                //    否则这一条的 ly/lx 全是 undefined，画的时候 toFixed 直接抛（踩过）。
+                if (!_gl_try(it0, it0.prefUp, true)) _gl_try(it0, !it0.prefUp, true);
+            }
+            // 万一三条路都没成（理论上不会），丢掉这一条，别让 undefined 流到画线那一步
+            all = all.filter(function (it) { return it.lx != null && it.ly != null; });
+            if (!all.length) { layer.parentNode.removeChild(layer); return; }
+            /* 万一真走到 ③（一段里注了很多字），另起的那行会往隔壁块上叠一点。
+               行距按**转过之后的外框**算：标签带 rotate(-2.5deg)，越宽转完外框越高
+               （208px 宽的多出 208×sin2.5°≈9px）。按未旋转的 14px 排，实际 23px 高照样叠。 */
+            for (var a3 = 0; a3 < all.length; a3++) {
+                var it3 = all[a3];
+                it3.rowOff = (it3.row || 0) * (it3.lh + it3.lw * RD_GL_ROT_SIN + 3);
+            }
 
             // 3) 落位 + 画引线（整篇共用一个 SVG，比每段一个省）
             var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -25534,6 +25580,10 @@ body {
 
             for (var n = 0; n < all.length; n++) {
                 var it2 = all[n];
+                /* 多行时按行号错开：往上就往上叠、往下就往下叠，第 0 行永远贴着正文。
+                   引线始终从标签朝正文那条边出发，所以行号只影响 y、别的都不用改。 */
+                var rowOff = it2.rowOff || 0;
+                it2.ly = it2.up ? (it2.ly - rowOff) : (it2.ly + rowOff);
                 it2.lab.style.left = it2.lx.toFixed(1) + 'px';
                 it2.lab.style.top = it2.ly.toFixed(1) + 'px';
 

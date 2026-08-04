@@ -315,6 +315,55 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             window.__mBox = box;                   // 交给外面等一会儿再查
         }
 
+        /* ── N：三条小注挤在一条缝里（用户 2026-08-04 截图：前两条直接叠在一起）──
+           那三条合计约 412px 而正文只有 358px，物理上排不下一行。
+           ⚠️用户明确否掉了「把缝撑高」的做法：「我担心会影响到行号什么的，
+              其实可以让缟素的那个从下往上画呀」——撑高＝改段落 margin＝真实重排。
+           所以改成**在上下两条缝之间分流**，排版一个像素都不动。 */
+        {
+            document.querySelectorAll('.__glt').forEach(n => n.remove());   // ⚠️别清 __glm，那是 M 组的
+            document.documentElement.style.setProperty('--reading-pspace', '28px');
+            const box = document.createElement('div');
+            box.className = 'reading-merged'; box.style.cssText = 'font-size:14px;line-height:1.6;width:358px';
+            box.innerHTML =
+                '<blockquote data-cp="1" style="margin:0.4em 0 0;padding:10px">汐：背景：董公遮说</blockquote>' +
+                '<p data-p="2">汉王闻之，袒而大哭。遂为义帝发丧，临三日。发使者告诸侯曰：“天下共立义帝，北面事之。寡人亲为发丧，诸侯皆缟素。”</p>' +
+                '<blockquote data-cp="2" style="margin:0.4em 0 0;padding:10px">汐：背景：三河</blockquote>';
+            const bub = document.createElement('div'); bub.className = 'chat-bubble'; bub.appendChild(box);
+            const msg = document.createElement('div');
+            msg.className = 'chat-msg ai __glt'; msg.setAttribute('data-idx','0'); msg.appendChild(bub);
+            document.body.appendChild(msg);
+            const p2 = box.querySelector('p[data-p="2"]');
+            const before = getComputedStyle(p2).marginTop;
+            [['袒','tǎn·脱去上衣露肩膀','n1','gold'],
+             ['义帝','yì dì·楚怀王熊心，被项羽尊为义帝','n2','sky'],
+             ['缟素','gǎo sù·穿白色丧服','n3','green']].forEach(([w, note, id, c]) => {
+                const at = p2.textContent.indexOf(w);
+                rdHlWrapRange(p2, at, at + w.length, c, id, false);
+                const mk = p2.querySelector('mark[data-hlid="' + id + '"]');
+                if (mk) mk.setAttribute('data-gl', note);
+            });
+            rdGlLayout(bub);
+            const labs = [...box.querySelectorAll('.rd-gl-label')];
+            const rs = labs.map(l => l.getBoundingClientRect());
+            let ov = 0;
+            for (let i = 0; i < rs.length; i++) for (let j = i + 1; j < rs.length; j++) {
+                const a = rs[i], c = rs[j];
+                if (a.left < c.right && c.left < a.right && a.top < c.bottom && c.top < a.bottom) ov++;
+            }
+            const pr = p2.getBoundingClientRect();
+            out.N_三条都在 = labs.length === 3;
+            out.N_零重叠 = ov === 0;
+            out.N_确实放不下一行 = rs.reduce((s, r) => s + r.width, 0) > pr.width;   // 前提成立才谈得上分流
+            // ⚠️用**中心点**判在上还是在下：标签带 rotate，外框会比视觉位置向外胀几像素，
+            //   拿 top/bottom 硬判会把明明在下面的那条判成"段落内部"（第一版就这么假红的）。
+            const midOf = r => r.top + r.height / 2;
+            out.N_分到了上下两边 = rs.some(r => midOf(r) < pr.top) && rs.some(r => midOf(r) > pr.bottom);
+            out.N_没动段落间距 = getComputedStyle(p2).marginTop === before;
+            out.N_没设行内间距变量 = !p2.style.getPropertyValue('--reading-pspace');
+            document.querySelectorAll('.__glt').forEach(n => n.remove());
+        }
+
         // ── H：按钮挂上去了 ──
         {
             out.H_有注按钮 = rdHlShowSelBar.toString().indexOf('data-act="gloss"') >= 0;
@@ -387,6 +436,12 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('K4 长意思不被砍（章邯那条完整版）', R.K_长意思没被砍);
     ok('K5 四字词的长拼音不挤掉意思', R.K_四字词也不砍);
     ok('K6 代码上限留了余量（>提示词的 14）', R.K_留了余量);
+    ok('N1 三条小注都排出来了', R.N_三条都在);
+    ok('N2 挤在一起时零重叠', R.N_零重叠);
+    ok('N3 前提：它们确实一行放不下', R.N_确实放不下一行);
+    ok('N4 自动分流到上下两条缝', R.N_分到了上下两边);
+    ok('N5 没有把段间距撑高（用户明确否掉）', R.N_没动段落间距);
+    ok('N6 没给段落写行内 --reading-pspace', R.N_没设行内间距变量);
     ok('H1 小条上有「✍️ 注」按钮', R.H_有注按钮);
     ok('H2 按钮接到 rdGlMake', R.H_接到rdGlMake);
     ok('H3 「💬 问」那条路没被动', R.H_问还在);
