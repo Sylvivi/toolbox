@@ -3378,7 +3378,11 @@ body {
         .rd-hl-bar .rd-sw-ink    { background: #3a3f47; }
         body.dark .rd-hl-bar .rd-sw-ink { background: #dfe5ee; }   /* 夜间翻成白，否则黑点贴在黑条上没了 */
         .rd-hl-bar .rd-sep { width: 1px; align-self: stretch; background: var(--card-border, rgba(0,0,0,0.12)); margin: 2px 1px; }
-        .rd-hl-bar button.rd-act { background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px 6px; border-radius: 6px; font-size: 13px; }
+        /* ⚠️字色用 --text（正文黑）不用 --text-muted（灰）：这条上「✍️注」「✏️改」跟「划线」是并排的三个键，
+           而「划线」那个 .rd-style 一直是 --text。灰的那两个在小字号 + 半透明卡片底上明显更难认，
+           用户 2026-08-05 实测提出「注和改的颜色应该跟划线保持一致，即黑色，不然不太好辨认」。
+           删除键的红(.rd-del)在下面单独盖回去，不受影响。 */
+        .rd-hl-bar button.rd-act { background: transparent; border: none; color: var(--text); cursor: pointer; padding: 4px 6px; border-radius: 6px; font-size: 13px; }
         .rd-hl-bar button.rd-act:hover { background: var(--accent-light); color: var(--accent); }
         .rd-hl-bar button.rd-act.rd-del { color: #e5484d; }
         .rd-hl-bar button.rd-act.rd-del.armed { background: #e5484d; color: #fff; }
@@ -3386,7 +3390,11 @@ body {
            固定屏幕底部居中，比选区位置稳、手机也好按；带个小标签提示这是给划线的。 */
         .rd-hl-bar.rd-dock {
             left: 50%; right: auto; top: auto; transform: translateX(-50%);
-            bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+            /* ⚠️72px → 104px（用户 2026-08-05 要求「位置可以上移一些」）：原来贴得太靠下，
+               离输入区/clawd 那排太近，手指去点色块时容易连带碰到底下的东西。
+               只抬这一条（选中文字冒出来的）；改错字编辑框 .rd-edit-box 仍在 72px——
+               两者从不同时出现（开编辑框时这条会被 rdHlShowSelBar 主动挡掉），不必对齐。 */
+            bottom: calc(104px + env(safe-area-inset-bottom, 0px));
             padding: 7px 10px; gap: 7px; box-shadow: 0 8px 28px rgba(0,0,0,0.28);
             flex-wrap: nowrap; white-space: nowrap; max-width: 96vw;
             animation: rdDockIn 0.16s ease;
