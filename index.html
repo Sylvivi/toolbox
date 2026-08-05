@@ -3208,19 +3208,21 @@ body {
            半透明，白天压在白底、夜间压在暗底都读得清；颜色管「分类含义」，底色/下划线两种长相靠 body class 全书切换。
            mark 只描在文字上、color:inherit 不夺字色，不破坏既有的人名/引号高亮结构。 */
         mark.rd-hl { color: inherit; background: transparent; border-radius: 2px; -webkit-box-decoration-break: clone; box-decoration-break: clone; cursor: pointer; }
-        /* 底色款（默认）：半透明荧光底，两端淡出成一条「光带」（2026-08-05 用户要的，
-           学自名词柔光那款 rn-glow-band，但三处**刻意不照抄**，每一处都是踩出来的）：
+        /* 底色款（默认）：半透明荧光底（矩形）+ 外面一圈同色柔光。
 
-           ① **淡出比例 10%/90%，不是名词那款的 22%/78%**。名词通常 2~3 个字，
-              而她最常注的是**单个字**（原话「有些个别的字我不会读」）——一个字才 14px 宽，
-              22% 起淡会把颜色吃掉一大半，划了跟没划一样。
-           ② **不加左右 padding**（名词那款有 5px）。mark 是行内元素，横向 padding 会把
-              后面的字推开——划一下线整段文字就位移了，而且小注的引线锚点跟着一起动。
-           ③ **必须 slice，不能用基础规则那个 clone**。划线常常跨行（「诸侯皆缟／素」），
-              clone 会让每一截各自淡出一次，断行处凭空多出一道假边界；slice 是把渐变
-              按整条划线铺满再切给各行，断行处接得上。实测对比过，clone 那版第二行
-              开头明显淡一截。
-           颜色本身一个字没动：中间那段仍是原来的浓度，只是两头化开、去掉「贴纸」那种硬边。
+           ⚠️⚠️**别再把光做进形状里**（2026-08-05 踩过一次，当天回退）。当时照着名词柔光
+           那款 rn-glow-band 做成「两端横向淡出」的光带，用户一看就否了，原话：
+           「左右怎么没有边界的感觉……它不是一个矩形的形状，边缘居然是消失的状态」。
+           道理是**这两个高亮的活儿不一样**：名词散在满篇正文里、要的是「不打断阅读」，
+           化开正合适；而**划线是读者自己划的记号，它必须有边界**——一眼看得出圈到哪儿为止，
+           化开就成了一团渍、不是一个记号。所以光只能加在形状**外面**（box-shadow），
+           不能拿形状去换光。横向淡出那版还顺带带来两个副作用，一并记下免得重试：
+           单个字（她最常注的长度）才 14px 宽，两头一淡就几乎不剩颜色；跨行时若用
+           基础规则那个 clone，每一截会各自淡出一次、断行处凭空多一道假边界。
+
+           ⚠️柔光**只用 box-shadow，不加左右 padding**（名词那款有 5px）：mark 是行内元素，
+           横向 padding 会把后面的字推开——划一下线整段文字就位移，小注的引线锚点也跟着动；
+           box-shadow 不占布局，画在外面不动一个字。
            ⚠️底色必须用浅亮色才压不住黑字，所以「蓝」用浅亮蓝、不用深蓝。
            ⚠️夜间近黑底会吃掉半透明色，所以反而要「加重」一档才显（只改 --hla，见下）。 */
         .reading-merged mark.rd-hl.rd-hl-gold   { --hlc: 255,207,46;  --hla: 0.55; }
@@ -3234,12 +3236,9 @@ body {
         body.dark .reading-merged mark.rd-hl.rd-hl-sky    { --hla: 0.42; }
         body.dark .reading-merged mark.rd-hl.rd-hl-rose   { --hla: 0.42; }
         body:not(.rd-hl-underline) .reading-merged mark.rd-hl {
-            background: linear-gradient(to right,
-                rgba(var(--hlc), 0) 0%,
-                rgba(var(--hlc), var(--hla)) 10%,
-                rgba(var(--hlc), var(--hla)) 90%,
-                rgba(var(--hlc), 0) 100%);
-            -webkit-box-decoration-break: slice; box-decoration-break: slice;   /* 见上面 ③ */
+            background: rgba(var(--hlc), var(--hla));
+            border-radius: 3px;
+            box-shadow: 0 0 6px rgba(var(--hlc), calc(var(--hla) * 0.85));
         }
         /* 下划线款：彩色实线在字下，不夺底。「蓝」这里才用上蓝金的深蓝 #1E50A2（线条用深色没问题）。 */
         body.rd-hl-underline .reading-merged mark.rd-hl { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
