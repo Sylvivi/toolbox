@@ -3339,7 +3339,10 @@ body {
         .rd-gl-green  { color: #286a35; }
         .rd-gl-sky    { color: #2a5ba0; }
         .rd-gl-rose   { color: #a93353; }
-        .rd-gl-ink    { color: #33383f; }
+        /* ⚠️墨色要用**接近纯黑**，别停在 #33383f 那种「深灰」（2026-08-05 用户报「看着是浅灰不是深黑」）：
+           花体笔画本来就细、字号只有 13px，抗锯齿会把细笔画的实际观感提亮一大截，
+           标称的深灰到眼睛里就是灰。别改成加粗来补——她明确说过能换字体的槽位不要叠加粗。 */
+        .rd-gl-ink    { color: #16181c; }
         body.dark .rd-gl-gold   { color: #ffcf2e; }
         body.dark .rd-gl-orange { color: #ff9a52; }
         body.dark .rd-gl-green  { color: #5fc46a; }
@@ -25289,10 +25292,16 @@ body {
         }
         function rdHlToggleStyle() { rdHlSetStyle(!document.body.classList.contains('rd-hl-underline')); }
         function rdHlInitStyle() { rdHlSetStyle(localStorage.getItem('reading_hl_style') === 'underline'); }
-        // 颜色条上的「样式」按钮 HTML：标签写「将切换到的那种」，点了立刻换且条不收
+        /* 颜色条上的「样式」按钮。点了立刻换且条不收。
+           ⚠️⚠️**别再把标签写成光秃秃的「底色」/「划线」**（2026-08-05 用户报「划线再也不能生效了」）。
+           它原本按「将切换到的那种」显示，单看是清楚的——但它跟色板同处一条小条上，而
+           **点色板才是「划线」这个动作本身**。于是一个写着「划线」的按钮杵在那儿，点下去
+           却是把全书划线的长相换成下划线：用户以为划线功能坏了，实际一条都没建出来。
+           2026-08-04 把「✍️ 注」插进色板和它中间之后，它正好落在伸手去点的位置，更容易踩。
+           现在加动词写成「换成底色」/「换成划线」——**必须让它一眼看出是「换长相」不是「划一条」**。 */
         function rdHlStyleBtnHtml() {
             var u = document.body.classList.contains('rd-hl-underline');
-            return '<button class="rd-act rd-style" data-act="style" title="切换划线长相：底色 ↔ 划线">' + (u ? '底色' : '划线') + '</button>';
+            return '<button class="rd-act rd-style" data-act="style" title="换划线的长相：底色 ↔ 下划线（不是划线本身，划线请点左边的色块）">' + (u ? '换成底色' : '换成划线') + '</button>';
         }
 
         // 把段落 p 内 [start,end) 这段字描成一条 mark（可能横跨人名/引号 span，按文本节点逐段包，不动元素结构）
