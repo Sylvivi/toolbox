@@ -6381,6 +6381,13 @@ body {
             }
             // 手画框/波浪的 SVG 按新主题强调色重新生成
             if (typeof readingRefreshQuoteSvgs === 'function') readingRefreshQuoteSvgs();
+            /* 手写小注的**引线**同理：它是 SVG，stroke 由 JS 在排版那一刻用行内样式刷上去的
+               （见 .rd-gl-svg 上那条 ⚠️：表现属性会被 CSS 盖掉，所以只能用 style），
+               于是**切主题/切夜间时字色跟着 CSS 走了、线还留在旧颜色**。
+               ⚠️这不是墨色专有的老问题，另外五个色一直也这样，只是它们日夜色差小、看不出来；
+               「墨」是黑↔白，一眼就露馅（2026-08-05 用户报「夜间黑色小注的线没改成合适的颜色」）。
+               重排一次最省事：位置本来就算得出一样的，顺带把 stroke 重刷。 */
+            if (typeof rdGlRelayoutSoon === 'function') rdGlRelayoutSoon(0);
             // 更新 PWA 状态栏颜色
             updateStatusBarColor();
         }

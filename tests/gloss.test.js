@@ -555,6 +555,37 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             document.querySelectorAll('.__glt').forEach(n => n.remove());
         }
 
+        /* ── T：切主题/切夜间之后，引线的颜色要跟着字色一起变 ──
+           引线是 SVG，stroke 由 JS 在排版那一刻刷成**行内样式**（表现属性会被 CSS 盖掉，
+           所以只能用 style）。于是切夜间时字色跟着 CSS 走了、线还留在旧颜色。
+           这个坑一直都在，只是另外五个色日夜色差小、看不出来；「墨」是黑↔白，一眼露馅
+           （2026-08-05 用户报「夜间黑色小注的线没改成合适的颜色，只改了字体色」）。 */
+        {
+            document.querySelectorAll('.__glt').forEach(n => n.remove());
+            var tm = document.createElement('div');
+            tm.className = 'chat-msg ai __glt'; tm.setAttribute('data-idx', '0');
+            tm.innerHTML = '<div class="chat-bubble"><div class="reading-merged" style="font-size:15px;line-height:1.7;width:320px">'
+                + '<p data-p="1" style="margin:8px 0 30px">读到<mark class="rd-hl rd-hl-ink" data-hlid="t1" data-gl="b\u0113i g\u00e9\u00b7\u8054\u5408\u62b5\u5236">杯葛</mark>停了一下。</p>'
+                + '<p data-p="2">又过了三年。</p></div></div>';
+            document.body.appendChild(tm);
+            document.documentElement.style.setProperty('--reading-pspace', '28px');
+            rdGlLayout(tm.querySelector('.chat-bubble'));
+            var tLab = tm.querySelector('.rd-gl-label'), tPath = tm.querySelector('.rd-gl-svg path');
+            out.T_日间线跟字同色 = !!tPath && tPath.style.stroke === getComputedStyle(tLab).color;
+            var wasDark = document.body.classList.contains('dark');
+            document.body.classList.add('dark');
+            // 只加 class＝模拟「CSS 生效了但没人重排」，此刻线**应该**还是旧的（前提成立才说明这条测试有意义）
+            out.T_前提_不重排线就不会变 = tPath.style.stroke !== getComputedStyle(tLab).color;
+            rdGlLayout(tm.querySelector('.chat-bubble'));
+            var tPath2 = tm.querySelector('.rd-gl-svg path'), tLab2 = tm.querySelector('.rd-gl-label');
+            out.T_重排后线跟上了 = !!tPath2 && tPath2.style.stroke === getComputedStyle(tLab2).color;
+            if (!wasDark) document.body.classList.remove('dark');
+            // 主题总开关里挂了重排（漏了的话切夜间线就一直是旧色）
+            out.T_切主题会重排小注 = typeof applyTheme === 'function'
+                && applyTheme.toString().indexOf('rdGlRelayoutSoon') >= 0;
+            document.querySelectorAll('.__glt').forEach(n => n.remove());
+        }
+
         // ── H：按钮挂上去了 ──
         {
             out.H_有注按钮 = rdHlShowSelBar.toString().indexOf('data-act="gloss"') >= 0;
@@ -671,6 +702,11 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('N4 自动分流到上下两条缝', R.N_分到了上下两边);
     ok('N5 没有把段间距撑高（用户明确否掉）', R.N_没动段落间距);
     ok('N6 没给段落写行内 --reading-pspace', R.N_没设行内间距变量);
+    ok('T1 日间：引线跟字同色', R.T_日间线跟字同色);
+    ok('T2 前提：不重排的话线不会自己变色', R.T_前提_不重排线就不会变);
+    ok('T3 重排后引线跟上了新主题的字色', R.T_重排后线跟上了);
+    ok('T4 切主题/切夜间的总开关里挂了小注重排', R.T_切主题会重排小注);
+
     ok('H1 小条上有「✍️ 注」按钮', R.H_有注按钮);
     ok('H2 按钮接到 rdGlMake', R.H_接到rdGlMake);
     ok('H3a 选中小条上已经没有「💬 问」', R.H_选中条上没有问);
