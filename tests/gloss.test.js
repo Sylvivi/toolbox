@@ -721,6 +721,36 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('I1 改字号会重排', R.I_字号);
     ok('I2 改段间距会重排', R.I_段间距);
     ok('I3 改字体会重排', R.I_字体);
+    /* ── U：重刷人名高亮时，别把套在里面的划线/小注一起抹掉 ──────────────
+       2026-08-05 用户报「先写的小注，标完背景那个词的小注就不见了」。
+       标背景收尾会把讲过的词并进名单高亮，而她写小注的正是同一个词 →
+       划线 <mark> 被裹进 .reading-name → readingRehighlightNamesInPlace 拆 span 时
+       旧写法 replaceChild(createTextNode(textContent)) 把 mark 连同 data-gl 一起压成纯文字。
+       症状：划线和小注在页面上一起消失，但存储里数据完好、重开一章又回来（所以像随机发作）。*/
+    const U = await page.evaluate(() => {
+        const box = document.createElement('div');
+        box.className = 'reading-merged __mt';
+        box.style.cssText = 'font-size:14px;line-height:1.6;width:358px';
+        box.innerHTML = '<p data-p="1">门前石阶上生满'
+            + '<span class="reading-name"><mark class="rd-hl rd-hl-gold" data-hlid="H1" data-gl="qīng tái·青色的苔藓">青苔</mark></span>'
+            + '，屋中雾气氤氲。</p>';
+        document.body.appendChild(box);
+        readingRehighlightNamesInPlace();
+        const p = box.querySelector('p');
+        const r = {
+            划线还在: !!p.querySelector('mark.rd-hl[data-hlid="H1"]'),
+            小注文字还在: !!p.querySelector('mark.rd-hl[data-gl]'),
+            正文一字没改: p.textContent === '门前石阶上生满青苔，屋中雾气氤氲。',
+            人名span已拆掉: !p.querySelector('.reading-name'),
+        };
+        box.remove();
+        return r;
+    });
+    ok('U1 拆人名高亮后，套在里面的划线还在（别用 textContent 压平）', U.划线还在);
+    ok('U2 划线上的小注(data-gl)也还在', U.小注文字还在);
+    ok('U3 正文一个字都没改', U.正文一字没改);
+    ok('U4 旧的人名 span 确实拆掉了（没白拆）', U.人名span已拆掉);
+
     ok('J1 无页面报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();

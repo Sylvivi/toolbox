@@ -19008,8 +19008,20 @@ body {
             for (var i = 0; i < ps.length; i++) {
                 var p = ps[i];
                 // 先拆掉旧的人名 span，合并相邻文本节点，再按新名单重包
+                /* ⚠️⚠️拆 span 必须「把孩子搬出来」，**绝不能** replaceChild(createTextNode(textContent))。
+                   那样写等于把 span 里的东西全压成纯文字——而人名里常常套着划线 `<mark class="rd-hl">`
+                   （读者正好给这个名字划过线/写过小注），一压就连 mark 带 data-gl 一起没了。
+                   2026-08-05 用户报「先写的小注，标完背景那个词的小注就不见了」就是这条：
+                   标背景收尾会把讲过的词并进名单（好让人看出背景冲着哪个词），
+                   她写小注的又正是同一个词 → 划线被裹进人名 span → 这一刷把划线和小注一起抹平。
+                   **数据是好的、只是 DOM 被抹**，所以重开一章又会回来，看着像随机发作。
+                   回归 tests/gloss.test.js U 组。 */
                 var olds = p.querySelectorAll('.reading-name');
-                for (var j = 0; j < olds.length; j++) { var s = olds[j]; s.parentNode.replaceChild(document.createTextNode(s.textContent), s); }
+                for (var j = 0; j < olds.length; j++) {
+                    var s = olds[j];
+                    while (s.firstChild) s.parentNode.insertBefore(s.firstChild, s);
+                    s.parentNode.removeChild(s);
+                }
                 p.normalize();
                 if (re) _readingWrapNamesInEl(p, re);
             }
