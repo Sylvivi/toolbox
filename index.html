@@ -3230,11 +3230,15 @@ body {
         .reading-merged mark.rd-hl.rd-hl-green  { --hlc: 95,196,106;  --hla: 0.36; }
         .reading-merged mark.rd-hl.rd-hl-sky    { --hlc: 124,180,255; --hla: 0.45; }
         .reading-merged mark.rd-hl.rd-hl-rose   { --hlc: 255,138,163; --hla: 0.36; }
+        /* 墨：中性色。⚠️底色**不能真用黑**，黑底会把正文的黑字吞掉——走一层浅灰纱，
+           黑只出现在下划线和小注的笔迹上。夜间整个翻过来：浅色底纱 + 白笔迹。 */
+        .reading-merged mark.rd-hl.rd-hl-ink    { --hlc: 96,102,112;  --hla: 0.24; }
         body.dark .reading-merged mark.rd-hl.rd-hl-gold   { --hla: 0.46; }
         body.dark .reading-merged mark.rd-hl.rd-hl-orange { --hla: 0.42; }
         body.dark .reading-merged mark.rd-hl.rd-hl-green  { --hla: 0.42; }
         body.dark .reading-merged mark.rd-hl.rd-hl-sky    { --hla: 0.42; }
         body.dark .reading-merged mark.rd-hl.rd-hl-rose   { --hla: 0.42; }
+        body.dark .reading-merged mark.rd-hl.rd-hl-ink    { --hlc: 226,232,240; --hla: 0.22; }
         body:not(.rd-hl-underline) .reading-merged mark.rd-hl {
             background: rgba(var(--hlc), var(--hla));
             border-radius: 3px;
@@ -3247,11 +3251,13 @@ body {
         body.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-green  { text-decoration-color: #3a9a4a; }
         body.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-sky    { text-decoration-color: #1E50A2; }
         body.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-rose   { text-decoration-color: #e85f7f; }
+        body.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-ink    { text-decoration-color: #2f333a; }
         body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-gold  { text-decoration-color: #ffcf2e; }
         body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-orange { text-decoration-color: #ff9a52; }
         body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-green  { text-decoration-color: #5fc46a; }
         body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-sky    { text-decoration-color: #7aa3e8; }
         body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-rose   { text-decoration-color: #ff8aa3; }
+        body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-ink    { text-decoration-color: #dfe5ee; }
         /* 带批注的划线：右上角缀一个小点提示「这条有笔记」。
            ⚠️只留给**长批注**（>RD_GL_MAX 字）——短的已经以手写小注的形式直接写在段间距里了，
            再缀个 ✎ 就是同一件事说两遍。类名由 readingApplyHighlights 按长度分流决定。 */
@@ -3328,16 +3334,18 @@ body {
            **小注写在段间的缝里、压在纸白上，不是压在那块黄底上**，#ffcf2e 配纸白对比度只有 1.6，
            比她最初嫌淡那版还淡；而 #d9a400 那档**就是最初那版**，绕回原点。
            想「保住亮黄再加描边撑住可读性」也试了：花体笔画本来就细，13px 上加描边直接糊成一团。 */
-        .rd-gl-gold   { color: #a8790a; }
+        .rd-gl-gold   { color: #9e7008; }
         .rd-gl-orange { color: #a84a17; }
         .rd-gl-green  { color: #286a35; }
         .rd-gl-sky    { color: #2a5ba0; }
         .rd-gl-rose   { color: #a93353; }
+        .rd-gl-ink    { color: #33383f; }
         body.dark .rd-gl-gold   { color: #ffcf2e; }
         body.dark .rd-gl-orange { color: #ff9a52; }
         body.dark .rd-gl-green  { color: #5fc46a; }
         body.dark .rd-gl-sky    { color: #7aa3e8; }
         body.dark .rd-gl-rose   { color: #ff8aa3; }
+        body.dark .rd-gl-ink    { color: #dfe5ee; }
 
         /* 划线浮动小条：选中文字 / 点已有划线时冒出 */
         .rd-hl-bar {
@@ -3354,6 +3362,8 @@ body {
         .rd-hl-bar .rd-sw-green  { background: #5fc46a; }
         .rd-hl-bar .rd-sw-sky    { background: #4a86e8; }
         .rd-hl-bar .rd-sw-rose   { background: #ff8aa3; }
+        .rd-hl-bar .rd-sw-ink    { background: #3a3f47; }
+        body.dark .rd-hl-bar .rd-sw-ink { background: #dfe5ee; }   /* 夜间翻成白，否则黑点贴在黑条上没了 */
         .rd-hl-bar .rd-sep { width: 1px; align-self: stretch; background: var(--card-border, rgba(0,0,0,0.12)); margin: 2px 1px; }
         .rd-hl-bar button.rd-act { background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px 6px; border-radius: 6px; font-size: 13px; }
         .rd-hl-bar button.rd-act:hover { background: var(--accent-light); color: var(--accent); }
@@ -25236,7 +25246,10 @@ body {
         /* ===================== 划线（读者在正文里划重点 + 批注 + 问 clawd） =====================
            存账思路同书签：按「会话 → 第几条消息 + 第几段 + 段内第几个字到第几个字」记，
            正文内容稳定不变，所以刷新/换设备/窗口化补渲染都能按账把线重新描回去，且不破坏既有人名/引号高亮。 */
-        var RD_HL_COLORS = ['gold', 'orange', 'green', 'sky', 'rose'];   // 取自主题夜间亮强调色，色相拉开当分类色板
+        /* ⚠️加/删颜色时**必须同步改**：下面两条写死色名的正则（小注取色 rdGlLayout、换色 rdHlSetColor）、
+   RD_HL_SW（读痕面板那个小圆点）、以及 CSS 里 --hlc/--hla、下划线色、.rd-gl-* 墨色、.rd-sw-* 色板
+   的日间+夜间各一套。漏掉正则那两条的表现是**新颜色被当成蓝色**（正则匹配不上就走 || 'sky' 兜底）。 */
+        var RD_HL_COLORS = ['gold', 'orange', 'green', 'sky', 'rose', 'ink'];   // 取自主题夜间亮强调色，色相拉开当分类色板；ink=墨（中性色，日间黑/夜间白）
         function readingGetAllHl() {
             try { return JSON.parse(localStorage.getItem('reading_highlights')) || {}; }
             catch (e) { return {}; }
@@ -25535,7 +25548,7 @@ body {
                     var nearUp = ((rTop.top - cr.top) - pTop) < (pBot - (rBot.bottom - cr.top));
 
                     var lab = document.createElement('div');
-                    var col = (m.className.match(/rd-hl-(gold|orange|green|sky|rose)/) || [0, 'sky'])[1];
+                    var col = (m.className.match(/rd-hl-(gold|orange|green|sky|rose|ink)/) || [0, 'sky'])[1];
                     lab.className = 'rd-gl-label rd-gl-' + col;
                     /* 按「·」切成拼音／中文两段，各挂各的字体（见 .rd-gl-label 上那条注释）。
                        没有「·」就整条按兜底字体走，不硬拆。 */
@@ -26077,7 +26090,7 @@ body {
             var _bub = null;
             for (var j = 0; j < marks.length; j++) {
                 if (!_bub) _bub = marks[j].closest('.chat-bubble');
-                marks[j].className = marks[j].className.replace(/rd-hl-(gold|orange|green|sky|rose)/g, 'rd-hl-' + color);
+                marks[j].className = marks[j].className.replace(/rd-hl-(gold|orange|green|sky|rose|ink)/g, 'rd-hl-' + color);
             }
             // 手写小注的墨色跟着划线色走，换色要重画（引线的 stroke 是 JS 刷上去的，不会自己变）
             if (_bub) rdGlLayout(_bub);
@@ -26672,7 +26685,9 @@ body {
             var nav = document.getElementById('chatNavPanel');
             if (!nav || !nav.classList.contains('show')) readingHidePanelMask();
         }
-        var RD_HL_SW = { gold: '#ffcf2e', orange: '#ff9a52', green: '#5fc46a', sky: '#4a86e8', rose: '#ff8aa3' };
+        /* ⚠️ink 用**中灰**不用纯黑：这个色号是给读痕/导航面板里那个小圆点用的，
+           而那两个面板日间是浅底、夜间是深底，同一个值两边都得看得见。 */
+        var RD_HL_SW = { gold: '#ffcf2e', orange: '#ff9a52', green: '#5fc46a', sky: '#4a86e8', rose: '#ff8aa3', ink: '#7a828e' };
         function chatBuildBookmarkPanel() {
             var panel = document.getElementById('chatBookmarkPanel');
             panel.innerHTML = '';
