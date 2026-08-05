@@ -751,6 +751,52 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('U3 正文一个字都没改', U.正文一字没改);
     ok('U4 旧的人名 span 确实拆掉了（没白拆）', U.人名span已拆掉);
 
+    /* ── V：紧挨着的两个词，小注宽度差很多时不许交叉 ────────────────────
+       2026-08-05 用户截图（《史记的读法》「…撮名法之要…」）：
+         撮   → cuō·撮取、提取           标签宽 89
+         名法 → 名家和法家两个学派的合称   标签宽 156
+       两个字才差 21px、标签宽度差 34px。老排序键是「字x + 方向偏移 − 标签宽/2」＝标签想放的位置，
+       **宽的减得多** → 宽的那条被排到前面 → 先占左边 → 字是左→右、标签却右→左 → 两条引线交叉。
+       排序键必须只用「目标字的位置」：标签宽度决定"摆在哪"，不该决定"谁先摆"。*/
+    const V = await page.evaluate(() => {
+        const TXT = '使人精神专一，动合无形，赡足万物。其为术也，因阴阳之大顺，采儒墨之善，撮名法之要，与时迁移，应物变化。';
+        const box = document.createElement('div');
+        box.className = 'reading-merged __v';
+        box.style.cssText = 'font-size:14px;line-height:1.9;width:358px';
+        box.innerHTML = '<p data-p="1">前面一段垫底的正文，让上面也有一条缝可用。</p>'
+            + '<p data-p="2">' + TXT.replace('撮名法',
+                '<mark class="rd-hl rd-hl-sky" data-hlid="A" data-gl="cuō·撮取、提取">撮</mark>'
+              + '<mark class="rd-hl rd-hl-sky" data-hlid="B" data-gl="名家和法家两个学派的合称">名法</mark>') + '</p>'
+            + '<p data-p="3">后面一段垫底的正文，让下面也有一条缝可用。</p>';
+        const bub = document.createElement('div'); bub.className = 'chat-bubble'; bub.appendChild(box);
+        const msg = document.createElement('div');
+        msg.className = 'chat-msg ai __v'; msg.setAttribute('data-idx', '0'); msg.appendChild(bub);
+        document.body.appendChild(msg);
+        document.documentElement.style.setProperty('--reading-pspace', '28px');
+        box.querySelectorAll('p').forEach((p, i) => { if (i) p.style.marginTop = '28px'; });
+        rdGlLayout(bub);
+
+        const one = id => {
+            const lab = [...box.querySelectorAll('.rd-gl-label')].find(l => l.getAttribute('data-glid') === id);
+            const mk = box.querySelector('mark[data-hlid="' + id + '"]');
+            if (!lab || !mk) return null;
+            const lr = lab.getBoundingClientRect(), mr = mk.getBoundingClientRect();
+            return { labX: lr.left + lr.width / 2, top: lr.top, tgtX: mr.left + mr.width / 2 };
+        };
+        const A = one('A'), B = one('B');
+        const r = {
+            两条都画出来了: !!(A && B),
+            // 同一条缝里才谈得上交叉；换到另一条缝是允许的退路（宁可换缝也不交叉）
+            同缝: !!(A && B) && Math.abs(A.top - B.top) < 6,
+            交叉: !!(A && B) && Math.abs(A.top - B.top) < 6 && ((A.tgtX < B.tgtX) !== (A.labX < B.labX)),
+        };
+        msg.remove();
+        return r;
+    });
+    ok('V1 两条小注都画出来了', V.两条都画出来了);
+    ok('V2 紧挨着的两个词、小注宽度差很多时引线不交叉（排序键只能用目标字位置）', !V.交叉,
+        V.同缝 ? '两条在同一条缝' : '已挪到另一条缝（允许）');
+
     ok('J1 无页面报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();
