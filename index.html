@@ -25355,6 +25355,17 @@ body {
                     layer.appendChild(lab);
 
                     var lw = lab.offsetWidth, lh = lab.offsetHeight;
+                    /* ⚠️「装得下」优先于「离得近」（2026-08-06 加，用户报小注压住了
+                       「汐：背景：阳翟」那行字，原话「主要就是想着能不遮挡字就好了」）。
+                       只有一边的缝真装得下时就先试那边——那一侧完全落在空当里、一个字都不压；
+                       另一侧（缝宽 0 的那种，紧跟段落的批注框不吃段间距）注定要压进块里。
+                       两边都装得下 or 都装不下时，仍按原来的「就近」走，手感不变。
+                       ⚠️这不是压缩：标签尺寸、离正文的距离、缝高全都没动，只是换了先试哪条缝——
+                         「挤不下就挪到另一条缝」本来就是这套排版既定的退路（2026-08-04 用户自己提的）。
+                       ⚠️必须放在 lh 量出来之后！写在上面 nearUp 旁边时 lh 还是 undefined，
+                         `roomUp >= undefined+14` 恒为 false → 两边都判"装不下" → 整条逻辑白写。 */
+                    var fitUp = roomUp >= lh + RD_GL_INSET * 2, fitDown = roomDown >= lh + RD_GL_INSET * 2;
+                    var prefUp = (fitUp !== fitDown) ? fitUp : nearUp;
                     // 锚点：往上就锚**第一行**、往下就锚**最后一行**（跨行的词靠这个治好的）
                     var tx = ((rTop.left + rTop.right) / 2) - cr.left;
                     var txDown = ((rBot.left + rBot.right) / 2) - cr.left;
@@ -25366,7 +25377,7 @@ body {
                        挪边则完全不碰排版，代价只是偶尔压到紧跟的批注框上——她说过那个不介意。 */
                     all.push({
                         pIdx: j, pLeft: pLeft, pW: pr.width, lab: lab, lw: lw, lh: lh,
-                        prefUp: nearUp,
+                        prefUp: prefUp,
                         /* ⚠️缝的编号要按**容器里的兄弟节点**算，不能按「第几个段落」。
                            写成 j-1 时，凡是段落上面隔着背景/点评块(blockquote)的，
                            都会因为「它是第 0 个段落」被判成"上面没有缝"，小注全被赶到下面去。
@@ -25386,6 +25397,10 @@ body {
                         // 缝装得下就用 7px（居中）；装不下＝注定压到隔壁块，改用 12px 落进它的留白带
                         lyUp: pTop - ((roomUp >= lh + RD_GL_INSET * 2) ? RD_GL_INSET : RD_GL_INSET_OVER) - lh,
                         lyDown: pBot + ((roomDown >= lh + RD_GL_INSET * 2) ? RD_GL_INSET : RD_GL_INSET_OVER),
+                        /* 这一侧的缝装不下＝标签注定伸进隔壁块里，排位时要设法**横向避开它的字**
+                           （2026-08-06 加，见 _glGlyphSpan 上那段）。存下邻居节点备查。 */
+                        overUp: roomUp < lh + RD_GL_INSET * 2, overDown: roomDown < lh + RD_GL_INSET * 2,
+                        upEl: _prev, downEl: _next,
                         /* ⚠️「想放哪儿」必须**跟着方向各算一份**。
                            只算一份（用第一行片段）时，跨行的词会舍近求远：
                            「缟素」的缟在第 3 行末尾(最右)、素在第 4 行开头(最左)，
@@ -25413,6 +25428,26 @@ body {
                挪边则一个像素的排版都不动，代价只是偶尔压到紧跟的批注框上，那个她说不介意。
                ⚠️别再加「把缝撑高」那套逻辑回来。 */
             var rowRight = {}, rowNum = {};       // 每条缝：当前行的右边界 / 已经用到第几行
+            /* 隔壁块在某条水平带里，**字**实际占了从哪儿到哪儿（容器坐标；量不到就返回 null）。
+               ⚠️必须用 Range 逐行量，不能拿元素的 getBoundingClientRect。
+                 背景块第一行往往只有「汐：背景：阳翟」十来个字、右边大片是空的
+                 （实测：块宽 328px，第一行文字只占 112px，右边空着 216px）；
+                 按整块的框算就等于说「没地方可挪」，白白放弃唯一不压字的解法。 */
+            function _glGlyphSpan(el, top, bottom) {
+                if (!el || !el.getClientRects) return null;
+                var rng = document.createRange();
+                try { rng.selectNodeContents(el); } catch (e) { return null; }
+                var rects = rng.getClientRects(), L = Infinity, R = -Infinity;
+                for (var i = 0; i < rects.length; i++) {
+                    var q = rects[i];
+                    if (q.width <= 0 || q.height <= 0) continue;
+                    var qt = q.top - cr.top, qb = q.bottom - cr.top;
+                    if (qb <= top || qt >= bottom) continue;      // 不在这条水平带里，不挡事
+                    L = Math.min(L, q.left - cr.left);
+                    R = Math.max(R, q.right - cr.left);
+                }
+                return (R > L) ? { l: L, r: R } : null;
+            }
             function _gl_try(it, useUp, force) {
                 var g = useUp ? it.gapUp : it.gapDown;
                 if (g < 0) return false;                       // 第一段上面没有缝
@@ -25425,6 +25460,29 @@ body {
                 var wantHere = useUp ? it.wantUp : it.wantDown;   // ⚠️跟着方向取，别用那份只算一次的
                 var x = Math.max(wantHere, left);
                 if (prev != null && x < prev + RD_GL_SEP) x = prev + RD_GL_SEP;
+                /* ⚠️压到隔壁块的**留白**可以，压到**字**不行（2026-08-06 用户定的，
+                   她原话「主要就是想着能不遮挡字就好了」「遮挡背景词的那个块倒是没问题」，
+                   而且明确说了**不接受靠压缩小注空间来换**）。
+                   所以这里只做一件事：横向挪开。尺寸、缝高、离正文的距离全都不动。
+                   ⚠️必须在这儿挪、不能等摆完再挪：排位是「按 want 从左往右占位」，
+                     事后平移会打乱左右顺序，引线立刻交叉（那个坑 2026-08-05 修过两次）。
+                   挪不开就保持原样往下走——右边界判定/另起一行/换条缝那几条退路照常兜底，
+                   宁可维持老行为，也不为了躲字把版面搞乱。 */
+                var _nb = (useUp ? it.overUp : it.overDown) ? (useUp ? it.upEl : it.downEl) : null;
+                if (_nb) {
+                    var _ly0 = useUp ? it.lyUp : it.lyDown;
+                    var _rot = it.lw * RD_GL_ROT_SIN / 2;     // 标签是斜的，实际外框比 lh 高一圈
+                    var _sp = _glGlyphSpan(_nb, _ly0 - _rot, _ly0 + it.lh + _rot);
+                    if (_sp && x < _sp.r && x + it.lw > _sp.l) {      // 横向真的压在字上了
+                        var _xR = _sp.r + RD_GL_SEP;                  // 挪到那行字的右边
+                        var _xL = _sp.l - RD_GL_SEP - it.lw;          // 或者挪到左边
+                        var _okR = (_xR + it.lw <= right);
+                        var _okL = (_xL >= left) && (prev == null || _xL >= prev + RD_GL_SEP);
+                        if (_okR && _okL) x = (Math.abs(_xR - wantHere) <= Math.abs(_xL - wantHere)) ? _xR : _xL;
+                        else if (_okR) x = _xR;
+                        else if (_okL) x = _xL;
+                    }
+                }
                 if (x + it.lw > right) {
                     /* ⚠️伸出右边了**先别急着判"这一行满了"**，往左推、贴着右边界再试一次。
                        想放的位置(want)只是「离目标字 22px」这个手感偏好，本来就允许让步；

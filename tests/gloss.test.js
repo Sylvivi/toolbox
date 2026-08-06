@@ -466,7 +466,16 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             const msg = document.createElement('div');
             msg.className = 'chat-msg ai __glt'; msg.setAttribute('data-idx','0'); msg.appendChild(bub);
             document.body.appendChild(msg);
-            box.querySelectorAll('p').forEach((p, i) => { if (i) p.style.marginTop = '28px'; });
+            /* ⚠️这里必须让**上下两条缝都窄**（2026-08-06 改）。
+               下缝紧跟批注框≈5.6px 本来就窄，但上缝是段间距(28px)——而 W 组那条新规矩是
+               「只有一边装得下就先试那边」，于是这条小注会被挪进上面那条宽缝，
+               R2/R3 量的 `lab.style.top - pBot` 就不再是「往下摆的内缩」，整组假红。
+               R 组要守的是**两边都摆不下、只能压进隔壁块时**用多大内缩，所以把上缝也压窄。
+               ⚠️必须改 `--reading-pspace` 变量，**行内 `p.style.marginTop` 没用**——
+                 CSS 里那条 `.reading-merged p[data-p]{margin-top:var(--reading-pspace)!important}`
+                 会把行内样式盖掉（我第一版就是这么改的，白改一轮）。 */
+            const _psSave = document.documentElement.style.getPropertyValue('--reading-pspace');
+            document.documentElement.style.setProperty('--reading-pspace', '6px');
             const p2 = box.querySelector('p[data-p="2"]');
             const at = p2.textContent.indexOf('杯葛');
             rdHlWrapRange(p2, at, at + 2, 'rose', 'r1', false);
@@ -483,6 +492,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.R_下面那道缝很窄 = (bq.top - pr.bottom) < 12;          // 前提成立
             // 宽缝（正常段间距）那一路必须还用小内缩，别被这次改动误伤
             {
+                // ⚠️这一小段测的是「宽缝」，而外面为了 R2/R3 把段间距压成了 6px，
+                //   必须在这儿单独调回正常宽度，否则它量到的是窄缝、必假红。
+                document.documentElement.style.setProperty('--reading-pspace', '28px');
                 const b2box = document.createElement('div');
                 b2box.className = 'reading-merged'; b2box.style.cssText = 'font-size:14px;line-height:1.6;width:358px';
                 b2box.innerHTML = '<p data-p="1">第一段占位。</p><p data-p="2">必然要面对这个势力可能对他的杯葛或反抗。</p>';
@@ -501,6 +513,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
                 const p9 = q1.getBoundingClientRect();
                 const in9 = parseFloat(l9.style.top) - (p9.bottom - c9.top);
                 out.R_宽缝仍用小内缩 = Math.abs(in9 - RD_GL_INSET) < 1.5;
+                document.documentElement.style.setProperty('--reading-pspace', '6px');   // 还给外面那段窄缝场景
             }
             /* 缝装不下时用更大的 RD_GL_INSET_OVER，让小注整个落进隔壁块的留白带里。
                ⚠️别以为「越远越好」：渲过 7/12/16 三版，16px 会直接撞上块里的第一行字。 */
@@ -508,6 +521,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.R_窄缝用大内缩 = Math.abs(inset - RD_GL_INSET_OVER) < 1.5;
             out.R_大内缩比小的大 = RD_GL_INSET_OVER > RD_GL_INSET;
             out.R_大内缩没大过头 = RD_GL_INSET_OVER <= 14;              // 再大就撞块里的字了
+            // ⚠️用完把段间距还回去，别把这一组的窄缝设置漏给后面的组
+            if (_psSave) document.documentElement.style.setProperty('--reading-pspace', _psSave);
+            else document.documentElement.style.removeProperty('--reading-pspace');
             document.querySelectorAll('.__glt').forEach(n => n.remove());
         }
 
@@ -796,6 +812,59 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('V1 两条小注都画出来了', V.两条都画出来了);
     ok('V2 紧挨着的两个词、小注宽度差很多时引线不交叉（排序键只能用目标字位置）', !V.交叉,
         V.同缝 ? '两条在同一条缝' : '已挪到另一条缝（允许）');
+
+    /* ===== W 组：别压到隔壁块的**字**（2026-08-06，用户截图报）=====
+       她的原话：「主要就是想着能不遮挡字就好了」「遮挡背景词的那个块倒是没问题」
+       「我也不想因为遮挡而过度压缩它的空间」。
+       ⇒ 压到块的留白/背景色可以，压到字不行；而且**不许靠缩小标签或缩短离正文的距离**去换。
+       修法＝选边时「装得下」优先于「离得近」：紧跟段落的批注框不吃段间距、那道缝是 0，
+       注定压进块里；上面那条缝装得下就先试上面，整条落在空当里、一个字都不压。
+       ⚠️这条判定必须写在 lh（标签高度）量出来之后——写在 nearUp 旁边时 lh 还是 undefined，
+         `roomUp >= undefined+14` 恒 false，两边都判"装不下"，整条逻辑白写（我踩过）。 */
+    async function _wCase(pspace) {
+        return page.evaluate((ps) => {
+            document.querySelectorAll('.__w').forEach(n => n.remove());
+            document.documentElement.style.setProperty('--reading-pspace', ps + 'px');
+            const host = document.createElement('div');
+            host.className = 'chat-msg ai __w'; host.setAttribute('data-idx', '0');
+            host.style.cssText = 'width:360px';
+            host.innerHTML = '<div class="reading-merged">' +
+                '<blockquote data-cp="0">汐：背景：韩司徒<br>司徒是先秦时期一个很古老的官职，大致管的是民政这些事。</blockquote>' +
+                '<p data-p="1">所以，看起来张良会投入韩的阵营，与刘邦越走越远。可是当刘邦带领军队从洛阳南出时，张良又去找了刘邦。用这种方式，韩王成得到了落脚的基地<mark class="rd-hl rd-hl-rose" data-hlid="hw" data-gl="zháí·韩国故都，在今河南禹州">阳翟</mark>。也因为这样的交情，张良愿意跟着刘邦一起往南。</p>' +
+                '<blockquote data-cp="1">汐：背景：阳翟<br>阳翟大概在今天河南禹州一带，是个老资格的地方。</blockquote>' +
+                '</div>';
+            document.body.appendChild(host);
+            rdGlLayout(host);
+            const lab = host.querySelector('.rd-gl-label');
+            if (!lab) return { err: '没生成小注' };
+            const lb = lab.getBoundingClientRect();
+            const para = host.querySelector('p[data-p="1"]');
+            const pr = para.getBoundingClientRect();
+            let hit = 0;
+            host.querySelectorAll('blockquote').forEach(bq => {
+                const rg = document.createRange(); rg.selectNodeContents(bq);
+                [...rg.getClientRects()].forEach(q => {
+                    if (q.width <= 0 || q.height <= 0) return;
+                    if (Math.min(lb.bottom, q.bottom) - Math.max(lb.top, q.top) > 1 &&
+                        Math.min(lb.right, q.right) - Math.max(lb.left, q.left) > 1) hit++;
+                });
+            });
+            // 「离正文多远」＝标签朝正文那条边到段落边的距离，用来证明没靠缩距离换
+            const gapToText = lb.bottom <= pr.top ? (pr.top - lb.bottom) : (lb.top - pr.bottom);
+            const r = { 压到字的行数: hit, 在段落上方: lb.bottom <= pr.top, 标签宽: +lb.width.toFixed(1), 离正文: +gapToText.toFixed(1) };
+            host.remove();
+            return r;
+        }, pspace);
+    }
+    const W28 = await _wCase(28);
+    const W8 = await _wCase(8);
+    ok('W1 上面那条缝装得下时，小注挪上去、一个字都不压', !W28.err && W28.压到字的行数 === 0, JSON.stringify(W28));
+    ok('W2 它确实是挪到了段落上方（而不是靠别的手段躲开）', !W28.err && W28.在段落上方, JSON.stringify(W28));
+    ok('W3 ⚠️不是靠压缩换的：标签宽度跟窄缝时一模一样', !W28.err && !W8.err && Math.abs(W28.标签宽 - W8.标签宽) < 1,
+        '宽缝 ' + W28.标签宽 + ' / 窄缝 ' + W8.标签宽);
+    ok('W4 ⚠️也不是靠贴近正文换的：离正文的距离没缩水', !W28.err && W28.离正文 >= 5, JSON.stringify(W28));
+    ok('W5 两边的缝都装不下时保持老行为（压进块里），别为了躲字把版面搞乱',
+        !W8.err && !W8.在段落上方, JSON.stringify(W8));
 
     ok('J1 无页面报错', pageErrs.length === 0, pageErrs.join(' | '));
 
