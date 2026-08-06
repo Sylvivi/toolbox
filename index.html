@@ -14,7 +14,7 @@
 /* =========================================================================
  * [1] CSS 样式区 - [1.1] 基础变量与主题
  * ========================================================================= */
-        
+
 /* =========================================================================
  * [1.2] 全局样式与基础组件
  * ========================================================================= */
@@ -367,7 +367,6 @@ html:has(.theme-rose-night) { background-color: #0c0c0e; }
             --gold: #0F766E;
             --dup-bg: rgba(15,118,110,0.07);
         }
-
 
 
         .theme-iceblue {
@@ -4730,7 +4729,7 @@ body {
 
     <!-- ==================== 页面二：密钥管理 ==================== -->
     <div class="tab-content active" id="tab-keys">
-        
+
 <!-- =======================================================================
   [2.2] 主体导航与视图区
 ======================================================================== -->
@@ -5225,7 +5224,6 @@ body {
             </div>
         </div>
     </div>
-
 
 
     <!-- ===== AI 聊天面板 ===== -->
@@ -5965,9 +5963,6 @@ body {
             showLockScreen();
         }
 
-        function resetLockPassword() {
-            startResetFlow();
-        }
 
         // 页面加载时检查锁
         (function checkLock() {
@@ -6933,26 +6928,8 @@ body {
             renderKeyCards();
         }
 
-        function getExpandedCardIds() {
-            var ids = [];
-            document.querySelectorAll('.card:not(.collapsed)').forEach(function(c) {
-                var id = c.dataset.kid || c.dataset.sid;
-                if (id) ids.push(id);
-            });
-            return ids;
-        }
 
-        function restoreExpandedCards(ids) {
-            if (!ids || ids.length === 0) return;
-            ids.forEach(function(id) {
-                var card = document.querySelector('.card[data-kid="' + id + '"]') || document.querySelector('.card[data-sid="' + id + '"]');
-                if (card && card.classList.contains('collapsed')) {
-                    card.classList.remove('collapsed');
-                    card.classList.add('expanded');
-                }
-            });
-        }
-
+        
         function renderKeyCards() {
             var data = getKeyData();
             var search = document.getElementById('keySearchInput').value.toLowerCase();
@@ -7241,27 +7218,8 @@ body {
             for (var i = 0; i < data.length; i++) { if (data[i].id === id) { openKeyModal(data[i]); return; } }
         }
 
-        function deleteKeyEntry(id) {
-            if (!confirm('确定删除这条记录吗？')) return;
-            addTombstone(id);
-            setKeyData(getKeyData().filter(function(d) { return d.id !== id; }));
-            renderKeyFilters(); renderKeyCards(); showToast('🗑️ 已删除');
-        }
 
-        function duplicateKeyEntry(id) {
-            var data = getKeyData();
-            for (var i = 0; i < data.length; i++) {
-                if (data[i].id === id) {
-                    var copy = JSON.parse(JSON.stringify(data[i]));
-                    copy.id = generateId(); copy.group = ''; copy.models = [];
-                    openKeyModal(copy);
-                    document.getElementById('keyEditId').value = '';
-                    showToast('📋 已复制，请修改后保存');
-                    return;
-                }
-            }
-        }
-
+        
         function toggleKeyPin(id) {
             var data = getKeyData();
             for (var i = 0; i < data.length; i++) {
@@ -7334,10 +7292,6 @@ body {
             var u = (url || '').replace(/\/+$/, '');
             if (!/\/v1$/i.test(u)) u += '/v1';
             return u;
-        }
-        function getRootUrl(url) {
-            // 去掉 /v1 等路径后缀，获取站点根地址
-            return getBaseUrl(url).replace(/\/v1$/i, '');
         }
 
         // 多密钥选择器：如果只有一个密钥直接执行，多个则弹出选择
@@ -7476,14 +7430,6 @@ body {
         }
 
         // 📊 打开消耗记录页面
-        function openKeyLog(id) {
-            var item = getKeyItemById(id);
-            if (!item) return;
-            var url = item.website || item.url || '';
-            if (!url) { showToast('⚠️ 请先配置官网或 API 地址'); return; }
-            var base = url.replace(/\/v1\/?$/, '').replace(/\/$/, '');
-            window.open(base + (item.logPath || '/console/log'), '_blank');
-        }
 
         // 🚀 测速 Ping — 用 /v1/models 接口
         function pingKeyApi(id) {
@@ -7524,27 +7470,6 @@ body {
         }
 
         // 🤖 试聊 — 显示模型名输入框
-        function showChatTest(id) {
-            var container = document.getElementById('chat-test-' + id);
-            if (!container) return;
-            // 切换显示/隐藏
-            if (container.innerHTML) { container.innerHTML = ''; return; }
-
-            var item = getKeyItemById(id);
-            // 自动填入第一个已配置的模型名
-            var defaultModel = '';
-            if (item && item.models && item.models.length > 0) {
-                defaultModel = item.models[0].name;
-            }
-
-            container.innerHTML = '<div class="key-chat-input-row">' +
-                '<input type="text" id="chat-model-' + id + '" placeholder="输入模型名，如 gpt-4o-mini" value="' + esc(defaultModel) + '">' +
-                '<button onclick="event.stopPropagation();doKeyChat(\'' + id + '\')">发送</button>' +
-                '</div>';
-            // 聚焦输入框
-            var inp = document.getElementById('chat-model-' + id);
-            if (inp) inp.focus();
-        }
 
         // 🤖 执行试聊
         function doKeyChat(id) {
@@ -9080,10 +9005,8 @@ body {
         function toggleSubEditSearch() { _subEditor.toggleSearch(); }
         function doSubEditSearch() { _subEditor.doSearch(); }
         function jumpSubEditMatch(dir) { _subEditor.jumpMatch(dir); }
-        function renderSubEditHighlight() { _subEditor.renderHighlight(); }
-        function clearSubEditHighlight() { _subEditor.clearHighlight(); }
-        function scrollSubEditToMatch() { _subEditor.scrollToMatch(); }
-        function syncSubEditScroll() { _subEditor.syncScroll(); }
+                function clearSubEditHighlight() { _subEditor.clearHighlight(); }
+                function syncSubEditScroll() { _subEditor.syncScroll(); }
         function syncSubEditHighlight() { _subEditor.syncHighlight(); }
         function syncSubEditLines() { _subEditor.syncLines(); }
         function updateSubEditCursorPos() { _subEditor.updateCursorPos(); }
@@ -9243,12 +9166,6 @@ body {
             for (var i = 0; i < data.length; i++) { if (data[i].id === id) { openSnipModal(data[i]); return; } }
         }
 
-        function deleteSnipEntry(id) {
-            if (!confirm('确定删除这个片段吗？')) return;
-            addTombstone(id);
-            setSnipData(getSnipData().filter(function(d) { return d.id !== id; }));
-            renderSnipFilters(); renderSnippets(); showToast('🗑️ 已删除');
-        }
 
         /* ----- 主编辑器代理函数 ----- */
         function syncEditorLines() { _mainEditor.syncLines(); }
@@ -9257,10 +9174,7 @@ body {
         function toggleEditorSearch() { _mainEditor.toggleSearch(); }
         function doEditorSearch() { _mainEditor.doSearch(); }
         function jumpEditorMatch(dir) { _mainEditor.jumpMatch(dir); }
-        function renderEditorHighlight() { _mainEditor.renderHighlight(); }
-        function clearEditorHighlight() { _mainEditor.clearHighlight(); }
-        function scrollEditorToMatch() { _mainEditor.scrollToMatch(); }
-        function syncEditorHighlight() { _mainEditor.syncHighlight(); }
+                                function syncEditorHighlight() { _mainEditor.syncHighlight(); }
 
         function loadFileToForm(event) {
             var file = event.target.files[0]; if (!file) return;
@@ -9607,22 +9521,6 @@ body {
             downloadJSON({ api_keys: [], snippets: [item] }, item.title || 'card_export');
         }
 
-        function batchExportData() {
-            var selected = document.querySelectorAll('.card.selected');
-            if (selected.length === 0) { showToast('⚠️ 请先选择要导出的卡片'); return; }
-            var sData = getSnipData();
-            var kData = getKeyData();
-            var sIds = {}, kIds = {};
-            selected.forEach(function(card) {
-                if (card.dataset.sid) sIds[card.dataset.sid] = true;
-                if (card.dataset.kid) kIds[card.dataset.kid] = true;
-            });
-            var exportSnips = sData.filter(function(d) { return sIds[d.id]; });
-            var exportKeys = kData.filter(function(d) { return kIds[d.id]; });
-            var name = 'toolbox_export_' + selected.length + '项';
-            downloadJSON({ api_keys: exportKeys, snippets: exportSnips }, name);
-            exitSelectMode();
-        }
 
         function downloadJSON(data, name) {
             var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -11220,10 +11118,6 @@ body {
             else { gistPushData(); }
         }
 
-        function syncPullData(manual) {
-            if (activeSyncProvider === 'cf') { return cfPullData(manual); }
-            else { return gistPull(manual) || Promise.resolve(); }
-        }
 
         function gistSetStatus(msg, color) {
             var el = document.getElementById('gistStatus');
@@ -12367,11 +12261,7 @@ body {
         function genStyleDefault() { return localStorage.getItem('gen_style_default') || '写实'; }
         function _genStyleBookMap() { try { return JSON.parse(localStorage.getItem('gen_style_book') || '{}'); } catch (e) { return {}; } }
         // 取风格：有书且该书设过 → 用书的；否则用全局默认
-        function genStyleGet(bookId) {
-            if (bookId) { var m = _genStyleBookMap(); if (m[bookId]) return m[bookId]; }
-            return genStyleDefault();
-        }
-        // 存风格：带 bookId 存到该书；不带则改全局默认
+                // 存风格：带 bookId 存到该书；不带则改全局默认
         function genStyleSet(bookId, str) {
             str = (str || '').trim(); if (!str) return;
             if (bookId) { var m = _genStyleBookMap(); m[bookId] = str; try { localStorage.setItem('gen_style_book', JSON.stringify(m)); } catch (e) {} }
@@ -12433,41 +12323,7 @@ body {
             throw new Error('生图返回格式不认识');
         }
         // 第一步：把小说片段（或用户描述）+ 书名 + 风格 提炼成画面描述；失败回退原文截断
-        async function aiBuildImagePrompt(rawText, bookName, styleStr, signal) {
-            var styleTag = genStyleTag(styleStr);
-            var fallback = (rawText || '').replace(/\s+/g, ' ').trim().slice(0, 300) + (styleTag ? ', ' + styleTag : '');
-            // 提炼用「当前选中的文字模型」（收藏/模型选择器里选的那个）；生图才用设置里的生图模型。两者分开。
-            var baseUrl, apiKey, model;
-            var ps = document.getElementById('chatProviderSelect');
-            var item = getKeyItemById(ps ? ps.value : '');
-            if (item && chatSelectedModel) {
-                baseUrl = getBaseUrl(item.url); apiKey = chatSelectedKeyStr || getActiveKey(item); model = chatSelectedModel;
-            } else {
-                // 当前没有选中模型时，退回共读点评模型
-                var cfg = chatResolveReadingModel('comment');
-                if (!cfg) return fallback;
-                baseUrl = cfg.baseUrl; apiKey = cfg.apiKey; model = cfg.model;
-            }
-            // 提炼要用「文字模型」。若当前选中的正好是生图类模型（如在用 gpt-image 聊天），
-            // 不能拿它去调 /chat/completions（会 503），直接跳过提炼、用原文+风格出图。
-            if (_isImageModelName(model)) return fallback;
-            try {
-                var sys = '你是插画提示词助手。把用户给的小说片段凝练成一句【画面描述】：交代清楚人物外貌/动作/表情、场景环境、光影氛围、构图视角，可中英混合，控制在 80 字内。只输出画面描述本身，不要解说、不要引号、不要任何前缀。';
-                var usr = '书名：《' + (bookName || '未知') + '》\n期望风格：' + (styleStr || '') + '\n小说片段：\n' + (rawText || '').slice(0, 1500);
-                var out = (await chatStreamChat({
-                    baseUrl: baseUrl, apiKey: apiKey, model: model,
-                    purpose: '生图提示词',
-                    messages: [{ role: 'system', content: sys }, { role: 'user', content: usr }],
-                    signal: signal
-                })).trim();
-                if (!out) return fallback;
-                return out + (styleTag ? ', ' + styleTag : '');
-            } catch (e) {
-                if (e && e.name === 'AbortError') throw e;
-                return fallback;
-            }
-        }
-        // 把生成好的图作为一条「生图消息」追加到当前对话末尾（图字节已在本机 IDB，消息只放轻量引用）。
+                // 把生成好的图作为一条「生图消息」追加到当前对话末尾（图字节已在本机 IDB，消息只放轻量引用）。
         // 单条 append 而非整体重渲，长篇共读才不卡。
         function chatInsertGenImage(imgId, caption, prompt) {
             if (typeof chatEnsureRenderedToEnd === 'function') chatEnsureRenderedToEnd(); // 接末尾前先补齐窗口，防串位
@@ -13303,16 +13159,6 @@ body {
         }
 
         /* ===== 打开 / 关闭 ===== */
-        function _chatBlockBgScroll(e) {
-            var overlay = document.getElementById('chatModalOverlay');
-            if (!overlay || !overlay.classList.contains('show')) return;
-            var el = e.target;
-            while (el && el !== overlay) {
-                if (el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth) return;
-                el = el.parentElement;
-            }
-            e.preventDefault();
-        }
 
         // 直接进入最近一次对话；没有任何对话时开新对话
         function chatOpenMostRecent() {
@@ -14929,35 +14775,8 @@ body {
         }
 
         /* ----- 设置弹窗 ----- */
-        function chatSwitchSettingsTab(n) {
-            var tab1 = document.getElementById('chatSettingsTab1');
-            var tab2 = document.getElementById('chatSettingsTab2');
-            var pane1 = document.getElementById('chatSettingsPane1');
-            var pane2 = document.getElementById('chatSettingsPane2');
-            if (!tab1 || !tab2 || !pane1 || !pane2) return;
-            if (n === 1) {
-                tab1.style.color = 'var(--accent)';
-                tab1.style.borderBottomColor = 'var(--accent)';
-                tab2.style.color = 'var(--text-muted)';
-                tab2.style.borderBottomColor = 'transparent';
-                pane1.style.display = '';
-                pane2.style.display = 'none';
-            } else {
-                tab2.style.color = 'var(--accent)';
-                tab2.style.borderBottomColor = 'var(--accent)';
-                tab1.style.color = 'var(--text-muted)';
-                tab1.style.borderBottomColor = 'transparent';
-                pane2.style.display = '';
-                pane1.style.display = 'none';
-            }
-        }
 
-        function chatOpenSettings() {
-            // 旧入口：现已并入 clawd 面板的「预设 · 上下文」标签页
-            chatOpenModelSheet();
-            switchSheetTab('preset');
-        }
-        function chatRenderThemeList() {
+                function chatRenderThemeList() {
             var wrap = document.getElementById('chatThemeList');
             if (!wrap) return;
             var curIdx = getThemeIdx();
@@ -14970,21 +14789,7 @@ body {
             }
             wrap.innerHTML = html;
         }
-        function chatSetThemeRandom() {
-            var lastTheme = localStorage.getItem('toolbox_theme_last') || '';
-            var candidates = [];
-            for (var ti = 0; ti < THEMES.length; ti++) { if (THEMES[ti].id !== lastTheme) candidates.push(ti); }
-            if (candidates.length === 0) { for (var ti2 = 0; ti2 < THEMES.length; ti2++) candidates.push(ti2); }
-            var idx = candidates[Math.floor(Math.random() * candidates.length)];
-            localStorage.setItem('toolbox_theme_last', THEMES[idx].id);
-            applyTheme(idx);
-            localStorage.setItem('toolbox_theme', 'random');
-            chatRenderThemeList();
-            syncChatMaskToggleStyle();
-            chatSyncReadingToggleVis();
-            showToast(THEMES[idx].name);
-        }
-        function chatSetTheme(idx) {
+                function chatSetTheme(idx) {
             applyTheme(idx);
             chatRenderThemeList();
             // 同步遮罩行显隐
@@ -16060,42 +15865,8 @@ body {
             el.innerHTML = h;
         }
 
-        function chatAddRerollBtn() {
-            var old = document.getElementById('chatRerollBtn');
-            if (old) old.remove();
-            // 找到最后一条AI气泡
-            var aiMsgs = document.getElementById('chatMessages').querySelectorAll('.chat-msg.ai');
-            if (aiMsgs.length === 0) return;
-            var lastAi = aiMsgs[aiMsgs.length - 1];
-            var bubble = lastAi.querySelector('.chat-bubble');
-            if (!bubble) return;
-            bubble.style.position = 'relative';
-            var btn = document.createElement('button');
-            btn.id = 'chatRerollBtn';
-            btn.className = 'chat-reroll-btn';
-            btn.textContent = '🔄';
-            btn.title = '重新生成';
-            btn.onclick = function(e) { e.stopPropagation(); chatReroll(); };
-            bubble.appendChild(btn);
-        }
 
         /* ===== 长按操作面板 ===== */
-        function chatAttachLongPress(el, msgIdx) {
-            if (typeof msgIdx !== 'number') return;
-            var timer = null, didLong = false;
-            function down(e) {
-                didLong = false;
-                timer = setTimeout(function() { didLong = true; timer = null; chatShowSheet(msgIdx); }, 400);
-            }
-            function up(e) { if (timer) { clearTimeout(timer); timer = null; } if (didLong) { e.preventDefault(); e.stopPropagation(); } }
-            function cancel() { if (timer) { clearTimeout(timer); timer = null; } didLong = false; }
-            el.addEventListener('touchstart', down, { passive: true });
-            el.addEventListener('touchend', up);
-            el.addEventListener('touchcancel', cancel);
-            el.addEventListener('mousedown', down);
-            el.addEventListener('mouseup', up);
-            el.addEventListener('mouseleave', cancel);
-        }
 
         function chatShowSheet(idx) {
             chatActionMsgIdx = idx;
@@ -17797,15 +17568,7 @@ body {
             return Array.isArray(r) ? r : [];
         }
         // 追问回喂 AI：把各集前情按集号拼起来
-        function chatTransRecapJoin() {
-            var segs = chatTransRecapSegs();
-            if (!segs.length) return '';
-            return segs.map(function (s, i) {
-                var ep = chatTransEpisodeNo(s.srcIdx);
-                return (ep ? '第 ' + ep + ' 集：' : '') + (s.text || '');
-            }).join('\n\n');
-        }
-        // 某条 user 消息(srcIdx)是第几集 = 它之前(含自己)有几条 user 消息
+                // 某条 user 消息(srcIdx)是第几集 = 它之前(含自己)有几条 user 消息
         function chatTransEpisodeNo(srcIdx) {
             if (srcIdx == null || srcIdx < 0 || srcIdx >= chatMessages.length) return null;
             var n = 0;
@@ -18159,51 +17922,12 @@ body {
                 }
                 return lines.join('\n');
             }
-            function _parseTableMd(md, cols) {
-                var rows = [];
-                var lines = md.split('\n').filter(function(l) { return l.indexOf('|') >= 0 && l.indexOf('---') < 0; });
-                for (var i = 0; i < lines.length; i++) {
-                    var cells = lines[i].split('|').map(function(s) { return s.trim(); }).filter(function(s) { return s !== ''; });
-                    if (cells.length < 2) continue;
-                    // 跳过表头行（与 cols 完全匹配）
-                    var isHeader = true;
-                    for (var h = 0; h < cols.length; h++) { if (cells[h] !== cols[h]) { isHeader = false; break; } }
-                    if (isHeader) continue;
-                    var obj = {};
-                    for (var c = 0; c < cols.length; c++) obj[cols[c]] = (cells[c] || '').replace(/｜/g, '|');
-                    rows.push(obj);
-                }
-                return rows;
-            }
-            var _charCols = _mtCharCols;
+                        var _charCols = _mtCharCols;
             var _placeCols = _mtPlaceCols;
             var _timeCols = _mtTimeCols;
             var _plotCols = _mtPlotCols;
 
             // 把模型输出按四张表的表头行切成四段（人物/地点/大事年表/主线），顺序无关
-            function _splitThreeTables(result) {
-                var lines = result.split('\n');
-                function hdr(test) {
-                    for (var i = 0; i < lines.length; i++) { if (lines[i].indexOf('|') >= 0 && test(lines[i])) return i; }
-                    return -1;
-                }
-                var marks = [
-                    { type: 'characters', idx: hdr(function(l){ return l.indexOf('人物') >= 0 && l.indexOf('身份') >= 0; }) },
-                    { type: 'places', idx: hdr(function(l){ return l.indexOf('地点') >= 0; }) },
-                    { type: 'timeline', idx: hdr(function(l){ return l.indexOf('时间') >= 0 && l.indexOf('事件') >= 0 && l.indexOf('已解决') < 0; }) },
-                    { type: 'plotlines', idx: hdr(function(l){ return l.indexOf('事件') >= 0 && l.indexOf('已解决') >= 0; }) }
-                ].filter(function(m){ return m.idx >= 0; }).sort(function(a, b){ return a.idx - b.idx; });
-                var out = { characters: '', places: '', timeline: '', plotlines: '' };
-                if (!marks.length) { out.characters = result; return out; }
-                for (var k = 0; k < marks.length; k++) {
-                    var start = marks[k].idx;
-                    // 往上并入紧邻的非表格标题行（如"【地点表】"）
-                    if (start > 0 && lines[start - 1].indexOf('|') < 0 && lines[start - 1].trim() !== '') start--;
-                    var end = k + 1 < marks.length ? marks[k + 1].idx : lines.length;
-                    out[marks[k].type] = lines.slice(start, end).join('\n');
-                }
-                return out;
-            }
 
             // 结构化记忆表格更新：把「还没折进表格」的摘要段喂给模型，增量更新人物表+地点表+主线表。
             // _targetCount = 本次若成功，水位应推进到的摘要段数（= chatCompressSummaries.length）；成功才推进，失败留待下轮补。
@@ -19347,7 +19071,6 @@ body {
             if (typeof rdGlRelayoutSoon === 'function') rdGlRelayoutSoon();
         }
         // 兼容旧调用名（同步拉取等处仍在用）
-        function readingApplyFont() { readingApplyFonts(); }
 
         // 云同步拉取时套用字体设置（字体库 + 五个位置的选择），带时间戳护栏：
         // 只有云端比本地新才覆盖，避免开机时把刚选好的字体被云端旧值冲回默认。
@@ -20226,7 +19949,6 @@ body {
         function rbGetConvBook() { if (!chatCurrentConvId) return null; return rbConvBookMap()[chatCurrentConvId] || null; }
         function rbSetConvBook(bookId) { if (!chatCurrentConvId) return; var m = rbConvBookMap(); m[chatCurrentConvId] = bookId; try { localStorage.setItem('reading_conv_book', JSON.stringify(m)); } catch (e) {} }
         function rbEsc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
-        function rbFileIcon(name) { var ext = (name.split('.').pop() || '').toLowerCase(); var m = { epub: '📗', mobi: '📕', azw: '📕', azw3: '📕', txt: '📄', md: '📝', markdown: '📝', text: '📄' }; return m[ext] || '📖'; }
 
         function rbOpenShelf() {
             rbLoad();
@@ -20431,10 +20153,7 @@ body {
            用户自己打的「导读这段讲的是什么」也会中，目录上就会冒出假的导读标记。
            这里咬死「导读」后面要么跟全角冒号、要么到此为止。 */
         var GUIDE_Q_RE = /^导读(：|$)/;
-        function readerGuideOfChap(fileKey, chap) {
-            return readerQAGet(fileKey, chap).filter(function (it) { return GUIDE_Q_RE.test(it.q || ''); });
-        }
-        // 全书已讲过的背景词——喂给第一遍让它跳过，免得共济会在第 3、7、11 章各讲一遍
+                // 全书已讲过的背景词——喂给第一遍让它跳过，免得共济会在第 3、7、11 章各讲一遍
         function readerBgDoneTerms(fileKey) {
             var book = readerQAAll()[fileKey] || {}, seen = {}, out = [];
             Object.keys(book).forEach(function (k) {
@@ -20515,11 +20234,7 @@ body {
             all[fileKey].memTables = { characters: tables.characters || [], places: tables.places || [], timeline: tables.timeline || [], plotlines: tables.plotlines || [], ts: Date.now(), upTo: upTo };
             readerSummariesSaveAll(all);
         }
-        function readerMemTablesDelete(fileKey) {
-            var all = readerSummariesAll();
-            if (all[fileKey]) { all[fileKey].memTables = { characters: [], places: [], timeline: [], plotlines: [], ts: Date.now(), upTo: -1 }; readerSummariesSaveAll(all); }
-        }
-        // 记忆表格「上次更新是否失败」标记（按书存 localStorage，成功时清掉，给面板显示「失败·点此重试」用）
+                // 记忆表格「上次更新是否失败」标记（按书存 localStorage，成功时清掉，给面板显示「失败·点此重试」用）
         function readerMemTblErrAll() { try { return JSON.parse(localStorage.getItem('reader_memtbl_err') || '{}'); } catch (e) { return {}; } }
         function readerMemTblErrGet(fileKey) { return readerMemTblErrAll()[fileKey] || null; }
         function readerMemTblErrSet(fileKey, msg) {
@@ -23191,12 +22906,7 @@ body {
         var _topbarLastScroll = 0;
         var _topbarSuppressUntil = 0;   // 该时间戳之前不做显隐判断（进入对话/自身动画期间）
         var _readingTapSuppressUntil = 0;   // 该时间戳之前忽略点击翻页（避免从列表进入时的「幽灵点击」误翻页）
-        function readingShowTopbar() {
-            var bar = document.getElementById('chatTopbarConv');
-            if (bar) bar.style.marginTop = '';
-            _topbarHidden = false;
-        }
-        function readingHideTopbar(instant) {
+                function readingHideTopbar(instant) {
             var bar = document.getElementById('chatTopbarConv');
             if (!bar) return;
             if (instant) {
@@ -23281,11 +22991,6 @@ body {
         })();
 
         // 共读：点左半屏，无动画整页切到上一屏（与下滑对称，留约一行重叠）
-        function readingPageUp() {
-            var el = document.getElementById('chatMessages');
-            if (!el) return;
-            el.scrollTop = el.scrollTop - Math.max(100, el.clientHeight - 48);
-        }
 
         // 同步设置面板里的「共读模式」开关到当前状态
         function readingSyncReadingModeToggle() {
@@ -23832,21 +23537,7 @@ body {
         }
 
         // 点「提问」：把操作条切换成一个小输入框，回车或「发送」提交
-        function readingAskPrompt(msgIdx, pNum, btn) {
-            var bar = btn.closest('.reading-actbar');
-            if (!bar) return;
-            bar.innerHTML = '<textarea class="rp-ask" rows="1" placeholder="问问这一段…（如：他这句话什么意思？）"></textarea>' +
-                '<button class="rp-ask-send">发送</button>' +
-                '<button class="rp-cancel" onclick="readingClearActbar()">取消</button>' +
-                readingAskCtxBoxHtml();
-            var input = bar.querySelector('.rp-ask');
-            var send = bar.querySelector('.rp-ask-send');
-            function go() { readingAskOne(msgIdx, pNum, input.value, bar); }
-            send.onclick = go;
-            readingBindAskBox(input);
-            readingBindCtxBox(bar);
-        }
-        /* ===== 提问「带多少材料」的三档开关（2026-07-28 加）=====
+                /* ===== 提问「带多少材料」的三档开关（2026-07-28 加）=====
          * 用户要自己决定每次提问带不带记忆表和摘要——她实测这两块 6700 字、占一条提问的一多半，
          * 但砍死了又会让「顺口拐到剧情」时接不上。她选的形态：**一个小方块，点一下换一档**。
          *
@@ -23894,8 +23585,7 @@ body {
         }
         // 共读提问：是否把「本章前面已聊过的问答」一并发给 AI（＝三档里的第 2 档）
         function readingAskCtxOn() { return readingAskLv(false) >= 2; }
-        function readingSetAskCtx(on) { localStorage.setItem('reading_ask_ctx', on ? '1' : '0'); syncReadingAskCtxToggleStyle(); }
-        function syncReadingAskCtxToggleStyle() {
+                function syncReadingAskCtxToggleStyle() {
             var cb = document.getElementById('readingAskCtxToggle');
             if (!cb) return;
             cb.checked = readingAskCtxOn();
@@ -25268,13 +24958,7 @@ body {
             var all = readingGetAllBookmarks();
             return all[cid] || [];
         }
-        function readingIsBookmarked(msgIdx, p) {
-            var list = readingGetConvBookmarks();
-            var chap = _readerChapOf(msgIdx);
-            for (var i = 0; i < list.length; i++) { if (_markMatchesMsg(list[i], msgIdx, chap) && list[i].p === p && list[i].type !== 'ask') return true; }
-            return false;
-        }
-        function readingParaPreview(msgIdx, p) {
+                function readingParaPreview(msgIdx, p) {
             try {
                 var orig = readingModeStripParaNums(readingModeGetOriginalText(msgIdx));
                 var lines = orig.split('\n').filter(function(l) { return l.trim().length > 0; });
@@ -26677,18 +26361,7 @@ body {
             all[cid] = list;
             readingSaveAllBookmarks(all);
         }
-        function readingToggleBookmarkFromBar(msgIdx, pNum, btn) {
-            var on = readingToggleBookmark(msgIdx, pNum);
-            if (btn) {
-                btn.classList.toggle('on', on);
-                btn.textContent = on ? '🔖 已标记' : '🔖 标记';
-            }
-            // 同步段落视觉标记
-            var pEl = document.querySelector('.chat-msg.ai[data-idx="' + msgIdx + '"] p[data-p="' + pNum + '"]');
-            if (pEl) pEl.classList.toggle('rp-marked', on);
-            showToast(on ? '已标记' : '已取消标记');
-        }
-        function readingMarkBookmarks(bubble, msgIdx) {
+                function readingMarkBookmarks(bubble, msgIdx) {
             if (!bubble) return;
             var list = readingGetConvBookmarks();
             var chap = _readerChapOf(msgIdx);
@@ -26719,21 +26392,7 @@ body {
             var panel = document.getElementById('chatBookmarkPanel');
             if (panel && panel.classList.contains('show')) chatBuildBookmarkPanel();
         }
-        function chatToggleBookmarkPanel() {
-            var panel = document.getElementById('chatBookmarkPanel');
-            var btn = document.getElementById('chatBookmarkBtn');
-            if (panel.classList.contains('show')) {
-                panel.classList.remove('show'); btn.classList.remove('active'); readingHidePanelMask(); return;
-            }
-            var floating = true;   // 横幅已全模式隐藏，面板一律浮动
-            if (floating) chatCloseNavPanel();  // 两个弹窗不叠在一起
-            chatBuildBookmarkPanel();
-            panel.classList.toggle('panel-float', floating);
-            panel.classList.add('show'); btn.classList.add('active');
-            if (floating) readingShowPanelMask();
-            panel.scrollTop = panel.scrollHeight;
-        }
-        function chatCloseBookmarkPanel() {
+                function chatCloseBookmarkPanel() {
             var panel = document.getElementById('chatBookmarkPanel');
             var btn = document.getElementById('chatBookmarkBtn');
             if (panel) panel.classList.remove('show');
@@ -28040,21 +27699,6 @@ body {
             }
         }
 
-        function chatAddCopyBtn(bubbleEl, text) {
-            var btn = document.createElement('button');
-            btn.className = 'chat-copy-btn';
-            btn.textContent = '📋';
-            btn.title = '复制';
-            btn.onclick = function(e) {
-                e.stopPropagation();
-                copyText(text, btn);
-                btn.textContent = '✅';
-                btn.classList.add('copied');
-                setTimeout(function() { btn.textContent = '📋'; btn.classList.remove('copied'); }, 1500);
-            };
-            bubbleEl.style.position = 'relative';
-            bubbleEl.appendChild(btn);
-        }
 
         /* ===== 复制时清理富文本样式，保留段落结构 ===== */
         (function() {
@@ -28503,12 +28147,6 @@ body {
             setCheckinData(data);
         }
 
-        function isDayLit(dateKey) {
-            var done = getCheckinForDay(dateKey);
-            var tasks = getCheckinTasks();
-            var threshold = Math.min(CHECKIN_LIT_THRESHOLD, tasks.length);
-            return threshold > 0 && done.filter(function(t){return tasks.indexOf(t)!==-1;}).length >= threshold;
-        }
 
         // 获取某月的天数
         function getDaysInMonth(year, month) { return new Date(year, month + 1, 0).getDate(); }
@@ -28781,9 +28419,6 @@ body {
             renderCheckinMonths();
         }
 
-        function toggleCheckinDay(dateKey) {
-            checkinSelectDay(dateKey);
-        }
 
         // 备注读写
         function getCheckinNote(dateKey) {
