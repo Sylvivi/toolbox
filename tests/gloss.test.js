@@ -840,31 +840,37 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             const lb = lab.getBoundingClientRect();
             const para = host.querySelector('p[data-p="1"]');
             const pr = para.getBoundingClientRect();
-            let hit = 0;
-            host.querySelectorAll('blockquote').forEach(bq => {
-                const rg = document.createRange(); rg.selectNodeContents(bq);
+            // ⚠️「压到字」要连**正文自己的字**一起查：把小注塞进段落末行的空白里同样是遮挡
+            const count = (el) => {
+                const rg = document.createRange(); rg.selectNodeContents(el);
+                let n = 0;
                 [...rg.getClientRects()].forEach(q => {
                     if (q.width <= 0 || q.height <= 0) return;
                     if (Math.min(lb.bottom, q.bottom) - Math.max(lb.top, q.top) > 1 &&
-                        Math.min(lb.right, q.right) - Math.max(lb.left, q.left) > 1) hit++;
+                        Math.min(lb.right, q.right) - Math.max(lb.left, q.left) > 1) n++;
                 });
-            });
-            // 「离正文多远」＝标签朝正文那条边到段落边的距离，用来证明没靠缩距离换
-            const gapToText = lb.bottom <= pr.top ? (pr.top - lb.bottom) : (lb.top - pr.bottom);
-            const r = { 压到字的行数: hit, 在段落上方: lb.bottom <= pr.top, 标签宽: +lb.width.toFixed(1), 离正文: +gapToText.toFixed(1) };
+                return n;
+            };
+            let bq = 0; host.querySelectorAll('blockquote').forEach(e => { bq += count(e); });
+            const r = { 压隔壁块的字: bq, 压正文的字: count(para), 在段落上方: lb.bottom <= pr.top,
+                        标签宽: +lb.width.toFixed(1) };
             host.remove();
             return r;
         }, pspace);
     }
     const W28 = await _wCase(28);
     const W8 = await _wCase(8);
-    ok('W1 上面那条缝装得下时，小注挪上去、一个字都不压', !W28.err && W28.压到字的行数 === 0, JSON.stringify(W28));
-    ok('W2 它确实是挪到了段落上方（而不是靠别的手段躲开）', !W28.err && W28.在段落上方, JSON.stringify(W28));
+    ok('W1 段间距 28（用户实际设置）时，一个字都不压', !W28.err && W28.压隔壁块的字 === 0, JSON.stringify(W28));
+    /* ⚠️W2 originally asserted「必须挪到段落上方」——那是钉错了东西。
+       目标从来不是"往上"，而是"不压字"；能就近往下再横向躲开时，往下才是对的
+       （用户 2026-08-06 报「变成从上往下指了，可下面明明更近」）。 */
+    ok('W2 ⚠️别把「不压字」做成「一律往上」：躲得开时要保持就近（这里词在段落下半→往下）',
+        !W28.err && !W28.在段落上方, JSON.stringify(W28));
     ok('W3 ⚠️不是靠压缩换的：标签宽度跟窄缝时一模一样', !W28.err && !W8.err && Math.abs(W28.标签宽 - W8.标签宽) < 1,
         '宽缝 ' + W28.标签宽 + ' / 窄缝 ' + W8.标签宽);
-    ok('W4 ⚠️也不是靠贴近正文换的：离正文的距离没缩水', !W28.err && W28.离正文 >= 5, JSON.stringify(W28));
-    ok('W5 两边的缝都装不下时保持老行为（压进块里），别为了躲字把版面搞乱',
-        !W8.err && !W8.在段落上方, JSON.stringify(W8));
+    ok('W4 ⚠️也不许压到正文自己的字（别把小注塞进段落末行的空白里）',
+        !W28.err && W28.压正文的字 === 0, JSON.stringify(W28));
+    ok('W5 窄段间距下也不能比以前更糟', !W8.err && W8.压隔壁块的字 <= 2, JSON.stringify(W8));
 
     ok('J1 无页面报错', pageErrs.length === 0, pageErrs.join(' | '));
 

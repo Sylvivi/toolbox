@@ -25405,10 +25405,37 @@ body {
                     };
                     var _lyU = pTop - _insetToward(roomUp, _prev, false) - lh;
                     var _lyD = pBot + _insetToward(roomDown, _next, true);
-                    var hitUp = !!(_prev && _glGlyphSpan(_prev, _lyU - _pad, _lyU + lh + _pad));
-                    var hitDown = !!(_next && _glGlyphSpan(_next, _lyD - _pad, _lyD + lh + _pad));
-                    var prefUp = (hitUp !== hitDown) ? !hitUp
-                               : ((fitUp !== fitDown) ? fitUp : nearUp);
+                    /* 「这一侧会不会压到字」——⚠️必须把「横向躲一下」也算进去（2026-08-06 补）。
+                       用户报：阳翟的小注从「从下往上指」变成了「从上往下指」，而下面明明更近，
+                       她担心「以后都不从下往上了」。担心是对的：段落后面紧跟背景块非常常见
+                       （标背景一开就是这样），而只要判定说"往下会压字"，就一律让给上面。
+                       但那个判定太粗——它只看竖直方向撞没撞上，没算排位时**还能横向让开**。
+                       背景块第一行往往只有「汐：背景：阳翟」十来个字，右边空一大片，一躲就干净。
+                       所以：撞上了但躲得掉 ⇒ 不算压字 ⇒ 就近规则继续生效，方向不被无谓地翻掉。 */
+                    /* ⚠️「撞上了」和「躲不掉」是两件事，必须分开存，别图省事合成一个：
+                         · touch* ＝ 竖直方向撞上了 → 排位时**要跑横向避让**（overUp/overDown 用它）；
+                         · hit*   ＝ 撞上而且躲不掉 → 这才影响**选哪边**。
+                       合成一个的话：判成"躲得掉所以不算压字"，避让就不跑了，结果真压上去。
+                       我差点就这么写了。 */
+                    var _touch = function (nbEl, ly) { return !!(nbEl && _glGlyphSpan(nbEl, ly - _pad, ly + lh + _pad)); };
+                    var _stuck = function (nbEl, ly) {
+                        var sp = nbEl && _glGlyphSpan(nbEl, ly - _pad, ly + lh + _pad);
+                        if (!sp) return false;                                  // 压根没撞上
+                        var L = pLeft, R = pLeft + pr.width;
+                        if (sp.r + RD_GL_SEP + lw <= R) return false;           // 能躲到字的右边
+                        if (sp.l - RD_GL_SEP - lw >= L) return false;           // 或者躲到左边
+                        return true;                                            // 撞上了又躲不掉，这才叫压字
+                    };
+                    var touchUp = _touch(_prev, _lyU), touchDown = _touch(_next, _lyD);
+                    var hitUp = _stuck(_prev, _lyU), hitDown = _stuck(_next, _lyD);
+                    /* 选边只剩两步（2026-08-06 三改，用户报「变成从上往下指了，可下面明明更近」）：
+                         ① 一边会压字、另一边不会 → 走不压字那边；
+                         ② 否则 → **就近**，老规矩原样。
+                       ⚠️中间那条「哪边的缝更宽裕就走哪边」已删除，别加回来。
+                         它是精确判定做出来之前的粗糙代理：段落后面紧跟背景块时，下缝天生是 0，
+                         于是哪怕往下明明躲得开、而且离目标字更近，也会被这条规则送到上面去，
+                         方向被无谓地翻掉。有了 hit*（撞上且躲不掉）之后它只剩副作用。 */
+                    var prefUp = (hitUp !== hitDown) ? !hitUp : nearUp;
                     // 锚点：往上就锚**第一行**、往下就锚**最后一行**（跨行的词靠这个治好的）
                     var tx = ((rTop.left + rTop.right) / 2) - cr.left;
                     var txDown = ((rBot.left + rBot.right) / 2) - cr.left;
@@ -25442,7 +25469,7 @@ body {
                         lyDown: _lyD,
                         /* 这一侧的缝装不下＝标签注定伸进隔壁块里，排位时要设法**横向避开它的字**
                            （2026-08-06 加，见 _glGlyphSpan 上那段）。存下邻居节点备查。 */
-                        overUp: hitUp, overDown: hitDown,   // 真的会压到隔壁块的字时，排位时再试着横向让开
+                        overUp: touchUp, overDown: touchDown,   // ⚠️用 touch*（撞上就跑避让），不是 hit*（撞上且躲不掉）
                         upEl: _prev, downEl: _next,
                         /* ⚠️「想放哪儿」必须**跟着方向各算一份**。
                            只算一份（用第一行片段）时，跨行的词会舍近求远：
