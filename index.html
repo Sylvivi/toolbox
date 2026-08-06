@@ -25216,6 +25216,14 @@ body {
            12px 完整落进色块的留白带里，上不碰正文、下不碰「汐：背景」那行，最从容；
            16px 直接撞上块里的第一行字，更糟。要的是**落进留白带**，不是拉开距离。 */
         var RD_GL_INSET_OVER = 12;
+        /* 缝「塞得下但不宽裕」时允许的最小留白（2026-08-06 加）。
+           原来只有两档：缝很宽 → 留 7px；否则直接按 12px 往隔壁块里扎。
+           于是**中间那一大片「其实塞得下、只是紧一点」的缝完全没被利用**：
+           段间距 24px、标签转完 21.4px 高，本来居中一放谁也不碰，却被判成"放不下"、
+           扎进隔壁块压住了字（用户 2026-08-06 实测「阳翟还是挡着的，没有变化」）。
+           ⚠️这不是"为了躲字压缩小注"——标签尺寸一点没动，只是上下留白按缝的实际宽度收一点，
+             而且**只在收了就能不压字时才收**；收到比这个值还小就说明真放不下，退回 12px 那档。 */
+        var RD_GL_INSET_MIN = 2;
         var RD_GL_SEP   = 8;    // 两条小注之间最小水平间隔
         var RD_GL_DX    = 22;   // 引线横向偏移（唯一的手感旋钮，调大就开始花）
         var RD_GL_ROT_SIN = 0.0436;   // sin(2.5°)：标签是斜的，越宽转完外框越高，排行距要算上
@@ -25365,7 +25373,27 @@ body {
                        ⚠️必须放在 lh 量出来之后！写在上面 nearUp 旁边时 lh 还是 undefined，
                          `roomUp >= undefined+14` 恒为 false → 两边都判"装不下" → 整条逻辑白写。 */
                     var fitUp = roomUp >= lh + RD_GL_INSET * 2, fitDown = roomDown >= lh + RD_GL_INSET * 2;
-                    var prefUp = (fitUp !== fitDown) ? fitUp : nearUp;
+                    /* ⚠️⚠️「装得下」只是代理指标，**真正要判的是「会不会压到字」**（2026-08-06 二改）。
+                       第一版拿 `缝宽 >= 标签高 + 2*7` 当判据，用户实测「阳翟还是挡着的，没有变化」——
+                       因为她那两条缝都卡在阈值附近：都判"装不下"就退回按远近选边，等于没修。
+                       而且这个代理本来就偏严：缝比标签只宽一点点时照样能不压字，却被判成装不下。
+                       现在直接量：把标签按各自方向摆好，看那条水平带有没有撞上隔壁块**字**的行。
+                       没撞的那一侧优先——这才是她要的「能不遮挡字就好了」。 */
+                    var _lhR = lh + lw * RD_GL_ROT_SIN;      // 标签是斜的，实际外框比 lh 高
+                    var _pad = (_lhR - lh) / 2;              // 斜出来的那点，上下各一半
+                    /* 这条缝该留多少白：宽裕就 7px（居中）；塞得下但紧就按实际缝宽居中、
+                       只要还剩得下 RD_GL_INSET_MIN 就认；真塞不下才退回 12px 扎进隔壁块。 */
+                    var _insetOf = function (room) {
+                        if (room >= lh + RD_GL_INSET * 2) return RD_GL_INSET;
+                        if ((room - _lhR) / 2 >= RD_GL_INSET_MIN) return (room - lh) / 2;   // 居中，整条落在缝里
+                        return RD_GL_INSET_OVER;
+                    };
+                    var _lyU = pTop - _insetOf(roomUp) - lh;
+                    var _lyD = pBot + _insetOf(roomDown);
+                    var hitUp = !!(_prev && _glGlyphSpan(_prev, _lyU - _pad, _lyU + lh + _pad));
+                    var hitDown = !!(_next && _glGlyphSpan(_next, _lyD - _pad, _lyD + lh + _pad));
+                    var prefUp = (hitUp !== hitDown) ? !hitUp
+                               : ((fitUp !== fitDown) ? fitUp : nearUp);
                     // 锚点：往上就锚**第一行**、往下就锚**最后一行**（跨行的词靠这个治好的）
                     var tx = ((rTop.left + rTop.right) / 2) - cr.left;
                     var txDown = ((rBot.left + rBot.right) / 2) - cr.left;
@@ -25395,11 +25423,11 @@ body {
                            顺带：段间距最大 28px、标签高 14px，(28-14)/2 正好也是 7，
                            所以缝够宽时这个值跟居中是一回事，简化掉不损失什么。 */
                         // 缝装得下就用 7px（居中）；装不下＝注定压到隔壁块，改用 12px 落进它的留白带
-                        lyUp: pTop - ((roomUp >= lh + RD_GL_INSET * 2) ? RD_GL_INSET : RD_GL_INSET_OVER) - lh,
-                        lyDown: pBot + ((roomDown >= lh + RD_GL_INSET * 2) ? RD_GL_INSET : RD_GL_INSET_OVER),
+                        lyUp: _lyU,      // 留白由 _insetOf 按缝的实际宽度定，见它上面那段
+                        lyDown: _lyD,
                         /* 这一侧的缝装不下＝标签注定伸进隔壁块里，排位时要设法**横向避开它的字**
                            （2026-08-06 加，见 _glGlyphSpan 上那段）。存下邻居节点备查。 */
-                        overUp: roomUp < lh + RD_GL_INSET * 2, overDown: roomDown < lh + RD_GL_INSET * 2,
+                        overUp: hitUp, overDown: hitDown,   // 真的会压到隔壁块的字时，排位时再试着横向让开
                         upEl: _prev, downEl: _next,
                         /* ⚠️「想放哪儿」必须**跟着方向各算一份**。
                            只算一份（用第一行片段）时，跨行的词会舍近求远：
