@@ -3286,6 +3286,15 @@ body {
             --gl-font-cn: '青春例外你是偏爱', '溪涧山雪璞玉浑金', cursive;      /* 中文：她偏爱的，缺字回退 */
             font-family: '溪涧山雪璞玉浑金', cursive;   /* 没有「·」时的兜底，覆盖最全 */
             font-size: 13px; line-height: 1.05;
+            /* ⚠️默认仍是 nowrap，**别改成 normal**（2026-08-06 踩过，见下）。
+               允许折两行是在 JS 里**只对真超出一行的那几条**开的（rdGlLayout 里 _glWrap 那段）：
+               先按 nowrap 量出天然单行宽，装得下就原样保持 nowrap，一个像素都不动；
+               装不下的才就地改成 normal + 定死 width。
+               ⚠️为什么不能在 CSS 里直接 normal + max-width：标签是**绝对定位**的，
+                 max-width 之下的可用宽 ＝ 容器宽 − left，而 left 是**量完之后**才刷上去的。
+                 于是量的时候（还没 left）是一行 14px，排位写完 left:200px 当场重折成两行 27px，
+                 比量到的高 13px —— 后面「塞不塞得下」全按错的高度算，小注掉出缝外。
+                 tests/gloss.test.js 的 S4 就是这么抓到的（内缩从 +7px 变成 -6px）。 */
             white-space: nowrap;
             pointer-events: none;
             opacity: 1;              /* 日间不再打折，见下面 .rd-gl-gold 那段注释 */
@@ -3309,7 +3318,10 @@ body {
             position: absolute; inset: 0;
             overflow: visible; pointer-events: none;
         }
-        .rd-gl-py { font-family: var(--gl-font-py); }
+        /* ⚠️拼音那一半锁死不折：`míng xiū zhàn dào` 里有空格，标签允许折行之后
+           浏览器会挑空格断开，出来是「míng xiū / zhàn dào·表面…」——一个词被腰斩，
+           比截断还难看。中文那半照旧可以逐字折（汉字本来就哪儿都能断）。 */
+        .rd-gl-py { font-family: var(--gl-font-py); white-space: nowrap; }
         .rd-gl-cn { font-family: var(--gl-font-cn); }
         .rd-gl-svg path {
             fill: none; stroke-width: 1.4;
@@ -25172,13 +25184,26 @@ body {
            正确做法（现在这版）：**拼音有多长是多长，只限制「意思」那一半**；
            总长度只用「一行放不放得下」来兜底 —— 实测标签才 175px、容器有 358px，
            原来的额度连一半宽度都没用到，纯属自己吓自己。 */
-        /* ⚠️关键结构：**给 AI 的目标值(14) < 代码的上限值(16)**，中间那 2 个字是余量。
+        /* ⚠️关键结构：**给 AI 的目标值(14) < 代码的上限值(22)**，中间那 8 个字是余量。
            两个数写成一样等于零余量——模型稍微多写一个字就被砍，用户看到的还是半句话。
            截断只该在模型明显跑飞时兜底，不该在它「基本听话」时发作。
            别为了「怕太宽」把它调小：实测 2 字词 ≈273px、4 字词 ≈325px，容器有 358px，放得下。
-           这条为「显示不全」返工过三轮，宁可标签宽一点，也别再让她看半句话。 */
-        var RD_GL_MEAN  = 16;   // 「意思」那一半的**代码上限**（提示词里只要 14，留 2 字余量）
-        var RD_GL_MAX   = 26;   // 整条小注的宽度上限，单位＝汉字当量（≈338px，一行放得下）
+           这条为「显示不全」返工过三轮，宁可标签宽一点，也别再让她看半句话。
+           ⚠️2026-08-06 从 16 提到 22：实测一条典型小注（`zhāng hán·秦朝名将后来投降了项羽这个人`，
+             意思正好 14 字）才 239px，**一行的 358px 只用掉 67%**——一行还空着三分之一
+             就已经开始砍字了，纯属自己吓自己。22 字时约 337px，仍在一行之内。
+             用户当时的选择原话是「先榨干一行，不够再两行」，这一条就是「榨干一行」那一半。 */
+        var RD_GL_MEAN  = 22;   // 「意思」那一半的**代码上限**（提示词里只要 14，留 8 字余量）
+        /* 整条小注的宽度上限，单位＝汉字当量。**同时是两件事的门槛，改之前先想清楚两边**：
+             ① rdGlFit 的最后兜底——模型跑飞时从这儿砍；
+             ② 用户手写批注的「短/长分流」——≤ 它写成手写小注，> 它收进 ✎ 小点。
+           ⚠️2026-08-06 从 26（＝一行）提到 44（≈一行半）：26 那会儿一行装不下就只能砍，
+             现在标签允许折第二行了，门槛还卡在一行就等于两行白开。
+             为什么不给到满两行（≈58）：那样「极少数才两行」会变成「动不动就两行」，
+             而两行必压隔壁段的字（见 .rd-gl-label 上那条⚠️）。44 让第二行最多半满。
+           ⚠️副作用（明知故犯，已跟用户讲过）：27~44 当量的**用户手写批注**会从 ✎ 小点
+             变成两行手写小注。分流那儿拿不到「这条是 AI 注还是我自己写的」，两者同一个 note 字段。 */
+        var RD_GL_MAX   = 44;
         function rdGlWidth(s) {
             var w = 0;
             for (var i = 0; i < (s || '').length; i++) w += (s.charCodeAt(i) > 0x2E80) ? 1 : 0.5;
@@ -25372,7 +25397,25 @@ body {
                     lab.setAttribute('data-glid', m.getAttribute('data-hlid') || '');
                     layer.appendChild(lab);
 
+                    // ⚠️lh 必须**量**、不能假设是 14：折了第二行就是 27，下面「塞不塞得下 / 压不压到字 /
+                    //   引线从哪条边出发 / 多条摞行的行距」全吃这个值，量准了它们自动跟着走。
                     var lw = lab.offsetWidth, lh = lab.offsetHeight;
+                    /* 一行真放不下 → 就地放它折第二行（2026-08-06 加，用户：「大部分情况下是一行，
+                       极少数的情况下，为了不截断，可以接受两行」）。
+                       ⚠️必须定死 width、不能用 max-width：绝对定位下 max-width 的可用宽是
+                         「容器宽 − left」，而 left 是排位那步才写的，会导致量完之后又偷偷重折
+                         （见 .rd-gl-label 上那条⚠️）。定死 width 之后跟 left 无关，量到多高就是多高。
+                       ⚠️折完再按**最长那一行**把盒子收窄：不收的话盒子恒等于整个容器宽，
+                         排位那步就一点横向余地都没有，避让直接失效。 */
+                    if (lw > cr.width) {
+                        lab.style.whiteSpace = 'normal';
+                        lab.style.width = Math.round(cr.width) + 'px';
+                        var _rg = document.createRange(); _rg.selectNodeContents(lab);
+                        var _lines = _rg.getClientRects(), _wide = 0;
+                        for (var li = 0; li < _lines.length; li++) _wide = Math.max(_wide, _lines[li].width);
+                        if (_wide > 1) lab.style.width = Math.ceil(_wide) + 'px';
+                        lw = lab.offsetWidth; lh = lab.offsetHeight;
+                    }
                     /* ⚠️「装得下」优先于「离得近」（2026-08-06 加，用户报小注压住了
                        「汐：背景：阳翟」那行字，原话「主要就是想着能不遮挡字就好了」）。
                        只有一边的缝真装得下时就先试那边——那一侧完全落在空当里、一个字都不压；
