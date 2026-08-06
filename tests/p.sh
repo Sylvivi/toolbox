@@ -22,6 +22,7 @@ case "${1:-}" in
     切章)   set -- fanwai chapnospace booktitleline numtitle ;;
     改书)   set -- edit editraw append dedup ;;
     背景)   set -- bg bgparse guidemark ;;
+    同步)   set -- importmerge favmodel ;;
 esac
 [ $# -eq 0 ] && { echo "用法: bash tests/p.sh <测试名…>   或   bash tests/p.sh 切章|改书|背景"; exit 2; }
 

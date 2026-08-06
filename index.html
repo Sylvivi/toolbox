@@ -9779,11 +9779,24 @@ body {
                     var imported = JSON.parse(e.target.result);
                     var kCount = 0, sCount = 0;
 
+                    /* ⚠️墓碑检查（2026-08-06 补）：这一整套合并逻辑跟 applySyncData 是同源的，
+                       但云同步那边后来加了墓碑、导入这边一直没跟上——于是「导入备份」会把你
+                       早就删掉的密钥/收藏原样复活，而且删除记录还会被重新推上云。
+                       现在跟云同步用同一条规矩：id 在墓碑里就跳过，除非它比墓碑还新。
+                       ⚠️改这里时记得两边一起改，别再让它们分叉。 */
+                    var _tombs = (typeof getTombstones === 'function') ? getTombstones() : {};
+                    function _isDeleted(d) {
+                        if (!d || !d.id || !_tombs[d.id]) return false;
+                        return !(d.updatedAt && d.updatedAt > _tombs[d.id]);   // 比墓碑新＝删了又改回来，放行
+                    }
+                    var skipped = 0;
+
                     var kUpdated = 0;
                     if (imported.api_keys && Array.isArray(imported.api_keys)) {
                         var kData = getKeyData();
                         var kIds = {}; kData.forEach(function(d, i) { kIds[d.id] = i; });
                         imported.api_keys.forEach(function(d) {
+                            if (_isDeleted(d)) { skipped++; return; }
                             if (kIds[d.id] === undefined) {
                                 kIds[d.id] = kData.length;
                                 kData.push(d); kCount++;
@@ -9803,6 +9816,7 @@ body {
                         var sIds = {}; sData.forEach(function(d, i) { sIds[d.id] = i; });
                         var sUpdated = 0;
                         snipArr.forEach(function(d) {
+                            if (_isDeleted(d)) { skipped++; return; }
                             if (sIds[d.id] === undefined) {
                                 // 本地没有，新增
                                 sIds[d.id] = sData.length;
@@ -9828,15 +9842,28 @@ body {
                                             subMap[rs.id] = rs; changed = true;
                                         }
                                     });
+                                    /* ⚠️跟 applySyncData 同一条规矩：「对方更不更新」必须在动 localItem
+                                       之前先算好，否则下面那段里 localItem.updatedAt 已经被改成 d.updatedAt、
+                                       判断恒 false。详见 applySyncData 里同名变量旁边那段说明。 */
+                                    var remoteNewer = !!(d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt));
                                     if (changed || (localItem._deletedSubIds || []).length !== Object.keys(deletedIds).length) {
                                         var mergedSubs = Object.keys(subMap).map(function(k) { return subMap[k]; });
                                         mergedSubs.sort(function(a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
                                         localItem.items = mergedSubs;
                                         localItem._deletedSubIds = Object.keys(deletedIds);
-                                        if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
-                                            localItem.updatedAt = d.updatedAt;
-                                        }
+                                        if (remoteNewer) { localItem.updatedAt = d.updatedAt; }
                                         sUpdated++;
+                                    }
+                                    /* ⚠️外层字段也要跟（2026-08-06 补，之前只有 applySyncData 有）：
+                                       上面那段只合并了 items 子条目，集合自己的标题/标签/备注仍是本地旧值。
+                                       对方更新的话整条换过来，但把刚合并好的 items 和删除名单原样接回去，
+                                       否则子条目合并的结果会被整条覆盖掉。 */
+                                    if (remoteNewer) {
+                                        var mergedItems = localItem.items;
+                                        var mergedDeletedSubIds = localItem._deletedSubIds;
+                                        sData[sIds[d.id]] = d;
+                                        sData[sIds[d.id]].items = mergedItems;
+                                        sData[sIds[d.id]]._deletedSubIds = mergedDeletedSubIds;
                                     }
                                 } else {
                                     // 非集合：用更新的覆盖
@@ -9849,6 +9876,7 @@ body {
 
                         if (imported.url_bookmarks && Array.isArray(imported.url_bookmarks)) {
                             imported.url_bookmarks.forEach(function(d) {
+                                if (_isDeleted(d)) { skipped++; return; }
                                 if (!sIds[d.id]) {
                                     sData.push({
                                         id: d.id, title: d.name || d.title || '', tag: d.group || '',
@@ -9917,7 +9945,9 @@ body {
                     }
 
                     var totalUpdated = kUpdated + sUpdated;
-                    showToast('📦 导入成功，密钥+' + kCount + '，收藏+' + sCount + (totalUpdated ? '，更新' + totalUpdated : '') + (ibCount ? '，图床+' + ibCount : '') + (chCount || chUpd ? '，对话+' + chCount + (chUpd ? '/更新' + chUpd : '') : '') + (bkCount ? '，书库+' + bkCount : ''));
+                    // ⚠️「跳过N条已删除」必须报出来：墓碑是 2026-08-06 才加进导入路径的，
+                    //   不显示的话，备份里的东西没进来会被当成导入坏了，而不是「它本来就被你删了」。
+                    showToast('📦 导入成功，密钥+' + kCount + '，收藏+' + sCount + (totalUpdated ? '，更新' + totalUpdated : '') + (ibCount ? '，图床+' + ibCount : '') + (chCount || chUpd ? '，对话+' + chCount + (chUpd ? '/更新' + chUpd : '') : '') + (bkCount ? '，书库+' + bkCount : '') + (skipped ? '，跳过' + skipped + '条已删除' : ''));
                 } catch (err) { showToast('❌ 文件格式错误'); }
             };
             reader.readAsText(file); event.target.value = '';
@@ -11643,15 +11673,21 @@ body {
                                 if (!ls) { subMap[rs.id] = rs; changed = true; }
                                 else if (rs.updatedAt && (!ls.updatedAt || rs.updatedAt > ls.updatedAt)) { subMap[rs.id] = rs; changed = true; }
                             });
+                            /* ⚠️「对方更不更新」必须在动 localItem 之前先算好（2026-08-06 修）。
+                               老代码在上面那个 if 里先写了 localItem.updatedAt = d.updatedAt，
+                               下面再拿同一个条件去判断外层字段要不要跟——那时候两边已经相等了，
+                               条件恒 false。结果就是：**只要子条目有变化，集合的标题/标签就永远不跟新**，
+                               只有子条目一点没变时那段才生效。这个顺序坑很隐蔽，别再合并回去。 */
+                            var remoteNewer = !!(d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt));
                             if (changed || (localItem._deletedSubIds || []).length !== Object.keys(deletedIds).length) {
                                 var mergedSubs = Object.keys(subMap).map(function(k) { return subMap[k]; });
                                 mergedSubs.sort(function(a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
                                 localItem.items = mergedSubs;
                                 localItem._deletedSubIds = Object.keys(deletedIds);
-                                if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) { localItem.updatedAt = d.updatedAt; }
+                                if (remoteNewer) { localItem.updatedAt = d.updatedAt; }
                                 sUpdated++;
                             }
-                            if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
+                            if (remoteNewer) {
                                 var mergedItems = localItem.items;
                                 var mergedDeletedSubIds = localItem._deletedSubIds;
                                 sData[sIds[d.id]] = d;
