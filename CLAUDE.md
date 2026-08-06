@@ -7,8 +7,13 @@
 - **单文件 HTML PWA**：核心就是 `index.html`（约 **2.95 万行 / 1.9MB**，1250 个函数、551 个 CSS 类，JS/CSS 全部内联；2026-08-06 实测）。**不要拆成多文件**，用户要求保持单文件。⚠️ 它一次塞不进上下文（约 60 万 token），所以**别假装"通读过全文"**——要么按 grep/行号精读局部，要么写脚本做全局扫描。
 - **⚠️ `#chatMessages` 容器必须保持空**（源码里应是 `<div class="chat-messages" id="chatMessages"></div>`）。它是运行时消息/阅读内容的渲染区，app 启动会清空重渲染——**绝不能让渲染后的正文/点评被冻进源码**。曾有一整段《傲慢与偏见》阅读快照误存进去，白白撑大文件 1.2MB（2026-07-07 已清）。多半是**从运行中的网页整页保存/导出**导致的，改动后留意别把 DOM 快照写回源码；发现文件异常变大先 grep 书中人名/`class="chat-msg"` 排查这里。
 - **⚠️同一个坑还会冻进密钥——仓库是 public（2026-07-27 发现并清理）**：`chatKeySelect`/`chatKeySelect2` 里躺过**两把明文 API 密钥**，`chatProviderSelect(2)` 躺过 16 个中转站的名字和 id，`compressModelSelect`/`imageModelSelect` 躺过收藏模型列表——**GitHub Pages 直接对外，查看源代码就能读到**，且在公开 git 历史里躺了两个多月才被发现（排查别的 bug 时顺带看见的）。这些 `<select>` 的内容**全部由 JS 在运行时重建**（`populateChatProviders` / `onChatProviderChange` / `_chatRenderModelSelect` 都是 `innerHTML` 整个重写），源码里**只该留占位项**。旁证：出事的 select 连 `style` 都被序列化成 `flex: 1 1 0%` 这类计算值。**每次改完 index.html 建议扫一眼**：`grep -oE 'sk-[A-Za-z0-9_-]{16,}' index.html`（应为空）+ 检查上述 select 是否只剩占位 option。**密钥一旦进过公开历史就必须去中转站作废重发，删文件没用。**
-- **部署**：GitHub Pages，仓库 `Sylvivi/toolbox`、分支 `main`。线上 https://sylvivi.github.io/toolbox/ ，**自定义域**（免梯子）`https://tool.masterofmydomain.top`（Cloudflare CNAME → sylvivi.github.io）。
-- **更新机制**：network-first 的 service worker，推送后过一两分钟刷新页面即生效。
+- **部署（2026-08-06 起改了，别再照旧的来）**：线上 `https://tool.masterofmydomain.top` **由这台服务器的 Caddy 直接伺服，不再走 GitHub Pages**。
+  - **上线动作＝ `bash /home/ubuntu/deploy_toolbox_local.sh`**，复制完立刻生效，没有构建队列。**`git push` 不再等于上线**，两件事都要做。
+  - ⚠️那个脚本用**白名单**只发 6 样（`index.html`/`sw.js`/`manifest.json`/两个图标/`.well-known/`）。**绝不能把仓库目录整个 root 出去**——里面有 `SERVER-OPS.md`（敏感拓扑、专门 gitignore 过）、`.git`、`tests`。**新增对外文件时要同步改脚本的白名单**，否则线上 404。
+  - Caddy 配置在 `/etc/caddy/Caddyfile` 末尾的 `tool.masterofmydomain.top {}` 块；DNS 在 Cloudflare 是 A 记录 → `43.172.66.189`、**灰云（仅 DNS）**。
+  - 仓库 `Sylvivi/toolbox` 分支 `main` **照旧提交推送当备份**，GitHub Pages 那份任其自然。
+  - **为什么搬**：2026-08-06 Pages 连着失败近一小时——先是「有部署卡在进行中」的锁冲突（HTTP 400，autoheal 一直重推只是白撞、堆了 5 个空提交），锁放开后又变成 deploy 步骤 10 分钟 `Timeout reached`；官方状态页显示 Pages「正常」，属于没上报的局部抽风，催不动。详见记忆 `toolbox-self-hosted`。
+- **更新机制**：network-first 的 service worker，同步完刷新页面即生效。
 - **主要用途**：用户主要用「共读模式」读长篇小说（如天龙八部），其次翻译模式、普通对话模式。
 - **PWA 安装注意**：装 PWA 到桌面要**挂梯子**（WebAPK 需 Google 服务器签发、国内被墙）；不挂梯子会退化成「带 Google 标识的快捷方式」，状态栏颜色被冻死、跟不上主题。装完之后日常用不需要梯子。遇到「状态栏不变色 / 图标变样」先往这个方向查。
 
