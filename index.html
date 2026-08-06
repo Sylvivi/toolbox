@@ -22405,7 +22405,33 @@ body {
             }
             return chapters;
         }
+        /* 书架里已经有同一个文件了吗（2026-08-06 加）。
+           判据就是 fileKey＝「文件名|文件大小」——跟读痕/划线/文件夹/书名认书的口径完全一致
+           （见 rbBookFileKey）。这两项都一样，就是**同一个文件**，不是"名字像"。
+           ⚠️只找本地正本，跳过 _remote 占位书：占位书本来就该被本地导入取代，
+             拦下来的话「服务器上有、想导到本地」这条路就断了。 */
+        function rbFindSameFile(fileName, fileSize) {
+            var k = (fileName || '') + '|' + (fileSize || 0);
+            for (var i = 0; i < rbBooks.length; i++) {
+                if (!rbBooks[i]._remote && rbBookFileKey(rbBooks[i]) === k) return rbBooks[i];
+            }
+            return null;
+        }
         function rbAddBook(fileName, fileSize, fileType, chapters, rawText) {
+            /* 重复导入（2026-08-06 用户报「书架里有两本社会性动物」）。
+               原来这里**一句查重都没有**，同一个文件导第二次就无脑再加一本。
+               她的症状很典型：两条书架记录「会一起移动」——因为文件夹/书名/划线/小注
+               全按 fileKey 存，两条的 fileKey 一样，数据层面本就是同一本书，只是列表排了两行。
+               ⚠️唯一**不**共享的是阅读进度（reading_pos_reader_<bookId>，按书的内部 id 存），
+                 所以删掉多余那条会连着丢那一条的阅读位置——这也是当时不敢让她随便删的原因。
+               用户选的是「弹窗问我一句」，不是静默跳过：她说有时确实想再存一份。 */
+            var _same = rbFindSameFile(fileName, fileSize);
+            if (_same) {
+                if (confirm('「' + fileName + '」书架里已经有了。\n\n点「确定」＝打开已有的那本（推荐）\n点「取消」＝仍然再存一份')) {
+                    rbOpenBook(_same.id);
+                    return;
+                }
+            }
             if (!chapters || !chapters.length) { chapters = [{ title: '全文', body: (rawText || '').trim() }]; }
             chapters = rbDedupChapters(chapters).chapters;  // 先并掉「同一章拆成多条」的重复，再修标题
             rbFixChapterTitles(chapters);
