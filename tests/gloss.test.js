@@ -827,11 +827,18 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             document.documentElement.style.setProperty('--reading-pspace', ps + 'px');
             const host = document.createElement('div');
             host.className = 'chat-msg ai __w'; host.setAttribute('data-idx', '0');
-            host.style.cssText = 'width:360px';
+            host.style.cssText = 'width:373px';
+            /* ⚠️必须照抄**真实**的背景块结构：首行是 `<div class="reading-q">` 这个 **block**，
+               里面「汐」还是个带色的 span。之前这里图省事写成纯文本 + <br>（inline），
+               于是量出来的矩形贴着字、一切正常，把真凶完美掩盖了——真实结构里
+               对 block 取 getClientRects() 返回的是**整行满宽的框**，导致代码永远以为
+               "右边没地方可躲"。用户连报三次「还是没往右」，就是被这个假场景骗的。 */
+            const bq = (w, body) => '<blockquote data-cp="1"><div class="reading-q">' +
+                '<span class="reading-q-name">汐</span>：背景：' + w + '</div>' + body + '</blockquote>';
             host.innerHTML = '<div class="reading-merged">' +
-                '<blockquote data-cp="0">汐：背景：韩司徒<br>司徒是先秦时期一个很古老的官职，大致管的是民政这些事。</blockquote>' +
-                '<p data-p="1">所以，看起来张良会投入韩的阵营，与刘邦越走越远。可是当刘邦带领军队从洛阳南出时，张良又去找了刘邦。用这种方式，韩王成得到了落脚的基地<mark class="rd-hl rd-hl-rose" data-hlid="hw" data-gl="zháí·韩国故都，在今河南禹州">阳翟</mark>。也因为这样的交情，张良愿意跟着刘邦一起往南。</p>' +
-                '<blockquote data-cp="1">汐：背景：阳翟<br>阳翟大概在今天河南禹州一带，是个老资格的地方。</blockquote>' +
+                bq('韩司徒', '司徒是先秦时期一个很古老的官职，大致管的是民政这些事，跟管军事的司马并称。') +
+                '<p data-p="1">所以，看起来张良会投入韩的阵营，与刘邦越走越远。可是当刘邦带领军队从洛阳南出时，张良又去找了刘邦。因为这个时候韩王的军事行动不太顺利，张良借着老交情去找刘邦帮忙。刘邦也够义气，就带着军队帮韩成打下了十几座城。用这种方式，韩王成得到了落脚的基地<mark class="rd-hl rd-hl-rose" data-hlid="hw" data-gl="yáng zhái·韩国故都，在今河南禹州">阳翟</mark>。也因为这样的交情，张良愿意跟着刘邦一起往南。</p>' +
+                bq('阳翟', '阳翟大概在今天河南禹州一带，是个老资格的地方。战国时期它就是韩国的都城。') +
                 '</div>';
             document.body.appendChild(host);
             rdGlLayout(host);
@@ -840,20 +847,25 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             const lb = lab.getBoundingClientRect();
             const para = host.querySelector('p[data-p="1"]');
             const pr = para.getBoundingClientRect();
-            // ⚠️「压到字」要连**正文自己的字**一起查：把小注塞进段落末行的空白里同样是遮挡
-            const count = (el) => {
-                const rg = document.createRange(); rg.selectNodeContents(el);
-                let n = 0;
-                [...rg.getClientRects()].forEach(q => {
-                    if (q.width <= 0 || q.height <= 0) return;
-                    if (Math.min(lb.bottom, q.bottom) - Math.max(lb.top, q.top) > 1 &&
-                        Math.min(lb.right, q.right) - Math.max(lb.left, q.left) > 1) n++;
-                });
-                return n;
+            /* ⚠️数「压到字」也只能数**文字节点**的矩形，理由同上：对元素整体取 rects 会把
+               block 子元素的满宽行框算进来，必假阳（我第一版就被自己这个假阳骗了一轮）。 */
+            const textRects = (el) => {
+                const out = [], rg = document.createRange();
+                const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+                let n;
+                while ((n = w.nextNode())) {
+                    if (!n.nodeValue || !n.nodeValue.trim()) continue;
+                    rg.selectNodeContents(n);
+                    [...rg.getClientRects()].forEach(q => { if (q.width > 0 && q.height > 0) out.push(q); });
+                }
+                return out;
             };
-            let bq = 0; host.querySelectorAll('blockquote').forEach(e => { bq += count(e); });
-            const r = { 压隔壁块的字: bq, 压正文的字: count(para), 在段落上方: lb.bottom <= pr.top,
-                        标签宽: +lb.width.toFixed(1) };
+            const hits = (el) => textRects(el).filter(q =>
+                Math.min(lb.bottom, q.bottom) - Math.max(lb.top, q.top) > 1 &&
+                Math.min(lb.right, q.right) - Math.max(lb.left, q.left) > 1).length;
+            let bq2 = 0; host.querySelectorAll('blockquote').forEach(e => { bq2 += hits(e); });
+            const r = { 压隔壁块的字: bq2, 压正文的字: hits(para), 在段落上方: lb.bottom <= pr.top,
+                        标签宽: +lb.width.toFixed(1), 标签左: +lb.left.toFixed(1) };
             host.remove();
             return r;
         }, pspace);
@@ -861,15 +873,11 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     const W28 = await _wCase(28);
     const W8 = await _wCase(8);
     ok('W1 段间距 28（用户实际设置）时，一个字都不压', !W28.err && W28.压隔壁块的字 === 0, JSON.stringify(W28));
-    /* ⚠️W2 originally asserted「必须挪到段落上方」——那是钉错了东西。
-       目标从来不是"往上"，而是"不压字"；能就近往下再横向躲开时，往下才是对的
-       （用户 2026-08-06 报「变成从上往下指了，可下面明明更近」）。 */
-    ok('W2 ⚠️别把「不压字」做成「一律往上」：躲得开时要保持就近（这里词在段落下半→往下）',
+    ok('W2 ⚠️别把「不压字」做成「一律往上」：躲得开时要保持就近（词在段落下半→往下）',
         !W28.err && !W28.在段落上方, JSON.stringify(W28));
     ok('W3 ⚠️不是靠压缩换的：标签宽度跟窄缝时一模一样', !W28.err && !W8.err && Math.abs(W28.标签宽 - W8.标签宽) < 1,
         '宽缝 ' + W28.标签宽 + ' / 窄缝 ' + W8.标签宽);
-    ok('W4 ⚠️也不许压到正文自己的字（别把小注塞进段落末行的空白里）',
-        !W28.err && W28.压正文的字 === 0, JSON.stringify(W28));
+    ok('W4 ⚠️也不许压到正文自己的字', !W28.err && W28.压正文的字 === 0, JSON.stringify(W28));
     ok('W5 窄段间距下也不能比以前更糟', !W8.err && W8.压隔壁块的字 <= 2, JSON.stringify(W8));
 
     ok('J1 无页面报错', pageErrs.length === 0, pageErrs.join(' | '));

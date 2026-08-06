@@ -25441,11 +25441,11 @@ body {
                         if (sp.l - 1 - lw >= L) return false;                  // 或者躲到左边
                         return true;                                            // 撞上了又躲不掉，这才叫压字
                     };
+                    var _dbg2 = null;
                     if (RD_GL_DBG) {
                         var _rD = _glRowsOf(_next), _rU = _glRowsOf(_prev);
                         var _spD = _next && _glGlyphSpan(_next, _lyD - _pad, _lyD + lh + _pad);
-                        window.__glD = (window.__glD || []);
-                        window.__glD.push({ lh: Math.round(lh), lhR: Math.round(_lhR),
+                        _dbg2 = ({ lh: Math.round(lh), lhR: Math.round(_lhR),
                             insD: Math.round(_lyD - pBot), 下行数: _rD.length,
                             行1顶: _rD[1] ? Math.round(_rD[1].top - pBot) : '-',
                             行0: _rD[0] ? (Math.round(_rD[0].top - pBot) + '~' + Math.round(_rD[0].bottom - pBot)) : '-',
@@ -25496,7 +25496,7 @@ body {
                         /* 这一侧的缝装不下＝标签注定伸进隔壁块里，排位时要设法**横向避开它的字**
                            （2026-08-06 加，见 _glGlyphSpan 上那段）。存下邻居节点备查。 */
                         overUp: touchUp, overDown: touchDown,   // ⚠️用 touch*（撞上就跑避让），不是 hit*（撞上且躲不掉）
-                        roomUp: roomUp, roomDown: roomDown,
+                        roomUp: roomUp, roomDown: roomDown, _dbg2: _dbg2,
                         _pick: RD_GL_DBG ? { 近: nearUp ? '上' : '下', 选: prefUp ? '上' : '下',
                                              上躲不掉: hitUp ? 'Y' : 'N', 下躲不掉: hitDown ? 'Y' : 'N' } : null,
                         upEl: _prev, downEl: _next,
@@ -25535,36 +25535,61 @@ body {
             /* 把一个块里的**文字**按「行」归并，返回每行的上下左右（容器坐标）。
                ⚠️同样必须走 Range 逐个矩形，元素的框只告诉你整块多大、看不出哪一行占了多宽。
                用途：塞不下时算出「只压第一行」该留多少白，见 _insetToward。 */
-            function _glRowsOf(el) {
+            /* 取一个块里**文字本身**的矩形（容器坐标）。
+               ⚠️⚠️必须逐个**文字节点**量，不能对整个元素 selectNodeContents（2026-08-06 修，
+                 这是「小注死活不往右躲」的真凶）：块里但凡有 block 级子元素——真实的背景块
+                 首行就是 `<div class="reading-q">汐：背景：阳翟</div>`——浏览器给它返回的
+                 矩形是**整行的框、撑满容器宽度**，而不是那几个字的宽度。于是量出来的
+                 「字右界」是 341（容器才 345），永远得出"右边没地方可躲"的结论。
+                 之前造场景时我用的是纯文本 + <br>（inline），矩形贴着字，所以一直复现不出来。 */
+            function _glTextRects(el) {
                 if (!el || !el.getClientRects) return [];
-                var rng = document.createRange();
-                try { rng.selectNodeContents(el); } catch (e) { return []; }
-                var rs = [], list = rng.getClientRects();
+                var out = [], rng = document.createRange();
+                var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+                var n;
+                while ((n = walker.nextNode())) {
+                    if (!n.nodeValue || !n.nodeValue.trim()) continue;
+                    try { rng.selectNodeContents(n); } catch (e) { continue; }
+                    var list = rng.getClientRects();
+                    for (var i = 0; i < list.length; i++) {
+                        var q = list[i];
+                        if (q.width <= 0 || q.height <= 0) continue;
+                        out.push(q);
+                    }
+                }
+                return out;
+            }
+            function _glRowsOf(el) {
+                if (!el) return [];
+                var rs = [], list = _glTextRects(el);
                 for (var i = 0; i < list.length; i++) {
                     var q = list[i];
-                    if (q.width <= 0 || q.height <= 0) continue;
                     rs.push({ top: q.top - cr.top, bottom: q.bottom - cr.top, left: q.left - cr.left, right: q.right - cr.left });
                 }
                 rs.sort(function (a, b) { return a.top - b.top; });
+                /* ⚠️归并条件是「竖直方向有没有重叠」，不是「top 差不差得多」（2026-08-06 修）。
+                   原来写的是 `|top差| <= 2`，而背景块首行「汐：背景：阳翟」里的「汐」是带颜色的
+                   span、字体度量跟后面不一样，两个矩形的 top 差了 3px —— 同一行被拆成两行。
+                   一拆两行，「只压第一行」那套算出来的边界就全是错的（用户诊断里
+                   `行0=30~52 行1顶33` 这种自相矛盾的数就是它）。 */
                 var out = [];
                 for (var j = 0; j < rs.length; j++) {
                     var last = out[out.length - 1];
-                    if (last && Math.abs(last.top - rs[j].top) <= 2) {   // 同一行的碎片并起来
+                    var ov = last ? (Math.min(last.bottom, rs[j].bottom) - Math.max(last.top, rs[j].top)) : -1;
+                    if (last && ov > Math.min(last.bottom - last.top, rs[j].bottom - rs[j].top) * 0.5) {
                         last.left = Math.min(last.left, rs[j].left);
                         last.right = Math.max(last.right, rs[j].right);
+                        last.top = Math.min(last.top, rs[j].top);
                         last.bottom = Math.max(last.bottom, rs[j].bottom);
                     } else out.push({ top: rs[j].top, bottom: rs[j].bottom, left: rs[j].left, right: rs[j].right });
                 }
                 return out;
             }
             function _glGlyphSpan(el, top, bottom) {
-                if (!el || !el.getClientRects) return null;
-                var rng = document.createRange();
-                try { rng.selectNodeContents(el); } catch (e) { return null; }
-                var rects = rng.getClientRects(), L = Infinity, R = -Infinity;
+                if (!el) return null;
+                var rects = _glTextRects(el), L = Infinity, R = -Infinity;   // ⚠️只认文字节点，见 _glTextRects
                 for (var i = 0; i < rects.length; i++) {
                     var q = rects[i];
-                    if (q.width <= 0 || q.height <= 0) continue;
                     var qt = q.top - cr.top, qb = q.bottom - cr.top;
                     if (qb <= top || qt >= bottom) continue;      // 不在这条水平带里，不挡事
                     L = Math.min(L, q.left - cr.left);
@@ -25677,9 +25702,9 @@ body {
                     var _d = document.createElement('div');
                     _d.style.cssText = 'position:absolute;left:2px;top:' + (it2.ly + 16).toFixed(0)
                         + 'px;font:9px/1.3 monospace;color:#c00;background:rgba(255,255,255,.92);'
-                        + 'padding:1px 3px;border-radius:3px;white-space:nowrap;z-index:9;pointer-events:none';
+                        + 'padding:1px 3px;border-radius:3px;max-width:96%;z-index:9;pointer-events:none';
                     var a = it2._dbg || {}, b = it2._pick || {};
-                    var c = (window.__glD && window.__glD[n]) || {};
+                    var c = it2._dbg2 || {};   // ⚠️必须从条目上取：排位前 all 被 sort 过，按序号取会串条
                     _d.textContent = '宽' + a.lw + ' x' + a.x + ' 右界' + a.右界 + ' 缝上' + a.缝上 + '下' + a.缝下
                         + ' 近' + b.近 + '选' + b.选 + ' 上' + b.上躲不掉 + '下' + b.下躲不掉
                         + ' ｜下: 高' + c.lh + '/' + c.lhR + ' 内缩' + c.insD + ' 行数' + c.下行数
