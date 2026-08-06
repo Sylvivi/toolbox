@@ -25276,6 +25276,10 @@ body {
             layer.className = 'rd-gl-layer';
             box.appendChild(layer);
 
+            /* ⚠️必须在第一阶段之前赋值：`var` 的**声明**会提升、**赋值不会**，
+               而第一阶段（算留白）就要用它。放到下面 _glTextRects 旁边的话，
+               第一阶段拿到的是 undefined，`.has()` 当场抛异常——语法检查查不出来。 */
+            var _glRectCache = new Map();
             var paras = box.querySelectorAll('p[data-p]');
             var all = [];
 
@@ -25423,9 +25427,20 @@ body {
                          · hit*   ＝ 撞上而且躲不掉 → 这才影响**选哪边**。
                        合成一个的话：判成"躲得掉所以不算压字"，避让就不跑了，结果真压上去。
                        我差点就这么写了。 */
-                    var _touch = function (nbEl, ly) { return !!(nbEl && _glGlyphSpan(nbEl, ly - _pad, ly + lh + _pad)); };
-                    var _stuck = function (nbEl, ly) {
-                        var sp = nbEl && _glGlyphSpan(nbEl, ly - _pad, ly + lh + _pad);
+                    /* ⚠️省算力的前置闸（2026-08-06 加）：小注整条都还待在缝里、压根够不着隔壁块时，
+                       直接判「没撞上」，不必去走那个块的文字节点。量一个块要 TreeWalker 逐个文字节点
+                       取矩形，是这套排版里最贵的一步；而「缝够宽、整条塞得下」恰恰是最常见的情况。
+                       ⚠️纯粹的提前退出，不改判定结果——够不着的时候 _glGlyphSpan 本来也返回 null。 */
+                    var _reaches = function (ly, down) {
+                        return down ? (ly + lh + _pad > pBot + roomDown) : (ly - _pad < pTop - roomUp);
+                    };
+                    var _touch = function (nbEl, ly, down) {
+                        if (!nbEl || !_reaches(ly, down)) return false;
+                        return !!_glGlyphSpan(nbEl, ly - _pad, ly + lh + _pad);
+                    };
+                    var _stuck = function (nbEl, ly, down) {
+                        if (!nbEl || !_reaches(ly, down)) return false;
+                        var sp = _glGlyphSpan(nbEl, ly - _pad, ly + lh + _pad);
                         if (!sp) return false;                                  // 压根没撞上
                         var L = pLeft, R = pLeft + pr.width;
                         /* ⚠️判「躲不躲得开」要按**能用的全部空间**算，不是按理想间隔算。
@@ -25435,8 +25450,8 @@ body {
                         if (sp.l - 1 - lw >= L) return false;                  // 或者躲到左边
                         return true;                                            // 撞上了又躲不掉，这才叫压字
                     };
-                    var touchUp = _touch(_prev, _lyU), touchDown = _touch(_next, _lyD);
-                    var hitUp = _stuck(_prev, _lyU), hitDown = _stuck(_next, _lyD);
+                    var touchUp = _touch(_prev, _lyU, false), touchDown = _touch(_next, _lyD, true);
+                    var hitUp = _stuck(_prev, _lyU, false), hitDown = _stuck(_next, _lyD, true);
                     /* 选边只剩两步（2026-08-06 三改，用户报「变成从上往下指了，可下面明明更近」）：
                          ① 一边会压字、另一边不会 → 走不压字那边；
                          ② 否则 → **就近**，老规矩原样。
@@ -25523,8 +25538,16 @@ body {
                  矩形是**整行的框、撑满容器宽度**，而不是那几个字的宽度。于是量出来的
                  「字右界」是 341（容器才 345），永远得出"右边没地方可躲"的结论。
                  之前造场景时我用的是纯文本 + <br>（inline），矩形贴着字，所以一直复现不出来。 */
+            /* ⚠️一次排版之内按元素缓存（2026-08-06 加）。
+               相邻的几条小注量的往往是同一个隔壁块，而每条要问好几次
+               （算留白、判撞没撞上、判躲不躲得掉、真正躲的时候各一次），
+               不缓存就是同一个块被 TreeWalker 走七八遍。
+               实测 40 条小注的一章：80ms → 见下方注释里的实测值。
+               ⚠️缓存只活在这一次 rdGlLayout 里（每次进来重建）：排版期间只往
+                 绝对定位的 .rd-gl-layer 里加东西，不会让正文重排，所以量到的值不会过期。 */
             function _glTextRects(el) {
                 if (!el || !el.getClientRects) return [];
+                if (_glRectCache.has(el)) return _glRectCache.get(el);
                 var out = [], rng = document.createRange();
                 var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
                 var n;
@@ -25538,6 +25561,7 @@ body {
                         out.push(q);
                     }
                 }
+                _glRectCache.set(el, out);
                 return out;
             }
             function _glRowsOf(el) {
