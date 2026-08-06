@@ -8361,50 +8361,47 @@ body {
         }
 
         /* 带状态保持的渲染：保存展开状态、子条目预览状态、滚动位置，渲染后恢复 */
-        function renderSnippetsKeepState(targetId) {
-            // 1. 记住哪些卡片是展开的
+        /* ===== 收藏列表「重渲染前后保住展开状态」的捕获/恢复对 =====
+           ⚠️2026-08-06 合并：renderSnippetsKeepState 和 saveSubEdit 原本各抄了一份，
+           而且已经抄岔了——前者恢复「预览 + 字数」，后者恢复「预览 + 翻一个 ▶/▼ 按钮」。
+           而子条目现在是**整行可点**（onclick=toggleSubPreview）、根本没有 ▶/▼ 按钮，
+           所以后者那半是对着不存在的 UI 写的，同时漏了字数 → 表现为
+           「编辑子条目保存后，字数那行消失了」，跟自己点开时的样子对不上。
+           以 toggleSubPreview 为准（它才是真正的展开动作）：预览 + 字数一起恢复。
+           ⚠️以后再加「展开时还要显示什么」，改这一处就够，别再各写各的。 */
+        function snipCaptureExpandState(targetId) {
             var expandedIds = {};
             document.querySelectorAll('.card[data-sid]:not(.collapsed)').forEach(function(c) {
                 expandedIds[c.getAttribute('data-sid')] = true;
             });
-            // 如果指定了 targetId（刚编辑的卡片），确保它展开
+            // targetId＝刚编辑过的那张卡，无论之前折没折都让它展开
             if (targetId) expandedIds[targetId] = true;
 
-            // 2. 记住哪些子条目预览是展开的
             var expandedSubs = {};
             document.querySelectorAll('.sub-content-preview').forEach(function(el) {
                 if (el.style.display !== 'none') {
                     var subItem = el.closest('.collection-sub-item');
                     var card = el.closest('.card[data-sid]');
                     if (subItem && card) {
-                        var cardId = card.getAttribute('data-sid');
-                        var subIdx = subItem.getAttribute('data-sub-idx');
-                        expandedSubs[cardId + ':' + subIdx] = true;
+                        expandedSubs[card.getAttribute('data-sid') + ':' + subItem.getAttribute('data-sub-idx')] = true;
                     }
                 }
             });
+            return { ids: expandedIds, subs: expandedSubs, scrollY: window.scrollY };
+        }
 
-            // 3. 记住滚动位置
-            var scrollY = window.scrollY;
-
-            // 4. 重新渲染
-            renderSnipFilters();
-            renderSnippets();
-
-            // 5. 恢复展开状态
+        function snipRestoreExpandState(st) {
+            if (!st) return;
             document.querySelectorAll('.card[data-sid]').forEach(function(c) {
-                if (expandedIds[c.getAttribute('data-sid')]) {
+                if (st.ids[c.getAttribute('data-sid')]) {
                     c.classList.remove('collapsed');
                     c.classList.add('expanded');
                 }
             });
-
-            // 6. 恢复子条目预览展开状态
             document.querySelectorAll('.card[data-sid]').forEach(function(card) {
                 var cardId = card.getAttribute('data-sid');
                 card.querySelectorAll('.collection-sub-item').forEach(function(subItem) {
-                    var subIdx = subItem.getAttribute('data-sub-idx');
-                    if (expandedSubs[cardId + ':' + subIdx]) {
+                    if (st.subs[cardId + ':' + subItem.getAttribute('data-sub-idx')]) {
                         var preview = subItem.querySelector('.sub-content-preview');
                         var charCount = subItem.querySelector('.sub-char-count');
                         if (preview) preview.style.display = 'block';
@@ -8412,9 +8409,15 @@ body {
                     }
                 });
             });
+            // 用 requestAnimationFrame 等 DOM 更新完再滚，否则滚不到位
+            requestAnimationFrame(function() { window.scrollTo(0, st.scrollY); });
+        }
 
-            // 7. 恢复滚动位置（用 requestAnimationFrame 确保 DOM 已更新）
-            requestAnimationFrame(function() { window.scrollTo(0, scrollY); });
+        function renderSnippetsKeepState(targetId) {
+            var _st = snipCaptureExpandState(targetId);
+            renderSnipFilters();
+            renderSnippets();
+            snipRestoreExpandState(_st);
         }
 
         function toggleAllSnippets() {
@@ -8787,51 +8790,13 @@ body {
                         data[i].updatedAt = new Date().toISOString();
                     }
 
-                    // 保存当前展开的卡片ID和滚动位置
-                    var expandedIds = {};
-                    document.querySelectorAll('.card[data-sid]:not(.collapsed)').forEach(function(c) {
-                        expandedIds[c.getAttribute('data-sid')] = true;
-                    });
-                    // 也记住哪些子条目预览是展开的
-                    var expandedSubs = {};
-                    document.querySelectorAll('.sub-content-preview').forEach(function(el) {
-                        if (el.style.display !== 'none') {
-                            var subItem = el.closest('.collection-sub-item');
-                            var card = el.closest('.card[data-sid]');
-                            if (subItem && card) {
-                                var cardId = card.getAttribute('data-sid');
-                                var subIdx = subItem.getAttribute('data-sub-idx');
-                                expandedSubs[cardId + ':' + subIdx] = true;
-                            }
-                        }
-                    });
-                    var scrollY = window.scrollY;
+                    // 展开状态/滚动位置的捕获与恢复走公用的那一对（见 snipCaptureExpandState 上面的说明）
+                    var _st = snipCaptureExpandState();
 
                     setSnipData(data);
                     renderSnippets();
 
-                    // 恢复展开状态
-                    document.querySelectorAll('.card[data-sid]').forEach(function(c) {
-                        if (expandedIds[c.getAttribute('data-sid')]) {
-                            c.classList.remove('collapsed');
-                            c.classList.add('expanded');
-                        }
-                    });
-                    // 恢复子条目预览展开状态
-                    document.querySelectorAll('.card[data-sid]').forEach(function(card) {
-                        var cardId = card.getAttribute('data-sid');
-                        card.querySelectorAll('.collection-sub-item').forEach(function(subItem) {
-                            var subIdx = subItem.getAttribute('data-sub-idx');
-                            if (expandedSubs[cardId + ':' + subIdx]) {
-                                var preview = subItem.querySelector('.sub-content-preview');
-                                var btn = subItem.querySelector('.btn-copy');
-                                if (preview) preview.style.display = 'block';
-                                if (btn && btn.textContent.trim() === '▶') btn.textContent = '▼';
-                            }
-                        });
-                    });
-                    // 恢复滚动位置
-                    window.scrollTo(0, scrollY);
+                    snipRestoreExpandState(_st);
 
                     closeSubEdit();
                     showToast('✅ 子条目已更新');
@@ -9769,6 +9734,50 @@ body {
             showToast('💾 导出成功');
         }
 
+        /* 集合类收藏的合并：子条目取并集（两边的 _deletedSubIds 都算数、显式删除优先），
+           外层字段（标题/标签/备注…）谁新跟谁、但把刚合并好的 items 原样接回去。
+
+           ⚠️「云同步」(applySyncData) 和「导入备份」(importAllData) 共用这一份。
+           它**分叉过一次**，代价是两个 bug：导入那边不认墓碑（删掉的会复活）、
+           外层字段两边都不跟新（remoteNewer 被先一步改掉的 localItem.updatedAt
+           顶成了恒 false，于是只要子条目有变化、集合改过的标题就永远停在旧值）。
+           2026-08-06 合并成一份。**别再各抄一份**——tests/importmerge.test.js 钉的就是这条。
+
+           返回 true＝子条目确实变了，调用方据此计「更新了几条」。 */
+        function snipMergeCollectionInto(sData, idx, d) {
+            var localItem = sData[idx];
+            var deletedIds = {};
+            (localItem._deletedSubIds || []).concat(d._deletedSubIds || []).forEach(function(id) { deletedIds[id] = true; });
+            var subMap = {};
+            var changed = false;
+            (localItem.items || []).forEach(function(s) { if (!deletedIds[s.id]) subMap[s.id] = s; });
+            (d.items || []).forEach(function(rs) {
+                if (deletedIds[rs.id]) return;
+                var ls = subMap[rs.id];
+                if (!ls) { subMap[rs.id] = rs; changed = true; }
+                else if (rs.updatedAt && (!ls.updatedAt || rs.updatedAt > ls.updatedAt)) { subMap[rs.id] = rs; changed = true; }
+            });
+            // ⚠️必须赶在动 localItem.updatedAt 之前算好，否则下面的外层合并判断恒 false
+            var remoteNewer = !!(d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt));
+            var counted = false;
+            if (changed || (localItem._deletedSubIds || []).length !== Object.keys(deletedIds).length) {
+                var mergedSubs = Object.keys(subMap).map(function(k) { return subMap[k]; });
+                mergedSubs.sort(function(a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
+                localItem.items = mergedSubs;
+                localItem._deletedSubIds = Object.keys(deletedIds);
+                if (remoteNewer) { localItem.updatedAt = d.updatedAt; }
+                counted = true;
+            }
+            if (remoteNewer) {
+                var mergedItems = localItem.items;
+                var mergedDeletedSubIds = localItem._deletedSubIds;
+                sData[idx] = d;
+                sData[idx].items = mergedItems;
+                sData[idx]._deletedSubIds = mergedDeletedSubIds;
+            }
+            return counted;
+        }
+
         function importAllData(event) {
             var file = event.target.files[0]; if (!file) return;
             // 导入前先自动存一份快照
@@ -9825,46 +9834,8 @@ body {
                                 // 本地已有，尝试合并
                                 var localItem = sData[sIds[d.id]];
                                 if (localItem.type === 'collection' && d.type === 'collection') {
-                                    // 集合类型：子条目级别合并
-                                    var localSubs = localItem.items || [];
-                                    var remoteSubs = d.items || [];
-                                    var deletedIds = {};
-                                    (localItem._deletedSubIds || []).concat(d._deletedSubIds || []).forEach(function(id) { deletedIds[id] = true; });
-                                    var subMap = {};
-                                    var changed = false;
-                                    localSubs.forEach(function(s) { if (!deletedIds[s.id]) subMap[s.id] = s; });
-                                    remoteSubs.forEach(function(rs) {
-                                        if (deletedIds[rs.id]) return;
-                                        var ls = subMap[rs.id];
-                                        if (!ls) {
-                                            subMap[rs.id] = rs; changed = true;
-                                        } else if (rs.updatedAt && (!ls.updatedAt || rs.updatedAt > ls.updatedAt)) {
-                                            subMap[rs.id] = rs; changed = true;
-                                        }
-                                    });
-                                    /* ⚠️跟 applySyncData 同一条规矩：「对方更不更新」必须在动 localItem
-                                       之前先算好，否则下面那段里 localItem.updatedAt 已经被改成 d.updatedAt、
-                                       判断恒 false。详见 applySyncData 里同名变量旁边那段说明。 */
-                                    var remoteNewer = !!(d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt));
-                                    if (changed || (localItem._deletedSubIds || []).length !== Object.keys(deletedIds).length) {
-                                        var mergedSubs = Object.keys(subMap).map(function(k) { return subMap[k]; });
-                                        mergedSubs.sort(function(a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
-                                        localItem.items = mergedSubs;
-                                        localItem._deletedSubIds = Object.keys(deletedIds);
-                                        if (remoteNewer) { localItem.updatedAt = d.updatedAt; }
-                                        sUpdated++;
-                                    }
-                                    /* ⚠️外层字段也要跟（2026-08-06 补，之前只有 applySyncData 有）：
-                                       上面那段只合并了 items 子条目，集合自己的标题/标签/备注仍是本地旧值。
-                                       对方更新的话整条换过来，但把刚合并好的 items 和删除名单原样接回去，
-                                       否则子条目合并的结果会被整条覆盖掉。 */
-                                    if (remoteNewer) {
-                                        var mergedItems = localItem.items;
-                                        var mergedDeletedSubIds = localItem._deletedSubIds;
-                                        sData[sIds[d.id]] = d;
-                                        sData[sIds[d.id]].items = mergedItems;
-                                        sData[sIds[d.id]]._deletedSubIds = mergedDeletedSubIds;
-                                    }
+                                    // 集合：子条目并集 + 外层字段，跟云同步共用一份（见 snipMergeCollectionInto）
+                                    if (snipMergeCollectionInto(sData, sIds[d.id], d)) sUpdated++;
                                 } else {
                                     // 非集合：用更新的覆盖
                                     if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
@@ -11660,40 +11631,8 @@ body {
                     } else {
                         var localItem = sData[sIds[d.id]];
                         if (localItem.type === 'collection' && d.type === 'collection') {
-                            var localSubs = localItem.items || [];
-                            var remoteSubs = d.items || [];
-                            var deletedIds = {};
-                            (localItem._deletedSubIds || []).concat(d._deletedSubIds || []).forEach(function(id) { deletedIds[id] = true; });
-                            var subMap = {};
-                            var changed = false;
-                            localSubs.forEach(function(s) { if (!deletedIds[s.id]) subMap[s.id] = s; });
-                            remoteSubs.forEach(function(rs) {
-                                if (deletedIds[rs.id]) return;
-                                var ls = subMap[rs.id];
-                                if (!ls) { subMap[rs.id] = rs; changed = true; }
-                                else if (rs.updatedAt && (!ls.updatedAt || rs.updatedAt > ls.updatedAt)) { subMap[rs.id] = rs; changed = true; }
-                            });
-                            /* ⚠️「对方更不更新」必须在动 localItem 之前先算好（2026-08-06 修）。
-                               老代码在上面那个 if 里先写了 localItem.updatedAt = d.updatedAt，
-                               下面再拿同一个条件去判断外层字段要不要跟——那时候两边已经相等了，
-                               条件恒 false。结果就是：**只要子条目有变化，集合的标题/标签就永远不跟新**，
-                               只有子条目一点没变时那段才生效。这个顺序坑很隐蔽，别再合并回去。 */
-                            var remoteNewer = !!(d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt));
-                            if (changed || (localItem._deletedSubIds || []).length !== Object.keys(deletedIds).length) {
-                                var mergedSubs = Object.keys(subMap).map(function(k) { return subMap[k]; });
-                                mergedSubs.sort(function(a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
-                                localItem.items = mergedSubs;
-                                localItem._deletedSubIds = Object.keys(deletedIds);
-                                if (remoteNewer) { localItem.updatedAt = d.updatedAt; }
-                                sUpdated++;
-                            }
-                            if (remoteNewer) {
-                                var mergedItems = localItem.items;
-                                var mergedDeletedSubIds = localItem._deletedSubIds;
-                                sData[sIds[d.id]] = d;
-                                sData[sIds[d.id]].items = mergedItems;
-                                sData[sIds[d.id]]._deletedSubIds = mergedDeletedSubIds;
-                            }
+                            // 集合：子条目并集 + 外层字段，跟导入备份共用一份（见 snipMergeCollectionInto）
+                            if (snipMergeCollectionInto(sData, sIds[d.id], d)) sUpdated++;
                         } else {
                             if (d.updatedAt && (!localItem.updatedAt || d.updatedAt > localItem.updatedAt)) {
                                 sData[sIds[d.id]] = d; sUpdated++;
@@ -13718,6 +13657,26 @@ body {
             d.onclick = chatLoadLater;
             return d;
         }
+        /* 「把渲染窗口往下推到 newEnd」这一段：找出最后一条 AI 消息（渲染要用）、摘掉旧的底部哨兵、
+           拼一段接到末尾、推进 chatRenderEndIdx、没到真末尾就重新挂上哨兵。
+           ⚠️2026-08-06 抽出来共用：chatLoadLater（滑到底自动补）和 chatRenderDownTo（跳转前补）
+           原本各抄一份一模一样的 8 行，改了「接消息」的规矩只改一处，两条路就会走出不同结果。
+           ⚠️只负责接 DOM。防重入标记和窗口裁剪**故意留在各自那边**——它们的规矩本来就不一样
+           （自动补要裁顶部、跳转补不裁，裁错会把正要跳过去的那条裁掉）。 */
+        function chatAppendWindowTo(container, newEnd) {
+            var oldEnd = chatRenderEndIdx;
+            if (newEnd <= oldEnd) return;
+            var lastAiIdx = -1;
+            for (var k = chatMessages.length - 1; k >= 0; k--) { if (chatMessages[k].role === 'assistant') { lastAiIdx = k; break; } }
+            var oldSentinel = document.getElementById('chatLaterSentinel');
+            if (oldSentinel) oldSentinel.remove();
+            var frag = document.createDocumentFragment();
+            var seed = oldEnd > 0 ? ((chatMessages[oldEnd - 1] && chatMessages[oldEnd - 1].ts) || 0) : 0;
+            chatAppendMsgRange(frag, oldEnd, newEnd, seed, lastAiIdx, false);
+            container.appendChild(frag);
+            chatRenderEndIdx = newEnd;
+            if (newEnd < chatMessages.length) container.appendChild(chatMakeLaterSentinel());
+        }
         // 往下补渲染一段更后面的消息（对称于 chatLoadEarlier）。接在底部哨兵位置、当前视图下方，不动 scrollTop。
         function chatLoadLater() {
             if (chatReaderMode) return;   // 阅读模式自管 DOM（readerAppendNextChapter），不走窗口化，否则会把刚接的下一章又渲染一遍→「下一章还是本章」
@@ -13726,18 +13685,7 @@ body {
             try {
                 var container = document.getElementById('chatMessages');
                 if (!container) return;
-                var oldEnd = chatRenderEndIdx;
-                var newEnd = Math.min(chatMessages.length, oldEnd + READING_RENDER_CHUNK);
-                var lastAiIdx = -1;
-                for (var k = chatMessages.length - 1; k >= 0; k--) { if (chatMessages[k].role === 'assistant') { lastAiIdx = k; break; } }
-                var oldSentinel = document.getElementById('chatLaterSentinel');
-                if (oldSentinel) oldSentinel.remove();
-                var frag = document.createDocumentFragment();
-                var seed = oldEnd > 0 ? ((chatMessages[oldEnd - 1] && chatMessages[oldEnd - 1].ts) || 0) : 0;
-                chatAppendMsgRange(frag, oldEnd, newEnd, seed, lastAiIdx, false);
-                container.appendChild(frag);
-                chatRenderEndIdx = newEnd;
-                if (newEnd < chatMessages.length) container.appendChild(chatMakeLaterSentinel());
+                chatAppendWindowTo(container, Math.min(chatMessages.length, chatRenderEndIdx + READING_RENDER_CHUNK));
                 // 窗口过大 → 把远离视口的顶部一批裁掉（顶部在视口上方，需按高度差补偿 scrollTop 防跳动）
                 chatTrimTopIfNeeded(container);
             } finally {
@@ -13783,17 +13731,9 @@ body {
             if (!container || chatRenderEndIdx >= chatMessages.length) return;
             var newEnd = Math.min(chatMessages.length, Math.max(targetIdx + 1, chatRenderEndIdx) + READING_RENDER_BUFFER);
             if (newEnd <= chatRenderEndIdx) return;
-            var oldEnd = chatRenderEndIdx;
-            var lastAiIdx = -1;
-            for (var k = chatMessages.length - 1; k >= 0; k--) { if (chatMessages[k].role === 'assistant') { lastAiIdx = k; break; } }
-            var oldSentinel = document.getElementById('chatLaterSentinel');
-            if (oldSentinel) oldSentinel.remove();
-            var frag = document.createDocumentFragment();
-            var seed = oldEnd > 0 ? ((chatMessages[oldEnd - 1] && chatMessages[oldEnd - 1].ts) || 0) : 0;
-            chatAppendMsgRange(frag, oldEnd, newEnd, seed, lastAiIdx, false);
-            container.appendChild(frag);
-            chatRenderEndIdx = newEnd;
-            if (newEnd < chatMessages.length) container.appendChild(chatMakeLaterSentinel());
+            // 接 DOM 走公用的那段（见 chatAppendWindowTo）；这里**故意不裁窗口**——
+            // 正要跳过去的那条可能就在会被裁掉的那一批里。
+            chatAppendWindowTo(container, newEnd);
         }
         // 确保第 idx 条消息已在 DOM 中（可能在窗口上方或下方还没渲染），供任意位置跳转前调用。
         // ⚠️阅读模式(chatReaderMode)的 DOM 由它自己那套(readerOpenChapter 非窗口化 + readerAppend/Prepend)管，
@@ -13938,6 +13878,10 @@ body {
             } else {
                 if (typeof text === 'string') text = chatStripTimeTag(text);
                 var h = '';
+                /* ⚠️这里长得像 chatThinkingBlockHtml，但**故意不用它**，别顺手合并（2026-08-06 记）：
+                   这条路径渲染的是**历史消息**，而 chatThinkDuration 是「当前这次请求」的全局值。
+                   套用公用版会把这一刻的思考耗时贴到一条几天前的旧消息上，显示一个假时长。
+                   公用版只给「刚生成完的这一条」用（chatRenderStreamFinal / …ReadingModeFinal）。 */
                 if (thinking && thinking.trim()) {
                     h += '<div class="chat-thinking"><div class="chat-thinking-hd" onclick="chatToggleThinking(this)">';
                     h += '<span class="arrow">▶</span> 思考过程</div>';
@@ -15871,34 +15815,32 @@ body {
             el.innerHTML = h;
         }
         // 流式结束后调用：一次性做 Markdown 渲染（最终精确版）
+        /* 「思考过程」折叠块的 HTML。原本 chatRenderStreamFinal 和
+           chatRenderReadingModeFinal 各抄了一份一模一样的 8 行，改一处忘另一处
+           就会出现「普通对话有计时、共读没有」这类只在一边生效的毛病。
+           2026-08-06 抽出来共用。没有思考内容时返回空串，调用方直接拼。 */
+        function chatThinkingBlockHtml(thinking) {
+            if (!thinking || !thinking.trim()) return '';
+            var h = '<div class="chat-thinking">';
+            h += '<div class="chat-thinking-hd" onclick="chatToggleThinking(this)">';
+            h += '<span class="arrow">▶</span> 思考过程';
+            if (chatThinkDuration > 0) h += ' <span class="chat-think-timer">' + chatFmtElapsed(chatThinkDuration) + '</span>';
+            h += '</div>';
+            h += '<div class="chat-thinking-bd">' + renderText(thinking) + '</div>';
+            h += '</div>';
+            return h;
+        }
+
         function chatRenderStreamFinal(el, thinking, content) {
             _streamContentEl = null;
             if (_streamMdTimer) { clearTimeout(_streamMdTimer); _streamMdTimer = 0; }
-            var h = '';
-            if (thinking && thinking.trim()) {
-                h += '<div class="chat-thinking">';
-                h += '<div class="chat-thinking-hd" onclick="chatToggleThinking(this)">';
-                h += '<span class="arrow">▶</span> 思考过程';
-                if (chatThinkDuration > 0) h += ' <span class="chat-think-timer">' + chatFmtElapsed(chatThinkDuration) + '</span>';
-                h += '</div>';
-                h += '<div class="chat-thinking-bd">' + renderText(thinking) + '</div>';
-                h += '</div>';
-            }
+            var h = chatThinkingBlockHtml(thinking);
             if (content) h += renderText(content);
             el.innerHTML = h;
         }
 
         function chatRenderReadingModeFinal(el, thinking, aiContent, originalText) {
-            var h = '';
-            if (thinking && thinking.trim()) {
-                h += '<div class="chat-thinking">';
-                h += '<div class="chat-thinking-hd" onclick="chatToggleThinking(this)">';
-                h += '<span class="arrow">▶</span> 思考过程';
-                if (chatThinkDuration > 0) h += ' <span class="chat-think-timer">' + chatFmtElapsed(chatThinkDuration) + '</span>';
-                h += '</div>';
-                h += '<div class="chat-thinking-bd">' + renderText(thinking) + '</div>';
-                h += '</div>';
-            }
+            var h = chatThinkingBlockHtml(thinking);
             h += readingModeRenderMerged(originalText, aiContent);
             el.innerHTML = h;
         }
@@ -17105,6 +17047,34 @@ body {
         // 避免碰 chatCompressContext 内部作用域里的同名闭包。
         var _chatRebuildingMt = false;
         var _MT_SYS_PROMPT = '你是小说记忆表格维护助手。根据新章节摘要，更新下面四张表格。\n规则：\n- 人物表列：人物、身份、关系、当前状态、备注\n- 地点表列：地点、规模/特征、关联、简介\n- 大事年表列：时间、事件\n- 主线表列：章节、事件、细节、已解决\n- 新人物加行，已有人物只改变了的字段，没变的原样保留\n- 人物表只收主要人物，标准要严：①主角②反复出场或对剧情有持续作用的重要配角③对主线、关键事件或人物关系有实质影响的人。只露一两面的过场龙套、纯功能性角色（店小二、轿夫、随从甲、路人等）、仅被顺口提及一次名字而无戏份的人，一律不入表，宁缺毋滥\n- 已彻底退场且后续不再被提及、也不影响后文的次要人物可删除，避免人物表无限膨胀\n- 地点表只记故事的主要舞台，标准要严：①主角及重要人物长期居住/所属的地方（家、庄园、宅邸、据点等）②反复出现、承载多段重要情节的关键场所③大的城市或地区。只在某一处出现一次的过场地点、建筑内部的具体房间、只被顺口提及的地名，一律不入表，宁缺毋滥\n- 地点表「规模/特征」用通俗方式帮读者建立地理印象：城镇写人口多少/繁华程度，庄园宅邸写占地大小/气派程度，山川河流写地形，确实无从判断就留空\n- 地点表「关联」写它属于谁或关联的人物/势力；「简介」一句话点明它是什么、发生过什么关键事件\n- 大事年表只记带明确时间标记或重大时间跨度的关键节点（如「三十年前」「次年春」「三日后」对应的大事件），「时间」列写相对或绝对时间、「事件」列一句话写发生了什么；没有时间感的日常情节不入表；全表最多 30 行；满了时优先删掉近期的小事件（近期剧情在摘要里已有），奠基性的远期大事（如「三十年前…」这类全书根基性时间锚点）务必保住，宁缺毋滥\n- 主线表只记真正的伏笔（埋下但尚未揭晓的线索）和重大主线转折，普通过场、日常对话、次要细节一律不入表\n- 按事件去重：不要把同一件事拆成多条流水账；但不同的重大伏笔或转折，即使章节相同也各自成行，不要强行合并\n- 旧伏笔如已解决则「已解决」列改为「是」\n- 「已解决」列只填「是」或「否」\n- 已解决的伏笔如不再重要可删除，避免表格无限膨胀\n- 输出完整的四张 markdown 表格，依次为人物表、地点表、大事年表、主线表，之间用空行分隔\n- 不要输出任何其他内容';
+        /* 「整表重建」的结果解析：把模型吐回来的四张 markdown 表拆开解析、跟旧表逐行比出增改标记
+           （绿点/橙点），再折出一份「有新的用新的、新的为空就留旧的」的合并结果。
+
+           ⚠️共读的 chatRebuildMemTables 和阅读的 readerUpdateMemoryTables(rebuild 分支)
+           共用这一份——两边原本各抄一份一模一样的 10 行，**加一张新表就得记得改两处**，
+           漏一处的表现是「共读能看到新表、阅读看不到」这种只在一边生效的怪毛病。2026-08-06 抽出。
+
+           返回 null＝四张表全空（模型没按格式回）→ 调用方按失败处理，
+           ⚠️别推进水位，否则那一段永远不会被重喂（见 CLAUDE.md 摘要断点续传那条）。 */
+        function _mtParseRebuildResult(result, tables) {
+            var _parts = _readerSplitThreeTables(result);
+            var newChars = _readerParseTableMd(_parts.characters, _mtCharCols);
+            var newPlaces = _readerParseTableMd(_parts.places, _mtPlaceCols);
+            var newTime = _readerParseTableMd(_parts.timeline, _mtTimeCols);
+            var newPlots = _readerParseTableMd(_parts.plotlines, _mtPlotCols);
+            if (!(newChars.length || newPlaces.length || newTime.length || newPlots.length)) return null;
+            _mtDiffMark('characters', newChars, tables.characters, _mtCharCols);
+            _mtDiffMark('places', newPlaces, tables.places, _mtPlaceCols);
+            _mtDiffMark('timeline', newTime, tables.timeline, _mtTimeCols);
+            _mtDiffMark('plotlines', newPlots, tables.plotlines, _mtPlotCols);
+            return {
+                characters: newChars.length ? newChars : tables.characters,
+                places: newPlaces.length ? newPlaces : tables.places,
+                timeline: newTime.length ? newTime : tables.timeline,
+                plotlines: newPlots.length ? newPlots : tables.plotlines
+            };
+        }
+
         async function chatRebuildMemTables(btn) {
             if (_chatRebuildingMt) { showToast('正在重建中，请稍候…'); return; }
             if (!chatCompressSummaries || !chatCompressSummaries.length) { showToast('还没有摘要可用'); return; }
@@ -17140,22 +17110,9 @@ body {
                 });
                 if (!result) { errMsg = '模型无返回'; }
                 else {
-                    var _parts = _readerSplitThreeTables(result);
-                    var newChars = _readerParseTableMd(_parts.characters, _mtCharCols);
-                    var newPlaces = _readerParseTableMd(_parts.places, _mtPlaceCols);
-                    var newTime = _readerParseTableMd(_parts.timeline, _mtTimeCols);
-                    var newPlots = _readerParseTableMd(_parts.plotlines, _mtPlotCols);
-                    if (newChars.length || newPlaces.length || newTime.length || newPlots.length) {
-                        _mtDiffMark('characters', newChars, tables.characters, _mtCharCols);
-                        _mtDiffMark('places', newPlaces, tables.places, _mtPlaceCols);
-                        _mtDiffMark('timeline', newTime, tables.timeline, _mtTimeCols);
-                        _mtDiffMark('plotlines', newPlots, tables.plotlines, _mtPlotCols);
-                        chatMemoryTables = {
-                            characters: newChars.length ? newChars : tables.characters,
-                            places: newPlaces.length ? newPlaces : tables.places,
-                            timeline: newTime.length ? newTime : tables.timeline,
-                            plotlines: newPlots.length ? newPlots : tables.plotlines
-                        };
+                    var _merged = _mtParseRebuildResult(result, tables);   // 解析+打点+合并，跟阅读那边共用
+                    if (_merged) {
+                        chatMemoryTables = _merged;
                         chatMemTableCount = chatCompressSummaries.length; // 手动重建已把全部摘要折进去 → 水位拉满
                         chatSaveCurrentConv(true);
                         var _addedNm = readingAutoMergeNamesFromTables(chatMemoryTables, readingNamesKey());
@@ -20809,30 +20766,17 @@ body {
                     }
                     return true;
                 }
-                var _parts = _readerSplitThreeTables(result);
-                var newChars = _readerParseTableMd(_parts.characters, _mtCharCols);
-                var newPlaces = _readerParseTableMd(_parts.places, _mtPlaceCols);
-                var newTime = _readerParseTableMd(_parts.timeline, _mtTimeCols);
-                var newPlots = _readerParseTableMd(_parts.plotlines, _mtPlotCols);
-                if (newChars.length || newPlaces.length || newTime.length || newPlots.length) {
-                    _mtDiffMark('characters', newChars, tables.characters, _mtCharCols);
-                    _mtDiffMark('places', newPlaces, tables.places, _mtPlaceCols);
-                    _mtDiffMark('timeline', newTime, tables.timeline, _mtTimeCols);
-                    _mtDiffMark('plotlines', newPlots, tables.plotlines, _mtPlotCols);
-                    readerMemTablesSet(fileKey, {
-                        characters: newChars.length ? newChars : tables.characters,
-                        places: newPlaces.length ? newPlaces : tables.places,
-                        timeline: newTime.length ? newTime : tables.timeline,
-                        plotlines: newPlots.length ? newPlots : tables.plotlines
-                    }, curChap);
+                var _merged = _mtParseRebuildResult(result, tables);   // 解析+打点+合并，跟共读那边共用
+                if (_merged) {
+                    readerMemTablesSet(fileKey, _merged, curChap);
                     readerMemTblErrSet(fileKey, null); // 成功 → 清掉失败标记
-                    console.log('[阅读记忆表格] 人物 ' + (newChars.length || tables.characters.length) + ' 行，地点 ' + (newPlaces.length || tables.places.length) + ' 行，年表 ' + (newTime.length || tables.timeline.length) + ' 行，主线 ' + (newPlots.length || tables.plotlines.length) + ' 行');
+                    console.log('[阅读记忆表格] 人物 ' + _merged.characters.length + ' 行，地点 ' + _merged.places.length + ' 行，年表 ' + _merged.timeline.length + ' 行，主线 ' + _merged.plotlines.length + ' 行');
                     // 自动把新人名/地名并入本书高亮名单（仍在读同一本时才并、并即时重高亮）
                     if (chatReaderMode && typeof readerBookId !== 'undefined' && readerBookKey(readerBookId) === fileKey) {
                         var _addedNm = readingAutoMergeNamesFromTables(readerMemTablesGet(fileKey), readingNamesKey());
                         if (_addedNm) { console.log('[名单] 自动并入 ' + _addedNm + ' 个名词'); if (readingNameAnyOn()) readingRehighlightNamesInPlace(); }
                     }
-                    showToast('🧠 记忆表格已更新（人物 ' + (newChars.length || tables.characters.length) + ' · 地点 ' + (newPlaces.length || tables.places.length) + ' · 年表 ' + (newTime.length || tables.timeline.length) + ' · 主线 ' + (newPlots.length || tables.plotlines.length) + '）');
+                    showToast('🧠 记忆表格已更新（人物 ' + _merged.characters.length + ' · 地点 ' + _merged.places.length + ' · 年表 ' + _merged.timeline.length + ' · 主线 ' + _merged.plotlines.length + '）');
                     return true;
                 }
             } catch (e) { console.warn('[阅读记忆表格] 更新失败:', e.message); readerMemTblErrSet(fileKey, e.message || '未知错误'); }
