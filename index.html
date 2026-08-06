@@ -25381,15 +25381,30 @@ body {
                        没撞的那一侧优先——这才是她要的「能不遮挡字就好了」。 */
                     var _lhR = lh + lw * RD_GL_ROT_SIN;      // 标签是斜的，实际外框比 lh 高
                     var _pad = (_lhR - lh) / 2;              // 斜出来的那点，上下各一半
-                    /* 这条缝该留多少白：宽裕就 7px（居中）；塞得下但紧就按实际缝宽居中、
-                       只要还剩得下 RD_GL_INSET_MIN 就认；真塞不下才退回 12px 扎进隔壁块。 */
-                    var _insetOf = function (room) {
+                    /* 这条缝该留多少白，四档（2026-08-06 定，全都是为了「别压到字」）：
+                       ① 缝宽裕 → 7px 居中，老行为；
+                       ② 塞得下但紧 → 按实际缝宽居中，只要还剩得下 RD_GL_INSET_MIN；
+                       ③ 真塞不下 → **退而求其次：只压隔壁块的第一行**（往下时）。
+                          背景块第一行往往只有「汐：背景：阳翟」十来个字、右边大片空白，
+                          只压一行的话排位那步就能横向躲进去，实际一个字都不碰；
+                          而按老的 12px 一扎，标签那条带同时盖住第一、二行，第二行是满宽的，
+                          横向就无处可躲了（用户 2026-08-06 实测「还是挡着的」的直接原因）。
+                       ④ 连一行都躲不出来 → 回到 12px 那档，老行为兜底。
+                       ⚠️这几档只动上下留白，**标签尺寸自始至终没变过**。 */
+                    var _insetToward = function (room, nbEl, down) {
                         if (room >= lh + RD_GL_INSET * 2) return RD_GL_INSET;
-                        if ((room - _lhR) / 2 >= RD_GL_INSET_MIN) return (room - lh) / 2;   // 居中，整条落在缝里
+                        if ((room - _lhR) / 2 >= RD_GL_INSET_MIN) return (room - lh) / 2;
+                        var rows = _glRowsOf(nbEl);
+                        if (rows.length >= 2) {
+                            // 往下：卡在第二行上沿之前；往上：卡在倒数第二行下沿之后
+                            var limit = down ? (rows[1].top - pBot - lh - _pad)
+                                             : (pTop - rows[rows.length - 2].bottom - lh - _pad);
+                            if (limit >= RD_GL_INSET_MIN) return limit;
+                        }
                         return RD_GL_INSET_OVER;
                     };
-                    var _lyU = pTop - _insetOf(roomUp) - lh;
-                    var _lyD = pBot + _insetOf(roomDown);
+                    var _lyU = pTop - _insetToward(roomUp, _prev, false) - lh;
+                    var _lyD = pBot + _insetToward(roomDown, _next, true);
                     var hitUp = !!(_prev && _glGlyphSpan(_prev, _lyU - _pad, _lyU + lh + _pad));
                     var hitDown = !!(_next && _glGlyphSpan(_next, _lyD - _pad, _lyD + lh + _pad));
                     var prefUp = (hitUp !== hitDown) ? !hitUp
@@ -25461,6 +25476,31 @@ body {
                  背景块第一行往往只有「汐：背景：阳翟」十来个字、右边大片是空的
                  （实测：块宽 328px，第一行文字只占 112px，右边空着 216px）；
                  按整块的框算就等于说「没地方可挪」，白白放弃唯一不压字的解法。 */
+            /* 把一个块里的**文字**按「行」归并，返回每行的上下左右（容器坐标）。
+               ⚠️同样必须走 Range 逐个矩形，元素的框只告诉你整块多大、看不出哪一行占了多宽。
+               用途：塞不下时算出「只压第一行」该留多少白，见 _insetToward。 */
+            function _glRowsOf(el) {
+                if (!el || !el.getClientRects) return [];
+                var rng = document.createRange();
+                try { rng.selectNodeContents(el); } catch (e) { return []; }
+                var rs = [], list = rng.getClientRects();
+                for (var i = 0; i < list.length; i++) {
+                    var q = list[i];
+                    if (q.width <= 0 || q.height <= 0) continue;
+                    rs.push({ top: q.top - cr.top, bottom: q.bottom - cr.top, left: q.left - cr.left, right: q.right - cr.left });
+                }
+                rs.sort(function (a, b) { return a.top - b.top; });
+                var out = [];
+                for (var j = 0; j < rs.length; j++) {
+                    var last = out[out.length - 1];
+                    if (last && Math.abs(last.top - rs[j].top) <= 2) {   // 同一行的碎片并起来
+                        last.left = Math.min(last.left, rs[j].left);
+                        last.right = Math.max(last.right, rs[j].right);
+                        last.bottom = Math.max(last.bottom, rs[j].bottom);
+                    } else out.push({ top: rs[j].top, bottom: rs[j].bottom, left: rs[j].left, right: rs[j].right });
+                }
+                return out;
+            }
             function _glGlyphSpan(el, top, bottom) {
                 if (!el || !el.getClientRects) return null;
                 var rng = document.createRange();
