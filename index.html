@@ -26721,6 +26721,7 @@ body {
         var _rdTraceQuery = '';
         var _rdTraceDesc = true;      // 默认倒序（最近的在最上面）
         var _rdTraceShown = [];       // 当前列表显示的条目（按 data-i 取回）
+        var _rdTraceTypes = ['all'];  // 当前屏幕上有哪几格筛选、什么顺序（左右滑按这个走）
         function rdTraceTime(ts) { if (!ts) return ''; var d = new Date(ts); if (isNaN(d.getTime())) return ''; return (d.getMonth() + 1) + '月' + d.getDate() + '日'; }
         function rdTraceBookTitle() {
             try {
@@ -26871,6 +26872,42 @@ body {
             mask.appendChild(modal);
             mask.addEventListener('click', function (ev) { if (ev.target === mask) mask.remove(); });
             document.body.appendChild(mask);
+            rdTraceBindSwipe(modal.querySelector('#rdTraceBody'));
+            rdTraceRenderBody();
+        }
+        /* 左右滑切筛选格（2026-08-06 加）。
+           ⚠️绑在 #rdTraceBody 这个**外壳**上，只绑一次——rdTraceRenderBody 每次只换 innerHTML，
+             壳本身不重建，所以绑里面的元素会在下一次渲染时全丢。
+           ⚠️不能 preventDefault：这个壳是竖着滚的，拦了就滚不动了。靠 touchend 时比 dx/dy 来分辨。 */
+        function rdTraceBindSwipe(el) {
+            if (!el) return;
+            var x0 = 0, y0 = 0, ok = false;
+            el.addEventListener('touchstart', function (ev) {
+                ok = (ev.touches.length === 1);   // 双指是缩放，不算滑
+                if (!ok) return;
+                x0 = ev.touches[0].clientX; y0 = ev.touches[0].clientY;
+            }, { passive: true });
+            el.addEventListener('touchend', function (ev) {
+                if (!ok) return;
+                ok = false;
+                var t = ev.changedTouches && ev.changedTouches[0];
+                if (!t) return;
+                /* 搜索框里滑是在选文字，别抢。 */
+                if (ev.target && ev.target.closest && ev.target.closest('input, textarea')) return;
+                var dx = t.clientX - x0, dy = t.clientY - y0;
+                // 横移够 50px、且明显比竖移长（1.5 倍）才认——不然竖滚一歪就误切
+                if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+                rdTraceStepType(dx < 0 ? 1 : -1);   // 左滑＝往后翻一格，右滑＝往前
+            }, { passive: true });
+        }
+        // 在当前这排筛选格里挪一格。到头就停住（不绕回去——转圈会让人不知道自己在哪）
+        function rdTraceStepType(dir) {
+            var i = _rdTraceTypes.indexOf(_rdTraceType);
+            if (i < 0) i = 0;
+            var j = i + dir;
+            if (j < 0 || j >= _rdTraceTypes.length) return;
+            _rdTraceType = _rdTraceTypes[j];
+            if (_rdTraceType !== 'hl') _rdTraceColor = null;   // 同点击 chip：离开划线就清掉颜色筛选
             rdTraceRenderBody();
         }
         function rdTraceRenderBody() {
@@ -26878,6 +26915,7 @@ body {
             if (!body) return;
             var entries = rdTraceBuildEntries();
             if (!entries.length) {
+                _rdTraceTypes = ['all'];   // 一格都没有 → 左右滑无处可去
                 body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">还没有读痕<br><span style="font-size:11px">看书时点一段去问问它、或选中文字划线，都会收进这里</span></div>';
                 return;
             }
@@ -26898,9 +26936,10 @@ body {
                小说压根没有导读功能，常年摆一个点了必空的筛选按钮是纯噪音。
                ⚠️三个概览卡不动——加第四张会把它们挤到 390px 屏幕上一行放不下，
                而且导读本来就是问答，算进「提问」那张卡不算错。 */
-            var types = [['all', '全部'], ['single', '单问'], ['thread', '追问']];
+            var types = [['all', '全部'], ['hl', '划线']];
             if (guideCnt) types.push(['guide', '导读']);
-            types.push(['hl', '划线']);
+            types.push(['single', '单问'], ['thread', '追问']);
+            _rdTraceTypes = types.map(function (t) { return t[0]; });   // 给左右滑手势用（顺序＝屏幕上的顺序）
             html += '<div class="rd-trace-chips">';
             types.forEach(function (t) { html += '<button class="rd-trace-chip' + (_rdTraceType === t[0] ? ' on' : '') + '" data-t="' + t[0] + '">' + t[1] + '</button>'; });
             html += '<button class="rd-trace-sort" id="rdTraceSortBtn">' + (_rdTraceDesc ? '↓ 倒序' : '↑ 正序') + '</button>';
