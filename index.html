@@ -25231,11 +25231,6 @@ body {
              小注宽 210、段落右界 368 → 149.5+8+210=367.5，只差 0.5px 就判成躲不开，
              于是整条被翻到上面去（她连报两次「还是没有往右」）。3px 视觉上照样清楚。 */
         var RD_GL_DODGE_SEP = 3;
-        /* 临时诊断开关（2026-08-06 加）：网址后面带 ?gldbg=1 才生效，别人完全看不到。
-           小注排版这块靠截图量了三轮都对不上（我按图估她的小注 210px、实测 200.7px，
-           这 9px 在临界情况下就是成败），所以改成把真实数字直接印在页面上让她截图。
-           ⚠️定位到问题之后记得删掉这一整套（搜 RD_GL_DBG）。 */
-        var RD_GL_DBG = (function () { try { return /[?&]gldbg=1/.test(location.search); } catch (e) { return false; } })();
         var RD_GL_DX    = 22;   // 引线横向偏移（唯一的手感旋钮，调大就开始花）
         var RD_GL_ROT_SIN = 0.0436;   // sin(2.5°)：标签是斜的，越宽转完外框越高，排行距要算上
         var RD_GL_TIP   = 3;    // 引线端点离标签/目标字的留缝
@@ -25281,7 +25276,6 @@ body {
             layer.className = 'rd-gl-layer';
             box.appendChild(layer);
 
-            if (RD_GL_DBG) window.__glD = [];
             var paras = box.querySelectorAll('p[data-p]');
             var all = [];
 
@@ -25441,17 +25435,6 @@ body {
                         if (sp.l - 1 - lw >= L) return false;                  // 或者躲到左边
                         return true;                                            // 撞上了又躲不掉，这才叫压字
                     };
-                    var _dbg2 = null;
-                    if (RD_GL_DBG) {
-                        var _rD = _glRowsOf(_next), _rU = _glRowsOf(_prev);
-                        var _spD = _next && _glGlyphSpan(_next, _lyD - _pad, _lyD + lh + _pad);
-                        _dbg2 = ({ lh: Math.round(lh), lhR: Math.round(_lhR),
-                            insD: Math.round(_lyD - pBot), 下行数: _rD.length,
-                            行1顶: _rD[1] ? Math.round(_rD[1].top - pBot) : '-',
-                            行0: _rD[0] ? (Math.round(_rD[0].top - pBot) + '~' + Math.round(_rD[0].bottom - pBot)) : '-',
-                            带D: Math.round(_lyD - _pad - pBot) + '~' + Math.round(_lyD + lh + _pad - pBot),
-                            字右D: _spD ? Math.round(_spD.r) : '-', 上行数: _rU.length });
-                    }
                     var touchUp = _touch(_prev, _lyU), touchDown = _touch(_next, _lyD);
                     var hitUp = _stuck(_prev, _lyU), hitDown = _stuck(_next, _lyD);
                     /* 选边只剩两步（2026-08-06 三改，用户报「变成从上往下指了，可下面明明更近」）：
@@ -25496,9 +25479,7 @@ body {
                         /* 这一侧的缝装不下＝标签注定伸进隔壁块里，排位时要设法**横向避开它的字**
                            （2026-08-06 加，见 _glGlyphSpan 上那段）。存下邻居节点备查。 */
                         overUp: touchUp, overDown: touchDown,   // ⚠️用 touch*（撞上就跑避让），不是 hit*（撞上且躲不掉）
-                        roomUp: roomUp, roomDown: roomDown, _dbg2: _dbg2,
-                        _pick: RD_GL_DBG ? { 近: nearUp ? '上' : '下', 选: prefUp ? '上' : '下',
-                                             上躲不掉: hitUp ? 'Y' : 'N', 下躲不掉: hitDown ? 'Y' : 'N' } : null,
+                        roomUp: roomUp, roomDown: roomDown,
                         upEl: _prev, downEl: _next,
                         /* ⚠️「想放哪儿」必须**跟着方向各算一份**。
                            只算一份（用第一行片段）时，跨行的词会舍近求远：
@@ -25650,10 +25631,6 @@ body {
                         x = Math.min(Math.max(wantHere, left), xr);
                     }
                 }
-                if (RD_GL_DBG) it._dbg = { 方向: useUp ? '上' : '下', x: Math.round(x), lw: Math.round(it.lw),
-                    左界: Math.round(left), 右界: Math.round(right),
-                    撞: (useUp ? it.overUp : it.overDown) ? 'Y' : 'N',
-                    字右界: (_nb && _sp) ? Math.round(_sp.r) : '-', 缝上: Math.round(it.roomUp), 缝下: Math.round(it.roomDown) };
                 it.up = useUp; it.gap = g; it.lx = x;
                 it.ly = useUp ? it.lyUp : it.lyDown;
                 it.ty = useUp ? it.tyUp : it.tyDown;
@@ -25698,19 +25675,6 @@ body {
                 it2.ly = it2.up ? (it2.ly - rowOff) : (it2.ly + rowOff);
                 it2.lab.style.left = it2.lx.toFixed(1) + 'px';
                 it2.lab.style.top = it2.ly.toFixed(1) + 'px';
-                if (RD_GL_DBG) {
-                    var _d = document.createElement('div');
-                    _d.style.cssText = 'position:absolute;left:2px;top:' + (it2.ly + 16).toFixed(0)
-                        + 'px;font:9px/1.3 monospace;color:#c00;background:rgba(255,255,255,.92);'
-                        + 'padding:1px 3px;border-radius:3px;max-width:96%;z-index:9;pointer-events:none';
-                    var a = it2._dbg || {}, b = it2._pick || {};
-                    var c = it2._dbg2 || {};   // ⚠️必须从条目上取：排位前 all 被 sort 过，按序号取会串条
-                    _d.textContent = '宽' + a.lw + ' x' + a.x + ' 右界' + a.右界 + ' 缝上' + a.缝上 + '下' + a.缝下
-                        + ' 近' + b.近 + '选' + b.选 + ' 上' + b.上躲不掉 + '下' + b.下躲不掉
-                        + ' ｜下: 高' + c.lh + '/' + c.lhR + ' 内缩' + c.insD + ' 行数' + c.下行数
-                        + ' 行0=' + c.行0 + ' 行1顶' + c.行1顶 + ' 带' + c.带D + ' 字右' + c.字右D;
-                    layer.appendChild(_d);
-                }
 
                 /* ⚠️引线起点取「标签边上、距目标字 RD_GL_DX 的那个点」，不是标签正中。
                    标签有七八十像素宽，这个点几乎总落在标签范围内，所以**防撞怎么推、横向偏移都保得住**。
