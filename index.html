@@ -27077,12 +27077,21 @@ body {
                所以必须在 `pointerdown` 阶段——那时选区还在——记下来。
 
                效果＝跟正文对齐：有选中时第一下只用来取消选中，想翻页再点一下。 */
-            document.addEventListener('pointerdown', function() {
+            document.addEventListener('pointerdown', function(e) {
                 if (!chatReadingMode && !chatReaderMode) return;
                 var sel = window.getSelection && window.getSelection();
-                if (sel && !sel.isCollapsed && String(sel).trim().length > 0) {
-                    _rdOverlayClosedAt = Date.now();   // 复用同一道 400ms 闸：这一下是来收选中的，不是来翻页的
-                }
+                if (!(sel && !sel.isCollapsed && String(sel).trim().length > 0)) return;
+                /* ⚠️⚠️点在划线小条/已有划线上时**绝不能碰**：那是在用选中态干活
+                   （小条的按钮靠 _rdHlPending 里暂存的选区，见 rdHlShowSelBar）。 */
+                if (e.target && e.target.closest && (e.target.closest('.rd-hl-bar') || e.target.closest('mark.rd-hl'))) return;
+                /* ⚠️⚠️必须**当场把选区清掉**（2026-08-06 补，血的教训）。
+                   初版只标记不清选区，结果：选区一旦没被浏览器收走就一直挂在那儿，
+                   于是**之后每一次点击**都在 pointerdown 看到"有选中"→ 每次都标记 →
+                   400ms 闸每次都吃掉 click → 单击不翻页、双击的连击计数也被清零，
+                   用户报「双击提问以及单击下滑的功能全部消失了」。
+                   自己清掉就变成真正的一次性：这一下用来取消选中，下一下照常翻页/提问。 */
+                try { sel.removeAllRanges(); } catch (x) {}
+                _rdOverlayClosedAt = Date.now();   // 复用同一道 400ms 闸：这一下是来收选中的，不是来翻页的
             }, true);
             // 滚动时跟手收起小条，免得它飘在错位置（批注框是流内元素，跟着滚，不在此列）
             var sc = document.getElementById('chatMessages');

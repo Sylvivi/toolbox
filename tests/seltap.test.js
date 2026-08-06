@@ -105,13 +105,48 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('C1 没选中时不标记（否则正常单击翻页会被吃掉）', !C.空选区时, JSON.stringify(C));
     ok('C2 只有折叠光标、没真选中文字时也不标记', !C.折叠光标时, JSON.stringify(C));
 
+    /* ===== E 组：⚠️这一下之后，下一下必须照常翻页（初版就是漏了这条才闯的祸）=====
+       初版只标记、不清选区。真机上选区没被浏览器收走就一直挂着，于是**每一次**点击
+       都在 pointerdown 看到「有选中」→ 每次都标记 → 400ms 闸每次都吃掉 click，
+       单击不翻页、双击的连击计数也被清零。用户报「双击提问以及单击下滑的功能全部消失了」。
+       ⚠️所以判定不能只看「该拦的拦住了」，必须同时钉住「拦完之后能恢复」。 */
+    const E = await page.evaluate(() => {
+        window._selSetup();
+        window._selIn('selQuote');
+        const 第一下 = window._tapOn('selOther');          // 取消选中那一下：该标记
+        const 选区还在吗 = String(window.getSelection()).trim().length > 0;
+        _rdOverlayClosedAt = 0;                            // 归零，看下一下会不会又被标记
+        const 第二下 = window._tapOn('selOther');
+        return { 第一下, 选区还在吗, 第二下 };
+    });
+    ok('E1 取消选中那一下：标记（不翻页）', E.第一下, JSON.stringify(E));
+    ok('E2 ⚠️它必须当场把选区清掉，否则会一直挡着后面每一次点击', !E.选区还在吗, JSON.stringify(E));
+    ok('E3 ⚠️紧接着的第二下不再被标记＝单击翻页/双击提问恢复正常', !E.第二下, JSON.stringify(E));
+
+    /* ===== F 组：正在用选中态干活时别插手 ===== */
+    const F = await page.evaluate(() => {
+        window._selSetup();
+        const bar = document.createElement('div');
+        bar.className = 'rd-hl-bar'; bar.id = 'rdHlBar'; bar.textContent = '划线';
+        document.getElementById('selTestHost').appendChild(bar);
+        window._selIn('selPara');
+        bar.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+        return { 标记了: _rdOverlayClosedAt > 0, 选区还在: String(window.getSelection()).trim().length > 0 };
+    });
+    ok('F1 点划线小条时不标记（那是在用它，不是收它）', !F.标记了, JSON.stringify(F));
+    ok('F2 ⚠️更要紧：不许清掉选区，小条的按钮还等着用', F.选区还在, JSON.stringify(F));
+
     /* ===== D 组：源码级——修法必须在 pointerdown 阶段，且非共读模式不介入 ===== */
-    const fn = (SRC.match(/document\.addEventListener\('pointerdown', function\(\) \{\s*\n\s*if \(!chatReadingMode && !chatReaderMode\) return;[\s\S]*?\}, true\);/) || [''])[0];
+    const fn = (SRC.match(/document\.addEventListener\('pointerdown', function\(e\) \{\s*\n\s*if \(!chatReadingMode && !chatReaderMode\) return;[\s\S]*?\}, true\);/) || [''])[0];
     ok('D1 这条监听存在，且走捕获期 pointerdown（click 阶段选区已被浏览器收掉，拦不住）',
         /\}, true\);/.test(fn) && fn.length > 0, fn.slice(0, 90));
     ok('D2 判定要求真有选中文字（isCollapsed + trim 长度都查）',
         /isCollapsed/.test(fn) && /trim\(\)\.length\s*>\s*0/.test(fn), fn.slice(0, 120));
     ok('D3 复用同一道 400ms 闸（别再造第二道，两道会分叉）', /_rdOverlayClosedAt = Date\.now\(\)/.test(fn));
+    ok('D3b ⚠️必须自己 removeAllRanges——留着选区会挡住后面每一次点击（初版就栽在这）',
+        /removeAllRanges/.test(fn), fn.slice(0, 120));
+    ok('D3c ⚠️点划线小条/已有划线时要提前 return，别动它的选区',
+        /rd-hl-bar/.test(fn) && /mark\.rd-hl/.test(fn), fn.slice(0, 120));
     ok('D4 翻页那边的 400ms 闸还在', /_rdOverlayClosedAt\s*<\s*400/.test(SRC));
     ok('D5 非共读/非阅读器模式直接 return（别影响普通对话的选词复制）',
         /if \(!chatReadingMode && !chatReaderMode\) return;/.test(fn));
