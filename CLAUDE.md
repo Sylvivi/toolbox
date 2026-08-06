@@ -20,7 +20,9 @@
 ## 部署排障
 - 根目录有 **`.nojekyll`**，让 Pages 跳过 legacy Jekyll 构建、原样发布（曾因反复 Jekyll 构建失败导致线上半天不更新，加它后修好，别删）。
 - `sylvivi.github.io/toolbox` 会 **301 重定向到自定义域**，curl 验证线上要么加 `-L`、要么直接打 `tool.masterofmydomain.top`。
-- Pages 的「部署」步骤偶尔 GitHub 侧抽风（build 成功、deploy 失败/卡 queued）。**别干等**：立刻推个空提交触发全新运行（常几十秒就过）；服务器上有 `/home/ubuntu/deploy_autoheal.sh` 可后台自动盯着重触发。查真实状态用 Actions API，`/pages/builds` 那个老接口会滞后，别只信它。
+- ⚠️**下面这条只适用于「GitHub 那份镜像」，跟线上无关**（线上已是本机 Caddy，见上面「部署」）。线上打不开跟 Pages 一点关系都没有，别往这儿查。
+  - Pages 的「部署」步骤偶尔 GitHub 侧抽风（build 成功、deploy 失败/卡 queued）。可推个空提交触发全新运行；`/home/ubuntu/deploy_autoheal.sh` 能后台盯着重触发，但**它已不再由 pre-push 自动拉起**（钩子 2026-08-06 卸了，因为它盯 Pages 只会发假消息），要用得手动跑。**跑之前先读记忆 `github-pages-deploy-flaky`**：它只治得了「跑完就失败/卡 queued」，遇到「有部署卡在进行中(HTTP 400)」那种越重推越糟。查真实状态用 Actions API，`/pages/builds` 那个老接口会滞后。
+- **线上可用性**由 `/home/ubuntu/cc-bridge/healthcheck.sh` 每 10 分钟盯着（请求一次 `tool.masterofmydomain.top`，连着两次打不开才发 Telegram）。改完部署相关的东西，可以直接跑一次它当冒烟测试。
 
 ## 用户偏好（重要）
 - 用户**非技术背景**，请用**中文**回复，方案要**傻瓜式**、解释通俗，少术语。

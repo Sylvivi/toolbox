@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
+# ⚠️⚠️【2026-08-06 起已停用，.git/hooks/pre-push 已卸载。别顺手装回去。】
+#   停用原因：线上已从 GitHub Pages 搬到本机 Caddy 伺服（tool.masterofmydomain.top →
+#   43.172.66.189，见 CLAUDE.md「部署」一节 / 记忆 toolbox-self-hosted）。
+#   这个钩子盯的是 **Pages**，而 Pages 已经不是线上了，于是它只会发假消息：
+#     · Pages 发布成功 → 告诉用户「刷新页面即可」，可线上根本没变；
+#     · Pages 又抽风   → 告诉用户「部署失败需人工」，可线上好好的。
+#   用户 2026-08-06 问「以后我还需要 tg 那边的部署提示吗」，据此拆掉。
+#   线上现在的可用性由 /home/ubuntu/cc-bridge/healthcheck.sh 每 10 分钟盯着（打不开才报警）。
+#   ⚠️只有当「重新把线上切回 GitHub Pages」时才谈得上装回来——那时先确认 Pages 真是线上。
+#
 # 自动部署通知：每次 push main 时，后台拉起 deploy_autoheal.sh 盯这次提交，
-# 部署成功/失败都发 Telegram（详见记忆 toolbox-deploy-notify）。用户 2026-07-10 明确授权。
+# 部署成功/失败都发 Telegram。用户 2026-07-10 明确授权。
 # 安装为 .git/hooks/pre-push。git 把待推的 ref 从 stdin 传进来:
 #   <local ref> <local sha> <remote ref> <remote sha>
 set -u
