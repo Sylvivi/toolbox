@@ -6066,13 +6066,20 @@ body {
         }
         new MutationObserver(checkModalScroll).observe(document.documentElement, { attributes: true, subtree: true, attributeFilter: ['class'] });
 
+        /* 「有新版本，点这里刷新」那条提示挂起中——点 toast 时除了收起还要 reload。
+           放在 showToast 外面是因为这个标志由 service worker 的消息置起（见 PWA 那段）。 */
+        var _swUpdatePending = false;
         function showToast(msg, sticky) {
             var t = document.getElementById('toast');
             t.textContent = msg; t.classList.add('show');
             if (t._t) clearTimeout(t._t);
             // 常驻提示：点一下收起。⚠️不给关闭方式的话它就永远杵在那儿（用户实测报的）
             t.classList.toggle('sticky', !!sticky);
-            if (!t._bound) { t._bound = 1; t.addEventListener('click', function () { t.classList.remove('show', 'sticky'); }); }
+            if (!t._bound) { t._bound = 1; t.addEventListener('click', function () {
+                t.classList.remove('show', 'sticky');
+                // ⚠️reload 放在收起之后：先让提示消失，避免刷新瞬间它还挂在屏幕上闪一下
+                if (_swUpdatePending) { _swUpdatePending = false; location.reload(); }
+            }); }
             if (!sticky) t._t = setTimeout(function() { t.classList.remove('show'); }, 2000);
         }
         function fmtTime(iso) {
@@ -29433,14 +29440,32 @@ body {
         }
 
         /* ===== PWA 支持 ===== */
-        // Service Worker 注册（仅在 HTTPS 下有效）
-        if ('serviceWorker' in navigator && location.protocol === 'https:') {
+        /* Service Worker 注册。只在**安全上下文**下有效：https，**外加 localhost/127.0.0.1**
+           —— 后者是浏览器规范里明确认可的安全上下文，不是特例开洞。
+           ⚠️2026-08-07 补上 localhost 这一支，否则 `tests/swshell.test.js` 那套根本测不了：
+             用 http://127.0.0.1 起本地服务器时注册这一步被跳过，
+             `navigator.serviceWorker.ready` 永远不 resolve，测试直接挂死到超时（踩过）。
+             而 file:// 下 SW 一律不生效，所以这套只能靠 localhost 测。 */
+        var _swSecure = location.protocol === 'https:'
+            || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+        if ('serviceWorker' in navigator && _swSecure) {
             var _swHadController = !!navigator.serviceWorker.controller;
             var _swReloaded = false;
             navigator.serviceWorker.addEventListener('controllerchange', function() {
                 if (!_swHadController || _swReloaded) return;
                 _swReloaded = true;
                 window.location.reload();
+            });
+            /* 「有新版本」提示（2026-08-07 加）。
+               sw.js v9 起，外壳是**先拿缓存秒开、后台再去取新版**（见 sw.js 顶部注释）——
+               代价就是推了新版之后，这一次打开看到的还是旧的。不提示的话，
+               她会以为「改了半天没生效」，然后来问我。取到新版时 sw 会 postMessage 过来。
+               ⚠️只是提示，不自动刷新：她可能正读到一半，页面自己跳掉最讨厌。 */
+            navigator.serviceWorker.addEventListener('message', function(ev) {
+                if (ev.data && ev.data.type === 'toolbox-update') {
+                    _swUpdatePending = true;
+                    showToast('有新版本，点这里刷新', true);
+                }
             });
             navigator.serviceWorker.register('sw.js').then(function(reg) {
                 reg.update();

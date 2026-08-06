@@ -1,5 +1,20 @@
-var CACHE = 'toolbox-v8';   // v7→v8：顺便把之前误存进来的书籍/字体响应（单个能有 19MB）整批清掉
-var PRECACHE = ['./', 'index.html', 'manifest.json'];
+/* v8→v9（2026-08-07）：外壳改成「先拿缓存秒开、后台悄悄更新」（stale-while-revalidate）。
+   起因：线上从 GitHub Pages 搬到自建服务器后，服务器在**美国加州**，而 index.html 带 no-cache、
+   Cloudflare 不缓存它（cf-cache-status 一直是 DYNAMIC），于是**每次打开都要穿太平洋取 478KB**。
+   用户连着说了两次「感觉变很慢了」「开网页还是有点慢」。
+   改完之后：有缓存就瞬间出画面，新版在后台取、下次打开就是新的；
+   取到新版时给页面发一条消息，弹「有新版本，点这里刷新」，免得她以为改动没生效。
+   ⚠️版本号一定要跟着变（v8→v9），否则 activate 里那段清旧缓存不会跑。 */
+var CACHE = 'toolbox-v9';
+/* ⚠️故意**不预缓存 './'**：它和 'index.html' 是同一个 1.9MB 的文件，会白存两份。
+   下面 fetch 里外壳一律归一到 SHELL_KEY，'./' 那份存了也没人读，纯浪费配额。
+   而 Cache Storage 跟 IndexedDB **共用同一个源的配额**——顶满时字体落盘的 idbSet 会**静默**失败
+   （2026-07-29 查了半天的「另一台设备怎么都拉不到字体，书却一切正常」就是这个）。 */
+var PRECACHE = ['index.html', 'manifest.json'];
+/* 外壳在缓存里的**统一键**：'/'（导航请求）和 '/index.html' 是同一个文件，
+   但它们的 Request URL 不同。不统一的话会存成两份、各自更新，
+   出现「从桌面图标进是新的、从浏览器进还是旧的」这种见了鬼的现象。 */
+var SHELL_KEY = 'index.html';
 
 self.addEventListener('install', function(e) {
   e.waitUntil(caches.open(CACHE).then(function(c) { return c.addAll(PRECACHE); }));
@@ -13,6 +28,29 @@ self.addEventListener('activate', function(e) {
   self.clients.claim();
 });
 
+// 这个请求要的是不是「应用外壳」（那个 1.9MB 的 index.html）
+function _isShell(req) {
+  if (req.mode === 'navigate') return true;
+  try {
+    var u = new URL(req.url);
+    if (u.origin !== self.location.origin) return false;
+    return u.pathname === '/' || /\/index\.html$/.test(u.pathname);
+  } catch (e) { return false; }
+}
+
+/* 拿来判断「是不是同一版」的指纹。
+   ⚠️源站（Caddy 的 file_server）**不发 ETag、只发 Last-Modified**，经 Cloudflare 之后也还在，
+   所以两个都取、谁有用谁。两边都拿不到时就当「没变」——宁可不提示，也别每次都弹。 */
+function _stamp(r) {
+  return r ? (r.headers.get('ETag') || r.headers.get('Last-Modified') || '') : '';
+}
+
+function _tellClients() {
+  return self.clients.matchAll({ includeUncontrolled: true, type: 'window' }).then(function(cs) {
+    cs.forEach(function(c) { c.postMessage({ type: 'toolbox-update' }); });
+  });
+}
+
 self.addEventListener('fetch', function(e) {
   if (e.request.method !== 'GET') return;
   if (e.request.url.indexOf('api.github.com') !== -1) return;
@@ -24,6 +62,33 @@ self.addEventListener('fetch', function(e) {
   // 缓存被这些大响应顶满时，字体落盘的 idbSet 事务会失败——而那个失败是静默的，
   // 表现就是「另一台设备怎么都拉不到字体，书却一切正常」（2026-07-29 查了半天的那个）。
   if (e.request.url.indexOf('/books/') !== -1) return;
+
+  /* ===== 外壳：先拿缓存秒开，后台更新 =====
+     ⚠️两个顺序上的讲究，别图省事改：
+       ① fetch **必须立刻发起**、且 e.waitUntil 要在事件处理函数里**同步**登记。
+          写成「等查完缓存再 fetch」的话，respondWith 早就用缓存把响应给出去了，
+          浏览器随时可能把 Service Worker 杀掉，后台那趟更新就半路夭折——
+          表现是「怎么刷都还是旧版」，而且极难查。
+       ② 只有**旧的存在**时才提示新版。首次访问没有旧的，一提示就成了莫名其妙的弹窗。 */
+  if (_isShell(e.request)) {
+    var hitP = caches.open(CACHE).then(function(c) {
+      return c.match(SHELL_KEY).then(function(hit) { return { c: c, hit: hit }; });
+    });
+    var netP = fetch(e.request).then(function(r) {
+      if (!r || !r.ok) return r;
+      return hitP.then(function(o) {
+        var before = _stamp(o.hit), after = _stamp(r);
+        return o.c.put(SHELL_KEY, r.clone()).then(function() {
+          if (o.hit && before && after && before !== after) return _tellClients();
+        }).then(function() { return r; });
+      });
+    }).catch(function() { return hitP.then(function(o) { return o.hit; }); });
+    e.waitUntil(netP);
+    e.respondWith(hitP.then(function(o) { return o.hit || netP; }));
+    return;
+  }
+
+  // 其余资源照旧：先走网络，断网才回缓存
   e.respondWith(
     fetch(e.request).then(function(r) {
       if (r.ok) { var rc = r.clone(); caches.open(CACHE).then(function(c) { c.put(e.request, rc); }); }

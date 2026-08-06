@@ -16,7 +16,12 @@
   - 顺带记一笔：`index.html` 是 `no-cache`，所以 CF 不缓存它（`cf-cache-status: DYNAMIC`），每次仍回源取 544KB（gzip 后）。实测这样已经够快，**没有**去动 `sw.js` 的「先走网络」策略——改成「先拿缓存」会带来「新版要刷两次才出来」的代价，为一个已经不存在的问题付这个代价不划算。
   - 仓库 `Sylvivi/toolbox` 分支 `main` **照旧提交推送当备份**，GitHub Pages 那份任其自然。
   - **为什么搬**：2026-08-06 Pages 连着失败近一小时——先是「有部署卡在进行中」的锁冲突（HTTP 400，autoheal 一直重推只是白撞、堆了 5 个空提交），锁放开后又变成 deploy 步骤 10 分钟 `Timeout reached`；官方状态页显示 Pages「正常」，属于没上报的局部抽风，催不动。详见记忆 `toolbox-self-hosted`。
-- **更新机制**：network-first 的 service worker，同步完刷新页面即生效。
+- **更新机制（2026-08-07 改了）**：service worker 对**应用外壳**（那个 1.9MB 的 index.html）已改成 **stale-while-revalidate**——先拿缓存秒开、后台再取新版。其余资源仍是 network-first。
+  - **⚠️所以「同步完刷新一次」不再一定看到新版**：这一次是旧的，下一次才是新的。取到新版时 sw 会 postMessage，页面弹「有新版本，点这里刷新」。**跟用户确认改动效果时要提醒她这一点**，否则她会以为没生效。
+  - 为什么改：服务器在美国加州，`index.html` 带 `no-cache`、CF 也不缓存它（`cf-cache-status: DYNAMIC`），每次打开都要穿太平洋取 478KB。用户连说两次「感觉变很慢了」「开网页还是有点慢」。
+  - **⚠️改 sw.js 必须同时把 `CACHE` 版本号加一**，否则 activate 里清旧缓存那段不跑。
+  - **⚠️sw.js 里 `e.waitUntil(netP)` 必须在事件处理函数里同步登记**，且 fetch 要立刻发起。写成「等查完缓存再 fetch」的话，respondWith 早把缓存给出去了，浏览器随时会杀掉 SW，后台更新半路夭折 → 表现是「怎么刷都还是旧版」，极难查。回归 `tests/swshell.test.js` 第 ④ 条专钉这个。
+  - **⚠️测 SW 只能用 localhost**（`file://` 下 SW 一律不注册）。为此 index.html 的注册条件除了 https 还放行 localhost/127.0.0.1——那是浏览器规范认可的安全上下文，不是开洞。
 - **主要用途**：用户主要用「共读模式」读长篇小说（如天龙八部），其次翻译模式、普通对话模式。
 - **PWA 安装注意**：装 PWA 到桌面要**挂梯子**（WebAPK 需 Google 服务器签发、国内被墙）；不挂梯子会退化成「带 Google 标识的快捷方式」，状态栏颜色被冻死、跟不上主题。装完之后日常用不需要梯子。遇到「状态栏不变色 / 图标变样」先往这个方向查。
 
