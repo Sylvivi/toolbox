@@ -6089,11 +6089,10 @@ body {
 
         function switchTab(tab, btn) {
             currentTab = tab;
-            /* ⚠️这个键**只写不读**（2026-08-06 体检发现，全文没有任何一处 getItem）。
-               所以「记住上次在哪个标签页」其实没生效，每次打开都从 keys 开始。
-               留着没删是因为两条路都要用户拍板：要么补上启动时读回来，要么删掉这行。
-               在她定之前别自作主张改行为——不是 bug，是个没做完的功能。 */
-            localStorage.setItem('toolbox_active_tab', tab);
+            /* ⚠️别加回「记住上次在哪个标签页」（2026-08-06 用户明确定的）：
+               这里原本写着 toolbox_active_tab，但全文没有任何一处读它，所以那个功能
+               从来没生效过——每次打开都是从密钥页开始。用户说「我现在更习惯每次打开
+               从密钥页开始」，所以这是**故意的行为**，不是漏做。想加"记住"之前先问她。 */
             document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.remove('active'); });
             var tabEl = document.getElementById('tab-' + tab);
             if (tabEl) tabEl.classList.add('active');
@@ -9327,6 +9326,7 @@ body {
             readingRegisterLocalFonts();
             readingApplyFonts();
             try { localStorage.removeItem('reading_stats'); } catch (e) {}   // 阅读时长统计已移除，顺手清掉各端残留的旧数据
+            try { localStorage.removeItem('toolbox_active_tab'); } catch (e) {}   // 「记住上次的标签页」已确认不做，清掉各端残留的旧值
         });
 
         /* =========================================================================
