@@ -25225,6 +25225,12 @@ body {
              而且**只在收了就能不压字时才收**；收到比这个值还小就说明真放不下，退回 12px 那档。 */
         var RD_GL_INSET_MIN = 2;
         var RD_GL_SEP   = 8;    // 两条小注之间最小水平间隔
+        /* 横向躲开隔壁块里的字时，只要留这么点缝就够（2026-08-06 加）。
+           ⚠️别再用 RD_GL_SEP(8)：那是「两条小注之间」的间隔，拿来当「小注离块里的字」
+             的间隔太奢侈，而这一步常常只差几个像素。用户实测那条：块首行右界 149.5、
+             小注宽 210、段落右界 368 → 149.5+8+210=367.5，只差 0.5px 就判成躲不开，
+             于是整条被翻到上面去（她连报两次「还是没有往右」）。3px 视觉上照样清楚。 */
+        var RD_GL_DODGE_SEP = 3;
         var RD_GL_DX    = 22;   // 引线横向偏移（唯一的手感旋钮，调大就开始花）
         var RD_GL_ROT_SIN = 0.0436;   // sin(2.5°)：标签是斜的，越宽转完外框越高，排行距要算上
         var RD_GL_TIP   = 3;    // 引线端点离标签/目标字的留缝
@@ -25422,8 +25428,11 @@ body {
                         var sp = nbEl && _glGlyphSpan(nbEl, ly - _pad, ly + lh + _pad);
                         if (!sp) return false;                                  // 压根没撞上
                         var L = pLeft, R = pLeft + pr.width;
-                        if (sp.r + RD_GL_SEP + lw <= R) return false;           // 能躲到字的右边
-                        if (sp.l - RD_GL_SEP - lw >= L) return false;           // 或者躲到左边
+                        /* ⚠️判「躲不躲得开」要按**能用的全部空间**算，不是按理想间隔算。
+                           贴着右边界放、只要还能跟字错开 1px 就算躲得开——用户那条只差 0.5px，
+                           按理想间隔判就成了"躲不开"，整条被翻到上面去（她连报两次「还是没有往右」）。 */
+                        if (R - lw >= sp.r + 1) return false;                  // 贴右边界也能躲开
+                        if (sp.l - 1 - lw >= L) return false;                  // 或者躲到左边
                         return true;                                            // 撞上了又躲不掉，这才叫压字
                     };
                     var touchUp = _touch(_prev, _lyU), touchDown = _touch(_next, _lyD);
@@ -25569,9 +25578,10 @@ body {
                     var _rot = it.lw * RD_GL_ROT_SIN / 2;     // 标签是斜的，实际外框比 lh 高一圈
                     var _sp = _glGlyphSpan(_nb, _ly0 - _rot, _ly0 + it.lh + _rot);
                     if (_sp && x < _sp.r && x + it.lw > _sp.l) {      // 横向真的压在字上了
-                        var _xR = _sp.r + RD_GL_SEP;                  // 挪到那行字的右边
-                        var _xL = _sp.l - RD_GL_SEP - it.lw;          // 或者挪到左边
-                        var _okR = (_xR + it.lw <= right);
+                        // 想放的位置优先，放不下就一路往右推到边界；只要跟字错开 1px 就算成
+                        var _xR = Math.min(Math.max(wantHere, _sp.r + RD_GL_DODGE_SEP), right - it.lw);
+                        var _xL = _sp.l - RD_GL_DODGE_SEP - it.lw;    // 或者挪到左边
+                        var _okR = (_xR >= _sp.r + 1) && (_xR + it.lw <= right);
                         var _okL = (_xL >= left) && (prev == null || _xL >= prev + RD_GL_SEP);
                         if (_okR && _okL) x = (Math.abs(_xR - wantHere) <= Math.abs(_xL - wantHere)) ? _xR : _xL;
                         else if (_okR) x = _xR;
