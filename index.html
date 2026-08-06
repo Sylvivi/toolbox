@@ -27064,6 +27064,26 @@ body {
                 if (!chatReadingMode || !e.target) return;
                 if (_rdIsOverlayDismissTap(e.target)) _rdOverlayClosedAt = Date.now();
             }, true);
+            /* ⚠️「点别处取消选中」的那一下同样不许翻页（2026-08-06 修，用户报：
+               「正文选中后点其他部位不会翻页，但问答段落选中后点其他部位取消选中却会翻页」）。
+
+               为什么只有正文躲得过：选中**正文**会冒划线小条，而收小条那一下在上面
+               27039 行已经标过 `_rdOverlayClosedAt`。问答/评论块 `blockquote[data-cp]`
+               选中时**根本不冒小条**——`rdHlCurrentSel()` 只认 `.reading-merged p[data-p]`，
+               所以那条保护顺带保护的只有正文，问答块从来没被保护过。
+
+               ⚠️为什么不能靠 click 里那道「有选区就不翻页」的闸（`String(sel).length > 0`）：
+               浏览器**在 click 之前**就把选区收掉了，跑到那一行时选区已经是空的，它拦不住。
+               所以必须在 `pointerdown` 阶段——那时选区还在——记下来。
+
+               效果＝跟正文对齐：有选中时第一下只用来取消选中，想翻页再点一下。 */
+            document.addEventListener('pointerdown', function() {
+                if (!chatReadingMode && !chatReaderMode) return;
+                var sel = window.getSelection && window.getSelection();
+                if (sel && !sel.isCollapsed && String(sel).trim().length > 0) {
+                    _rdOverlayClosedAt = Date.now();   // 复用同一道 400ms 闸：这一下是来收选中的，不是来翻页的
+                }
+            }, true);
             // 滚动时跟手收起小条，免得它飘在错位置（批注框是流内元素，跟着滚，不在此列）
             var sc = document.getElementById('chatMessages');
             if (sc) sc.addEventListener('scroll', function() { if (document.getElementById('rdHlBar')) rdHlHideBar(); }, { passive: true });
