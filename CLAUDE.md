@@ -9,6 +9,7 @@
 - **⚠️同一个坑还会冻进密钥——仓库是 public（2026-07-27 发现并清理）**：`chatKeySelect`/`chatKeySelect2` 里躺过**两把明文 API 密钥**，`chatProviderSelect(2)` 躺过 16 个中转站的名字和 id，`compressModelSelect`/`imageModelSelect` 躺过收藏模型列表——**GitHub Pages 直接对外，查看源代码就能读到**，且在公开 git 历史里躺了两个多月才被发现（排查别的 bug 时顺带看见的）。这些 `<select>` 的内容**全部由 JS 在运行时重建**（`populateChatProviders` / `onChatProviderChange` / `_chatRenderModelSelect` 都是 `innerHTML` 整个重写），源码里**只该留占位项**。旁证：出事的 select 连 `style` 都被序列化成 `flex: 1 1 0%` 这类计算值。**每次改完 index.html 建议扫一眼**：`grep -oE 'sk-[A-Za-z0-9_-]{16,}' index.html`（应为空）+ 检查上述 select 是否只剩占位 option。**密钥一旦进过公开历史就必须去中转站作废重发，删文件没用。**
 - **部署（2026-08-06 起改了，别再照旧的来）**：线上 `https://tool.masterofmydomain.top` **由这台服务器的 Caddy 直接伺服，不再走 GitHub Pages**。
   - **上线动作＝ `bash /home/ubuntu/deploy_toolbox_local.sh`**，复制完立刻生效，没有构建队列。**`git push` 不再等于上线**，两件事都要做。
+  - **跑完会自动发 Telegram 通知用户**（2026-08-07 加，她原话「你每次这边改完，tg也像部署github一样给我发个提示好吗，这样我会及时来看」）。通知写在脚本内部、不是"记得手动跑一下"；内容带最近一次提交的标题；**内容没变就不发**（比 md5），免得空跑一次也响、把她烦到开始无视通知。
   - ⚠️那个脚本用**白名单**只发 6 样（`index.html`/`sw.js`/`manifest.json`/两个图标/`.well-known/`）。**绝不能把仓库目录整个 root 出去**——里面有 `SERVER-OPS.md`（敏感拓扑、专门 gitignore 过）、`.git`、`tests`。**新增对外文件时要同步改脚本的白名单**，否则线上 404。
   - Caddy 配置在 `/etc/caddy/Caddyfile` 末尾的 `tool.masterofmydomain.top {}` 块；DNS 在 Cloudflare 是 A 记录 → `43.172.66.189`、**橙云（走 CF 代理）**。
   - **⚠️必须是橙云，别改回灰云**：服务器在**美国加州**（腾讯云硅谷），国内直连跨太平洋，用户实测「感觉变很慢了」；套上 CF 就近节点后她说「差不多，挺快的」。
