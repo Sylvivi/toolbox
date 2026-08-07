@@ -14,7 +14,7 @@
   - Caddy 配置在 `/etc/caddy/Caddyfile` 末尾的 `tool.masterofmydomain.top {}` 块；DNS 在 Cloudflare 是 A 记录 → `43.172.66.189`、**橙云（走 CF 代理）**。
   - **⚠️必须是橙云，别改回灰云**：服务器在**美国加州**（腾讯云硅谷），国内直连跨太平洋，用户实测「感觉变很慢了」；套上 CF 就近节点后她说「差不多，挺快的」。
   - **⚠️橙云之下 TLS-ALPN 挑战必然失败**（CF 在边缘就把 TLS 握手接掉了），所以 Caddy 那个块里显式 `disable_tlsalpn_challenge`、只走 HTTP-01。CF 的 SSL 模式现在是「完全」——**够用，且比「完全(严格)」更抗造**（万一证书续期失败，CF 仍会照常开着页面）。
-  - 顺带记一笔：`index.html` 是 `no-cache`，所以 CF 不缓存它（`cf-cache-status: DYNAMIC`），每次仍回源取 544KB（gzip 后）。实测这样已经够快，**没有**去动 `sw.js` 的「先走网络」策略——改成「先拿缓存」会带来「新版要刷两次才出来」的代价，为一个已经不存在的问题付这个代价不划算。
+  - 顺带记一笔：`index.html` 是 `no-cache`，所以 **CF 不缓存它**（`cf-cache-status: DYNAMIC`），每次仍回源取约 478KB（brotli 后）。她当天仍觉得「开网页还是有点慢」，于是改了 `sw.js`（见下面「更新机制」）。**下一张牌**是让 CF 也缓存首页——要在 CF 面板加一条 Cache Rule（HTML 默认不缓存），并配合 `s-maxage`；目前没做，改前先确认真有必要。
   - 仓库 `Sylvivi/toolbox` 分支 `main` **照旧提交推送当备份**，GitHub Pages 那份任其自然。
   - **为什么搬**：2026-08-06 Pages 连着失败近一小时——先是「有部署卡在进行中」的锁冲突（HTTP 400，autoheal 一直重推只是白撞、堆了 5 个空提交），锁放开后又变成 deploy 步骤 10 分钟 `Timeout reached`；官方状态页显示 Pages「正常」，属于没上报的局部抽风，催不动。详见记忆 `toolbox-self-hosted`。
 - **更新机制（2026-08-07 改了）**：service worker 对**应用外壳**（那个 1.9MB 的 index.html）已改成 **stale-while-revalidate**——先拿缓存秒开、后台再取新版。其余资源仍是 network-first。
