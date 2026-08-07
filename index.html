@@ -5497,7 +5497,7 @@ body {
                         <button class="chip-btn" id="chipKsWave" onclick="readingToggleKeySentStyle('wave')" title="精句底部加手绘波浪线">波浪</button>
                         <button class="chip-btn" id="chipKsGlow" onclick="readingToggleKeySentStyle('glow')" title="精句背后铺一条柔光带">柔光</button>
                         <button class="chip-btn" id="chipKsUl" onclick="readingToggleKeySentStyle('ul')" title="精句加虚线下划线">划线</button>
-                        <button class="chip-btn" id="chipKsHl" onclick="readingToggleKeySentStyle('hl')" title="精句用强调色">着色</button>
+                        <button class="chip-btn" id="chipKsHl" onclick="readingToggleKeySentStyle('hl')" title="精句用强调色。日间/夜间各记一份：默认夜间开、日间关，你在哪个模式下改就只改那个模式">着色</button>
                         <button class="chip-btn" id="chipKsBold" onclick="readingToggleKeySentStyle('bold')" title="精句加粗（可单独开、跟着色分开）">加粗</button>
                     </div>
                 </div>
@@ -6418,6 +6418,10 @@ body {
                「墨」是黑↔白，一眼就露馅（2026-08-05 用户报「夜间黑色小注的线没改成合适的颜色」）。
                重排一次最省事：位置本来就算得出一样的，顺带把 stroke 重刷。 */
             if (typeof rdGlRelayoutSoon === 'function') rdGlRelayoutSoon(0);
+            /* 精句「着色」按日夜各记一份，切模式要重新读对应那一份（见 _ksHlKey 上那段）。
+               ⚠️必须放在上面那批 body class 增删**之后**：_ksHlKey 靠 body 有没有 dark 类判日夜，
+                 放前面读到的还是上一个模式的值，表现是「切过去要再切一次才对」。 */
+            if (typeof readingApplyKeySentStyles === 'function') readingApplyKeySentStyles();
             // 更新 PWA 状态栏颜色
             updateStatusBarColor();
         }
@@ -18359,15 +18363,41 @@ body {
         }
         // ===== 精句样式（独立于引号，作用在每段最短完整句 .reading-keysent 上）=====
         // 画框/波浪/柔光 铺句底三选一；划线与波浪/画框互斥（都在底部）；着色可与任意叠加。
+        /* 「着色」这一项**按日夜各记一份**（2026-08-07，用户：「夜间模式的时候精句默认着色，
+           日间模式的时候精句取消着色」）。默认夜间开、日间关，但**手动改只影响当前模式、且一直记着**——
+           她选的是「按日夜各记一份」而不是「模式说了算」，所以别改成切模式就无脑覆盖。
+           ⚠️只有「着色」这一项分日夜，其余五项（加粗/柔光/波浪/画框/划线）仍是共用一份，
+             别顺手把它们也拆了——她只提了着色，多拆等于替她做主。
+           ⚠️判「现在是不是夜间」用 body 上的 dark 类，不用 nightMode 变量：
+             有的皮肤本身就是深色（THEMES 里 cls 直接带 dark），那时 nightMode 是 false，
+             但用户眼里就是夜间。dark 类才是「屏幕现在黑不黑」的真信号。 */
+        function _ksHlKey() {
+            return document.body.classList.contains('dark') ? 'reading_ks_hl_night' : 'reading_ks_hl_day';
+        }
+        function _ksHlOn() {
+            var k = _ksHlKey();
+            var v = localStorage.getItem(k);
+            // 头一回：按新默认落一份（夜=开、日=关）。老的共用键 reading_ks_hl 就此不再读。
+            if (v === null) { v = (k === 'reading_ks_hl_night') ? '1' : '0'; localStorage.setItem(k, v); }
+            return v === '1';
+        }
         function readingApplyKeySentStyles() {
             var b = document.body;
             [['hl', 'chipKsHl'], ['bold', 'chipKsBold'], ['glow', 'chipKsGlow'], ['wave', 'chipKsWave'], ['box', 'chipKsBox'], ['ul', 'chipKsUl']].forEach(function (x) {
-                var on = localStorage.getItem('reading_ks_' + x[0]) === '1';
+                var on = (x[0] === 'hl') ? _ksHlOn() : (localStorage.getItem('reading_ks_' + x[0]) === '1');
                 b.classList.toggle('reading-ks-' + x[0], on);
                 var c = document.getElementById(x[1]); if (c) c.classList.toggle('active', on);
             });
         }
         function readingToggleKeySentStyle(kind) {
+            /* 着色单独走：写进「当前模式」那一份。
+               ⚠️提前返回是安全的——下面那套互斥只管 铺句底三选一(box/wave/glow) 和 划线(ul)，
+                 着色跟谁都能叠，本来就不参与互斥。 */
+            if (kind === 'hl') {
+                localStorage.setItem(_ksHlKey(), _ksHlOn() ? '0' : '1');
+                readingApplyKeySentStyles();
+                return;
+            }
             var key = 'reading_ks_' + kind;
             var on = localStorage.getItem(key) === '1';
             localStorage.setItem(key, on ? '0' : '1');
