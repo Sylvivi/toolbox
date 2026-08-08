@@ -3945,9 +3945,10 @@ body {
         }
         .theme-picker-item:hover { background: var(--accent-light); }
         .theme-picker-item.active { background: var(--accent-light); color: var(--accent); font-weight: 600; }
-        .theme-picker-night { display: flex; align-items: center; justify-content: space-between; }
-        .theme-picker-night .tp-state { font-size: 11px; color: var(--text-muted); font-weight: 600; }
-        .theme-picker-night.active .tp-state { color: var(--accent); }
+        /* 夜间开关 和 🎲随机 两行共用：左边标题、右边一个小字状态 */
+        .theme-picker-night, .theme-picker-random { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .theme-picker-night .tp-state, .theme-picker-random .tp-state { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+        .theme-picker-night.active .tp-state, .theme-picker-random.active .tp-state { color: var(--accent); }
         .theme-picker-sep { height: 1px; background: var(--card-border); margin: 4px 6px 6px; }
 
         .fab-search {
@@ -6276,15 +6277,53 @@ body {
 
         function showThemePicker() {
             var picker = document.getElementById('themePicker');
+            renderThemePickerList();
+            syncThemePickerNight();
+            picker.classList.add('show');
+            setTimeout(function() {
+                document.addEventListener('pointerdown', closePickerOutside);
+            }, 10);
+        }
+
+        // 主题小窗的皮肤列表。⚠️抽出来是因为**小窗开着时也会变**：
+        //   在窗里切日/夜，🎲那行右边的小字要从「夜·蓝橙」变回日间皮肤名，得能就地重画。
+        function renderThemePickerList() {
             var list = document.getElementById('themePickerList');
+            if (!list) return;
             var curIdx = getThemeIdx();
+            var isRandom = themeRandomOn();
             list.innerHTML = '';
+            // 🎲 随机排在最前面：开着时它自己高亮，具体皮肤都不高亮（当前是哪个由它右边的小字说）
+            (function() {
+                var btn = document.createElement('button');
+                btn.className = 'theme-picker-item theme-picker-random' + (isRandom ? ' active' : '');
+                btn.innerHTML = '🎲 随机' + (isRandom
+                    ? '<span class="tp-state">' + (nightMode ? '夜·蓝橙' : THEMES[themeRandomIdx()].name) + '</span>'
+                    : '<span class="tp-state">关</span>');
+                btn.onclick = function() {
+                    if (themeRandomOn()) {
+                        // 再点一次＝关掉随机，停在当前这个皮肤上（applyTheme 会把它写成固定值）
+                        applyTheme(themeRandomIdx());
+                        hideThemePicker();
+                        showToast('已关闭随机 · ' + THEMES[getThemeIdx()].name);
+                    } else {
+                        localStorage.setItem('toolbox_theme', 'random');
+                        themeRandomRoll();       // 当场摇一个，点了立刻有变化
+                        themeRandomApply();
+                        hideThemePicker();
+                        showToast('🎲 随机主题已开 · ' + (nightMode ? '夜间用蓝橙' : THEMES[getThemeIdx()].name));
+                    }
+                };
+                list.appendChild(btn);
+            })();
             for (var i = 0; i < THEMES.length; i++) {
                 (function(idx) {
                     var btn = document.createElement('button');
-                    btn.className = 'theme-picker-item' + (idx === curIdx ? ' active' : '');
+                    // 随机开着时不给具体皮肤打勾——那会让人以为自己钉住了这个皮肤，下次打开却变了
+                    btn.className = 'theme-picker-item' + (!isRandom && idx === curIdx ? ' active' : '');
                     btn.textContent = THEMES[idx].name;
                     btn.onclick = function() {
+                        // 手动挑一个＝关掉随机（applyTheme 把 toolbox_theme 写成具体 id，'random' 自然被顶掉）
                         applyTheme(idx);
                         hideThemePicker();
                         showToast(THEMES[idx].name);
@@ -6292,11 +6331,6 @@ body {
                     list.appendChild(btn);
                 })(i);
             }
-            syncThemePickerNight();
-            picker.classList.add('show');
-            setTimeout(function() {
-                document.addEventListener('pointerdown', closePickerOutside);
-            }, 10);
         }
 
         function hideThemePicker() {
@@ -6315,6 +6349,7 @@ body {
             if (e) e.stopPropagation();
             setNightMode(!nightMode);
             syncThemePickerNight();
+            renderThemePickerList();   // 随机那行的小字要跟着日/夜换（夜·蓝橙 ⇄ 日间皮肤名）
             showToast(nightMode ? '🌙 夜间模式' : '☀️ 日间模式');
         }
 
@@ -6349,6 +6384,49 @@ body {
             if (saved === 'dream') saved = 'rose';   // 绮梦已移除，迁移到霞玫
             for (var i = 0; i < THEMES.length; i++) { if (THEMES[i].id === saved) return i; }
             return 0;
+        }
+
+        /* ===== 🎲 随机主题（长按 + 号的主题小窗里那一行）=====
+           存储：`toolbox_theme` 存占位串 `'random'` 表示「开着随机」，
+                 `toolbox_theme_last` 存**本次开机随机到的那个日间皮肤 id**。
+           ⚠️两个键缺一不可：`applyTheme` 每次都会把真实皮肤 id 写回 `toolbox_theme`，
+             所以随机模式下每次 applyTheme 之后都要**把 'random' 再写回去**，否则开关一用就自己关了
+             （现有的开机初始化/`setNightMode` 就是这么写的，别删那两行看着像多余的 setItem）。
+           规则（用户 2026-08-08 定）：**每次打开 app 换一个日间皮肤；夜间固定蓝橙、不参与随机。** */
+        var THEME_RANDOM_NIGHT_ID = 'blueorange';   // 夜间钉死的那个（用户：夜间一般默认蓝橙）
+
+        function themeRandomOn() { return localStorage.getItem('toolbox_theme') === 'random'; }
+
+        function themeIdxById(id) {
+            for (var i = 0; i < THEMES.length; i++) { if (THEMES[i].id === id) return i; }
+            return 0;
+        }
+
+        // 摇一个新的日间皮肤出来并记进 toolbox_theme_last。
+        // ⚠️排掉上一次那个，免得连着两次开出同一个——「随机」却没变化，看着就像功能坏了。
+        function themeRandomRoll() {
+            var last = localStorage.getItem('toolbox_theme_last') || '';
+            var candidates = [];
+            for (var i = 0; i < THEMES.length; i++) { if (THEMES[i].id !== last) candidates.push(i); }
+            if (!candidates.length) { for (var j = 0; j < THEMES.length; j++) candidates.push(j); }
+            var idx = candidates[Math.floor(Math.random() * candidates.length)];
+            localStorage.setItem('toolbox_theme_last', THEMES[idx].id);
+            return idx;
+        }
+
+        // 随机模式下「此刻该用哪个皮肤」：夜间一律蓝橙；日间用本次开机摇到的那个。
+        // ⚠️这里**不摇新的**——日夜来回切要稳定停在同一个皮肤上，只有开机(和手动点🎲)才换。
+        function themeRandomIdx() {
+            if (nightMode) return themeIdxById(THEME_RANDOM_NIGHT_ID);
+            var last = localStorage.getItem('toolbox_theme_last');
+            if (last) { for (var i = 0; i < THEMES.length; i++) { if (THEMES[i].id === last) return i; } }
+            return themeRandomRoll();
+        }
+
+        // 套用随机模式当前该用的皮肤（applyTheme 会覆写 toolbox_theme，所以随后补写回 'random'）
+        function themeRandomApply() {
+            applyTheme(themeRandomIdx());
+            localStorage.setItem('toolbox_theme', 'random');
         }
         var THEME_STATUS_COLORS = {
             light: '#EEF4FB',
@@ -6453,13 +6531,9 @@ body {
         function setNightMode(on) {
             nightMode = !!on;
             localStorage.setItem('toolbox_night', nightMode ? '1' : '0');
-            var saved = localStorage.getItem('toolbox_theme');
-            if (saved === 'random') {
-                var last = localStorage.getItem('toolbox_theme_last') || '';
-                var idx = 0;
-                for (var i = 0; i < THEMES.length; i++) { if (THEMES[i].id === last) { idx = i; break; } }
-                applyTheme(idx);
-                localStorage.setItem('toolbox_theme', 'random');
+            // 随机模式：日夜切换**不重摇**，只是按新的日/夜状态换算该用哪个（夜=蓝橙、日=本次摇到的）
+            if (themeRandomOn()) {
+                themeRandomApply();
             } else {
                 applyTheme(getThemeIdx());
             }
@@ -6489,14 +6563,10 @@ body {
             }
             var saved = localStorage.getItem('toolbox_theme');
             if (saved === 'random') {
-                var lastTheme = localStorage.getItem('toolbox_theme_last') || '';
-                var candidates = [];
-                for (var ti = 0; ti < THEMES.length; ti++) { if (THEMES[ti].id !== lastTheme) candidates.push(ti); }
-                if (candidates.length === 0) { for (var ti2 = 0; ti2 < THEMES.length; ti2++) candidates.push(ti2); }
-                var idx = candidates[Math.floor(Math.random() * candidates.length)];
-                localStorage.setItem('toolbox_theme_last', THEMES[idx].id);
-                applyTheme(idx);
-                localStorage.setItem('toolbox_theme', 'random');
+                // 开机＝换一个新的日间皮肤（这就是「每次打开可以换」）。
+                // 夜间也照样先摇：这样等她切回日间时，拿到的是本次开机的新皮肤而不是上次那个。
+                themeRandomRoll();
+                themeRandomApply();
             } else {
                 applyTheme(getThemeIdx());
             }
