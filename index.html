@@ -6286,7 +6286,7 @@ body {
         }
 
         // 主题小窗的皮肤列表。⚠️抽出来是因为**小窗开着时也会变**：
-        //   在窗里切日/夜，🎲那行右边的小字要从「夜·蓝橙」变回日间皮肤名，得能就地重画。
+        //   在窗里切日/夜，🎲那行右边的小字要从「夜·<夜间那档>」变回日间皮肤名，得能就地重画。
         function renderThemePickerList() {
             var list = document.getElementById('themePickerList');
             if (!list) return;
@@ -6298,7 +6298,7 @@ body {
                 var btn = document.createElement('button');
                 btn.className = 'theme-picker-item theme-picker-random' + (isRandom ? ' active' : '');
                 btn.innerHTML = '🎲 随机' + (isRandom
-                    ? '<span class="tp-state">' + (nightMode ? '夜·蓝橙' : THEMES[themeRandomIdx()].name) + '</span>'
+                    ? '<span class="tp-state">' + (nightMode ? '夜·' + themeRandomNightName() : THEMES[themeRandomIdx()].name) + '</span>'
                     : '<span class="tp-state">关</span>');
                 btn.onclick = function() {
                     if (themeRandomOn()) {
@@ -6311,7 +6311,7 @@ body {
                         themeRandomRoll();       // 当场摇一个，点了立刻有变化
                         themeRandomApply();
                         hideThemePicker();
-                        showToast('🎲 随机主题已开 · ' + (nightMode ? '夜间用蓝橙' : THEMES[getThemeIdx()].name));
+                        showToast('🎲 随机主题已开 · ' + (nightMode ? '夜间用' + themeRandomNightName() : THEMES[getThemeIdx()].name));
                     }
                 };
                 list.appendChild(btn);
@@ -6349,7 +6349,7 @@ body {
             if (e) e.stopPropagation();
             setNightMode(!nightMode);
             syncThemePickerNight();
-            renderThemePickerList();   // 随机那行的小字要跟着日/夜换（夜·蓝橙 ⇄ 日间皮肤名）
+            renderThemePickerList();   // 随机那行的小字要跟着日/夜换（夜·蓝金 ⇄ 日间皮肤名）
             showToast(nightMode ? '🌙 夜间模式' : '☀️ 日间模式');
         }
 
@@ -6393,7 +6393,10 @@ body {
              所以随机模式下每次 applyTheme 之后都要**把 'random' 再写回去**，否则开关一用就自己关了
              （现有的开机初始化/`setNightMode` 就是这么写的，别删那两行看着像多余的 setItem）。
            规则（用户 2026-08-08 定）：**每次打开 app 换一个日间皮肤；夜间固定蓝橙、不参与随机。** */
-        var THEME_RANDOM_NIGHT_ID = 'blueorange';   // 夜间钉死的那个（用户：夜间一般默认蓝橙）
+        var THEME_RANDOM_NIGHT_ID = 'warm';   // 夜间钉死的那个（用户 2026-08-08：夜间用蓝金）
+        // 夜间那档的显示名：⚠️跟着常量走、别把皮肤名写死进文案——改常量时最容易漏掉文案，
+        //   结果小字写着一个皮肤、屏幕上是另一个（第一版写死「蓝橙」就漏过一次）。
+        function themeRandomNightName() { return THEMES[themeIdxById(THEME_RANDOM_NIGHT_ID)].name; }
 
         function themeRandomOn() { return localStorage.getItem('toolbox_theme') === 'random'; }
 
