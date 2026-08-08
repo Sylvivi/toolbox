@@ -205,6 +205,10 @@ html:has(.theme-rose-night) { background-color: #0c0c0e; }
             --bg: linear-gradient(135deg, #0c0c0e 0%, #111115 50%, #0c0c0e 100%);
             --text: #ededf2; --text-sub: #a6a6ae; --text-light: #83838c; --text-muted: #63636c;
             --accent: #c08cff; --accent-mid: #ef8ed0; --accent-light: rgba(192,140,255,0.16); --accent-chip: rgba(192,140,255,0.5);
+            /* 阅读正文单独提亮一档（用户 2026-08-08：「阅读模式下不好看」）。
+               紫在暗底上的视觉亮度天生比红/粉低，#c08cff 当按钮底色正好，当**字色**混在白正文里就发灰发闷。
+               这里只提亮字色，--accent 不动（它当背景时上面压白字，提亮会糊）。 */
+            --accent-read: #d5b0ff;
             --card-bg: rgba(255,255,255,0.06); --card-border: rgba(255,255,255,0.1); --card-inner: rgba(255,255,255,0.05);
             --input-bg: rgba(255,255,255,0.07); --input-border: rgba(255,255,255,0.12);
             --modal-bg: rgba(18,18,21,0.86); --overlay-bg: rgba(0,0,0,0.55);
@@ -439,6 +443,13 @@ html:has(.theme-rose-night) { background-color: #0c0c0e; }
  * [1.3] 布局与导航
  * ========================================================================= */
 body {
+            /* 阅读正文里那几处「上色的字」（对话/人名/精句/点评人名）专用的强调色。
+               默认＝主题强调色，各皮肤不用管它；只有当某个皮肤的 --accent 拿去当**字色**太暗时，
+               在该皮肤里单独覆盖这一个变量提亮，而不去动 --accent 本身——
+               ⚠️--accent 有 73 处是当**背景**用的（上面压白字），提亮它会让白字糊掉。
+               ⚠️必须定义在 body 上、不能写进 :root：主题变量是挂在 body 的 .theme-xxx 类上的，
+               在 :root 里写 var(--accent) 只会取到 :root 自己那份默认值，所有皮肤都会串色。 */
+            --accent-read: var(--accent);
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: var(--bg);
             background-attachment: fixed;
@@ -2946,13 +2957,13 @@ body {
            变色/底纹作用于整段引号(.reading-quote，含符号)；下划线只画在内层文字(.reading-quote-inner)下，不压符号。 */
         .reading-quote { color: inherit; }
         /* 着色：默认给所有引号上色 */
-        body.reading-quote-on .reading-merged .reading-quote { color: var(--accent); font-weight: 600; }
+        body.reading-quote-on .reading-merged .reading-quote { color: var(--accent-read); font-weight: 600; }
         /* 名词高亮：正文里命中的人名/地名包成 .reading-name（渲染时一直在），下面几种样式可单选可叠加，靠 body class 即时切换、不用重排。
            着色=强调色；加粗=只加粗不变色。
            例外①：名词若套了自定义字体(rn-has-font) 且 出现在短句(对话, .reading-quote 非 rq-wide 长句)里，
            加粗会和花字打架不好看 → 仅此情形强制不加粗，让字体自己说话；其余位置照常加粗。
            例外②：名词出现在精句(.reading-keysent)里也不单独加粗，同样的理由 → 规则写在下面精句那一段（3080 附近）。 */
-        body.reading-names-on.rn-color .reading-merged .reading-name { color: var(--accent); }
+        body.reading-names-on.rn-color .reading-merged .reading-name { color: var(--accent-read); }
         body.reading-names-on.rn-bold .reading-merged .reading-name { font-weight: 700; }
         /* 划线：复用引号「划线」那条虚线下划线写法（同款 underline dashed），让人名走划线、对话走着色，两不打架不花。
            划线颜色用 currentColor —— 跟着人名当前字色走：没开「着色」时就是正文色（低调），开了「着色」就跟着强调色，不再永远是醒目的主题色。 */
@@ -3006,7 +3017,7 @@ body {
         /* 长短分工(reading-ls-on)：着色只落长句(rq-wide)，短句不着色、让给装饰 */
         body.reading-ls-on .reading-merged .reading-quote:not(.rq-wide) { color: inherit; font-weight: 400; }
         /* 划线：默认作用于所有引号内层文字；长短分工下长句的划线由后面的 strip 规则去掉 */
-        body.reading-uline-on .reading-merged .reading-quote .reading-quote-inner { text-decoration: underline dashed var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+        body.reading-uline-on .reading-merged .reading-quote .reading-quote-inner { text-decoration: underline dashed var(--accent-read); text-decoration-thickness: 1px; text-underline-offset: 3px; }
         /* 底纹高亮：荧光笔+毛边手涂感。
            毛边直接烤进 SVG 填充矩形（--quote-band-img，feTurbulence 揉上下缘），当背景图用永不擦字；
            background-size 高 0.62em + bottom 0.3em 把色带压在字的下半截、不再漫进行间空白；
@@ -3084,7 +3095,7 @@ body {
            跟「长短分工」井水不犯河水——那套只作用在引号(.reading-quote)上，精句用自己的 class，不会打架。
            总开关 body.reading-keysent-on；字体在字体面板单独选(--reading-font-keysent)。 */
         .reading-merged .reading-keysent { font-family: var(--reading-font-keysent, inherit); }
-        body.reading-ks-hl .reading-merged .reading-keysent { color: var(--accent); }  /* 着色（只变色）*/
+        body.reading-ks-hl .reading-merged .reading-keysent { color: var(--accent-read); }  /* 着色（只变色）*/
         body.reading-ks-bold .reading-merged .reading-keysent { font-weight: 700; }  /* 加粗（独立开关，可与着色分开）*/
         /* 例外：精句里的名词不吃「名词·加粗」那一档——跟短句里的名词同一个理由（见 .reading-name 那段例外①，2950 那条）：
            精句通常单独换过字体，花字上再叠加粗，字体没有粗体字面时浏览器只会合成假粗、糊成一团，不好看，让字体自己说话。
@@ -3123,7 +3134,7 @@ body {
         }
         .reading-merged blockquote { font-style: normal; }
         .reading-merged blockquote .reading-q { font-weight: 600; }
-        .reading-merged blockquote .reading-q-name { color: var(--accent); font-weight: 600; }
+        .reading-merged blockquote .reading-q-name { color: var(--accent-read); font-weight: 600; }
         .reading-merged p[data-p] {
             cursor: pointer; border-radius: 5px; padding: 1px 4px; margin-left: -4px; margin-right: -4px;
             transition: background 0.15s;
@@ -3547,7 +3558,7 @@ body {
         /* ===== 共读：点段评价 ===== */
         .reading-merged blockquote { font-style: normal; }
         .reading-merged blockquote .reading-q { font-weight: 600; }
-        .reading-merged blockquote .reading-q-name { color: var(--accent); font-weight: 600; }
+        .reading-merged blockquote .reading-q-name { color: var(--accent-read); font-weight: 600; }
         .reading-merged p[data-p] {
             cursor: pointer; border-radius: 5px; padding: 1px 4px; margin-left: -4px; margin-right: -4px;
             transition: background 0.15s;
