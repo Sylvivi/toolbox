@@ -21169,20 +21169,34 @@ body {
 
         // 把当前「剧集记忆」三张表（人物/地点/文化背景）拼成一段系统提示，回喂给翻译/追问（Phase 2）。
         // 没有记忆时返回空串（不塞冗余）。
-        function chatTransMemoryPromptBlock() {
+        // 回喂「剧集记忆」的提示块。includeCases 控制带不带「文化背景」表（默认带，追问用）。
+        // ⚠️**逐段翻译传 false，只带人物+地点**（2026-08-08 用户要求精简，她原话「上下文我想再精简一些，
+        //   但是又有助于翻译的准确性」）。为什么砍的是这张：
+        //   ① 这块是**每翻一段就整个重发一遍**的，而三张表里只有它会一路膨胀——它的数据来自追问
+        //      (`chatTransHarvestMemory`)，追问越多攒越多，人物/地点则收敛在剧中固定那些人和地方；
+        //   ② 它列的是「线索/事件·进展·关键点·状态」＝**剧情线**，对逐段译文的准确性帮助最小
+        //      （翻译指令里本来就写着「不要在译文里额外复述这些背景」）；
+        //   ③ 它真正的主场是追问——那条路照旧全量带，问剧情/梗/典故一点没削弱。
+        //   人物表是「说话人标真名、人称性别不跳、译名统一」的命根子，地点表只有 2 列很短，都留着。
+        function chatTransMemoryPromptBlock(includeCases) {
             if (!chatTranslateMode) return '';
             var t = chatMemoryTables;
             if (!t) return '';
-            var chars = t.characters || [], places = t.places || [], cases = t.cases || [];
+            if (includeCases === undefined) includeCases = true;   // 不传＝全量，老调用点行为不变
+            var chars = t.characters || [], places = t.places || [];
+            var cases = includeCases ? (t.cases || []) : [];
             if (!chars.length && !places.length && !cases.length) return '';
             var parts = [];
             if (chars.length) parts.push('【已知人物表】\n' + _readerRenderTableMd(_mtTransCharCols, chars));
             if (places.length) parts.push('【已知地点表】\n' + _readerRenderTableMd(_mtTransPlaceCols, places));
             if (cases.length) parts.push('【文化背景】\n' + _readerRenderTableMd(_mtTransCaseCols, cases));
+            // ⚠️提示语按「实际发出去的表」拼：不带文化背景时必须把那条也撤掉，
+            //   否则是在让模型「结合文化背景」去参考一张根本没收到的表，纯属误导 + 白烧 token。
+            var tips = ['· 标注说话人时，优先用人物表里的真实角色名与性别，而不是笼统的 A/B；',
+                        '· 同一人名/地名/专有名词在各集里保持中文译法统一；'];
+            if (cases.length) tips.push('· 结合文化背景理解剧情、把梗和典故解释到位，但不要在译文里额外复述这些背景。');
             return '以下是这部剧到目前为止积累的「剧集记忆」，翻译/解答时请充分利用：\n'
-                + '· 标注说话人时，优先用人物表里的真实角色名与性别，而不是笼统的 A/B；\n'
-                + '· 同一人名/地名/专有名词在各集里保持中文译法统一；\n'
-                + '· 结合文化背景理解剧情、把梗和典故解释到位，但不要在译文里额外复述这些背景。\n\n'
+                + tips.join('\n') + '\n\n'
                 + parts.join('\n\n');
         }
 
@@ -24929,7 +24943,8 @@ body {
                 var baseUrl = getBaseUrl(item.url);
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
                 var _tlast = 0;
-                var _memBlk = (typeof chatTransMemoryPromptBlock === 'function') ? chatTransMemoryPromptBlock() : '';
+                // false = 不带「文化背景」表：逐段翻译只吃人物+地点，省掉每段重发的那一大块（见函数注释）。
+                var _memBlk = (typeof chatTransMemoryPromptBlock === 'function') ? chatTransMemoryPromptBlock(false) : '';
                 var _trMsgs = [{ role: 'system', content: TRANSLATE_MODE_INSTRUCTION }];
                 if (_memBlk) _trMsgs.push({ role: 'system', content: _memBlk });  // 回喂剧集记忆：说话人标真名、人名译法统一
                 _trMsgs.push({ role: 'user', content: segment });
