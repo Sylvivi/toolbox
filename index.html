@@ -20399,8 +20399,36 @@ body {
             } catch (e) {}
         }
 
-        // 单点同步：把某条阅读章节消息里的问答整体抽出，覆盖进可同步的 reader_qa（删空写空列表当墓碑）
-        function readerPersistQA(msgIdx) {
+        // 问答条目的身份：段号 + 问题原文。用来判断「存过的这条，现在这个视图里还在不在」
+        function _qaKey(it) { return (it && it.p) + ' ' + ((it && it.q) || ''); }
+        /* 把一条「解析出来的评论」折成同款身份 {p, q}，给删除/重答那两处报「我删的是哪条」用。
+           ⚠️取 q 的方式必须跟 readerPersistQA 里那段**逐字一致**（剥掉「汐：」前缀、取第一行、trim）——
+           两边算法一旦有出入，删除就会被当成「本机还没同步到」原样补回来，表现是「删了又自己回来」。
+           不是问答（不以「汐：」开头的点评）返回 null：那种本来就不进 reader_qa。 */
+        function _qaOfComment(c) {
+            if (!c || !(c.p > 0)) return null;
+            var m = /^\s*汐：([\s\S]*)$/.exec(c.text || '');
+            if (!m) return null;
+            var body = m[1], nl = body.indexOf('\n');
+            return { p: c.p, q: (nl >= 0 ? body.slice(0, nl) : body).trim() };
+        }
+
+        /* 单点同步：把某条阅读章节消息里的问答整体抽出，写进可同步的 reader_qa。
+           ⚠️注意它写的是**整章一格**，合并时也是整格按时间戳替换——
+           所以「这台设备当前看到的那一章」就是它要广播给全世界的真相。
+
+           ⚠️⚠️少的会盖掉多的（2026-08-09 修，用户自己看出来的：「似乎会让读痕少的覆盖多的，这对吗」——对）。
+           原来这里无条件 `list = 视图里解析出来的`，于是：手机第 5 章有 3 条问答并已推送 →
+           电脑也开着这本书但还没拉到（30 秒窗口内，或正在流式/标背景所以没重灌）→
+           在电脑上问了 1 个问题 → 电脑打包写「第 5 章 = 1 条」且时间戳更新 →
+           手机拉下来，3 条被那 1 条整格替换。**两台设备上都没了，救不回来。**
+
+           修法：写之前跟本地存的那一格做并集——**视图里没有、但本地存过的条目一律保住**。
+           那种条目的含义只有一个：这台设备还没把它同步进视图（正是上面那个窗口），不是用户删了它。
+           ⚠️唯一允许"变少"的是**明确的删除**：删除/重答那两处会把被删条目的身份 (opts.removed)
+             传进来，只有它会被排除在并集之外。别图省事退回"整格覆盖"——那正是这个 bug 本身。
+           ⚠️并集后按段号稳定排序：视图里的排在前、补回来的排在后，渲染顺序才不会跳。 */
+        function readerPersistQA(msgIdx, opts) {
             if (!chatReaderMode || readerBookId == null) return;
             var msg = chatMessages[msgIdx];
             if (!msg || msg.readerChapter == null) return;
@@ -20419,6 +20447,18 @@ body {
             }
             var all = readerQAAll();
             if (!all[fileKey]) all[fileKey] = {};
+            var prevCell = all[fileKey][chap];
+            var prev = (prevCell && Array.isArray(prevCell.list)) ? prevCell.list : [];
+            var removed = (opts && opts.removed) ? _qaKey(opts.removed) : null;
+            var seen = {};
+            for (var s = 0; s < list.length; s++) seen[_qaKey(list[s])] = true;
+            for (var t = 0; t < prev.length; t++) {
+                var pk = _qaKey(prev[t]);
+                if (seen[pk]) continue;          // 视图里已经有了
+                if (removed && pk === removed) continue;  // 这一条是刚被明确删掉的，不留
+                list.push(prev[t]);              // 视图里没有、也不是被删的 → 本机还没同步到，保住
+            }
+            list.sort(function (x, y) { return (x.p | 0) - (y.p | 0); });   // Array.sort 稳定，同段内保持原顺序
             all[fileKey][chap] = { list: list, ts: Date.now() }; // 即使空也写，靠新时间戳压过云端旧值
             readerQASaveAll(all);
             if (activeSyncProvider === 'cf') syncPushData();
@@ -23884,10 +23924,13 @@ body {
             var comments = readingModeParseComments(msg.content);
             var absIdx = readingFindCommentAbsIdx(comments, pNum, ci);
             if (absIdx < 0) { readingClearActbar(); return; }
+            // ⚠️先把被删这条的身份记下来再 splice：readerPersistQA 靠它才知道「这条是真删了」，
+            // 而不是「本机还没同步到」。不传的话它会被当成缺失条目原样补回来，删了跟没删一样。
+            var _delQ = _qaOfComment(comments[absIdx]);
             comments.splice(absIdx, 1);
             msg.content = readingRebuildContent(comments);
             chatSaveCurrentConv(true);
-            readerPersistQA(msgIdx); // 阅读模式：删问答后同步覆盖该章（删空也写空列表当墓碑）
+            readerPersistQA(msgIdx, { removed: _delQ }); // 阅读模式：删问答后同步该章（明确删除，允许变少）
             readingClearActbar();
             readingRerenderMsg(msgIdx, pNum);
             showToast('已删除');
@@ -23909,10 +23952,11 @@ body {
                 question = (nl >= 0 ? body.slice(0, nl) : body).trim();
             }
             // 先删掉旧的这一块，再让 AI 重新生成（问答用原问题重问，点评则重新点评本段）
+            var _regenQ = _qaOfComment(comments[absIdx]);   // 同 readingDeleteBlock：明确删除要带身份，否则会被当缺失补回来
             comments.splice(absIdx, 1);
             msg.content = readingRebuildContent(comments);
             chatSaveCurrentConv(true);
-            readerPersistQA(msgIdx); // 阅读模式：重生成前先把删旧块的状态同步出去（QA 重答后 readingAskOne 会再覆盖一次）
+            readerPersistQA(msgIdx, { removed: _regenQ }); // 阅读模式：重生成前先把删旧块的状态同步出去（QA 重答后 readingAskOne 会再覆盖一次）
             readingClearActbar();
             readingRerenderMsg(msgIdx, pNum);
             showToast('重新回答中…');

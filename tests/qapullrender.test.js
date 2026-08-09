@@ -157,6 +157,69 @@ function pullFromCloud(cloudQA) {
     ok('D1 同步来的背景知识也当场显示', d.inDom, 'DOM 里没有背景内容');
     eq('D2 且被认成「背景」而不是普通问答', d.bgCount, 1);
 
+    /* ── E 组：⭐少的不许盖掉多的 ────────────────────────────────────
+       用户 2026-08-09 自己看出来的：「似乎会让读痕少的覆盖多的，这对吗」——对。
+       现场：另一台设备给第二章存了 3 条问答（已进本机 localStorage），
+       但本机视图还是旧的（正在流式/标背景时不重灌，窗口就是这么敞开的）。
+       这时在本机问一个新问题 → 原来会打包写「第二章＝1 条」把那 3 条冲掉。 */
+    const e = await page.evaluate(() => {
+        const fk = '测试书.txt|4321';
+        // 另一台设备的 3 条，已经躺在本机存储里
+        localStorage.setItem('reader_qa', JSON.stringify({
+            [fk]: { '1': { list: [
+                { p: 1, q: '别处问的甲', a: 'A' },
+                { p: 2, q: '别处问的乙', a: 'B' },
+                { p: 4, q: '别处问的丙', a: 'C' }
+            ], ts: 1000 } }
+        }));
+        // 本机视图是旧的：只有刚在本机问的这一条
+        chatMessages[3].content = '[P3] 汐：本机刚问的\n本机的答案';
+        readerPersistQA(3);
+        const cell = JSON.parse(localStorage.getItem('reader_qa'))[fk]['1'];
+        return { n: cell.list.length, qs: cell.list.map(x => x.q), ps: cell.list.map(x => x.p) };
+    });
+    eq('E1 ⭐三条旧的全部保住，加上本机新的一条＝4', e.n, 4);
+    ok('E2 别处那三条一条没少', ['别处问的甲', '别处问的乙', '别处问的丙'].every(q => e.qs.indexOf(q) >= 0), JSON.stringify(e.qs));
+    ok('E3 本机新问的那条也在', e.qs.indexOf('本机刚问的') >= 0, JSON.stringify(e.qs));
+    eq('E4 按段号排好序（渲染顺序不跳）', e.ps, [1, 2, 3, 4]);
+
+    /* ── F 组：但「明确删除」必须还能删掉 ────────────────────────────
+       ⚠️E 组那条护栏最容易矫枉过正成「删了又自己回来」：删除时视图里少了一条，
+       如果不告诉 readerPersistQA「这条是我删的」，它就会当成「本机没同步到」补回去。 */
+    const f = await page.evaluate(() => {
+        const fk = '测试书.txt|4321';
+        localStorage.setItem('reader_qa', JSON.stringify({
+            [fk]: { '1': { list: [
+                { p: 1, q: '留下的', a: 'A' },
+                { p: 2, q: '要删的', a: 'B' }
+            ], ts: 1000 } }
+        }));
+        chatMessages[3].content = '[P1] 汐：留下的\nA\n[P2] 汐：要删的\nB';
+        readingRerenderMsg(3);
+        readingDeleteBlock(3, 2, 0);
+        const cell = JSON.parse(localStorage.getItem('reader_qa'))[fk]['1'];
+        return { qs: cell.list.map(x => x.q) };
+    });
+    eq('F1 ⭐明确删掉的那条没被"补"回来', f.qs, ['留下的']);
+
+    // F2：删除时，别处同步来的、视图里没有的条目仍然要保住（两条规则得同时成立）
+    const f2 = await page.evaluate(() => {
+        const fk = '测试书.txt|4321';
+        localStorage.setItem('reader_qa', JSON.stringify({
+            [fk]: { '1': { list: [
+                { p: 1, q: '留下的', a: 'A' },
+                { p: 2, q: '要删的', a: 'B' },
+                { p: 5, q: '别处来的', a: 'C' }   // 本机视图里没有这条
+            ], ts: 1000 } }
+        }));
+        chatMessages[3].content = '[P1] 汐：留下的\nA\n[P2] 汐：要删的\nB';
+        readingRerenderMsg(3);
+        readingDeleteBlock(3, 2, 0);
+        const cell = JSON.parse(localStorage.getItem('reader_qa'))[fk]['1'];
+        return { qs: cell.list.map(x => x.q) };
+    });
+    eq('F2 删一条的同时，别处同步来的那条仍在', f2.qs, ['留下的', '别处来的']);
+
     await browser.close();
 
     let fail = 0;
