@@ -3577,6 +3577,18 @@ body {
              第二行光秃秃。padding 用的是内缩值，别加大——右边留白太多会被隔壁「手写小注」的避让算法
              当成空地压上来（小注量的是文字矩形，量不到这层底）。 */
         .reading-merged blockquote .reading-q { color: var(--text); }
+        /* 名字做成「名牌药丸」（用户 2026-08-09 挑的）：实心本命色底 + 小圆角，后面那个「：」由渲染那边不再输出。
+           ⚠️字色不能写死 #fff：白天皮肤的 --accent 是深色（#c2485a / #1E50A2 那种），白字正好；
+             夜间皮肤的 --accent 是提亮过的糖果色（#ff8aa3 / #9bc4ff），白字压上去糊成一片，
+             所以 body.dark 下换成近黑。别为了"统一"把这两行并成一行。
+           字体用 system-ui：药丸只有一两个字、还带字距，衬线体在这么小的实心底上发虚。 */
+        .reading-merged blockquote .reading-q-name {
+            display: inline-block; background: var(--accent); color: #fff;
+            font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+            font-size: 0.82em; line-height: 1.5; font-weight: 700; letter-spacing: 0.04em;
+            padding: 0 8px; border-radius: 999px; margin-right: 8px; vertical-align: 0.06em;
+        }
+        body.dark .reading-merged blockquote .reading-q-name { color: #17171a; }
         .reading-merged blockquote .reading-q-hl {
             background: color-mix(in srgb, var(--accent), transparent 84%);
             border-radius: 6px; padding: 2px 7px; margin-left: -4px;
@@ -23590,7 +23602,7 @@ body {
                 '<button class="rd-stream-stop" type="button" onclick="readingAbortPending(' + pp.id + ')">停止</button>';
             // 问题文字包 .reading-q-hl（荧光笔底）——生成中的气泡和生成完的问答块要长得一模一样，
             // 不然一停笔样式就跳一下（这两处骨架分开写，改一处必须改另一处，见函数头那条注释）
-            if (pp.question) h += '<div class="reading-q"><span class="reading-q-name">' + esc(chatUserName()) + '</span>：<span class="reading-q-hl">' + esc(pp.question) + '</span></div>';
+            if (pp.question) h += '<div class="reading-q"><span class="reading-q-name">' + esc(chatUserName()) + '</span><span class="reading-q-hl">' + esc(pp.question) + '</span></div>';
             h += '<div class="rd-stream-ans">';
             h += started
                 ? (renderText(body) + '<span class="rd-stream-cursor">▍</span>')
@@ -28168,7 +28180,8 @@ body {
                             // ⚠️只有替换真发生了才补收尾的 </span>——万一 renderText 把「汐：」拆散（markdown 里
                             //   问题以 # / > 之类开头时它会改结构），replace 会一无所获，硬补就多出个孤儿闭合标签。
                             var _qHtml = renderText(_qLine);
-                            var _qRep = _qHtml.replace(QA_TAG, '<span class="reading-q-name">' + esc(chatUserName()) + '</span>：<span class="reading-q-hl">');
+                            // 名字后面**不再输出「：」**——它现在是个药丸名牌，自带边界，再跟个冒号像多打了个字
+                            var _qRep = _qHtml.replace(QA_TAG, '<span class="reading-q-name">' + esc(chatUserName()) + '</span><span class="reading-q-hl">');
                             _cmtRendered = '<div class="reading-q">' + (_qRep === _qHtml ? _qHtml : _qRep + '</span>') + '</div>';
                             if (_aLine.trim()) {
                                 _cmtRendered += '<div style="margin-top:0.4em">' + renderText(_aLine.replace(/^\n+/, '')) + '</div>';
