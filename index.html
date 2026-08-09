@@ -20271,6 +20271,30 @@ body {
             } catch (e) {}
             return { chapter: null, p: null, off: 0 };
         }
+        /* ⚠️阅读进度必须自己推云端（2026-08-09 修，用户报「两边都开着，一边产生了读痕，
+           另一边总感觉需要触发点什么才同步，有时候碰巧能触发，有时候怎么也触发不了」）。
+           病根：这个函数原来只 setItem、**从不调 syncPushData**——`reader_pos` 虽然挂在 manifest 里，
+           却只能等**别的**数据推送时被顺路捎上去。所以「碰巧能触发」＝她刚好划了条线／加了书签／
+           提了个问（那几处都自带推送），「怎么也触发不了」＝这一趟纯看书、没碰别的。
+           拉取那边一直是好的（autoSync 每 30 秒 + 切回页面/focus 都拉），所以刷新也救不回来——
+           云端压根没有新数据。同一份数据的书签(readingSaveAllBookmarks)和划线(readingSaveAllHl)
+           从一开始就带推送，就它漏了。
+
+           ⚠️防抖必须比别处长：滚动停 150ms 就存一次进度，看书时一直在存，
+           按书签那种 3 秒推会把同步接口打爆。这里用 8 秒「手停下来才推」。
+           ⚠️真正保命的是下面那两个 flush：**切走页面/关掉标签页时立刻推**——
+           换设备的那一刻正好触发，不然 8 秒的债就永远还不上了（照搬签到 flushCheckinPush 那套）。 */
+        var _readerPosPushTimer = null;
+        function flushReaderPosPush() {
+            if (_readerPosPushTimer) {
+                clearTimeout(_readerPosPushTimer);
+                _readerPosPushTimer = null;
+                syncPushData();
+            }
+        }
+        document.addEventListener('visibilitychange', function() { if (document.hidden) flushReaderPosPush(); });
+        window.addEventListener('beforeunload', flushReaderPosPush);
+
         // data 字段都显式传：{ chapter, p, off }。带上 ts 供云端逐书按时间取较新的。
         function readerSetProgress(bookId, data) {
             var all = readerPosAll();
@@ -20283,6 +20307,13 @@ body {
                 ts: Date.now()
             };
             try { localStorage.setItem('reader_pos', JSON.stringify(all)); } catch (e) {}
+            if (activeSyncProvider === 'cf') {
+                if (_readerPosPushTimer) clearTimeout(_readerPosPushTimer);
+                _readerPosPushTimer = setTimeout(function() {
+                    _readerPosPushTimer = null;
+                    syncPushData();
+                }, 8000);
+            }
         }
 
         /* ===== 阅读模式：问答 & 前情摘要（独立存储、可同步，不拖原文） =====
