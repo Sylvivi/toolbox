@@ -3566,6 +3566,22 @@ body {
         .reading-merged blockquote { font-style: normal; }
         .reading-merged blockquote .reading-q { font-weight: 600; }
         .reading-merged blockquote .reading-q-name { color: var(--accent-read); font-weight: 600; }
+        /* 问答块里「问题」那一行要更跳出来（用户 2026-08-09 要的，原话「把名字后面的问题也改得显眼一些」）。
+           两件事，缺一不可：
+           ① **提亮字色**——整个问答块是灰字(--text-sub)，问题虽然早就 font-weight:600，但跟答案同色，
+              于是"粗"完全看不出来。拉开层次的其实是颜色，不是字重；别再靠加粗去救。
+           ② 荧光笔底(.reading-q-hl)——只涂在「：」之后的问题文字上，**不铺满整行**：
+              整块底色本来就是 --accent-light，再铺满一层同色就是两层粉叠着、显脏
+              （给她看过铺满版 D1/D2，她挑的是这个只涂文字的）。
+           ⚠️box-decoration-break:clone 不能删：问题换行时靠它让每一行各自带底，否则只有第一行有底、
+             第二行光秃秃。padding 用的是内缩值，别加大——右边留白太多会被隔壁「手写小注」的避让算法
+             当成空地压上来（小注量的是文字矩形，量不到这层底）。 */
+        .reading-merged blockquote .reading-q { color: var(--text); }
+        .reading-merged blockquote .reading-q-hl {
+            background: color-mix(in srgb, var(--accent), transparent 84%);
+            border-radius: 6px; padding: 2px 7px; margin-left: -4px;
+            -webkit-box-decoration-break: clone; box-decoration-break: clone;
+        }
         .reading-merged p[data-p] {
             cursor: pointer; border-radius: 5px; padding: 1px 4px; margin-left: -4px; margin-right: -4px;
             transition: background 0.15s;
@@ -23572,7 +23588,9 @@ body {
             var h = '<blockquote class="rd-stream-bq' + (started ? '' : ' rd-pending') + '" data-pid="' + pp.id + '"' +
                 ' style="position:relative;margin:0.4em 0 0.6em;padding:6px 12px;border-left:3px solid var(--accent);background:var(--quote-bg, var(--accent-light));border-radius:0 8px 8px 0;font-size:0.92em;color:var(--text-sub);line-height:1.6">' +
                 '<button class="rd-stream-stop" type="button" onclick="readingAbortPending(' + pp.id + ')">停止</button>';
-            if (pp.question) h += '<div class="reading-q"><span class="reading-q-name">' + esc(chatUserName()) + '</span>：' + esc(pp.question) + '</div>';
+            // 问题文字包 .reading-q-hl（荧光笔底）——生成中的气泡和生成完的问答块要长得一模一样，
+            // 不然一停笔样式就跳一下（这两处骨架分开写，改一处必须改另一处，见函数头那条注释）
+            if (pp.question) h += '<div class="reading-q"><span class="reading-q-name">' + esc(chatUserName()) + '</span>：<span class="reading-q-hl">' + esc(pp.question) + '</span></div>';
             h += '<div class="rd-stream-ans">';
             h += started
                 ? (renderText(body) + '<span class="rd-stream-cursor">▍</span>')
@@ -28146,7 +28164,12 @@ body {
                             var _qLine = _nl >= 0 ? _cmtRaw.slice(0, _nl) : _cmtRaw;
                             var _aLine = _nl >= 0 ? _cmtRaw.slice(_nl + 1) : '';
                             // 存储里是「汐：问题」，显示时把名字换成当前昵称（存储那份一个字不动，见 chatUserName 上方那段）
-                            _cmtRendered = '<div class="reading-q">' + renderText(_qLine).replace(QA_TAG, '<span class="reading-q-name">' + esc(chatUserName()) + '</span>：') + '</div>';
+                            // 顺手把「：」之后的问题文字包进 .reading-q-hl，给它上荧光笔底（见 CSS 那段）。
+                            // ⚠️只有替换真发生了才补收尾的 </span>——万一 renderText 把「汐：」拆散（markdown 里
+                            //   问题以 # / > 之类开头时它会改结构），replace 会一无所获，硬补就多出个孤儿闭合标签。
+                            var _qHtml = renderText(_qLine);
+                            var _qRep = _qHtml.replace(QA_TAG, '<span class="reading-q-name">' + esc(chatUserName()) + '</span>：<span class="reading-q-hl">');
+                            _cmtRendered = '<div class="reading-q">' + (_qRep === _qHtml ? _qHtml : _qRep + '</span>') + '</div>';
                             if (_aLine.trim()) {
                                 _cmtRendered += '<div style="margin-top:0.4em">' + renderText(_aLine.replace(/^\n+/, '')) + '</div>';
                             }
