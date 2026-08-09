@@ -3570,38 +3570,19 @@ body {
            两件事，缺一不可：
            ① **提亮字色**——整个问答块是灰字(--text-sub)，问题虽然早就 font-weight:600，但跟答案同色，
               于是"粗"完全看不出来。拉开层次的其实是颜色，不是字重；别再靠加粗去救。
-           ② 荧光笔底(.reading-q-hl)——只涂在「：」之后的问题文字上，**不铺满整行**：
+           ② 荧光笔底(.reading-q-hl)——**名字＋冒号＋问题一整条**包在同一个底色框里，但**不铺满整行**：
               整块底色本来就是 --accent-light，再铺满一层同色就是两层粉叠着、显脏
-              （给她看过铺满版 D1/D2，她挑的是这个只涂文字的）。
+              （给她看过铺满版 D1/D2，她挑的是这个只贴着文字的）。
+           ⚠️名字保持"变色加粗"的老样子，**别再做成实心药丸标签**（2026-08-09 试过一版、当天就撤了）：
+             她的原话是「稍微感觉有点难看了…不符合极简风」。药丸还自带两个麻烦——字色得按白天/夜间
+             分两档（夜间皮肤的 accent 是糖果色，压白字会糊），以及它跟问题底之间的缝要单独调、
+             一撞就是"接壤"（她手机实拍逮到过）。一个框包全部就没这些事。
            ⚠️box-decoration-break:clone 不能删：问题换行时靠它让每一行各自带底，否则只有第一行有底、
-             第二行光秃秃。padding 用的是内缩值，别加大——右边留白太多会被隔壁「手写小注」的避让算法
+             第二行光秃秃。padding 别加大——右边留白太多会被隔壁「手写小注」的避让算法
              当成空地压上来（小注量的是文字矩形，量不到这层底）。
-           ⚠️间距一律用 em、不许写 px（2026-08-09 修）：第一版药丸 margin-right:8px + 荧光笔底
-             margin-left:-4px + padding:7px，两块底之间只剩 **4px**，用户在手机上一看就是"接壤"了；
-             更糟的是 px 不跟着正文字号走——她把共读字号调大，字变大、缝隙纹丝不动，越大越挤。
-             现在药丸 0.8em、底 0.4em，缝隙恒等于 0.4em，字号怎么调都保持同一个观感。 */
+           ⚠️间距一律用 em、不许写 px（2026-08-09 修）：px 不跟着正文字号走，她把共读字号调大之后
+             字变大、缝隙纹丝不动，越大越挤——药丸那版就是这么撞上的。 */
         .reading-merged blockquote .reading-q { color: var(--text); }
-        /* 名字做成「名牌药丸」（用户 2026-08-09 挑的）：实心本命色底 + 小圆角，后面那个「：」由渲染那边不再输出。
-           ⚠️字色不能写死 #fff：白天皮肤的 --accent 是深色（#c2485a / #1E50A2 那种），白字正好；
-             夜间皮肤的 --accent 是提亮过的糖果色（#ff8aa3 / #9bc4ff），白字压上去糊成一片，
-             所以 body.dark 下换成近黑。别为了"统一"把这两行并成一行。
-           字体用 system-ui：药丸只有一两个字、还带字距，衬线体在这么小的实心底上发虚。 */
-        .reading-merged blockquote .reading-q-name {
-            display: inline-block; background: var(--accent); color: #fff;
-            font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-            /* ⚠️字号跟问题**同大**（1em），别再缩小：第一版做成 0.82em 的小标签，用户一眼看出来
-               「名字看起来变小了」——她原来的名字是跟问题一样大的，缩了就等于把主角降级成配角。
-               药丸靠底色和圆角就够抢眼了，不需要再靠"小而精致"。 */
-            font-size: 1em; line-height: 1.45; font-weight: 700; letter-spacing: 0.04em;
-            padding: 1px 0.22em 1px 0.5em; border-radius: 999px; margin-right: 0.8em; vertical-align: 0.02em;
-        }
-        /* 冒号包在药丸**里面**（用户 2026-08-09 选的）。用 ::after 生成而不是让渲染那边多输出一个字：
-           两处骨架（存好的问答、生成中的气泡）都能自动跟上，且 .reading-q 的 textContent 不受影响
-           ——量文字矩形的小注避让、以及各处按文本找问答的逻辑都不用跟着改。
-           ⚠️右内边距比左边小(4 vs 9)：全角「：」的字面本来就靠左、右半边是空的，两边给一样的内边距
-             会看着整个字往左偏。 */
-        .reading-merged blockquote .reading-q-name::after { content: "："; }
-        body.dark .reading-merged blockquote .reading-q-name { color: #17171a; }
         .reading-merged blockquote .reading-q-hl {
             background: color-mix(in srgb, var(--accent), transparent 84%);
             border-radius: 6px; padding: 2px 0.4em;
@@ -23615,7 +23596,7 @@ body {
                 '<button class="rd-stream-stop" type="button" onclick="readingAbortPending(' + pp.id + ')">停止</button>';
             // 问题文字包 .reading-q-hl（荧光笔底）——生成中的气泡和生成完的问答块要长得一模一样，
             // 不然一停笔样式就跳一下（这两处骨架分开写，改一处必须改另一处，见函数头那条注释）
-            if (pp.question) h += '<div class="reading-q"><span class="reading-q-name">' + esc(chatUserName()) + '</span><span class="reading-q-hl">' + esc(pp.question) + '</span></div>';
+            if (pp.question) h += '<div class="reading-q"><span class="reading-q-hl"><span class="reading-q-name">' + esc(chatUserName()) + '</span>：' + esc(pp.question) + '</span></div>';
             h += '<div class="rd-stream-ans">';
             h += started
                 ? (renderText(body) + '<span class="rd-stream-cursor">▍</span>')
@@ -28189,12 +28170,11 @@ body {
                             var _qLine = _nl >= 0 ? _cmtRaw.slice(0, _nl) : _cmtRaw;
                             var _aLine = _nl >= 0 ? _cmtRaw.slice(_nl + 1) : '';
                             // 存储里是「汐：问题」，显示时把名字换成当前昵称（存储那份一个字不动，见 chatUserName 上方那段）
-                            // 顺手把「：」之后的问题文字包进 .reading-q-hl，给它上荧光笔底（见 CSS 那段）。
+                            // 顺手把**名字＋冒号＋问题一整条**包进 .reading-q-hl，给它上荧光笔底（见 CSS 那段）。
                             // ⚠️只有替换真发生了才补收尾的 </span>——万一 renderText 把「汐：」拆散（markdown 里
                             //   问题以 # / > 之类开头时它会改结构），replace 会一无所获，硬补就多出个孤儿闭合标签。
                             var _qHtml = renderText(_qLine);
-                            // 名字后面**不再输出「：」**——它现在是个药丸名牌，自带边界，再跟个冒号像多打了个字
-                            var _qRep = _qHtml.replace(QA_TAG, '<span class="reading-q-name">' + esc(chatUserName()) + '</span><span class="reading-q-hl">');
+                            var _qRep = _qHtml.replace(QA_TAG, '<span class="reading-q-hl"><span class="reading-q-name">' + esc(chatUserName()) + '</span>：');
                             _cmtRendered = '<div class="reading-q">' + (_qRep === _qHtml ? _qHtml : _qRep + '</span>') + '</div>';
                             if (_aLine.trim()) {
                                 _cmtRendered += '<div style="margin-top:0.4em">' + renderText(_aLine.replace(/^\n+/, '')) + '</div>';
