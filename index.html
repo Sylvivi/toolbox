@@ -10887,7 +10887,12 @@ body {
                 if (manifest.readerQA) {
                     try {
                         var localQA = JSON.parse(localStorage.getItem('reader_qa') || '{}');
-                        if (readerMergeByChapter(localQA, manifest.readerQA || {})) localStorage.setItem('reader_qa', JSON.stringify(localQA));
+                        if (readerMergeByChapter(localQA, manifest.readerQA || {})) {
+                            localStorage.setItem('reader_qa', JSON.stringify(localQA));
+                            // ⚠️光写进 localStorage 不够：这本书可能正开着，屏幕上那份正文是旧快照。
+                            // 不在这儿重灌，她就得退出去再进来才看得到（见 readerApplyPulledQA 的注释）。
+                            readerApplyPulledQA();
+                        }
                     } catch (e) {}
                 }
                 if (manifest.readerSummaries) {
@@ -20356,6 +20361,44 @@ body {
                 }
             } catch (e) {}
         }
+        /* 云端刚拉到新的问答/背景 → 把**已经开着**的这本书的正文当场重灌（2026-08-09 修）。
+           用户报「两边页面都开着，一边产生了读痕（问答、背景知识那些），要同步到另一边
+           总感觉需要触发点什么，有时候碰巧能触发，有时候怎么也触发不了，刷新也不太能解决」。
+
+           ⚠️病根不在同步、在渲染：推送(readerPersistQA)和拉取(readerMergeByChapter)一直都是好的，
+           `readerHydrateLoadedQA` 这个「用同步来的问答重灌正文」的函数也早就写好了——
+           但它**全项目只在 chatLoadConv 里被调过一次**，也就是只有「打开这本书的会话」那一刻才灌。
+           页面已经开着时，autoSync 每 30 秒确实把云端问答拉进了 localStorage，
+           屏幕上那份正文快照却没有任何人去动 → 必须退出去再进来才看得见＝「需要触发点什么」。
+           「刷新也不太能解决」也是这儿：刷新后会话常常在拉取回来**之前**就渲染完了，
+           等数据到了同样没人重灌，于是刷新看着也像没用。
+
+           ⚠️只重渲内容真的变了的那几章：重渲会动到开着的提问条和阅读位置，无脑全刷代价太大。
+           ⚠️正在流式回答 / 正在标背景时一律不插手——那两个过程自己在改 content 并逐条重渲，
+             这时候掺一脚等于两边抢同一块 DOM。它们跑完之后的下一轮 autoSync 会补上。
+           ⚠️重渲一律套 `_rdKeepScroll`：插入若发生在视口上方会把她正在看的那行顶跑，
+             这是标背景那边已经踩过并解决了的坑，直接复用、别再造一个。 */
+        function readerApplyPulledQA() {
+            try {
+                if (!chatReaderMode || !chatCurrentConvId) return;
+                if (typeof chatStreaming !== 'undefined' && chatStreaming) return;
+                if (typeof readerBgRunning !== 'undefined' && readerBgRunning) return;
+                var before = [];
+                for (var i = 0; i < chatMessages.length; i++) {
+                    var m = chatMessages[i];
+                    before[i] = (m && m.readerChapter != null) ? m.content : null;
+                }
+                readerHydrateLoadedQA();
+                for (var j = 0; j < chatMessages.length; j++) {
+                    if (before[j] === null) continue;
+                    if (chatMessages[j].content === before[j]) continue;
+                    (function (idx) {
+                        _rdKeepScroll(idx, function () { readingRerenderMsg(idx); });
+                    })(j);
+                }
+            } catch (e) {}
+        }
+
         // 单点同步：把某条阅读章节消息里的问答整体抽出，覆盖进可同步的 reader_qa（删空写空列表当墓碑）
         function readerPersistQA(msgIdx) {
             if (!chatReaderMode || readerBookId == null) return;
