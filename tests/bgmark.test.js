@@ -303,6 +303,31 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.J_出发点优先 = !!d && both.box.querySelectorAll('.bg-mk-svg > g').length === 1;
         }
 
+        /* ── K：⚠️「底下有线」要按**那个词自己的位置**判，不是拿整个段落去判 ──
+           2026-08-10 修的真 bug：原来传的是 <p>，而「词在精句里」是往上找祖先的——
+           段落是精句的**爹**不是儿子，所以永远找不到，背景词这边等于从来没避让过底下的线。
+           用户问「底下有线的定义是什么样的？」时才发现。 */
+        {
+            const b = document.body.classList;
+            const had = b.contains('reading-ks-ul');
+            b.add('reading-ks-ul');
+            // 「桑叶」包在精句里 → 底下有线 → 不许给下划线
+            const inKs = build([{ n: 1, html: '两国的女子为了抢夺<span class="reading-keysent"><span class="reading-keysent-inner">桑叶起了争执</span></span>，一路闹大。' }],
+                               [{ cp: 1, head: '汐：背景：吴楚边境桑女争桑', anchor: '桑叶起了争执' }]);
+            const g1 = inKs.box.querySelector('.bg-mk-svg > g');
+            out.K_精句里画上了 = !!g1;
+            // d 以 M…L…（直线）开头且只有两段 ＝ 下划线；框/圈都是弯的（带 C/Q）
+            const d1 = g1 ? g1.querySelector('path').getAttribute('d') : '';
+            out.K_精句里不是下划线 = /[cCqQ]/.test(d1);
+            // 同一个词不在精句里时，五字以上照样可能给下划线（这条只验「判断确实按位置走」）
+            out.K_判断按位置走 = (() => {
+                const p = inKs.box.querySelector('p[data-p="1"]');
+                const inner = p.querySelector('.reading-keysent-inner');
+                return rdMkHasUnderline(inner) === true && rdMkHasUnderline(p) === false;
+            })();
+            if (!had) b.remove('reading-ks-ul');
+        }
+
         document.querySelectorAll('.__bgt').forEach(n => n.remove());
         return out;
     });
@@ -352,6 +377,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('J6 ⚠️题目是概括的、正文里没有 → 靠出发点把圈画上', R.J_靠出发点画上了);
     ok('J7 没有出发点又找不到题目 → 照旧不画（不硬编不误标）', R.J_没出发点就不画);
     ok('J8 出发点优先于题目', R.J_出发点优先);
+    ok('K1 精句里的背景词照样画得出记号', R.K_精句里画上了);
+    ok('K2 ⚠️精句「划线」开着时不给下划线（画的是框或圈）', R.K_精句里不是下划线);
+    ok('K3 ⚠️「底下有线」按词自己的位置判、不是拿段落判', R.K_判断按位置走);
     ok('F1 无页面报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();

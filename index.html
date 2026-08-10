@@ -26193,7 +26193,12 @@ body {
                     try {
                         rg.setStart(sN, sO); rg.setEnd(eN, eO);
                         var rows = bgMkRows(rg.getClientRects(), cr);
-                        if (rows.length) out.push(rows);
+                        /* ⚠️`at` ＝ 这一处所在的元素，拿来问「它底下有没有线」（rdMkHasUnderline）。
+                           **必须是这个词自己的位置，不能拿整个段落去问**（2026-08-10 修）：
+                           那个判断是往上找祖先的，而 .reading-keysent/.reading-quote 是段落的**子**元素，
+                           传段落进去永远找不到 → 背景词这边等于从来没避让过底下的线。
+                           ⚠️同一个词在不同位置可能一处在精句里、一处不在，所以**逐处**判断。 */
+                        if (rows.length) out.push({ rows: rows, at: (sN.parentElement || null) });
                     } catch (e) { /* 这一处定位不了就跳过，别影响别处 */ }
                 }
                 at = full.indexOf(term, end);
@@ -26254,12 +26259,11 @@ body {
                 /* ⚠️颜色要用**另一个**哈希，不能跟形状共用 seed：形状是 seed%2、颜色是 seed%6，
                    共用的话两者绑死，看着就不像随机了（2026-08-10 实拍：两个不同的词一模一样都是紫圈）。 */
                 var cIdx = rdMkSeed(useTerm + '·色') % inks.length;
-                /* 那个词底下已经有别的下划线时（精句/引号/名词的「划线」开着），别再画一条压上去，
-                   两条叠在一起很脏——同小注那条规则，见 rdMkHasUnderline。 */
-                var noU = rdMkHasUnderline(para);
                 for (var gi = 0; gi < groups.length; gi++) {
-                    var rects = groups[gi];
-                    var kind = bgMkPick(useTerm, noU);
+                    var rects = groups[gi].rows;
+                    /* 这一处底下已经有线（精句/引号的划线或波浪、名词划线）时别再压一条下划线上去。
+                       ⚠️**按这一处自己的位置问**，别拿段落去问（见 bgMkAllRectsOf 里那条⚠️）。 */
+                    var kind = bgMkPick(useTerm, rdMkHasUnderline(groups[gi].at));
                     try {
                         // ⚠️每一处给个不同的 Rough 种子，否则同一个词的几处歪法一模一样，像复制粘贴
                         var els = rdMkDraw(rc, rects, kind, inks[cIdx], inks[cIdx], (seed + gi * 7919) % 2147483647, inkWidths[cIdx]);
