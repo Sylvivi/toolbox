@@ -75,6 +75,19 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         qa4.querySelector('.reading-q').click();
         out.C_问答块点了也不折 = !qa4.classList.contains('bg-fold');
 
+        /* ── E：⚠️折叠的重排只碰**这一条消息**，别再走全量 ──
+           2026-08-11 用户报「展开收起的过程中，感觉框框和圈圈的渲染有点跟不上，会有点卡顿」。
+           两个原因：① 调的是全量重排（页面上所有章节全量重量一遍）；② 还压了 30ms 延迟才开始画，
+           那段时间记号停在旧位置，「跟不上」的观感就是从这儿来的。
+           现在：只重排当前 bubble + requestAnimationFrame + 重排前先把记号层藏起来。 */
+        {
+            const src = rdBgFoldToggle.toString();
+            out.E_不走全量重排 = src.indexOf('rdGlLayoutAll') < 0 && src.indexOf('rdGlRelayoutSoon') < 0;
+            out.E_只重排本条 = src.indexOf('rdGlLayout(bub)') > 0 && src.indexOf('bgMkLayout(bub)') > 0;
+            out.E_用了rAF = src.indexOf('requestAnimationFrame') > 0;
+            out.E_先藏后画 = src.indexOf("visibility = 'hidden'") > 0;
+        }
+
         document.querySelectorAll('.__fd').forEach(n => n.remove());
         return out;
     });
@@ -90,6 +103,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('B4 收起后重渲仍是折叠', R.B_收起后重渲仍折叠);
     ok('C1 ⚠️点块里的正文不会收起（那是双击追问的地盘）', R.C_点正文不收起);
     ok('C2 问答块的标题点了也不折叠', R.C_问答块点了也不折);
+    ok('E1 ⚠️折叠不再触发全量重排（只重排当前这条消息）', R.E_不走全量重排 && R.E_只重排本条);
+    ok('E2 ⚠️用 rAF 在下一帧画完，不留「记号停在旧位置」的中间态', R.E_用了rAF);
+    ok('E3 重排前先把记号层藏起来（宁可短暂看不见，也别看见错位）', R.E_先藏后画);
     ok('D1 无页面报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();

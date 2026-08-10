@@ -26118,7 +26118,20 @@ body {
         function _rdBgFoldKey(msgIdx, pNum, ci) {
             return (typeof msgIdx === 'number' ? msgIdx : 'x') + '|' + pNum + '|' + ci;
         }
-        // 点背景块的标题行：折叠 / 展开
+        /* 点背景块的标题行：折叠 / 展开。
+           ⚠️块的高度一变，它**下方**所有行的位置就都变了，而小注和背景词记号都是按行位置画的，
+             所以必须重排；但重排的方式很讲究，这里踩过一次（2026-08-11 用户报
+             「展开收起的过程中，感觉框框和圈圈的渲染有点跟不上，会有点卡顿」）：
+             ① 原来调的是 `rdGlRelayoutSoon(30)` ＝ **全量**重排（页面上所有章节全量重量一遍）。
+                实测一章（13 个背景块 + 10 条小注、同时载入 3 章）：全量 47ms、只重排这一条 20ms，
+                手机上再乘 3~5 倍——白花的那一大半就是别的章。**只重排这一条消息就够**：
+                折叠只改变这一条消息内部的行位置，别的消息一个像素都没动。
+             ② 那 30ms 延迟里，记号还停在旧位置——「跟不上」的观感就是从这儿来的。
+                改用 requestAnimationFrame：在下一帧画出来之前就重排完，中间态根本不会被看到。
+             ③ 保险起见先把记号层**藏起来**再重排：万一某一帧没赶上，宁可短暂看不见，
+                也别看见一堆错位的圈。重排会重建这两层（rdGlClear/bgMkClear 先删旧的），
+                所以不用手动恢复 visibility。 */
+        var _rdBgFoldRaf = 0;
         function rdBgFoldToggle(bq) {
             if (!bq) return;
             var msg = bq.closest('.chat-msg');
@@ -26127,9 +26140,21 @@ body {
             var willOpen = bq.classList.contains('bg-fold');
             bq.classList.toggle('bg-fold', !willOpen);
             if (willOpen) _rdBgOpen[key] = 1; else delete _rdBgOpen[key];
-            /* ⚠️块的高度变了 → 小注和背景词记号都是按行位置画的，必须重排一次，
-               否则整篇的记号和引线会跟字错开（这正是 rdGlRelayoutSoon 存在的理由）。 */
-            if (typeof rdGlRelayoutSoon === 'function') rdGlRelayoutSoon(30);
+
+            var bub = bq.closest('.chat-bubble');
+            if (!bub) return;
+            var layers = bub.querySelectorAll('.rd-gl-layer, .bg-mk-layer');
+            for (var i = 0; i < layers.length; i++) layers[i].style.visibility = 'hidden';
+            // 连点时只留最后一次（rAF 本来就合并到下一帧，这里再挡掉重复排队）
+            if (_rdBgFoldRaf) cancelAnimationFrame(_rdBgFoldRaf);
+            _rdBgFoldRaf = requestAnimationFrame(function () {
+                _rdBgFoldRaf = 0;
+                try { rdGlLayout(bub); } catch (e) { console.warn('[折叠重排] 小注：', e); }
+                try { bgMkLayout(bub); } catch (e) { console.warn('[折叠重排] 背景词：', e); }
+                // 兜底：万一上面两步都早退（这条消息没小注也没背景词），把层显示回来
+                var ls = bub.querySelectorAll('.rd-gl-layer, .bg-mk-layer');
+                for (var j = 0; j < ls.length; j++) ls[j].style.visibility = '';
+            });
         }
         // 背景词用同一条规矩（那张表在 rdMkPick 上面），种子取词本身
         function bgMkPick(term, noUnderline) {
