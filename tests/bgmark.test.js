@@ -246,8 +246,16 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
                上面那套砍字只是兜底（管已经标好的老数据、和模型偶尔没照做）。
                这两条断言防的是：以后有人整理提示词时删了其中一条——
                只删①会让记号又标不上，只删②会让讲解退化成解释字面。 */
-            out.I_提示词要求照抄原文 = BG_SCAN_INSTRUCTION.indexOf('优先照抄原文里出现的那几个字') > 0
-                                  && BG_SCAN_INSTRUCTION.indexOf('不要写「艾陵之战」') > 0;
+            out.I_提示词要求照抄原文 = BG_SCAN_INSTRUCTION.indexOf('照抄那几个字') > 0
+                                  && BG_SCAN_INSTRUCTION.indexOf('别写「艾陵之战」') > 0;
+            /* ⚠️⚠️这条盯的是**当天翻过的车**：第一版把「贴着原文」写进了「名称怎么写」那一节，
+               模型当成了筛选标准，用户实测「找出来的基本上都是单个的名词」——
+               她之前那些最厚的条目（原文里没有现成词、全靠概括命名）全没了。
+               所以提示词里必须同时有「这是起名字的偏好、不是挑不挑的标准」和「绝不要因此放弃」
+               这两句话，还得留着那三个正例。少一句都可能让覆盖面再塌一次。 */
+            out.I_没把命名当筛选 = BG_SCAN_INSTRUCTION.indexOf('不是挑不挑这条的标准') > 0
+                              && BG_SCAN_INSTRUCTION.indexOf('绝不要因为原文里没有现成的词，就放弃这个背景点') > 0
+                              && BG_SCAN_INSTRUCTION.indexOf('春秋复仇观念') > 0;
             out.I_讲解要补全称 = BG_EXPLAIN_INSTRUCTION.indexOf('点明完整名称') > 0
                              && BG_EXPLAIN_INSTRUCTION.indexOf('艾陵之战') > 0;
         }
@@ -291,7 +299,8 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('I1 ⚠️砍词尾最多两字的回退匹配', R.I_对了,
        JSON.stringify([R.I_整词就在, R.I_砍之战, R.I_砍之会, R.I_核心在后不误标, R.I_不砍到单字, R.I_找不到就空]));
     ok('I2 真场景：题目「艾陵之战」、正文只有「艾陵」→ 标出来了', R.I_真场景标上了);
-    ok('I3 ⚠️第一遍：名字要照抄原文的字（这样才定位得到）', R.I_提示词要求照抄原文);
+    ok('I3 ⚠️第一遍：名字尽量照抄原文的字（这样才定位得到）', R.I_提示词要求照抄原文);
+    ok('I3b ⚠️⚠️但那只是起名偏好、不是筛选标准（否则长背景会全丢）', R.I_没把命名当筛选);
     ok('I4 ⚠️第二遍：开头补完整名称（解释仍要引申，别退化成解释字面）', R.I_讲解要补全称);
     ok('F1 无页面报错', pageErrs.length === 0, pageErrs.join(' | '));
 
