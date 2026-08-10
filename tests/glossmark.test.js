@@ -206,6 +206,61 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.G_记号不是虚的 = paths.length ? !/\d/.test((getComputedStyle(paths[0]).strokeDasharray || '').replace(/none/, '')) : false;
         }
 
+        /* ── J：那个词底下已经有别的下划线时，不许再画 rough 的下划线 ──
+           用户 2026-08-10 报：「有下划线（来自断句精句这类样式）的情况下，最好不要再用
+           rough的下划线，不然有点容易重叠」。三个来源：精句划线/引号划线/名词划线。 */
+        {
+            out.J_纯函数避开u = (() => {
+                const s = new Set();
+                for (let i = 0; i < 400; i++) s.add(rdMkPick('j' + i, 2, false, true));
+                return !s.has('u') && s.size === 3;
+            })();
+            out.J_长词只剩荧光 = (() => {
+                const s = new Set();
+                for (let i = 0; i < 400; i++) s.add(rdMkPick('j' + i, 9, false, true));
+                return [...s].join('') === 'h';
+            })();
+            // 跨行本来一律降级成下划线，但底下已有线时也得让开
+            out.J_跨行时也避开 = rdMkPick('anything', 2, true, true) !== 'u';
+            // 真场景：精句划线开着，词在精句里
+            const b = document.body.classList;
+            const hadKs = b.contains('reading-ks-ul');
+            b.add('reading-ks-ul');
+            const a = build([{ para: 1, word: '氤氲', id: 'hj1', note: 'yīn yūn·雾气弥漫' }]);
+            const mk = a.box.querySelector('mark[data-hlid="hj1"]');
+            const ks = document.createElement('span');
+            ks.className = 'reading-keysent';
+            mk.parentNode.insertBefore(ks, mk); ks.appendChild(mk);   // 把词包进精句里
+            rdGlLayout(a.bub);
+            out.J_识别到了 = rdMkHasUnderline(a.box.querySelector('mark[data-hlid="hj1"]'));
+            out.J_真场景不是下划线 = kindOf(a.box.querySelector('mark[data-hlid="hj1"]')) !== 'u';
+            if (!hadKs) b.remove('reading-ks-ul');
+            // 没有那些下划线时，u 仍然要在池子里（别一刀切）
+            out.J_平时还有u = (() => { const s = new Set(); for (let i = 0; i < 400; i++) s.add(rdMkPick('j' + i, 2, false, false)); return s.has('u'); })();
+        }
+
+        /* ── K：荧光不许把字弄糊 ──
+           用户 2026-08-10 报：「荧光笔似乎是盖在字体上的，像一层纱使它显得有点糊，
+           我觉得你可以参考一下之前的那个色带，因为色带盖在上面没有影响字的本色」。
+           记号这层画在正文**上面**，所以必须靠正片叠底（夜间滤色）保住字的本色。 */
+        {
+            let id = null;
+            for (let i = 0; i < 5000 && !id; i++) if (rdMkPick('kk' + i, 2, false) === 'h') id = 'kk' + i;
+            const a = build([{ para: 1, word: '氤氲', id: id, note: 'yīn yūn·雾气弥漫' }]);
+            out.K_拿到荧光 = kindOf(a.box.querySelector('mark[data-hlid="' + id + '"]')) === 'h';
+            const g = a.box.querySelector('.rd-mk-svg > g');
+            out.K_混合模式 = g ? getComputedStyle(g).mixBlendMode : '(没画出来)';
+            out.K_日间正片叠底 = out.K_混合模式 === 'multiply';
+            // 夜间要翻成滤色，否则荧光在暗底上被压成黑的
+            const hadDark = document.body.classList.contains('dark');
+            document.body.classList.add('dark');
+            const b = build([{ para: 1, word: '氤氲', id: id, note: 'yīn yūn·雾气弥漫' }]);
+            const g2 = b.box.querySelector('.rd-mk-svg > g');
+            out.K_夜间混合模式 = g2 ? getComputedStyle(g2).mixBlendMode : '(没画出来)';
+            out.K_夜间滤色 = out.K_夜间混合模式 === 'screen';
+            if (!hadDark) document.body.classList.remove('dark');
+        }
+
         /* ── I：Rough 每次画都会重新随机，**必须钉死种子** ──
            不钉的话每次重排（换字号/切主题/翻页重渲）同一个圈的歪法都不一样，页面像在抖。 */
         {
@@ -263,6 +318,15 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('G6 ⚠️记号层没跟引线层混在一起', R.G_没混进引线层);
     ok('G7 引线仍是虚线', R.G_引线仍是虚的);
     ok('G8 记号没被引线那条虚线 CSS 套上', R.G_记号不是虚的);
+    ok('J1 底下已有下划线时，池子里不再有 u', R.J_纯函数避开u);
+    ok('J2 长词遇上已有下划线：只剩荧光', R.J_长词只剩荧光);
+    ok('J3 跨行时也避开下划线', R.J_跨行时也避开);
+    ok('J4 认得出「词在精句里且精句开了划线」', R.J_识别到了);
+    ok('J5 真场景下拿到的不是下划线', R.J_真场景不是下划线);
+    ok('J6 平时（没有别的下划线）u 照样在池子里', R.J_平时还有u);
+    ok('K1 前提：造出了一个荧光记号', R.K_拿到荧光);
+    ok('K2 日间用正片叠底（字不被蒙糊）', R.K_日间正片叠底, R.K_混合模式);
+    ok('K3 夜间翻成滤色', R.K_夜间滤色, R.K_夜间混合模式);
     ok('I1 记号确实有路径', R.I_有路径);
     ok('I2 ⚠️重排后歪法一模一样（种子钉死了）', R.I_重排后一模一样);
     ok('I3 ⚠️重开一章后也一模一样', R.I_重建后一模一样);

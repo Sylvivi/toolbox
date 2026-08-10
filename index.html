@@ -25760,10 +25760,20 @@ body {
                     } else {
                         /* 荧光：一条**极粗的线**扫过去（rough-notation 也是这么干的），
                            两端天然不齐、中间有笔触感，这正是马克笔的样子。
-                           ⚠️颜色用 fill（原色带那两个值算出来的半透明色）、不是 ink：它画在字**上面**，
-                             不透明会把字盖掉；而且浓度要跟改前一样，用户说过日间底色浓度刚好、别动。 */
-                        out.push(rc.linearPath([[r.left + 1, y0 + h / 2], [r.right - 1, y0 + h / 2]],
-                            { seed: base.seed, stroke: fill, strokeWidth: h * 0.98, roughness: 2.6, bowing: 0 }));
+                           ⚠️颜色用 fill（原色带那两个值算出来的半透明色）、不是 ink，浓度跟改前一样
+                             （用户说过日间底色浓度刚好、别动）。 */
+                        var hi = rc.linearPath([[r.left + 1, y0 + h / 2], [r.right - 1, y0 + h / 2]],
+                            { seed: base.seed, stroke: fill, strokeWidth: h * 0.98, roughness: 2.6, bowing: 0 });
+                        /* ⚠️⚠️必须**正片叠底**（夜间反过来用滤色）。记号这一层画在正文**上面**，
+                           半透明色直接盖上去会把黑字调浅——用户 2026-08-10 报「荧光笔似乎是盖在
+                           字体上的，像一层纱使它显得有点糊，我觉得你可以参考一下之前的那个色带，
+                           因为色带盖在上面没有影响字的本色」。她说的没错：原来的色带是 background、
+                           长在字**后面**，字色一点不受影响。
+                           正片叠底能达到同样的效果而**不必把这一层塞到文字下面**（塞下去要动 z-index，
+                           会被祖先的气泡背景盖掉）：彩色×黑字＝还是黑字，彩色×白纸＝那片彩色。
+                           夜间底是暗的，正片叠底会把荧光压成黑的，所以翻成滤色。 */
+                        if (hi) hi.style.mixBlendMode = document.body.classList.contains('dark') ? 'screen' : 'multiply';
+                        out.push(hi);
                     }
                 } catch (e) { /* 画不出来就算了：记号只是装饰，绝不能拖垮整篇正文 */ }
             }
@@ -25775,10 +25785,32 @@ body {
            · 跨行的词：一律下划线。圈/框套在一个跨行的词上会裂成两半，而线可以每行各画一条。
            ⚠️「随机」必须**钉死**：种子取那条划线自己的 hlid，所以同一条小注刷新、换设备、
              重开一章永远是同一个记号。她原话是「随机一点」，但每次打开都换＝页面在抽风。 */
-        function rdMkPick(hlid, len, multiline) {
-            if (multiline) return 'u';
+        function rdMkPick(hlid, len, multiline, noUnderline) {
+            if (multiline) return noUnderline ? 'h' : 'u';
             var pool = (len <= 4) ? RD_MK_KINDS : ['u', 'h'];
+            /* 那个词底下已经有别的下划线了 → 别再画一条，两条叠在一起很脏
+               （2026-08-10 用户报：「有下划线（来自断句精句这类样式）的情况下，
+                 最好不要再用rough的下划线，不然有点容易重叠」）。
+               ⚠️长词去掉 u 之后只剩荧光，这是对的：框和圈本来就不给长词用。 */
+            if (noUnderline) {
+                pool = pool.filter(function (k) { return k !== 'u'; });
+                if (!pool.length) pool = ['h'];
+            }
             return pool[rdMkSeed(hlid) % pool.length];
+        }
+        /* 这个词身上是不是已经有下划线了。三个来源，都是**开关＋位置**同时成立才算：
+           ① 精句「划线」——body.reading-ks-ul + 词在 .reading-keysent 里；
+           ② 引号「划线」——body.reading-uline-on + 词在 .reading-quote 里；
+           ③ 名词「划线」——body.rn-dash + 这个词本身就是个名词高亮。
+           ⚠️划线自己的「下划线款」(body.rd-hl-underline)不用管：rd-mk 那条 CSS 已经把它
+             的 text-decoration 清掉了，不会跟记号打架。 */
+        function rdMkHasUnderline(el) {
+            if (!el || !el.closest) return false;
+            var b = document.body.classList;
+            if (b.contains('reading-ks-ul') && el.closest('.reading-keysent')) return true;
+            if (b.contains('reading-uline-on') && el.closest('.reading-quote')) return true;
+            if (b.contains('reading-names-on') && b.contains('rn-dash') && el.closest('.reading-name')) return true;
+            return false;
         }
         // 由 hlid 算一个稳定的数：既定记号种类，也当 Rough 的随机种子（见 rdMkDraw 那条⚠️）
         function rdMkSeed(hlid) {
@@ -25794,7 +25826,7 @@ body {
             if (document.body.classList.contains('rd-mk-off')) return null;
             var len = 0;
             for (var i = 0; i < marks.length; i++) len += (marks[i].textContent || '').length;
-            var kind = rdMkPick(hlid, len, rects.length > 1);
+            var kind = rdMkPick(hlid, len, rects.length > 1, rdMkHasUnderline(marks[0]));
             /* 颜色现取现用：--mk-ink（描边）和 --hlc/--hla（荧光的浓度）都定义在 CSS 的划线色板里，
                夜间那几条会自动覆盖 → 切夜间/切主题重排一次就跟着变，JS 这边不用记任何色值。 */
             var cs = getComputedStyle(marks[0]);
