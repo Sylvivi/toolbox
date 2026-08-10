@@ -6523,12 +6523,29 @@ body {
             return 0;
         }
 
+        /* 不参与随机的皮肤（2026-08-10 用户：「可以不要随机到霞玫主题吗」）。
+           ⚠️只是**不给随机摇到**，手动在主题小窗里照样能选——别顺手把它从 THEMES 里删了。
+           ⚠️万一哪天名单把所有皮肤都排掉了，下面有兜底：候选为空时忽略名单，
+             不然随机模式会卡在同一个皮肤上、看着像坏了。 */
+        var THEME_RANDOM_SKIP = ['rose'];   // rose ＝「霞玫」
+
         // 摇一个新的日间皮肤出来并记进 toolbox_theme_last。
         // ⚠️排掉上一次那个，免得连着两次开出同一个——「随机」却没变化，看着就像功能坏了。
         function themeRandomRoll() {
             var last = localStorage.getItem('toolbox_theme_last') || '';
             var candidates = [];
-            for (var i = 0; i < THEMES.length; i++) { if (THEMES[i].id !== last) candidates.push(i); }
+            for (var i = 0; i < THEMES.length; i++) {
+                if (THEMES[i].id === last) continue;
+                if (THEME_RANDOM_SKIP.indexOf(THEMES[i].id) >= 0) continue;
+                candidates.push(i);
+            }
+            // 兜底①：名单+上一次把候选清空了 → 放宽「排上一次」，但名单仍然守住
+            if (!candidates.length) {
+                for (var k = 0; k < THEMES.length; k++) {
+                    if (THEME_RANDOM_SKIP.indexOf(THEMES[k].id) < 0) candidates.push(k);
+                }
+            }
+            // 兜底②：还是空 → 全放开（宁可摇到重复的，也别一个都摇不出来）
             if (!candidates.length) { for (var j = 0; j < THEMES.length; j++) candidates.push(j); }
             var idx = candidates[Math.floor(Math.random() * candidates.length)];
             localStorage.setItem('toolbox_theme_last', THEMES[idx].id);
@@ -6540,6 +6557,9 @@ body {
         function themeRandomIdx() {
             if (nightMode) return themeIdxById(THEME_RANDOM_NIGHT_ID);
             var last = localStorage.getItem('toolbox_theme_last');
+            /* ⚠️上次摇到的那个后来被列进「不参与随机」名单了 → 立刻重摇。
+               不然名单加上之后，还得等下一次开机才生效，她这次刷新看到的仍是那个皮肤。 */
+            if (last && THEME_RANDOM_SKIP.indexOf(last) >= 0) return themeRandomRoll();
             if (last) { for (var i = 0; i < THEMES.length; i++) { if (THEMES[i].id === last) return i; } }
             return themeRandomRoll();
         }
