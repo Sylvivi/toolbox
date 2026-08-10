@@ -168,6 +168,29 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.E_同词只画一次 = c.box.querySelectorAll('.bg-mk-svg > g').length === 3;
         }
 
+        /* ── G：日夜两套颜色 ──
+           ⚠️⚠️钉的是一个真踩过的坑（2026-08-10）：夜间那套定义在 `body.dark` 上，
+             而代码里却用 `getComputedStyle(document.documentElement)` 读——CSS 变量只往**下**继承，
+             从 <html> 上读永远只拿到 :root 那套日间色，**切夜间等于没换色**。
+             光看代码「两套都写了」完全看不出来，是用户问「有没有对颜色做日夜相适应」才查出来的。 */
+        {
+            const hadDark = document.body.classList.contains('dark');
+            document.body.classList.remove('dark');
+            const a = build([{ n: 1, html: P1 }, { n: 2, html: P2 }],
+                            [{ cp: 1, head: '汐：背景：孙武' }, { cp: 2, head: '汐：背景：豫章' }]);
+            const dayC = [...a.box.querySelectorAll('.bg-mk-svg > g path')].map(p => p.getAttribute('stroke'));
+            document.body.classList.add('dark');
+            bgMkLayout(a.bub);
+            const nightC = [...a.box.querySelectorAll('.bg-mk-svg > g path')].map(p => p.getAttribute('stroke'));
+            out.G_日间色 = [...new Set(dayC)];
+            out.G_夜间色 = [...new Set(nightC)];
+            out.G_切夜间换了色 = JSON.stringify(dayC) !== JSON.stringify(nightC) && nightC.length === dayC.length;
+            // 荧光黄两边都是它（用户指定的那支笔，日夜都要是荧光黄）
+            out.G_荧光黄两边都在 = out.G_日间色.indexOf('#ffe500') >= 0 && out.G_夜间色.indexOf('#ffe500') >= 0;
+            if (!hadDark) document.body.classList.remove('dark');
+            bgMkLayout(a.bub);
+        }
+
         document.querySelectorAll('.__bgt').forEach(n => n.remove());
         return out;
     });
@@ -198,6 +221,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('E4 再开能补回来', R.E_再开能补回来);
     ok('E5 开关存进本机', R.E_存了本机);
     ok('E6 同一个词有两个背景块时不重复画', R.E_同词只画一次);
+    ok('G1 ⚠️切夜间确实换了另一套颜色（变量要从 body 读，不是 html）', R.G_切夜间换了色,
+       '日 ' + JSON.stringify(R.G_日间色) + ' / 夜 ' + JSON.stringify(R.G_夜间色));
+    ok('G2 荧光黄这支笔日夜都在', R.G_荧光黄两边都在);
     ok('F1 无页面报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();

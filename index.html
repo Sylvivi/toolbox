@@ -3316,13 +3316,18 @@ body {
            跟小注那套同一个引擎（Rough.js），但**颜色一词一支笔**：用户要的
            「人名上的颜色是随机变的」。
            ⚠️颜色按**词本身**算，所以「伍子胥」从头到尾都是同一支笔——满篇乱变会看不出是谁。
-           这六个色就是划线色板那批（日间深、夜间浅），JS 从 :root 现取，见 bgMkLayout。 */
+           这六个色就是划线色板那批（日间深、夜间浅），JS 从 :root 现取，见 bgMkLayout。
+           ⚠️日间那支黄是**荧光笔的亮黄**（#ffe500），2026-08-10 用户指定：「颜色要改成荧光黄色那种」。
+             ⚠️我一开始理解反了、往深里压成 #b07d00，被她当场纠正——**别再按对比度把它压深**。
+               它配纸白对比度只有 1.15，按无障碍标准是「不合格」，但这里要的就是荧光笔划过纸的那个观感，
+               是她明确的审美选择。为了不至于看不见，这支笔**单独加粗**（见 bgMkLayout 里的 inkWidths）。
+             ⚠️别顺手把「划线底色」那套黄也改了——那是**铺一片**的底，她说过浓度刚好、别动。 */
         :root {
-            --bg-ink-1: #d9a400; --bg-ink-2: #e8722a; --bg-ink-3: #3a9a4a;
+            --bg-ink-1: #ffe500; --bg-ink-2: #e8722a; --bg-ink-3: #3a9a4a;
             --bg-ink-4: #1E50A2; --bg-ink-5: #e85f7f; --bg-ink-6: #7a5cc4;
         }
         body.dark {
-            --bg-ink-1: #ffcf2e; --bg-ink-2: #ff9a52; --bg-ink-3: #5fc46a;
+            --bg-ink-1: #ffe500; --bg-ink-2: #ff9a52; --bg-ink-3: #5fc46a;
             --bg-ink-4: #7cb4ff; --bg-ink-5: #ff8aa3; --bg-ink-6: #b9a3f5;
         }
         .bg-mk-svg { position: absolute; left: 0; overflow: visible; pointer-events: none; z-index: 1; }
@@ -25772,13 +25777,13 @@ body {
              （那层为了让引线画到段落框外面，整体上移了这么多）。
            ⚠️**seed 必须固定传进来**：Rough 每次画都重新随机，不给种子的话每次重排
              （换字号/切主题/翻页重渲）同一个圈的歪法都不一样，看着就像页面在抖。 */
-        function rdMkDraw(rc, rects, kind, ink, fill, seed) {
+        function rdMkDraw(rc, rects, kind, ink, fill, seed, sw) {
             var out = [];
             for (var i = 0; i < rects.length; i++) {
                 var r = rects[i];
                 var w = r.right - r.left, h = r.bottom - r.top;
                 var y0 = r.top + RD_GL_PAD, y1 = r.bottom + RD_GL_PAD;
-                var base = { seed: (seed + i * 977) % 2147483647, stroke: ink, strokeWidth: 1.5, roughness: 1.4, bowing: 1.6 };
+                var base = { seed: (seed + i * 977) % 2147483647, stroke: ink, strokeWidth: sw || 1.5, roughness: 1.4, bowing: 1.6 };
                 try {
                     if (kind === 'u') {
                         // 下划线：落在字底下一点点，太贴会糊进笔画里
@@ -26028,10 +26033,19 @@ body {
             svg.setAttribute('height', String(Math.round(cr.height + RD_GL_PAD * 2)));
             layer.appendChild(svg);
 
-            // 六支笔的颜色从 :root 现取（夜间那套会自动覆盖），一次排版取一次
-            var rootCs = getComputedStyle(document.documentElement);
+            /* 六支笔的颜色现取，一次排版取一次。
+               ⚠️⚠️**必须从 document.body 读，不能从 documentElement（<html>）读**
+                 （2026-08-10 实测逮到）：夜间那套定义在 `body.dark` 上，而 CSS 变量只往**下**继承——
+                 从 <html> 上读永远只能拿到 :root 那套日间色，**切夜间等于没换色**。
+                 用户问「你有没有对颜色做日间模式和夜间模式的相适应」时才发现的，
+                 光看代码两套都写了、以为没问题。回归 tests/bgmark.test.js G 组钉死。 */
+            var rootCs = getComputedStyle(document.body);
             var inks = [];
             for (var c = 1; c <= 6; c++) inks.push((rootCs.getPropertyValue('--bg-ink-' + c) || '#888').trim() || '#888');
+            /* ⚠️第 1 支（荧光黄）**单独加粗**：它配纸白对比度只有 1.15，按 1.5px 画细线会发飘。
+               用户要的就是荧光笔那个亮黄（明确纠正过「颜色要改成荧光黄色那种」，别再往深里压），
+               所以走「加粗」这条路——荧光笔本来就比钢笔粗，观感反而更对。 */
+            var inkWidths = [2.1, 1.5, 1.5, 1.5, 1.5, 1.5];
 
             var rc = rough.svg(svg), drawn = 0, seen = {};
             for (var i = 0; i < bqs.length; i++) {
@@ -26055,7 +26069,7 @@ body {
                     var kind = bgMkPick(term, rects.length > 1, noU);
                     try {
                         // ⚠️每一处给个不同的 Rough 种子，否则同一个词的几处歪法一模一样，像复制粘贴
-                        var els = rdMkDraw(rc, rects, kind, inks[cIdx], inks[cIdx], (seed + gi * 7919) % 2147483647);
+                        var els = rdMkDraw(rc, rects, kind, inks[cIdx], inks[cIdx], (seed + gi * 7919) % 2147483647, inkWidths[cIdx]);
                         for (var e = 0; e < els.length; e++) if (els[e]) svg.appendChild(els[e]);
                         drawn++;
                     } catch (eB) { /* 单个画不出来就跳过，别拖累整篇 */ }
