@@ -287,6 +287,48 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.I_换个词就换歪法 = d4 !== d1;
         }
 
+        /* ── L：压在「背景词」上的小注 → 退回色带 ──
+           2026-08-10 用户提：「如果这个词作为背景词被渲染，并且又被标上了小注，哪怕是其中的个别字眼，
+           可否此时小注也用色带？不然两个圈叠在一起不好看」。
+           按**字符区间相交**判（不是矩形相交），所以「只沾到其中一个字」也算。 */
+        {
+            const bq = cp => '<blockquote data-cp="' + cp + '" data-ci="0" data-bg="1" '
+                + 'style="margin:0.4em 0 0.6em;padding:0.5em 12px"><div class="reading-q">汐：背景：雾气氤氲</div>说明。</blockquote>';
+            function mk1(word, withBq) {
+                document.querySelectorAll('.__mkt').forEach(n => n.remove());
+                const box = document.createElement('div');
+                box.className = 'reading-merged';
+                box.style.cssText = 'font-size:14px;line-height:1.6;width:358px';
+                const t = P1.replace(word, '<mark class="rd-hl rd-hl-gold" data-hlid="hl9" data-gl="注文">' + word + '</mark>');
+                box.innerHTML = '<p data-p="1">' + t + '</p>' + (withBq ? bq(1) : '');
+                const bub = document.createElement('div'); bub.className = 'chat-bubble'; bub.appendChild(box);
+                const msg = document.createElement('div');
+                msg.className = 'chat-msg ai __mkt'; msg.setAttribute('data-idx', '0'); msg.appendChild(bub);
+                document.body.appendChild(msg);
+                rdGlLayout(bub);
+                const m = box.querySelector('mark.rd-hl');
+                return { 有记号: m.classList.contains('rd-mk'),
+                         有色带: getComputedStyle(m).backgroundColor !== 'rgba(0, 0, 0, 0)' };
+            }
+            // 背景词是「雾气氤氲」——小注整词压上去
+            const whole = mk1('雾气氤氲', true);
+            out.L_整词压上_退色带 = !whole.有记号 && whole.有色带;
+            // 只注其中两个字（「氤氲」⊂「雾气氤氲」）也算压上
+            const part = mk1('氤氲', true);
+            out.L_只沾几个字_也退色带 = !part.有记号 && part.有色带;
+            // 同一段但没碰到背景词的别处 → 照常画记号
+            const away = mk1('青苔', true);
+            out.L_没碰到的照常画 = away.有记号 && !away.有色带;
+            // 段落里压根没有背景块 → 照常画记号（别误伤）
+            const nobq = mk1('雾气氤氲', false);
+            out.L_没背景块照常画 = nobq.有记号 && !nobq.有色带;
+            // 背景词记号被关掉时不必避让（那边压根没画东西）
+            document.body.classList.add('bg-mk-off');
+            const off = mk1('雾气氤氲', true);
+            out.L_关了记号就不避让 = off.有记号 && !off.有色带;
+            document.body.classList.remove('bg-mk-off');
+        }
+
         document.querySelectorAll('.__mkt').forEach(n => n.remove());
         return out;
     });
@@ -340,6 +382,11 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('I2 ⚠️重排后歪法一模一样（种子钉死了）', R.I_重排后一模一样);
     ok('I3 ⚠️重开一章后也一模一样', R.I_重建后一模一样);
     ok('I4 换个词就是另一副歪法', R.I_换个词就换歪法);
+    ok('L1 ⚠️小注整词压在背景词上 → 退回色带', R.L_整词压上_退色带);
+    ok('L2 ⚠️只沾到其中几个字 → 也退回色带', R.L_只沾几个字_也退色带);
+    ok('L3 同段落里没碰到背景词的 → 照常画记号', R.L_没碰到的照常画);
+    ok('L4 段落没有背景块 → 照常画记号（别误伤）', R.L_没背景块照常画);
+    ok('L5 背景词记号关掉时不必避让', R.L_关了记号就不避让);
     ok('H1 无页面报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();

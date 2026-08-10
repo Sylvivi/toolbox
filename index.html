@@ -25895,6 +25895,45 @@ body {
             h ^= h >>> 15; h = Math.imul(h, 0x2545F491) >>> 0; h ^= h >>> 13;
             return h >>> 0;
         }
+        /* 这条划线是不是正压在「背景词」上（哪怕只沾到其中一两个字）。
+           压上了就**不画手绘记号、退回色带**——2026-08-10 用户提的：
+             「如果这个词作为背景词被渲染，并且又被标上了小注，哪怕是其中的个别字眼，
+               可否此时小注也用色带？不然两个圈叠在一起不好看」。
+           她是对的，而且理由比「不好看」更硬：两个手绘记号叠在同一处，读者分不清哪个圈对应哪件事；
+           而色带铺在字**后面**、圈框在字**外面**，两者叠加层次反而清楚。
+           ⚠️按**字符区间相交**判，不按矩形相交：几何判在换行处会误伤（上一行行尾和下一行行首
+             的矩形可能贴着），而且这两层的绘制先后不固定，拿不到对方的矩形。
+           ⚠️背景词记号被关掉时不必避让（那边压根没画东西），见 rdMkPlan 里的调用条件。 */
+        function rdMkOverlapsBgTerm(marks) {
+            var m0 = marks[0];
+            if (!m0 || !m0.closest) return false;
+            var p = m0.closest('p[data-p]');
+            var box = p && p.closest('.reading-merged');
+            if (!p || !box) return false;
+            var bqs = box.querySelectorAll('blockquote[data-bg="1"][data-cp="' + p.getAttribute('data-p') + '"]');
+            if (!bqs.length) return false;
+            // 这条划线在段落里的字符区间 [s, e)
+            var s, e, len = 0;
+            try {
+                var rg = document.createRange();
+                rg.selectNodeContents(p);
+                rg.setEnd(m0, 0);
+                s = rg.toString().length;
+            } catch (err) { return false; }
+            for (var i = 0; i < marks.length; i++) len += (marks[i].textContent || '').length;
+            e = s + len;
+            var full = p.textContent || '';
+            for (var b = 0; b < bqs.length; b++) {
+                var term = (typeof bgMkTermOf === 'function') ? bgMkTermOf(bqs[b]) : '';
+                if (!term) continue;
+                var at = full.indexOf(term), guard = 0;
+                while (at >= 0 && guard++ < 200) {
+                    if (s < at + term.length && at < e) return true;   // 区间相交
+                    at = full.indexOf(term, at + term.length);
+                }
+            }
+            return false;
+        }
         /* 收一条记号的活儿（真正画是在 rdGlLayout 第 3 步，那时 SVG 才建好）。
            marks ＝ 同一条划线的所有 mark（词跨过人名高亮时会被拆成好几个）；
            rects ＝ 它占的每一行（容器坐标），跨行时每行各画一条线。 */
@@ -25903,6 +25942,8 @@ body {
             if (document.body.classList.contains('rd-mk-off')) return null;
             var len = 0;
             for (var i = 0; i < marks.length; i++) len += (marks[i].textContent || '').length;
+            // 压在背景词上 → 退回色带，别让两个手绘记号叠在一处（见 rdMkOverlapsBgTerm）
+            if (!document.body.classList.contains('bg-mk-off') && rdMkOverlapsBgTerm(marks)) return null;
             var kind = rdMkPick(hlid, len, rects.length > 1, rdMkHasUnderline(marks[0]));
             if (!kind) return null;    // 没有合适的记号 → 不打 class，保留原来的划线底色
             /* 颜色现取现用：--mk-ink（描边）和 --hlc/--hla（荧光的浓度）都定义在 CSS 的划线色板里，
