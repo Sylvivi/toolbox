@@ -217,6 +217,41 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.H_没蹭小注的class = !!bgLayer && !bgLayer.classList.contains('rd-gl-layer');
         }
 
+        /* ── I：题目和正文对不上时，砍词尾最多两个字再找 ──
+           2026-08-10 用户实拍报的：背景块题目是「艾陵之战」，而正文里只有「艾陵」两个字，
+           于是一个记号都没标。她原话：「原文里面没有出现艾陵之战这四个字，只有艾陵，
+           这实际上任务就相当于完成了，但难以标注」。 */
+        {
+            const F = '吴王夫差跟太宰嚭一起出兵伐齐，大败齐师于艾陵，顺道灭了邹鲁之君。';
+            out.I_整词就在 = bgMkMatchTerm(F, '邹鲁');
+            out.I_砍之战 = bgMkMatchTerm(F, '艾陵之战');
+            out.I_砍之会 = bgMkMatchTerm('后来又搞了黄池那次会盟', '黄池之会');
+            // ⚠️最多砍两个字：核心在后面的词宁可不标，也别误标成前面那截
+            out.I_核心在后不误标 = bgMkMatchTerm(F, '齐国大夫鲍牧');
+            // ⚠️剩下不足两个字就放弃（别标到单字上）
+            out.I_不砍到单字 = bgMkMatchTerm('他在城里住了很久', '城中之乱');
+            out.I_找不到就空 = bgMkMatchTerm(F, '完全不相干的词');
+            out.I_对了 = out.I_整词就在 === '邹鲁' && out.I_砍之战 === '艾陵'
+                      && out.I_砍之会 === '黄池' && out.I_核心在后不误标 === ''
+                      && out.I_不砍到单字 === '' && out.I_找不到就空 === '';
+            // 真场景：题目「艾陵之战」，正文只有「艾陵」→ 该标出来
+            const a = build([{ n: 1, html: '吴王夫差出兵伐齐，大败齐师于艾陵，顺道灭了邹鲁之君。' }],
+                            [{ cp: 1, head: '汐：背景：艾陵之战' }]);
+            out.I_真场景标上了 = a.box.querySelectorAll('.bg-mk-svg > g').length === 1;
+            /* ⚠️**治本在提示词里，而且是「一对」**（2026-08-10）：
+               ① 第一遍：名字优先照抄原文里的字（这样正文里才定位得到、画得出圈）；
+               ② 第二遍：如果那只是简称/局部，开头先点明完整名称再讲——
+                  用户明确要求解释仍要引申（「解释的时候是允许在原文上面引申的」），
+                  不是退化成「只解释原文那两个字」。
+               上面那套砍字只是兜底（管已经标好的老数据、和模型偶尔没照做）。
+               这两条断言防的是：以后有人整理提示词时删了其中一条——
+               只删①会让记号又标不上，只删②会让讲解退化成解释字面。 */
+            out.I_提示词要求照抄原文 = BG_SCAN_INSTRUCTION.indexOf('优先照抄原文里出现的那几个字') > 0
+                                  && BG_SCAN_INSTRUCTION.indexOf('不要写「艾陵之战」') > 0;
+            out.I_讲解要补全称 = BG_EXPLAIN_INSTRUCTION.indexOf('点明完整名称') > 0
+                             && BG_EXPLAIN_INSTRUCTION.indexOf('艾陵之战') > 0;
+        }
+
         document.querySelectorAll('.__bgt').forEach(n => n.remove());
         return out;
     });
@@ -253,6 +288,11 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('H1 ⚠️写小注之后背景词记号还在（别再被 rdGlClear 连坐删掉）', R.H_没被抹掉, R.H_写之前 + ' → ' + R.H_写之后);
     ok('H2 小注自己那层也正常建起来了', R.H_小注层也在);
     ok('H3 ⚠️背景词层没有蹭 .rd-gl-layer 这个 class', R.H_没蹭小注的class);
+    ok('I1 ⚠️砍词尾最多两字的回退匹配', R.I_对了,
+       JSON.stringify([R.I_整词就在, R.I_砍之战, R.I_砍之会, R.I_核心在后不误标, R.I_不砍到单字, R.I_找不到就空]));
+    ok('I2 真场景：题目「艾陵之战」、正文只有「艾陵」→ 标出来了', R.I_真场景标上了);
+    ok('I3 ⚠️第一遍：名字要照抄原文的字（这样才定位得到）', R.I_提示词要求照抄原文);
+    ok('I4 ⚠️第二遍：开头补完整名称（解释仍要引申，别退化成解释字面）', R.I_讲解要补全称);
     ok('F1 无页面报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();
