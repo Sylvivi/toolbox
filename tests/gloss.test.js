@@ -639,14 +639,18 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.H_已有划线上也没问 = rdHlShowEditBar.toString().indexOf('data-act="ask"') < 0;
             out.H_函数已删干净 = typeof window.rdHlAskClawd === 'undefined';
             out.H_注按钮还在 = rdHlShowSelBar.toString().indexOf('data-act=\"gloss\"') >= 0;
-            /* 顺序是用户 2026-08-04 亲自定的：色板 → ✍️注 → 划线样式 → ✏️改。
-               她先试过「注放最前」，说不对，要在色板后面。按源码里三段的先后位置钉住。 */
+            /* 顺序：**🖍划线 → ✍️注 → ✏️改**。
+               ⚠️2026-08-10 大改过一次：选中小条上的**色板**和**划线样式键**都撤了——
+                 颜色改成随机（想自己挑就划完再点那条划线，色板在那条小条上），
+                 而样式键显示的字正好也是「划线」、跟新的真·划线键撞脸。
+                 原来那条「色板 → 注 → 样式」的顺序（2026-08-04 她定的）随之作废。
+               详见 tests/selbar.test.js。 */
             const _src = rdHlShowSelBar.toString();
-            const _iSw = _src.indexOf('rdHlSwatchHtml(');
+            const _iHl = _src.indexOf('data-act="hl"');
             const _iGl = _src.indexOf('data-act="gloss"');
-            const _iSt = _src.indexOf('rdHlStyleBtnHtml(');
-            out.H_注在色板后 = _iSw < _iGl;
-            out.H_注在划线前 = _iGl < _iSt;
+            const _iEd = _src.indexOf('data-act="edit"');
+            out.H_选中条没色板 = _src.indexOf('rdHlSwatchHtml(') < 0;
+            out.H_顺序对 = _iHl >= 0 && _iHl < _iGl && _iGl < _iEd;
             // 已有划线的小条上也要有「✍️ 重注」——否则想重注只能先删划线再重选（用户真踩了）
             out.H_重注按钮 = rdHlShowEditBar.toString().indexOf("data-act=\"gloss\"") >= 0;
             out.H_重注接到rdGlRedo = rdHlShowEditBar.toString().indexOf('rdGlRedo') >= 0;
@@ -760,8 +764,8 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('H3b 点已有划线时也没有「💬 问」了', R.H_已有划线上也没问);
     ok('H3d 死函数已删干净', R.H_函数已删干净);
     ok('H3c 撤「问」没误删「✍️ 注」', R.H_注按钮还在);
-    ok('H3e 「✍️ 注」排在色板后面', R.H_注在色板后);
-    ok('H3f 「✍️ 注」排在「划线」前面', R.H_注在划线前);
+    ok('H3e ⚠️选中小条上已无色板（2026-08-10 改成随机色）', R.H_选中条没色板);
+    ok('H3f 顺序：🖍划线 → ✍️注 → ✏️改', R.H_顺序对);
     ok('H4 已有划线上有「✍️ 重注」', R.H_重注按钮);
     ok('H5 重注接到 rdGlRedo', R.H_重注接到rdGlRedo);
     ok('H6 新建与重注共用同一条 AI 路径', R.H_共用一条路);

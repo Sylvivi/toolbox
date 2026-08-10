@@ -25594,7 +25594,7 @@ body {
            title 里补了一句说明，鼠标悬停/长按看得到，不占小条的宽度。 */
         function rdHlStyleBtnHtml() {
             var u = document.body.classList.contains('rd-hl-underline');
-            return '<button class="rd-act rd-style" data-act="style" title="换划线的长相：底色 ↔ 下划线（不是划线本身，划线请点左边的色块）">' + (u ? '底色' : '划线') + '</button>';
+            return '<button class="rd-act rd-style" data-act="style" title="换划线的长相：底色 ↔ 下划线（不是划线本身；划线请先选中文字、点小条上的「🖍 划线」）">' + (u ? '底色' : '划线') + '</button>';
         }
 
         // 把段落 p 内 [start,end) 这段字描成一条 mark（可能横跨人名/引号 span，按文本节点逐段包，不动元素结构）
@@ -26792,6 +26792,23 @@ body {
             if (top < 8) top = rect.bottom + 8;
             bar.style.left = left + 'px'; bar.style.top = top + 'px';
         }
+        /* 随机挑一支笔（2026-08-10 用户定的新交互）：
+             「刚开始选中的时候，没有那些颜色条，它可能是随机的小注颜色，
+               但是选好之后再点，就会出现可选颜色，这个时候我可以按我自己的想法去选颜色，
+               这样就即兼顾了随机又兼顾了自定义」。
+           ⚠️避开 ink（中性灰/白）：当「随机来的惊喜」太素，而且它本来就是留给「不想要颜色」时手动挑的。
+           ⚠️躲开上一次那支：连着抽到同一个色，看着就不像随机了（人对连号特别敏感）。 */
+        function rdHlRandomColor() {
+            var pool = RD_HL_COLORS.filter(function (c) { return c !== 'ink'; });
+            var last = null;
+            try { last = localStorage.getItem('reading_hl_last_color'); } catch (e) {}
+            var pick = pool[Math.floor(Math.random() * pool.length)];
+            if (last && pick === last && pool.length > 1) {
+                var alt = pool.filter(function (c) { return c !== last; });
+                pick = alt[Math.floor(Math.random() * alt.length)];
+            }
+            return pick;
+        }
         function rdHlSwatchHtml(curColor) {
             var h = '';
             for (var i = 0; i < RD_HL_COLORS.length; i++) {
@@ -26813,14 +26830,20 @@ body {
             var bar = document.createElement('div');
             // 停靠底部，躲开系统选区气泡（见 CSS .rd-dock 注释）
             bar.className = 'rd-hl-bar rd-dock'; bar.id = 'rdHlBar';
-            /* ⚠️顺序是用户 2026-08-04 亲自定的：**色板 → ✍️注 → 划线样式 → ✏️改**。
-               「✍️ 注」是高频功能所以要靠前，但要在色板**后面**（她先试过放最前，说不对）。
-               别再动这个顺序。 */
-            bar.innerHTML = rdHlSwatchHtml('') +
+            /* ⚠️⚠️**这条小条上没有色板**（2026-08-10 改，用户定的新交互）：
+               刚选中时只给动作、颜色随机；想自己挑颜色 → 划完之后**再点那条划线**，
+               色板在那条小条上（rdHlShowEditBar）。她的原话：
+                 「刚开始选中的时候，没有那些颜色条，它可能是随机的小注颜色，但是选好之后再点，
+                   就会出现可选颜色……这样就即兼顾了随机又兼顾了自定义」。
+               ⚠️连带撤掉的还有「划线样式(底色↔下划线)」那颗键——它显示的字正好也是「划线」，
+                 跟新加的这颗真·划线键撞脸（那颗键历史上就害用户以为「划线功能坏了」，
+                 见 rdHlStyleBtnHtml 上那段⚠️⚠️）。它在**已有划线**那条小条上还在，不丢功能。
+               顺序（2026-08-04 她定过「✍️注 要靠前」，现在色板没了，注就排在划线后面第一位）。 */
+            bar.innerHTML =
+                '<button class="rd-act" data-act="hl">🖍 划线</button>' +
                 '<span class="rd-sep"></span>' +
                 '<button class="rd-act" data-act="gloss">✍️ 注</button>' +
                 '<span class="rd-sep"></span>' +
-                rdHlStyleBtnHtml() +
                 /* 「✏️ 改」＝改正文错字。为什么挂在这条上：改错字的第一步本来就是「选中那个错字」，
                    手势天生就对上了，零新增手势、零新增图标。（长按段落不行——手机上长按＝系统选词，
                    而选词正是划线的入口，两者会正面打架。） */
@@ -26836,11 +26859,9 @@ body {
             bar.addEventListener('mousedown', function(e) { e.preventDefault(); });
             bar.addEventListener('touchstart', function(e) { e.stopPropagation(); }, { passive: true });
             bar.addEventListener('click', function(e) {
-                var sw = e.target.closest('.rd-sw');
-                if (sw) { rdHlCreate(sw.getAttribute('data-c')); return; }
                 var act = e.target.closest('.rd-act'); if (!act) return;
                 var a = act.getAttribute('data-act');
-                if (a === 'style') { rdHlToggleStyle(); return; }   // 切样式，条不收，继续选色
+                if (a === 'hl') { rdHlCreate(rdHlRandomColor()); return; }   // 颜色随机，想改点那条划线
                 if (a === 'edit') {
                     // ⚠️先把 _rdHlPending 抄下来：rdEditOpen 里会 rdHlHideBar()，那会把它清成 null
                     var pe = _rdHlPending;
@@ -26931,8 +26952,11 @@ body {
             var baseUrl = getBaseUrl(item.url);
             var apiKey = chatSelectedKeyStr || getActiveKey(item);
 
-            // 先把划线建出来：手机上点完立刻有反馈，AI 失败了这条也还在（可自己补批注或删掉）
-            var color = localStorage.getItem('reading_hl_last_color') || 'sky';
+            /* 先把划线建出来：手机上点完立刻有反馈，AI 失败了这条也还在（可自己补批注或删掉）。
+               ⚠️颜色**随机**（2026-08-10 改）。原来跟着 reading_hl_last_color 走，那是「选中就有色板」
+                 时代的遗留——现在选中时压根没有色板可点，跟着上一次等于永远一个色。
+                 想指定颜色：注完点那个词，色板在那条小条上。 */
+            var color = rdHlRandomColor();
             var id = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
             var hl = {
                 id: id, msgIdx: pend.msgIdx, chap: _readerChapOf(pend.msgIdx), p: pend.pNum,
