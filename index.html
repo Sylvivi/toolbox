@@ -3333,6 +3333,13 @@ body {
             --bg-ink-1: #ffe500; --bg-ink-2: #ff9a52; --bg-ink-3: #5fc46a;
             --bg-ink-4: #7cb4ff; --bg-ink-5: #ff8aa3; --bg-ink-6: #b9a3f5;
         }
+        /* ⚠️⚠️背景词这一层**必须有自己的 class 和自己的定位样式，绝不能蹭 `.rd-gl-layer`**
+           （2026-08-10 用户报的 bug：「当一个段落里面有画框时，我这个时候进行小注，原本因为背景词
+             而被选出来框起来的那一些渲染会消失，我必须退出重进才会重新渲染」）。
+           根因：小注重排的第一步 `rdGlClear` 删的是**所有** `.rd-gl-layer`——
+           当时为了省几行 CSS 让背景词层也挂了这个 class，于是写一条小注就把背景词记号一起抹了，
+           而 rdGlLayout 只会重建小注层，不会重建它。 */
+        .bg-mk-layer { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
         .bg-mk-svg { position: absolute; left: 0; overflow: visible; pointer-events: none; z-index: 1; }
         body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-gold  { text-decoration-color: #ffcf2e; }
         body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-orange { text-decoration-color: #ff9a52; }
@@ -26050,7 +26057,7 @@ body {
             if (cr.width < 1) return;              // 还没排好版，等下一次重排
 
             var layer = document.createElement('div');
-            layer.className = 'bg-mk-layer rd-gl-layer';   // 复用 .rd-gl-layer 的绝对定位（inset:0、不吃点击）
+            layer.className = 'bg-mk-layer';   // ⚠️别再加 rd-gl-layer，会被 rdGlClear 连坐删掉（见 CSS 那条⚠️⚠️）
             box.appendChild(layer);
             var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
             svg.setAttribute('class', 'bg-mk-svg');
@@ -26150,6 +26157,9 @@ body {
             };
         }
 
+        /* ⚠️它删的是**所有** .rd-gl-layer。别的功能想复用这个 class 蹭定位样式的话，
+           会在这里被连坐删掉、而且不会被重建（背景词记号 2026-08-10 就这么消失过一次）。
+           要新层就自己写 class 和定位样式，见 .bg-mk-layer。 */
         function rdGlClear(root) {
             var old = (root || document).querySelectorAll('.rd-gl-layer');
             for (var i = 0; i < old.length; i++) old[i].parentNode.removeChild(old[i]);

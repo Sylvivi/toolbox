@@ -193,6 +193,28 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             bgMkLayout(a.bub);
         }
 
+        /* ── H：⚠️写小注不许把背景词记号抹掉 ──
+           2026-08-10 用户报：「当一个段落里面有画框时，我这个时候进行小注，原本因为背景词而被选出来
+           框起来的那一些渲染会消失，我必须退出重进才会重新渲染」。
+           根因：背景词那层当时蹭了 `.rd-gl-layer` 这个 class 省 CSS，而小注重排第一步 `rdGlClear`
+           删的是**所有** .rd-gl-layer → 连坐删掉，且 rdGlLayout 只会重建小注层。
+           现在 .bg-mk-layer 有自己的定位样式。**别再让别的层去蹭 .rd-gl-layer。** */
+        {
+            const a = build([{ n: 1, html: P1 }], [{ cp: 1, head: '汐：背景：孙武' }]);
+            out.H_写之前 = a.box.querySelectorAll('.bg-mk-svg > g').length;
+            // 模拟「写了一条小注」：段落里出现带 data-gl 的 mark，然后重排小注层
+            const p = a.box.querySelector('p[data-p="1"]');
+            p.innerHTML = p.innerHTML.replace('齐国',
+                '<mark class="rd-hl rd-hl-gold" data-hlid="hh9" data-gl="qí guó·春秋诸侯国">齐国</mark>');
+            rdGlLayout(a.bub);
+            out.H_写之后 = a.box.querySelectorAll('.bg-mk-svg > g').length;
+            out.H_没被抹掉 = out.H_写之后 === out.H_写之前 && out.H_写之后 > 0;
+            out.H_小注层也在 = !!a.box.querySelector('.rd-gl-svg');
+            // 两层各自独立：class 不许再有交集
+            const bgLayer = a.box.querySelector('.bg-mk-layer');
+            out.H_没蹭小注的class = !!bgLayer && !bgLayer.classList.contains('rd-gl-layer');
+        }
+
         document.querySelectorAll('.__bgt').forEach(n => n.remove());
         return out;
     });
@@ -226,6 +248,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('G1 ⚠️切夜间确实换了另一套颜色（变量要从 body 读，不是 html）', R.G_切夜间换了色,
        '日 ' + JSON.stringify(R.G_日间色) + ' / 夜 ' + JSON.stringify(R.G_夜间色));
     ok('G2 荧光黄：日间 #eec400 / 夜间 #ffe500', R.G_荧光黄两边都在);
+    ok('H1 ⚠️写小注之后背景词记号还在（别再被 rdGlClear 连坐删掉）', R.H_没被抹掉, R.H_写之前 + ' → ' + R.H_写之后);
+    ok('H2 小注自己那层也正常建起来了', R.H_小注层也在);
+    ok('H3 ⚠️背景词层没有蹭 .rd-gl-layer 这个 class', R.H_没蹭小注的class);
     ok('F1 无页面报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();
