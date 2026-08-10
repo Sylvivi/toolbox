@@ -185,8 +185,10 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.G_日间色 = [...new Set(dayC)];
             out.G_夜间色 = [...new Set(nightC)];
             out.G_切夜间换了色 = JSON.stringify(dayC) !== JSON.stringify(nightC) && nightC.length === dayC.length;
-            // 荧光黄两边都是它（用户指定的那支笔，日夜都要是荧光黄）
-            out.G_荧光黄两边都在 = out.G_日间色.indexOf('#ffe500') >= 0 && out.G_夜间色.indexOf('#ffe500') >= 0;
+            /* 那支荧光黄日夜**不是同一个值**（2026-08-10 来回调了三轮）：
+               夜间 #ffe500（纯荧光黄，她说「夜间不错」）、日间 #eec400（压沉一档，她说「日间还是要压一点」）。
+               ⚠️日间这支别再往深里压——第一轮压成暗金 #b07d00 被她当场纠正。 */
+            out.G_荧光黄两边都在 = out.G_日间色.indexOf('#eec400') >= 0 && out.G_夜间色.indexOf('#ffe500') >= 0;
             if (!hadDark) document.body.classList.remove('dark');
             bgMkLayout(a.bub);
         }
@@ -223,7 +225,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('E6 同一个词有两个背景块时不重复画', R.E_同词只画一次);
     ok('G1 ⚠️切夜间确实换了另一套颜色（变量要从 body 读，不是 html）', R.G_切夜间换了色,
        '日 ' + JSON.stringify(R.G_日间色) + ' / 夜 ' + JSON.stringify(R.G_夜间色));
-    ok('G2 荧光黄这支笔日夜都在', R.G_荧光黄两边都在);
+    ok('G2 荧光黄：日间 #eec400 / 夜间 #ffe500', R.G_荧光黄两边都在);
     ok('F1 无页面报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();

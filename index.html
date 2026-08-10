@@ -3317,13 +3317,16 @@ body {
            「人名上的颜色是随机变的」。
            ⚠️颜色按**词本身**算，所以「伍子胥」从头到尾都是同一支笔——满篇乱变会看不出是谁。
            这六个色就是划线色板那批（日间深、夜间浅），JS 从 :root 现取，见 bgMkLayout。
-           ⚠️日间那支黄是**荧光笔的亮黄**（#ffe500），2026-08-10 用户指定：「颜色要改成荧光黄色那种」。
-             ⚠️我一开始理解反了、往深里压成 #b07d00，被她当场纠正——**别再按对比度把它压深**。
-               它配纸白对比度只有 1.15，按无障碍标准是「不合格」，但这里要的就是荧光笔划过纸的那个观感，
-               是她明确的审美选择。为了不至于看不见，这支笔**单独加粗**（见 bgMkLayout 里的 inkWidths）。
+           ⚠️那支黄是**荧光笔的黄**，日夜不是同一个值（2026-08-10 来回调了三轮才定的，别自作主张动）：
+             · 夜间 #ffe500（纯荧光黄，暗底上正好，用户「黄色夜间不错」）；
+             · 日间 #eec400（同一支笔压沉一档，用户「日间我觉得还是要压一点」）。
+             ⚠️**别按对比度把日间这支继续往深里压**：我第一轮理解反了、压成暗金 #b07d00，
+               被她当场纠正「颜色要改成荧光黄色那种」。它配纸白对比度也就 1.6，按无障碍标准不合格，
+               但要的就是荧光笔划过纸的观感，是她明确的审美选择。
+             为了不至于发飘，这支笔**单独加粗**（见 bgMkLayout 里的 inkWidths）。
              ⚠️别顺手把「划线底色」那套黄也改了——那是**铺一片**的底，她说过浓度刚好、别动。 */
         :root {
-            --bg-ink-1: #ffe500; --bg-ink-2: #e8722a; --bg-ink-3: #3a9a4a;
+            --bg-ink-1: #eec400; --bg-ink-2: #e8722a; --bg-ink-3: #3a9a4a;
             --bg-ink-4: #1E50A2; --bg-ink-5: #e85f7f; --bg-ink-6: #7a5cc4;
         }
         body.dark {
@@ -13413,19 +13416,22 @@ body {
         // 直接进入最近一次对话；没有任何对话时开新对话
         function chatOpenMostRecent() {
             var list = chatGetHistory() || [];
-            // 智能恢复「上次在做什么」：把阅读会话(reader_)也算进来一起比时间戳，
-            // 谁最近就进谁——上次在看书就回看书，上次在聊天/共读就开那个对话。
-            var top = null;
-            for (var i = 0; i < list.length; i++) {
-                var t = list[i].updated || list[i].created || 0;
-                if (!top || t > (top.updated || top.created || 0)) top = list[i];
-            }
-            // 上次就在阅读模式 → 回到上次那本书、上次读到的位置（readerResumeLast 只开当前章、不整本堆进来，不慢）
-            if (top && top.id && top.id.indexOf('reader_') === 0 && typeof readerResumeLast === 'function') {
-                readerResumeLast();
+            /* ⚠️**只要读过书，就一律回书**（2026-08-10 用户定，别再改回「比时间戳」）。
+               原来的做法是把阅读会话(reader_)和对话放一起比 updated、谁新进谁，听着聪明，
+               实际很烦：她偶尔聊两句对话，那条对话就成了最新的，**下次长按搜索键打开的就是对话**。
+               她的原话：「我偶尔会聊对话，然后有时候对话就变成默认打开的窗口了，
+                 其实我是希望能够打开阅读的，对话那边就不用管了，因为那个用得还是少一点」。
+               ⚠️「读过书」以 reader_last_book 且那本书还在为准——从没读过书的人（这 app 她朋友也在用）
+                 仍然照旧走下面的「最近对话」，不会被硬塞进书架。 */
+            var lastBook = null;
+            try { lastBook = localStorage.getItem('reader_last_book'); } catch (e) {}
+            if (lastBook && typeof rbLoad === 'function') rbLoad();
+            if (lastBook && typeof rbGetBook === 'function' && rbGetBook(lastBook)
+                && typeof readerResumeLast === 'function') {
+                readerResumeLast();   // 只开当前章、不把整本堆进来，所以不慢
                 return;
             }
-            // 否则打开最近的普通对话/共读（排除阅读会话）
+            // 从没读过书（或那本书已删/换设备没同步过来）→ 打开最近的普通对话/共读（排除阅读会话）
             var chats = list.filter(function(c) { return !(c.id && c.id.indexOf('reader_') === 0); });
             if (!chats.length) { chatNewConv(); return; }
             chats.sort(function(a, b) { return (b.updated || b.created || 0) - (a.updated || a.created || 0); });
