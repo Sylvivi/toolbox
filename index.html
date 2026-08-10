@@ -25917,7 +25917,20 @@ body {
 
            跟小注那套共用 Rough.js 和 rdMkDraw，区别在**颜色一词一支笔**（种子取词本身，
            所以「伍子胥」全书都是同一个颜色、同一种画法）。 */
-        var BG_MK_KINDS = ['u', 'b', 'c'];
+        /* 背景词能用的记号。⚠️**下划线有门槛：三个字及以上**（用户 2026-08-10 两次定的——
+           先说「对背景词这个来说，下划线可以去掉，还是画圈画框比较好」，随后补「下划线还是可以保留，
+           但是得是三个字及以上」）。道理是短词底下一条短线看着像笔误，而三个字以上就够长、
+           像真的划了一道。 */
+        var BG_MK_KINDS = ['b', 'c'];          // 谁都能用的两种
+        var BG_MK_U_MIN = 3;                   // 下划线的字数门槛
+        function bgMkPick(term, multiline, noUnderline) {
+            var canU = (term || '').length >= BG_MK_U_MIN && !noUnderline;
+            /* 跨行：圈会裂成两个半圆，所以只能下划线（每行一条，天然不裂）或方框（每行一个）。
+               够长就用下划线——那才是跨行时最自然的画法。 */
+            if (multiline) return canU ? 'u' : 'b';
+            var pool = canU ? BG_MK_KINDS.concat(['u']) : BG_MK_KINDS;
+            return pool[rdMkSeed(term) % pool.length];
+        }
         function bgMkClear(root) {
             var old = (root || document).querySelectorAll('.bg-mk-layer');
             for (var i = 0; i < old.length; i++) old[i].parentNode.removeChild(old[i]);
@@ -25937,32 +25950,16 @@ body {
                圈一整句既难看又多半在段落里根本找不到原样的文字。 */
             return (term.length >= 1 && term.length <= 8) ? term : '';
         }
-        // 在段落里找这个词第一次出现的位置，返回它占的每一行（容器坐标）
-        function bgMkRectsOf(p, term, cr) {
-            var full = p.textContent || '';
-            var at = full.indexOf(term);
-            if (at < 0) return [];                 // 段落里没有原样出现（AI 换了说法）→ 不画
-            var end = at + term.length;
-            var walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, null, false);
-            var idx = 0, n, sN = null, sO = 0, eN = null, eO = 0;
-            while ((n = walker.nextNode())) {
-                var len = n.nodeValue.length;
-                if (sN === null && idx + len > at) { sN = n; sO = at - idx; }
-                if (sN !== null && idx + len >= end) { eN = n; eO = end - idx; break; }
-                idx += len;
-            }
-            if (!sN || !eN) return [];
-            var rg = document.createRange();
-            try { rg.setStart(sN, sO); rg.setEnd(eN, eO); } catch (e) { return []; }
-            var list = rg.getClientRects(), rows = [];
+        /* 把一串 DOM 矩形按「行」并起来（容器坐标）。
+           ⚠️同一行常被拆成好几个矩形（词跨过人名高亮/划线时），不并的话一个词上会摞好几个圈。 */
+        function bgMkRows(list, cr) {
+            var rows = [];
             for (var i = 0; i < list.length; i++) {
                 var g = list[i];
                 if (g.width <= 0 || g.height <= 0) continue;
                 rows.push({ left: g.left - cr.left, right: g.right - cr.left,
                             top: g.top - cr.top, bottom: g.bottom - cr.top });
             }
-            /* ⚠️同一行会被拆成好几个矩形（词跨过人名高亮/划线时），要按行并起来，
-               否则一个词上会摞好几个圈。 */
             rows.sort(function (a, b) { return a.top - b.top || a.left - b.left; });
             var out = [];
             for (var j = 0; j < rows.length; j++) {
@@ -25973,6 +25970,38 @@ body {
                     last.top = Math.min(last.top, rows[j].top);
                     last.bottom = Math.max(last.bottom, rows[j].bottom);
                 } else out.push(rows[j]);
+            }
+            return out;
+        }
+        /* 在段落里找这个词**每一次**出现的位置。返回 [[这一处占的行…], [下一处…], …]。
+           ⚠️2026-08-10 用户报：「一段里面居然有多个背景词，相同的背景词哈，居然只划里面的一个」——
+             第一版只 indexOf 一次就收工了。同一段里出现几次就画几次。 */
+        function bgMkAllRectsOf(p, term, cr) {
+            var full = p.textContent || '';
+            if (!term || full.indexOf(term) < 0) return [];
+            // 一次收齐文本节点和各自的起止偏移：出现好几次时不必反复走 TreeWalker
+            var walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, null, false);
+            var nodes = [], idx = 0, n;
+            while ((n = walker.nextNode())) {
+                nodes.push({ node: n, from: idx, to: idx + n.nodeValue.length });
+                idx += n.nodeValue.length;
+            }
+            var out = [], at = full.indexOf(term), guard = 0;
+            while (at >= 0 && guard++ < 200) {
+                var end = at + term.length, sN = null, sO = 0, eN = null, eO = 0;
+                for (var i = 0; i < nodes.length; i++) {
+                    if (sN === null && nodes[i].to > at) { sN = nodes[i].node; sO = at - nodes[i].from; }
+                    if (sN !== null && nodes[i].to >= end) { eN = nodes[i].node; eO = end - nodes[i].from; break; }
+                }
+                if (sN && eN) {
+                    var rg = document.createRange();
+                    try {
+                        rg.setStart(sN, sO); rg.setEnd(eN, eO);
+                        var rows = bgMkRows(rg.getClientRects(), cr);
+                        if (rows.length) out.push(rows);
+                    } catch (e) { /* 这一处定位不了就跳过，别影响别处 */ }
+                }
+                at = full.indexOf(term, end);
             }
             return out;
         }
@@ -26011,23 +26040,26 @@ body {
                 var cp = bqs[i].getAttribute('data-cp');
                 var para = box.querySelector('p[data-p="' + cp + '"]');
                 if (!para) continue;
-                var rects = bgMkRectsOf(para, term, cr);
-                if (!rects.length) continue;
+                var groups = bgMkAllRectsOf(para, term, cr);
+                if (!groups.length) continue;
                 seen[term] = 1;
                 var seed = rdMkSeed(term);                     // ⚠️种子＝词本身，全书同色同款
-                /* ⚠️颜色要用**另一个**哈希，不能跟形状共用 seed：形状是 seed%3、颜色是 seed%6，
-                   而 6 是 3 的倍数——共用的话两者完全绑死，六支笔只剩六种固定搭配，
-                   看着就不像随机了（2026-08-10 实拍：两个不同的词一模一样都是紫圈）。 */
+                /* ⚠️颜色要用**另一个**哈希，不能跟形状共用 seed：形状是 seed%2、颜色是 seed%6，
+                   共用的话两者绑死，看着就不像随机了（2026-08-10 实拍：两个不同的词一模一样都是紫圈）。 */
                 var cIdx = rdMkSeed(term + '·色') % inks.length;
-                /* 那个词底下已经有别的下划线时避开 u（同小注那条规则）；
-                   跨行、或词太长时 rdMkPick 会自己退成下划线或直接不画。 */
-                var kind = rdMkPick(term, term.length, rects.length > 1, rdMkHasUnderline(para.firstChild || para));
-                if (!kind || BG_MK_KINDS.indexOf(kind) < 0) continue;
-                try {
-                    var els = rdMkDraw(rc, rects, kind, inks[cIdx], inks[cIdx], seed);
-                    for (var e = 0; e < els.length; e++) if (els[e]) svg.appendChild(els[e]);
-                    drawn++;
-                } catch (eB) { /* 单个画不出来就跳过，别拖累整篇 */ }
+                /* 那个词底下已经有别的下划线时（精句/引号/名词的「划线」开着），别再画一条压上去，
+                   两条叠在一起很脏——同小注那条规则，见 rdMkHasUnderline。 */
+                var noU = rdMkHasUnderline(para);
+                for (var gi = 0; gi < groups.length; gi++) {
+                    var rects = groups[gi];
+                    var kind = bgMkPick(term, rects.length > 1, noU);
+                    try {
+                        // ⚠️每一处给个不同的 Rough 种子，否则同一个词的几处歪法一模一样，像复制粘贴
+                        var els = rdMkDraw(rc, rects, kind, inks[cIdx], inks[cIdx], (seed + gi * 7919) % 2147483647);
+                        for (var e = 0; e < els.length; e++) if (els[e]) svg.appendChild(els[e]);
+                        drawn++;
+                    } catch (eB) { /* 单个画不出来就跳过，别拖累整篇 */ }
+                }
             }
             if (!drawn) layer.parentNode.removeChild(layer);
         }

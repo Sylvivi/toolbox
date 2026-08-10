@@ -54,7 +54,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             bgMkLayout(bub);
             return { box, bub };
         }
-        const P1 = '孙武是齐国人，后来跑到吴国，由' + N('伍子胥') + '引荐给' + N('阖闾') + '，带来一部兵法。';
+        const P1 = '孙武是齐国人，后来跑到吴国，由' + N('伍子胥') + '引荐给' + N('阖闾') + '，孙武带来一部兵法，让孙武练兵。';   // ⚠️「孙武」故意出现三次
         const P2 = '楚昭王叫公子囊瓦带兵进攻吴国，吴则带兵迎击，在豫章大破楚军，又拿下一座城。';
 
         // ── A：只画被解释的那个词 ──
@@ -62,7 +62,10 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             const a = build([{ n: 1, html: P1 }, { n: 2, html: P2 }],
                             [{ cp: 1, head: '汐：背景：孙武' }, { cp: 2, head: '汐：背景：豫章' }]);
             out.A_画了几个 = a.box.querySelectorAll('.bg-mk-svg > g').length;
-            out.A_两个词各一个 = out.A_画了几个 === 2;
+            /* ⚠️「孙武」在第 1 段出现三次、「豫章」一次 ＝ 四个记号。
+               2026-08-10 用户报：「一段里面居然有多个背景词，相同的背景词哈，居然只划里面的一个」——
+               第一版只 indexOf 一次就收工。出现几次画几次。 */
+            out.A_每一处都画 = out.A_画了几个 === 4;
             // ⚠️别的人名（伍子胥/阖闾）一个都不许画——那是被否掉的「满篇人名」版
             out.A_没碰别的人名 = a.box.querySelectorAll('.reading-name.rn-mk, .rn-mk-layer').length === 0;
             // 没有背景块时，一层都不该建
@@ -104,9 +107,31 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
                （6 是 3 的倍数）六支笔只剩六种固定搭配。实拍过两个词一模一样都是紫圈。 */
             const kinds = new Set(), colors = new Set();
             const words = ['孙武', '豫章', '囊瓦', '阖闾', '伍子胥', '子常', '唐蔡', '楚昭王', '越国', '居巢', '夫概', '司马迁'];
-            words.forEach(w => { kinds.add(rdMkPick(w, w.length, false)); colors.add(rdMkSeed(w + '·色') % 6); });
+            words.forEach(w => { kinds.add(BG_MK_KINDS[rdMkSeed(w) % BG_MK_KINDS.length]); colors.add(rdMkSeed(w + '·色') % 6); });
             out.C_形状种类 = kinds.size; out.C_颜色种类 = colors.size;
-            out.C_分布够散 = kinds.size === 3 && colors.size >= 5;
+            out.C_分布够散 = kinds.size >= 2 && colors.size >= 5;
+            /* ⚠️下划线有**三个字的门槛**（用户 2026-08-10 定：「下划线还是可以保留，
+               但是得是三个字及以上」）：短词底下一条短线像笔误。 */
+            const short2 = new Set(), long3 = new Set();
+            for (let i = 0; i < 300; i++) {
+                short2.add(bgMkPick('两字' + (i % 1 ? '' : ''), false, false));   // 恒 2 字
+                short2.add(bgMkPick('孙武', false, false));
+                long3.add(bgMkPick('伍子胥' + (i % 7 ? '' : ''), false, false));
+            }
+            for (let i = 0; i < 300; i++) long3.add(bgMkPick('词' + i + '子', false, false));   // 3 字以上
+            out.C_两字没有下划线 = !short2.has('u');
+            out.C_三字以上有下划线 = long3.has('u');
+            out.C_跨行够长走下划线 = bgMkPick('伍子胥', true, false) === 'u';
+            out.C_跨行太短走方框 = bgMkPick('孙武', true, false) === 'b';
+            out.C_底下有线就避开 = (() => {
+                for (let i = 0; i < 200; i++) if (bgMkPick('词' + i + '子', false, true) === 'u') return false;
+                return true;
+            })();
+            // 同一个词的几处：形状/颜色一样，但歪法不能一模一样（否则像复制粘贴）
+            const gg = [...a.box.querySelectorAll('.bg-mk-svg > g')].map(g => g.querySelector('path'));
+            const sunwu = gg.slice(0, 3);
+            out.C_同词同色 = new Set(sunwu.map(p => p.getAttribute('stroke'))).size === 1;
+            out.C_同词歪法不同 = new Set(sunwu.map(p => p.getAttribute('d'))).size === 3;
         }
 
         // ── D：一个像素都不许动版面 ──
@@ -118,7 +143,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             const after = build([{ n: 1, html: P1 }, { n: 2, html: P2 }],
                                 [{ cp: 1, head: '汐：背景：孙武' }]);
             const p1 = after.box.querySelector('p[data-p="1"]');
-            out.D_画上了 = after.box.querySelectorAll('.bg-mk-svg > g').length === 1;
+            out.D_画上了 = after.box.querySelectorAll('.bg-mk-svg > g').length === 3;   // 「孙武」在这段出现三次
             out.D_行位置没变 = JSON.stringify(rowsOf(p1)) === JSON.stringify(b1);
             out.D_段落没变高 = Math.abs(p1.getBoundingClientRect().height - h1) < 0.5;
             out.D_层不吃点击 = getComputedStyle(after.box.querySelector('.bg-mk-svg')).pointerEvents === 'none';
@@ -139,14 +164,15 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.E_存了本机 = localStorage.getItem('reading_bg_mark') === '1';
             // 同一个词讲两次，只画一次（别叠两个圈）
             const c = build([{ n: 1, html: P1 }], [{ cp: 1, head: '汐：背景：孙武' }, { cp: 1, head: '汐：背景：孙武' }]);
-            out.E_同词只画一次 = c.box.querySelectorAll('.bg-mk-svg > g').length === 1;
+            // 同一个词有**两个背景块**时只处理一次（别把同几处各画两遍）
+            out.E_同词只画一次 = c.box.querySelectorAll('.bg-mk-svg > g').length === 3;
         }
 
         document.querySelectorAll('.__bgt').forEach(n => n.remove());
         return out;
     });
 
-    ok('A1 两个背景词各画一个记号', R.A_两个词各一个, '实际 ' + R.A_画了几个 + ' 个');
+    ok('A1 ⚠️同一段里出现几次就画几次（孙武×3 + 豫章×1 = 4）', R.A_每一处都画, '实际 ' + R.A_画了几个 + ' 个');
     ok('A2 ⚠️别的人名一个都没碰（满篇人名那版已被否掉）', R.A_没碰别的人名);
     ok('A3 没有背景块时不建层', R.A_没背景块就不画);
     ok('B1 从背景块第一行抠词（含昵称/书名号/标点/整句）', R.B_对了,
@@ -155,6 +181,13 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('C2 重排后一模一样（种子钉死）', R.C_重排后一模一样);
     ok('C3 重开一章后也一模一样', R.C_重建后一模一样);
     ok('C4 ⚠️形状与颜色不绑死、分布够散', R.C_分布够散, '形状 ' + R.C_形状种类 + ' 种 / 颜色 ' + R.C_颜色种类 + ' 种');
+    ok('C5a ⚠️两个字的词不给下划线（门槛三个字）', R.C_两字没有下划线);
+    ok('C5b 三个字及以上可以抽到下划线', R.C_三字以上有下划线);
+    ok('C5c 跨行且够长 → 下划线（每行一条，不裂）', R.C_跨行够长走下划线);
+    ok('C5d 跨行但太短 → 方框', R.C_跨行太短走方框);
+    ok('C5e 底下已有别的下划线 → 避开', R.C_底下有线就避开);
+    ok('C6 同一个词的几处：同一支笔', R.C_同词同色);
+    ok('C7 同一个词的几处：歪法各不相同（不是复制粘贴）', R.C_同词歪法不同);
     ok('D1 前提：记号画上了', R.D_画上了);
     ok('D2 每一行的位置一个像素都没动', R.D_行位置没变);
     ok('D3 段落没有变高', R.D_段落没变高);
@@ -164,7 +197,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('E3 关掉就没了', R.E_关掉就没了);
     ok('E4 再开能补回来', R.E_再开能补回来);
     ok('E5 开关存进本机', R.E_存了本机);
-    ok('E6 同一个词讲两次只画一次', R.E_同词只画一次);
+    ok('E6 同一个词有两个背景块时不重复画', R.E_同词只画一次);
     ok('F1 无页面报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();
