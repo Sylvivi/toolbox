@@ -79,6 +79,22 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.B_都在池子里 = [...got].every(c => pool.indexOf(c) >= 0);
             out.B_覆盖了整池 = got.size === pool.length;
             out.B_不出墨色 = !sawInk;
+            /* ⚠️金(gold)已被换成紫(purple)（2026-08-10 用户：「可以把那个黄色换成紫色哦」）——
+               夜间主题钉死蓝金、强调色本身就是金黄，划线的黄跟它撞。
+               ⚠️但 gold **那一整套 CSS/RD_HL_SW/正则都必须留着**：书里已经划过的黄色划线还得
+                 正常显示、还得能被换色正则匹配到。这里查的是「色板数组里没有它」。 */
+            out.B_色板里没黄 = RD_HL_COLORS.indexOf('gold') < 0;
+            out.B_色板里有紫 = RD_HL_COLORS.indexOf('purple') >= 0;
+            out.B_随机不出黄 = !got.has('gold');
+            // gold 的定义留着：老划线仍要能显示、能被换色
+            const probe = document.createElement('mark');
+            probe.className = 'rd-hl rd-hl-gold';
+            const holder = document.querySelector('.reading-merged');
+            holder.appendChild(probe);
+            out.B_老黄划线仍有底色 = getComputedStyle(probe).backgroundColor !== 'rgba(0, 0, 0, 0)';
+            probe.className = probe.className.replace(/rd-hl-(gold|purple|orange|green|sky|rose|ink)/g, 'rd-hl-green');
+            out.B_老黄划线能换色 = probe.className.indexOf('rd-hl-green') >= 0;
+            probe.remove();
             out.B_不连着同色 = sawRepeat === 0;
         }
 
@@ -145,6 +161,11 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('B2 六个色里的五个都抽得到', R.B_覆盖了整池);
     ok('B3 ⚠️不抽到墨色（留给手动挑）', R.B_不出墨色);
     ok('B4 ⚠️不连着抽到同一个色', R.B_不连着同色);
+    ok('B5 ⚠️色板里已无黄色（换成了紫）', R.B_色板里没黄);
+    ok('B6 色板里有紫色', R.B_色板里有紫);
+    ok('B7 随机不会抽到黄', R.B_随机不出黄);
+    ok('B8 ⚠️老的黄色划线仍有底色（gold 的定义留着）', R.B_老黄划线仍有底色);
+    ok('B9 ⚠️老的黄色划线仍能被换色正则匹配到', R.B_老黄划线能换色);
     ok('C1 点「划线」真的划出来了', R.C_划出来了, '颜色=' + R.C_颜色类);
     ok('C2 随机到的颜色合法', R.C_颜色合法);
     ok('C3 ⚠️点已有划线时色板出现（自定义的入口）', R.C_编辑条有色板);
