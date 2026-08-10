@@ -111,23 +111,29 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             words.forEach(w => { kinds.add(BG_MK_KINDS[rdMkSeed(w) % BG_MK_KINDS.length]); colors.add(rdMkSeed(w + '·色') % 5); });   // 5 ＝ 去掉黄之后的池子大小
             out.C_形状种类 = kinds.size; out.C_颜色种类 = colors.size;
             out.C_分布够散 = kinds.size >= 2 && colors.size >= 4;   // 五支笔，12 个词里至少摊到 4 支
-            /* ⚠️下划线有**三个字的门槛**（用户 2026-08-10 定：「下划线还是可以保留，
-               但是得是三个字及以上」）：短词底下一条短线像笔误。 */
-            const short2 = new Set(), long3 = new Set();
-            for (let i = 0; i < 300; i++) {
-                short2.add(bgMkPick('两字' + (i % 1 ? '' : ''), false, false));   // 恒 2 字
-                short2.add(bgMkPick('孙武', false, false));
-                long3.add(bgMkPick('伍子胥' + (i % 7 ? '' : ''), false, false));
-            }
-            for (let i = 0; i < 300; i++) long3.add(bgMkPick('词' + i + '子', false, false));   // 3 字以上
-            out.C_两字没有下划线 = !short2.has('u');
-            out.C_三字以上有下划线 = long3.has('u');
-            out.C_跨行够长走下划线 = bgMkPick('伍子胥', true, false) === 'u';
-            out.C_跨行太短走方框 = bgMkPick('孙武', true, false) === 'b';
-            out.C_底下有线就避开 = (() => {
-                for (let i = 0; i < 200; i++) if (bgMkPick('词' + i + '子', false, true) === 'u') return false;
-                return true;
-            })();
+            /* ⚠️选记号的规则表在 index.html 的 rdMkPick 上面，**背景词和小注共用同一条**
+               （bgMkPick 直接委托过去）。2026-08-10 用户连调三轮定的：
+                 底下有线 → 框/圈（跨行只给框）；没线时 ≤4 字 → 框/圈，≥5 字 → 下划线/框。 */
+            const bgMany = (w, multi, noU) => {
+                const set = new Set();
+                for (let i = 0; i < 200; i++) set.add(bgMkPick(w + i, multi, noU));
+                return [...set].sort().join('');
+            };
+            /* ⚠️别用 bgMany 造四字词——它会把序号拼在后面，'四字词组0' 就变成五个字了，
+               而五字正好跨过下划线的门槛，测出来必然带 u（第一版就这么假红的）。
+               这里用「词N甲M」凑**恒定四个字**。 */
+            const four = new Set();
+            for (let i = 0; i < 200; i++) four.add(bgMkPick('词' + (i % 10) + '甲' + (i % 7), false, false));
+            out.C_四字以内不给下划线 = !four.has('u') && four.size === 2
+                                  && bgMkPick('孙武', false, false) !== 'u'
+                                  && bgMkPick('伍子胥', false, false) !== 'u';
+            out.C_五字以上给下划线 = bgMany('吴楚边境桑女争', false, false) === 'bu';
+            out.C_跨行长词给下划线 = bgMkPick('吴楚边境桑女争桑', true, false) === 'u';
+            out.C_跨行短词给方框 = bgMkPick('孙武', true, false) === 'b';
+            out.C_底下有线给框或圈 = bgMany('孙武', false, true) === 'bc'
+                                 && bgMany('吴楚边境桑女争', false, true) === 'bc';
+            out.C_有线且跨行只给框 = bgMkPick('吴楚边境桑女争桑', true, true) === 'b'
+                                 && bgMkPick('孙武', true, true) === 'b';
             // 同一个词的几处：形状/颜色一样，但歪法不能一模一样（否则像复制粘贴）
             const gg = [...a.box.querySelectorAll('.bg-mk-svg > g')].map(g => g.querySelector('path'));
             const sunwu = gg.slice(0, 3);
@@ -311,11 +317,12 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('C2 重排后一模一样（种子钉死）', R.C_重排后一模一样);
     ok('C3 重开一章后也一模一样', R.C_重建后一模一样);
     ok('C4 ⚠️形状与颜色不绑死、分布够散', R.C_分布够散, '形状 ' + R.C_形状种类 + ' 种 / 颜色 ' + R.C_颜色种类 + ' 种');
-    ok('C5a ⚠️两个字的词不给下划线（门槛三个字）', R.C_两字没有下划线);
-    ok('C5b 三个字及以上可以抽到下划线', R.C_三字以上有下划线);
-    ok('C5c 跨行且够长 → 下划线（每行一条，不裂）', R.C_跨行够长走下划线);
-    ok('C5d 跨行但太短 → 方框', R.C_跨行太短走方框);
-    ok('C5e 底下已有别的下划线 → 避开', R.C_底下有线就避开);
+    ok('C5a ⚠️四字及以内不给下划线', R.C_四字以内不给下划线);
+    ok('C5b 五字及以上：下划线/方框二选一', R.C_五字以上给下划线);
+    ok('C5c 跨行长词 → 下划线（每行一条，不裂）', R.C_跨行长词给下划线);
+    ok('C5d 跨行短词 → 方框', R.C_跨行短词给方框);
+    ok('C5e ⚠️底下已有线（含波浪）→ 框或圈都行，不看字数', R.C_底下有线给框或圈);
+    ok('C5f ⚠️底下有线且跨行 → 只给方框（圈会裂）', R.C_有线且跨行只给框);
     ok('C6 同一个词的几处：同一支笔', R.C_同词同色);
     ok('C7 同一个词的几处：歪法各不相同（不是复制粘贴）', R.C_同词歪法不同);
     ok('D1 前提：记号画上了', R.D_画上了);

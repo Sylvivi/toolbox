@@ -25919,19 +25919,33 @@ body {
            · 跨行的词：一律下划线。圈/框套在一个跨行的词上会裂成两半，而线可以每行各画一条。
            ⚠️「随机」必须**钉死**：种子取那条划线自己的 hlid，所以同一条小注刷新、换设备、
              重开一章永远是同一个记号。她原话是「随机一点」，但每次打开都换＝页面在抽风。 */
+        /* 选哪种记号。**小注和背景词共用这一条**（bgMkPick 直接委托过来），
+           2026-08-10 用户连着调了三轮才定稿，整理成一张表：
+
+             底下已经有线？   跨行？   字数      → 记号
+             ─────────────────────────────────────────────
+             有               否      不看      → 方框 / 圈 二选一
+             有               是      不看      → 方框（圈跨行会裂成两个半圆）
+             没有             否      ≤4 字     → 方框 / 圈 二选一
+             没有             否      ≥5 字     → 下划线 / 方框 二选一
+             没有             是      ≤4 字     → 方框（每行一个）
+             没有             是      ≥5 字     → 下划线（每行一条，天然不裂）
+
+           三条道理，别再来回改：
+           ① **「底下有线」优先于一切字数规则**——她原话「主要是优先让波浪线跟下划线要分开……
+              就不看字数什么的了」。这时候框和圈都行（她随后补的），只有跨行才收窄成框。
+              「有线」**含波浪**，见 rdMkHasUnderline。
+           ② **四字及以内不给下划线**（她定的）：短词底下一条短线看着像笔误。
+           ③ **五字及以上不给圈**：长词的圈会拉成一个很扁的大椭圆。
+              ⚠️但**五字及以上照样能用下划线**——只要底下没线（她特意确认过这一条：
+                「如果没有精句长短句带来的下划线的话，5字及以上下划线是可以用」）。 */
         function rdMkPick(hlid, len, multiline, noUnderline) {
-            /* 跨行、以及 5 字往上的长词：只有下划线能用（框/圈套上去不是裂成两半就是大扁椭圆）。
-               ⚠️返回 null ＝ **这条不画记号**，退回原来的划线底色。
-                 荧光去掉之后这一档没有备胎了：底下已经有别的下划线、又只剩下划线可用时，
-                 与其硬画一条压上去，不如老老实实用底色。 */
-            if (multiline || len > 4) return noUnderline ? null : 'u';
-            var pool = RD_MK_KINDS;
-            /* 那个词底下已经有别的下划线了 → 别再画一条，两条叠在一起很脏
-               （2026-08-10 用户报：「有下划线（来自断句精句这类样式）的情况下，
-                 最好不要再用rough的下划线，不然有点容易重叠」）。 */
-            if (noUnderline) pool = pool.filter(function (k) { return k !== 'u'; });
-            if (!pool.length) return null;
-            return pool[rdMkSeed(hlid) % pool.length];
+            var short = len <= 4;
+            var seed = rdMkSeed(hlid);
+            if (noUnderline) return multiline ? 'b' : ['b', 'c'][seed % 2];
+            if (multiline) return short ? 'b' : 'u';
+            var pool = short ? ['b', 'c'] : ['u', 'b'];
+            return pool[seed % pool.length];
         }
         /* 这个词身上是不是已经有下划线了。三个来源，都是**开关＋位置**同时成立才算：
            ① 精句「划线」——body.reading-ks-ul + 词在 .reading-keysent 里；
@@ -26068,11 +26082,8 @@ body {
 
            跟小注那套共用 Rough.js 和 rdMkDraw，区别在**颜色一词一支笔**（种子取词本身，
            所以「伍子胥」全书都是同一个颜色、同一种画法）。 */
-        /* 背景词能用的记号。⚠️**下划线有门槛：三个字及以上**（用户 2026-08-10 两次定的——
-           先说「对背景词这个来说，下划线可以去掉，还是画圈画框比较好」，随后补「下划线还是可以保留，
-           但是得是三个字及以上」）。道理是短词底下一条短线看着像笔误，而三个字以上就够长、
-           像真的划了一道。 */
-        var BG_MK_KINDS = ['b', 'c'];          // 谁都能用的两种
+        // 背景词画得出来的种类（选哪种见 rdMkPick 那张表），只用来做合法性校验
+        var BG_MK_KINDS = ['b', 'c'];
         /* ⚠️第 1 支（那支黄）**不参与随机**（2026-08-10 用户：「背景词的随机颜色中，也把那个黄色
            出现的可能去掉吧，因为夜间我主色调是黄色，容易重复」）——夜间主题钉死是蓝金，
            强调色本身就是金黄，记号再用黄就跟满屏的主题色混在一起了。
@@ -26083,14 +26094,10 @@ body {
              （跟 rdGlLayout 里 _glRectCache 那条⚠️是同一个坑）。 */
         var BG_MK_INKS = [2, 3, 4, 5, 6];      // 参与随机的笔号（对应 --bg-ink-N）
         var BG_MK_INK_WIDTH = { 1: 2.1 };      // 特例线宽；没列的走 1.5
-        var BG_MK_U_MIN = 3;                   // 下划线的字数门槛
+        // ⚠️下划线的字数门槛已并进 rdMkPick 那张表（≥5 字才给），这里不再单独判
+        // 背景词用同一条规矩（那张表在 rdMkPick 上面），种子取词本身
         function bgMkPick(term, multiline, noUnderline) {
-            var canU = (term || '').length >= BG_MK_U_MIN && !noUnderline;
-            /* 跨行：圈会裂成两个半圆，所以只能下划线（每行一条，天然不裂）或方框（每行一个）。
-               够长就用下划线——那才是跨行时最自然的画法。 */
-            if (multiline) return canU ? 'u' : 'b';
-            var pool = canU ? BG_MK_KINDS.concat(['u']) : BG_MK_KINDS;
-            return pool[rdMkSeed(term) % pool.length];
+            return rdMkPick(term, (term || '').length, multiline, noUnderline);
         }
         function bgMkClear(root) {
             var old = (root || document).querySelectorAll('.bg-mk-layer');
