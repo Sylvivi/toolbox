@@ -3357,7 +3357,15 @@ body {
             fill: none; stroke-width: 1.4;
             stroke-linecap: round; stroke-linejoin: round;
             opacity: 0.9;
+            /* 引线走虚线（2026-08-10 用户要的，原话「把线弄成虚线，感觉那样效果会更好一些」）。
+               ⚠️间隔要比线段长：stroke-linecap:round 会让每一段两头各鼓出半个线宽(0.7px)，
+                 写成等长的 `3 3` 实际是「段 4.4 / 隙 1.6」，看着几乎还是实线。
+               ⚠️别把 linecap 改成 butt 去省这点：圆头正是它像手写笔触的原因。 */
+            stroke-dasharray: 3 3.6;
         }
+        /* 箭头那两笔总共才 6.5px，跟着虚线一切就碎成小点、箭头当场消失，所以单独关掉。
+           它是 rdGlPath 返回的第二段 d，画成独立的 <path class="rd-gl-arrow">。 */
+        .rd-gl-svg path.rd-gl-arrow { stroke-dasharray: none; }
         /* 夜间维持原来那点淡淡的透明（用户说夜间已经很满意），只有日间实打实地上色 */
         body.dark .rd-gl-label { opacity: 0.94; }
         body.dark .rd-gl-svg path { opacity: 0.82; }
@@ -25668,7 +25676,13 @@ body {
         var RD_GL_ROT_SIN = 0.0436;   // sin(2.5°)：标签是斜的，越宽转完外框越高，排行距要算上
         var RD_GL_TIP   = 3;    // 引线端点离标签/目标字的留缝
 
-        // 手绘感引线：二次贝塞尔 + 末端箭头（末端切线 = 终点 - 控制点）
+        /* 手绘感引线：二次贝塞尔 + 末端箭头（末端切线 = 终点 - 控制点）。
+           ⚠️返回**两段** d：曲线 `d` 和箭头 `a`，必须画成两个 <path>，别再合回一条
+             （2026-08-10 改虚线时拆的）：曲线要 stroke-dasharray，而箭头那两笔总共才
+             HL=6.5px 长，跟着虚线一切就成了几个孤零零的小点，箭头当场没了。
+             拆开之后箭头单独一条 .rd-gl-arrow，CSS 里把 dasharray 关掉，实线照旧。
+           ⚠️曲线那条**必须先 appendChild**：测试和换色都用 `.rd-gl-svg path`
+             取"第一条"，且按 `^M… Q…` 解析 d，顺序反了会取到箭头、正则匹配不上。 */
         function rdGlPath(sx, sy, ex, ey, bow) {
             var mx = (sx + ex) / 2, my = (sy + ey) / 2;
             var dx = ex - sx, dy = ey - sy;
@@ -25682,9 +25696,12 @@ body {
             var A = 0.42, HL = 6.5, c = Math.cos(A), s = Math.sin(A);
             var b1x = ex - (tx * c - ty * s) * HL, b1y = ey - (tx * s + ty * c) * HL;
             var b2x = ex - (tx * c + ty * s) * HL, b2y = ey - (-tx * s + ty * c) * HL;
-            return d + ' M' + b1x.toFixed(1) + ' ' + b1y.toFixed(1) +
+            return {
+                d: d,
+                a: 'M' + b1x.toFixed(1) + ' ' + b1y.toFixed(1) +
                    ' L' + ex.toFixed(1) + ' ' + ey.toFixed(1) +
-                   ' L' + b2x.toFixed(1) + ' ' + b2y.toFixed(1);
+                   ' L' + b2x.toFixed(1) + ' ' + b2y.toFixed(1)
+            };
         }
 
         function rdGlClear(root) {
@@ -26177,12 +26194,22 @@ body {
                 var sy = it2.up ? (it2.ly + it2.lh + 1) : (it2.ly - 1);
                 var bow = Math.min(9, 2 + Math.abs(it2.ty - sy) * 0.05) * (n % 2 === 0 ? 1 : -1);
 
-                var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                path.setAttribute('d', rdGlPath(sx, sy + RD_GL_PAD, it2.tx, it2.ty + RD_GL_PAD, bow));
-                path.setAttribute('data-glid', it2.lab.getAttribute('data-glid'));
+                var seg = rdGlPath(sx, sy + RD_GL_PAD, it2.tx, it2.ty + RD_GL_PAD, bow);
                 var ink = getComputedStyle(it2.lab).color;
+                var glid = it2.lab.getAttribute('data-glid');
+                // 曲线（虚线）——⚠️必须先加，见 rdGlPath 上那条注释
+                var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', seg.d);
+                path.setAttribute('data-glid', glid);
                 if (ink) path.style.stroke = ink;   // ⚠️必须 style，见上面注释
                 svg.appendChild(path);
+                // 箭头（实线，不跟着虚）——两笔才 6.5px，虚线一切就没了
+                var arw = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                arw.setAttribute('d', seg.a);
+                arw.setAttribute('class', 'rd-gl-arrow');
+                arw.setAttribute('data-glid', glid);
+                if (ink) arw.style.stroke = ink;
+                svg.appendChild(arw);
             }
         }
 

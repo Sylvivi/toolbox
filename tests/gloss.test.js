@@ -165,6 +165,28 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.E_跟划线色走 = lab.className.indexOf('rd-gl-rose') >= 0;
         }
 
+        /* ── X：引线是虚线，但箭头必须实线（2026-08-10 用户要的「把线弄成虚线」）──
+           钉住的坑：曲线和箭头原本是**同一条 path**（d 里 `M…Q…` 接着 `M…L…L…`）。
+           那样加 stroke-dasharray，箭头两笔总共才 HL=6.5px，会被切成几个孤零零的小点、
+           箭头当场消失。所以拆成两条 path，箭头那条 .rd-gl-arrow 单独关掉虚线。
+           ⚠️曲线必须是**第一条**：本文件多处按 `.rd-gl-svg path` 取第一个并按 `^M… Q…` 解析。 */
+        {
+            const b = build([{ para: 1, word: '雾气氤氲', note: 'yīn yūn·雾气弥漫', color: 'rose' }]);
+            const ps = [...b.box.querySelectorAll('.rd-gl-svg path')];
+            out.X_一条小注两个path = ps.length === 2;
+            out.X_曲线在前 = !!(ps[0] && /^M[-\d.]+ [-\d.]+ Q/.test(ps[0].getAttribute('d')));
+            out.X_箭头在后 = !!(ps[1] && ps[1].classList.contains('rd-gl-arrow')
+                                && /^M[-\d.]+ [-\d.]+ L/.test(ps[1].getAttribute('d')));
+            const dashOf = el => (getComputedStyle(el).strokeDasharray || '').replace(/px/g, '');
+            out.X_曲线虚线 = ps[0] ? dashOf(ps[0]) : '';
+            out.X_曲线是虚的 = /\d/.test(out.X_曲线虚线);
+            out.X_箭头实线 = ps[1] ? dashOf(ps[1]) : '';
+            out.X_箭头没跟着虚 = !/\d/.test(out.X_箭头实线);
+            // 箭头也得跟着墨色走，不然虚线线是彩的、箭头是黑的
+            out.X_箭头同色 = !!(ps[1] && getComputedStyle(ps[1]).stroke === getComputedStyle(ps[0]).stroke);
+            document.querySelectorAll('.__glt').forEach(n => n.remove());
+        }
+
         // ── F：清理干净，不留孤儿 ──
         {
             const b = build([{ para: 1, word: '雾气氤氲', note: 'yīn yūn·雾气弥漫' }]);
@@ -392,7 +414,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
                     if (mk) mk.setAttribute('data-gl', note);
                 });
             rdGlLayout(bub);
-            const segs = [...box.querySelectorAll('.rd-gl-svg path')].map(pa => {
+            /* ⚠️必须排掉箭头（2026-08-10 改虚线时拆出来的第二条 path）：它的 d 是
+               `M… L… L…`，套这条 `^M… Q…` 的正则直接返回 null，取 m[1] 当场抛。 */
+            const segs = [...box.querySelectorAll('.rd-gl-svg path:not(.rd-gl-arrow)')].map(pa => {
                 const m = pa.getAttribute('d').match(/^M([-\d.]+) ([-\d.]+) Q[-\d.]+ [-\d.]+ ([-\d.]+) ([-\d.]+)/);
                 return { id: pa.getAttribute('data-glid'), x1: +m[1], y1: +m[2], x2: +m[3], y2: +m[4] };
             });
@@ -657,6 +681,12 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('E1 引线颜色 = 手写字颜色', R.E_色一致, R.E_墨色 + ' vs ' + R.E_引线实际色);
     ok('E2 用内联 style 刷 stroke（不是表现属性）', R.E_用的是内联style);
     ok('E3 墨色跟着划线色走', R.E_跟划线色走);
+    ok('X1 一条小注拆成曲线+箭头两个 path', R.X_一条小注两个path);
+    ok('X2 曲线在前（解析 d 的地方都靠这个顺序）', R.X_曲线在前);
+    ok('X3 箭头在后且是 .rd-gl-arrow', R.X_箭头在后);
+    ok('X4 曲线是虚线', R.X_曲线是虚的, 'dasharray=' + R.X_曲线虚线);
+    ok('X5 箭头没跟着变虚（虚了就碎成小点）', R.X_箭头没跟着虚, 'dasharray=' + (R.X_箭头实线 || 'none'));
+    ok('X6 箭头跟曲线同色', R.X_箭头同色);
     ok('F1 重复排版不叠加图层', R.F_重排不叠加);
     ok('F2 没小注时不留空层', R.F_没小注就不留层);
     ok('G1 清洗：去引号句号', R.G_去引号句号);
@@ -676,7 +706,8 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     const M = await page.evaluate(() => {
         const box = window.__mBox;
         const r = { 小注: box.querySelectorAll('.rd-gl-label').length,
-                    引线: box.querySelectorAll('.rd-gl-svg path').length };
+                    // ⚠️排掉箭头那条：一条小注现在是两个 path（曲线走虚线、箭头实线）
+                    引线: box.querySelectorAll('.rd-gl-svg path:not(.rd-gl-arrow)').length };
         document.querySelectorAll('.__glt, .__glm').forEach(n => n.remove());
         return r;
     });
