@@ -62,21 +62,25 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
 
         // ── A：字数定范围（纯函数直接问，不受随机影响）──
         {
-            // 1~4 字：四种都可能出现；5 字往上：只许下划线/荧光
+            /* 1~4 字：三种都可能出现；5 字往上：只剩下划线。
+               ⚠️荧光(h)已被用户去掉（2026-08-10「去掉荧光笔效果」），池子就是 u/b/c 三种。 */
             const shortKinds = new Set(), longKinds = new Set();
             for (let i = 0; i < 400; i++) {
                 shortKinds.add(rdMkPick('h' + i, 2, false));
                 longKinds.add(rdMkPick('h' + i, 8, false));
             }
-            out.A_短词四种都可能 = [...shortKinds].sort().join('') === 'bchu';
-            out.A_长词只有线和荧光 = [...longKinds].sort().join('') === 'hu';
-            out.A_四字仍是短词 = (() => { const s = new Set(); for (let i = 0; i < 400; i++) s.add(rdMkPick('x' + i, 4, false)); return s.size === 4; })();
-            out.A_五字就收窄 = (() => { const s = new Set(); for (let i = 0; i < 400; i++) s.add(rdMkPick('x' + i, 5, false)); return [...s].sort().join('') === 'hu'; })();
+            out.A_短词三种都可能 = [...shortKinds].sort().join('') === 'bcu';
+            out.A_没有荧光了 = !shortKinds.has('h') && !longKinds.has('h');
+            out.A_长词只剩下划线 = [...longKinds].sort().join('') === 'u';
+            out.A_四字仍是短词 = (() => { const s = new Set(); for (let i = 0; i < 400; i++) s.add(rdMkPick('x' + i, 4, false)); return s.size === 3; })();
+            out.A_五字就收窄 = (() => { const s = new Set(); for (let i = 0; i < 400; i++) s.add(rdMkPick('x' + i, 5, false)); return [...s].sort().join('') === 'u'; })();
             // 别退化成「永远同一种」：随机确实在分布
             const dist = {};
             for (let i = 0; i < 600; i++) { const k = rdMkPick('seed' + i, 2, false); dist[k] = (dist[k] || 0) + 1; }
             out.A_分布 = dist;
-            out.A_真的在随机 = Object.keys(dist).length === 4 && Object.values(dist).every(v => v > 60);
+            out.A_真的在随机 = Object.keys(dist).length === 3 && Object.values(dist).every(v => v > 120);
+            // ⚠️分布还得**够匀**：rdMkSeed 少了那步雪崩混合时，12 个常见词里有 6 个形状撞在一起
+            out.A_分布够匀 = Object.values(dist).every(v => v > 600 / 3 * 0.7 && v < 600 / 3 * 1.3);
         }
 
         // ── B：钉死的随机——同一个 id 永远同一个记号 ──
@@ -213,12 +217,13 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.J_纯函数避开u = (() => {
                 const s = new Set();
                 for (let i = 0; i < 400; i++) s.add(rdMkPick('j' + i, 2, false, true));
-                return !s.has('u') && s.size === 3;
+                return !s.has('u') && s.size === 2;      // 只剩框和圈
             })();
-            out.J_长词只剩荧光 = (() => {
-                const s = new Set();
-                for (let i = 0; i < 400; i++) s.add(rdMkPick('j' + i, 9, false, true));
-                return [...s].join('') === 'h';
+            /* 长词＋底下已有下划线 → **一个能用的都没有**（荧光去掉后没备胎了），
+               这时 rdMkPick 返回 null ＝ 不画记号、保留原来的划线底色。 */
+            out.J_没辙时返回null = (() => {
+                for (let i = 0; i < 100; i++) if (rdMkPick('j' + i, 9, false, true) !== null) return false;
+                return true;
             })();
             // 跨行本来一律降级成下划线，但底下已有线时也得让开
             out.J_跨行时也避开 = rdMkPick('anything', 2, true, true) !== 'u';
@@ -243,22 +248,25 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
            用户 2026-08-10 报：「荧光笔似乎是盖在字体上的，像一层纱使它显得有点糊，
            我觉得你可以参考一下之前的那个色带，因为色带盖在上面没有影响字的本色」。
            记号这层画在正文**上面**，所以必须靠正片叠底（夜间滤色）保住字的本色。 */
+        /* ⚠️荧光已被用户去掉，不再会被 rdMkPick 抽中；但**画法留着**（万一哪天加回来）。
+           所以这里直接调 rdMkDraw 验它的混合模式还在——不然下次加回来又会把字蒙糊一遍。 */
         {
-            let id = null;
-            for (let i = 0; i < 5000 && !id; i++) if (rdMkPick('kk' + i, 2, false) === 'h') id = 'kk' + i;
-            const a = build([{ para: 1, word: '氤氲', id: id, note: 'yīn yūn·雾气弥漫' }]);
-            out.K_拿到荧光 = kindOf(a.box.querySelector('mark[data-hlid="' + id + '"]')) === 'h';
-            const g = a.box.querySelector('.rd-mk-svg > g');
-            out.K_混合模式 = g ? getComputedStyle(g).mixBlendMode : '(没画出来)';
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            document.body.appendChild(svg);
+            const rc = rough.svg(svg);
+            const rects = [{ left: 10, right: 60, top: 10, bottom: 30 }];
+            const g = rdMkDraw(rc, rects, 'h', '#d9a400', 'rgba(255,207,46,0.55)', 7)[0];
+            svg.appendChild(g);
+            out.K_混合模式 = getComputedStyle(g).mixBlendMode;
             out.K_日间正片叠底 = out.K_混合模式 === 'multiply';
-            // 夜间要翻成滤色，否则荧光在暗底上被压成黑的
             const hadDark = document.body.classList.contains('dark');
             document.body.classList.add('dark');
-            const b = build([{ para: 1, word: '氤氲', id: id, note: 'yīn yūn·雾气弥漫' }]);
-            const g2 = b.box.querySelector('.rd-mk-svg > g');
-            out.K_夜间混合模式 = g2 ? getComputedStyle(g2).mixBlendMode : '(没画出来)';
+            const g2 = rdMkDraw(rc, rects, 'h', '#ffcf2e', 'rgba(255,207,46,0.46)', 7)[0];
+            svg.appendChild(g2);
+            out.K_夜间混合模式 = getComputedStyle(g2).mixBlendMode;
             out.K_夜间滤色 = out.K_夜间混合模式 === 'screen';
             if (!hadDark) document.body.classList.remove('dark');
+            svg.remove();
         }
 
         /* ── I：Rough 每次画都会重新随机，**必须钉死种子** ──
@@ -283,11 +291,13 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         return out;
     });
 
-    ok('A1 短词（≤4字）四种记号都可能出现', R.A_短词四种都可能);
-    ok('A2 长词（≥5字）只在下划线/荧光里挑', R.A_长词只有线和荧光);
+    ok('A1 短词（≤4字）三种记号都可能出现', R.A_短词三种都可能);
+    ok('A1b 荧光已去掉，不再出现', R.A_没有荧光了);
+    ok('A2 长词（≥5字）只剩下划线', R.A_长词只剩下划线);
     ok('A3 四个字仍算短词', R.A_四字仍是短词);
     ok('A4 五个字就收窄', R.A_五字就收窄);
     ok('A5 随机是真的在分布（没退化成一种）', R.A_真的在随机, JSON.stringify(R.A_分布));
+    ok('A6 ⚠️分布够匀（rdMkSeed 那步雪崩混合别删）', R.A_分布够匀, JSON.stringify(R.A_分布));
     ok('B1 同一个编号永远同一个记号', R.B_纯函数稳定);
     ok('B2 那个词确实被打上了记号', R.B_确实打上了, '记号=' + JSON.stringify(R.B_记号));
     ok('B3 重排（换字号/主题）后不变', R.B_重排不变);
@@ -319,13 +329,12 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('G7 引线仍是虚线', R.G_引线仍是虚的);
     ok('G8 记号没被引线那条虚线 CSS 套上', R.G_记号不是虚的);
     ok('J1 底下已有下划线时，池子里不再有 u', R.J_纯函数避开u);
-    ok('J2 长词遇上已有下划线：只剩荧光', R.J_长词只剩荧光);
+    ok('J2 长词＋已有下划线：一个都不画（返回 null，保留底色）', R.J_没辙时返回null);
     ok('J3 跨行时也避开下划线', R.J_跨行时也避开);
     ok('J4 认得出「词在精句里且精句开了划线」', R.J_识别到了);
     ok('J5 真场景下拿到的不是下划线', R.J_真场景不是下划线);
     ok('J6 平时（没有别的下划线）u 照样在池子里', R.J_平时还有u);
-    ok('K1 前提：造出了一个荧光记号', R.K_拿到荧光);
-    ok('K2 日间用正片叠底（字不被蒙糊）', R.K_日间正片叠底, R.K_混合模式);
+    ok('K2 荧光的画法还在，且日间是正片叠底（字不被蒙糊）', R.K_日间正片叠底, R.K_混合模式);
     ok('K3 夜间翻成滤色', R.K_夜间滤色, R.K_夜间混合模式);
     ok('I1 记号确实有路径', R.I_有路径);
     ok('I2 ⚠️重排后歪法一模一样（种子钉死了）', R.I_重排后一模一样);

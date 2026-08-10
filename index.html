@@ -3311,6 +3311,21 @@ body {
            正是靠它找「本页最后一整行」，一条小注就能让翻页的接头偏掉
            （2026-08-10 `tests/glossmark.test.js` E 组当场逮到，别再往回加）。 */
         .rd-mk-svg { position: absolute; left: 0; overflow: visible; pointer-events: none; z-index: 1; }
+
+        /* ===== 背景词的手绘记号（2026-08-10）=====
+           跟小注那套同一个引擎（Rough.js），但**颜色一词一支笔**：用户要的
+           「人名上的颜色是随机变的」。
+           ⚠️颜色按**词本身**算，所以「伍子胥」从头到尾都是同一支笔——满篇乱变会看不出是谁。
+           这六个色就是划线色板那批（日间深、夜间浅），JS 从 :root 现取，见 bgMkLayout。 */
+        :root {
+            --bg-ink-1: #d9a400; --bg-ink-2: #e8722a; --bg-ink-3: #3a9a4a;
+            --bg-ink-4: #1E50A2; --bg-ink-5: #e85f7f; --bg-ink-6: #7a5cc4;
+        }
+        body.dark {
+            --bg-ink-1: #ffcf2e; --bg-ink-2: #ff9a52; --bg-ink-3: #5fc46a;
+            --bg-ink-4: #7cb4ff; --bg-ink-5: #ff8aa3; --bg-ink-6: #b9a3f5;
+        }
+        .bg-mk-svg { position: absolute; left: 0; overflow: visible; pointer-events: none; z-index: 1; }
         body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-gold  { text-decoration-color: #ffcf2e; }
         body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-orange { text-decoration-color: #ff9a52; }
         body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-green  { text-decoration-color: #5fc46a; }
@@ -5603,6 +5618,12 @@ body {
                         <button class="chip-btn" id="chipNameDash" onclick="readingToggleNameStyle('dash')" title="名词加虚线下划线（同引号「划线」款）">划线</button>
                         <button class="chip-btn" id="chipNameGlow" onclick="readingToggleNameGlow()" title="名词柔光，单击循环换款：关→光晕→光带→关（夜间会发光）">柔光</button>
                         <button class="chip-btn" id="chipNameList" onclick="readingOpenNamesEditor()" title="填写/自动识别本书名词">名单…</button>
+                    </div>
+                </div>
+                <div id="readingBgMarkRow" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0" title="「标背景」讲解过的那个词">背景词</span>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
+                        <button class="chip-btn" id="chipBgMark" onclick="bgMkToggle()" title="给「有背景解释」的那个词画手绘记号（下划线/方框/圈，Rough.js 画的）。同一个词固定一种画法、一种颜色">手绘</button>
                     </div>
                 </div>
                 <div id="readingGlossRow" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
@@ -18572,6 +18593,7 @@ body {
             c = document.getElementById('chipQuoteLs'); if (c) c.classList.toggle('active', split);
             if (typeof rdHlInitStyle === 'function') rdHlInitStyle();   // 顺带恢复「划线」底色/下划线样式
             if (typeof rdMkInit === 'function') rdMkInit();             // 小注那个词的手绘记号开关
+            if (typeof bgMkInit === 'function') bgMkInit();             // 背景词的手绘记号开关（默认开）
             readingApplyKeySentStyles();   // 精句样式独立一套，跟着一起初始化
             updateStatusBarColor();
         }
@@ -18982,6 +19004,10 @@ body {
             var anyOn = readingNameAnyOn();
             localStorage.setItem('reading_names_on', anyOn ? '1' : '0');
             document.body.classList.toggle('reading-names-on', anyOn);
+            /* 背景词的记号得跟着重画（2026-08-10 加）：这几个开关一动，名词的字重/字色全变了，
+               字重一变整行的字就位移，而记号是按行片段坐标画的——漏掉这一下就会看到记号跟词错开。
+               （背景词很可能正好也是个名词，所以这条挂钩是必须的。） */
+            if (typeof bgMkLayoutAll === 'function') { try { bgMkLayoutAll(); } catch (e) {} }
         }
         function readingToggleNameStyle(k) {
             var cur = _rnStyleOn(k);
@@ -25622,6 +25648,8 @@ body {
                小注排版一旦抛异常，整篇正文就渲染不出来了。小注只是装饰，坏了顶多不显示，
                绝不能连累正文。（同理，rdGlLayoutAll 里也逐条 try。） */
             try { rdGlLayout(bubble); } catch (eGl) { console.warn('[手写小注] 排版失败：', eGl); }
+            // 背景词的记号：跟小注一样先画一次，量不准也没关系，下面那次延迟重排会重来
+            if (typeof bgMkLayout === 'function') { try { bgMkLayout(bubble); } catch (eN) { console.warn('[背景词记号] 排版失败：', eN); } }
             /* 再补一次（延迟的）。渲染这一刻浏览器未必已经完成排版——窗口化是分批渲染的，
                重进时尤其明显。第一次量不到就靠这一次兜住。 */
             _rdGlRetry = 0;
@@ -25731,7 +25759,10 @@ body {
            四种：u 下划线 / b 方框 / c 圈 / h 荧光。图是抖动 SVG，手法跟精句「画框/波浪」同源
            （feTurbulence 造噪声 → feDisplacementMap 把线推歪），纯背景图，
            **不逐个算路径**——一章几十条小注，逐个画 SVG 路径会卡。 */
-        var RD_MK_KINDS = ['u', 'b', 'c', 'h'];
+        /* ⚠️荧光(h)**已被用户去掉**（2026-08-10，原话「去掉荧光笔效果」），只剩这三种。
+           画荧光的代码（rdMkDraw 里那支 + 正片叠底）还留着，因为它是唯一一个「不遮字又能铺一片」
+           的画法，将来若要回来直接把 'h' 加回池子即可；但**别自作主张加回来**。 */
+        var RD_MK_KINDS = ['u', 'b', 'c'];
         /* 把一个记号画进小注那层 SVG 里。
            ⚠️**用的是真的 Rough.js**（页面顶上内联的那个），不是自己拿滤镜揉出来的抖动
              （2026-08-10 换的，用户看了对比图说「你这完全没按rough notation来呀」，她是对的：
@@ -25755,8 +25786,10 @@ body {
                     } else if (kind === 'b') {
                         out.push(rc.rectangle(r.left - 3, y0 - 2, w + 6, h + 4, base));
                     } else if (kind === 'c') {
-                        // 圈：椭圆要比字宽出一截，不然腰会削掉字的四个角
-                        out.push(rc.ellipse(r.left + w / 2, y0 + h / 2, w + 16, h + 12, base));
+                        /* 圈：椭圆要比字宽出一截，不然腰会削掉字的四个角。
+                           ⚠️别再放大：+16/+12 那版实测会蹭到隔壁的字，名词满篇都是时尤其明显
+                             （2026-08-10 实拍，人名一行三个圈几乎连成一片）。 */
+                        out.push(rc.ellipse(r.left + w / 2, y0 + h / 2, w + 11, h + 9, base));
                     } else {
                         /* 荧光：一条**极粗的线**扫过去（rough-notation 也是这么干的），
                            两端天然不齐、中间有笔触感，这正是马克笔的样子。
@@ -25786,16 +25819,17 @@ body {
            ⚠️「随机」必须**钉死**：种子取那条划线自己的 hlid，所以同一条小注刷新、换设备、
              重开一章永远是同一个记号。她原话是「随机一点」，但每次打开都换＝页面在抽风。 */
         function rdMkPick(hlid, len, multiline, noUnderline) {
-            if (multiline) return noUnderline ? 'h' : 'u';
-            var pool = (len <= 4) ? RD_MK_KINDS : ['u', 'h'];
+            /* 跨行、以及 5 字往上的长词：只有下划线能用（框/圈套上去不是裂成两半就是大扁椭圆）。
+               ⚠️返回 null ＝ **这条不画记号**，退回原来的划线底色。
+                 荧光去掉之后这一档没有备胎了：底下已经有别的下划线、又只剩下划线可用时，
+                 与其硬画一条压上去，不如老老实实用底色。 */
+            if (multiline || len > 4) return noUnderline ? null : 'u';
+            var pool = RD_MK_KINDS;
             /* 那个词底下已经有别的下划线了 → 别再画一条，两条叠在一起很脏
                （2026-08-10 用户报：「有下划线（来自断句精句这类样式）的情况下，
-                 最好不要再用rough的下划线，不然有点容易重叠」）。
-               ⚠️长词去掉 u 之后只剩荧光，这是对的：框和圈本来就不给长词用。 */
-            if (noUnderline) {
-                pool = pool.filter(function (k) { return k !== 'u'; });
-                if (!pool.length) pool = ['h'];
-            }
+                 最好不要再用rough的下划线，不然有点容易重叠」）。 */
+            if (noUnderline) pool = pool.filter(function (k) { return k !== 'u'; });
+            if (!pool.length) return null;
             return pool[rdMkSeed(hlid) % pool.length];
         }
         /* 这个词身上是不是已经有下划线了。三个来源，都是**开关＋位置**同时成立才算：
@@ -25812,11 +25846,16 @@ body {
             if (b.contains('reading-names-on') && b.contains('rn-dash') && el.closest('.reading-name')) return true;
             return false;
         }
-        // 由 hlid 算一个稳定的数：既定记号种类，也当 Rough 的随机种子（见 rdMkDraw 那条⚠️）
+        /* 由 hlid（或一个词）算一个稳定的数：既定记号种类，也当 Rough 的随机种子（见 rdMkDraw 那条⚠️）。
+           ⚠️末尾那三步「雪崩混合」不是装饰，别删（2026-08-10 实测加的）：
+             光是 `h*31+c` 对**短字符串**的低位分布很差，而我们全靠 `% 3`（形状）和 `% 6`（颜色）取值——
+             实测 12 个常见词里有 6 个形状号撞在一起，「孙武」和「豫章」连颜色都一样，
+             看着完全不像随机。混合之后两项都摊平了。 */
         function rdMkSeed(hlid) {
             var h = 0, s = String(hlid || '');
             for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-            return h;
+            h ^= h >>> 15; h = Math.imul(h, 0x2545F491) >>> 0; h ^= h >>> 13;
+            return h >>> 0;
         }
         /* 收一条记号的活儿（真正画是在 rdGlLayout 第 3 步，那时 SVG 才建好）。
            marks ＝ 同一条划线的所有 mark（词跨过人名高亮时会被拆成好几个）；
@@ -25827,6 +25866,7 @@ body {
             var len = 0;
             for (var i = 0; i < marks.length; i++) len += (marks[i].textContent || '').length;
             var kind = rdMkPick(hlid, len, rects.length > 1, rdMkHasUnderline(marks[0]));
+            if (!kind) return null;    // 没有合适的记号 → 不打 class，保留原来的划线底色
             /* 颜色现取现用：--mk-ink（描边）和 --hlc/--hla（荧光的浓度）都定义在 CSS 的划线色板里，
                夜间那几条会自动覆盖 → 切夜间/切主题重排一次就跟着变，JS 这边不用记任何色值。 */
             var cs = getComputedStyle(marks[0]);
@@ -25862,6 +25902,153 @@ body {
         }
         function rdMkToggle() { rdMkSetOn(document.body.classList.contains('rd-mk-off')); }
         function rdMkInit() { rdMkSetOn(localStorage.getItem('reading_gl_mark') !== '0', true); }   // 没设过＝开
+
+        /* ===================== 背景词的手绘记号 =====================
+           用户 2026-08-10 定的范围（**先做成满篇人名，她当场否了**，原话：
+           「我想我其实并不是要让每个人名都要被渲染成那样，而是在有背景词解释的那个段落，
+             把那个词儿给他渲染出来就行，不然确实会很花」）。
+           所以只画**这一段配了背景解释的那个词**：一段最多一两个，密度极低，
+           而且语义正好——一眼看出「这个词下面有解释」。
+           ⚠️别再扩回「所有人名」：实拍过，一行三个圈几乎连成一片，她否得很干脆。
+
+           词从哪来：背景块是 `blockquote[data-bg="1"]`，第一行长这样
+           `<div class="reading-q">汐：背景：孙武</div>`，块上的 data-cp 指着它讲的那一段。
+           把「孙武」抠出来，回到那一段里找它第一次出现的位置，画上去。
+
+           跟小注那套共用 Rough.js 和 rdMkDraw，区别在**颜色一词一支笔**（种子取词本身，
+           所以「伍子胥」全书都是同一个颜色、同一种画法）。 */
+        var BG_MK_KINDS = ['u', 'b', 'c'];
+        function bgMkClear(root) {
+            var old = (root || document).querySelectorAll('.bg-mk-layer');
+            for (var i = 0; i < old.length; i++) old[i].parentNode.removeChild(old[i]);
+        }
+        /* 从背景块里抠出它讲的是哪个词。
+           ⚠️只认第一行（.reading-q）：正文部分也常出现「背景：」字样，整块搜会抠错。
+           ⚠️「汐：」那个前缀是可改的昵称，别写死——按最后一个「背景：」切。 */
+        function bgMkTermOf(bq) {
+            var q = bq.querySelector('.reading-q');
+            var t = ((q ? q.textContent : '') || '').trim();
+            var at = t.lastIndexOf(BG_Q_PREFIX);
+            if (at < 0) return '';
+            var term = t.slice(at + BG_Q_PREFIX.length).trim();
+            // 去掉可能跟着的标点/书名号，只留词本身
+            term = term.replace(/^[《「『"'\s]+/, '').replace(/[》」』"'\s。，、,.:：;；!！?？]+$/, '');
+            /* ⚠️太长的不画：背景块的题目偶尔是一整句（AI 没按「一个词」写），
+               圈一整句既难看又多半在段落里根本找不到原样的文字。 */
+            return (term.length >= 1 && term.length <= 8) ? term : '';
+        }
+        // 在段落里找这个词第一次出现的位置，返回它占的每一行（容器坐标）
+        function bgMkRectsOf(p, term, cr) {
+            var full = p.textContent || '';
+            var at = full.indexOf(term);
+            if (at < 0) return [];                 // 段落里没有原样出现（AI 换了说法）→ 不画
+            var end = at + term.length;
+            var walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, null, false);
+            var idx = 0, n, sN = null, sO = 0, eN = null, eO = 0;
+            while ((n = walker.nextNode())) {
+                var len = n.nodeValue.length;
+                if (sN === null && idx + len > at) { sN = n; sO = at - idx; }
+                if (sN !== null && idx + len >= end) { eN = n; eO = end - idx; break; }
+                idx += len;
+            }
+            if (!sN || !eN) return [];
+            var rg = document.createRange();
+            try { rg.setStart(sN, sO); rg.setEnd(eN, eO); } catch (e) { return []; }
+            var list = rg.getClientRects(), rows = [];
+            for (var i = 0; i < list.length; i++) {
+                var g = list[i];
+                if (g.width <= 0 || g.height <= 0) continue;
+                rows.push({ left: g.left - cr.left, right: g.right - cr.left,
+                            top: g.top - cr.top, bottom: g.bottom - cr.top });
+            }
+            /* ⚠️同一行会被拆成好几个矩形（词跨过人名高亮/划线时），要按行并起来，
+               否则一个词上会摞好几个圈。 */
+            rows.sort(function (a, b) { return a.top - b.top || a.left - b.left; });
+            var out = [];
+            for (var j = 0; j < rows.length; j++) {
+                var last = out[out.length - 1];
+                if (last && rows[j].top < last.bottom && rows[j].bottom > last.top) {
+                    last.left = Math.min(last.left, rows[j].left);
+                    last.right = Math.max(last.right, rows[j].right);
+                    last.top = Math.min(last.top, rows[j].top);
+                    last.bottom = Math.max(last.bottom, rows[j].bottom);
+                } else out.push(rows[j]);
+            }
+            return out;
+        }
+        function bgMkLayout(bubble) {
+            if (!bubble) return;
+            bgMkClear(bubble);
+            if (document.body.classList.contains('bg-mk-off')) return;
+            var box = bubble.querySelector('.reading-merged');
+            if (!box || box.closest('.translate-merged')) return;
+            var bqs = box.querySelectorAll('blockquote[data-bg="1"]');
+            if (!bqs.length) return;
+            if (typeof rough === 'undefined' || !rough.svg) return;
+            if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
+            var cr = box.getBoundingClientRect();
+            if (cr.width < 1) return;              // 还没排好版，等下一次重排
+
+            var layer = document.createElement('div');
+            layer.className = 'bg-mk-layer rd-gl-layer';   // 复用 .rd-gl-layer 的绝对定位（inset:0、不吃点击）
+            box.appendChild(layer);
+            var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('class', 'bg-mk-svg');
+            svg.style.top = (-RD_GL_PAD) + 'px';
+            svg.setAttribute('width', String(Math.round(cr.width)));
+            svg.setAttribute('height', String(Math.round(cr.height + RD_GL_PAD * 2)));
+            layer.appendChild(svg);
+
+            // 六支笔的颜色从 :root 现取（夜间那套会自动覆盖），一次排版取一次
+            var rootCs = getComputedStyle(document.documentElement);
+            var inks = [];
+            for (var c = 1; c <= 6; c++) inks.push((rootCs.getPropertyValue('--bg-ink-' + c) || '#888').trim() || '#888');
+
+            var rc = rough.svg(svg), drawn = 0, seen = {};
+            for (var i = 0; i < bqs.length; i++) {
+                var term = bgMkTermOf(bqs[i]);
+                if (!term || seen[term]) continue;             // 同一个词讲两次，只画一次
+                var cp = bqs[i].getAttribute('data-cp');
+                var para = box.querySelector('p[data-p="' + cp + '"]');
+                if (!para) continue;
+                var rects = bgMkRectsOf(para, term, cr);
+                if (!rects.length) continue;
+                seen[term] = 1;
+                var seed = rdMkSeed(term);                     // ⚠️种子＝词本身，全书同色同款
+                /* ⚠️颜色要用**另一个**哈希，不能跟形状共用 seed：形状是 seed%3、颜色是 seed%6，
+                   而 6 是 3 的倍数——共用的话两者完全绑死，六支笔只剩六种固定搭配，
+                   看着就不像随机了（2026-08-10 实拍：两个不同的词一模一样都是紫圈）。 */
+                var cIdx = rdMkSeed(term + '·色') % inks.length;
+                /* 那个词底下已经有别的下划线时避开 u（同小注那条规则）；
+                   跨行、或词太长时 rdMkPick 会自己退成下划线或直接不画。 */
+                var kind = rdMkPick(term, term.length, rects.length > 1, rdMkHasUnderline(para.firstChild || para));
+                if (!kind || BG_MK_KINDS.indexOf(kind) < 0) continue;
+                try {
+                    var els = rdMkDraw(rc, rects, kind, inks[cIdx], inks[cIdx], seed);
+                    for (var e = 0; e < els.length; e++) if (els[e]) svg.appendChild(els[e]);
+                    drawn++;
+                } catch (eB) { /* 单个画不出来就跳过，别拖累整篇 */ }
+            }
+            if (!drawn) layer.parentNode.removeChild(layer);
+        }
+        function bgMkLayoutAll() {
+            var bubbles = document.querySelectorAll('.chat-msg.ai .chat-bubble');
+            for (var i = 0; i < bubbles.length; i++) {
+                if (!bubbles[i].querySelector('.reading-merged blockquote[data-bg="1"]')) continue;
+                try { bgMkLayout(bubbles[i]); } catch (e) { console.warn('[背景词记号] 排版失败：', e); }
+            }
+        }
+        // 开关（设置面板「背景」那行的「手绘」）。默认开：一段最多一两个，不花。
+        function bgMkSetOn(on, quiet) {
+            document.body.classList.toggle('bg-mk-off', !on);
+            localStorage.setItem('reading_bg_mark', on ? '1' : '0');
+            var chip = document.getElementById('chipBgMark');
+            if (chip) chip.classList.toggle('active', on);
+            if (quiet) return;
+            if (on) bgMkLayoutAll(); else bgMkClear(document);
+        }
+        function bgMkToggle() { bgMkSetOn(document.body.classList.contains('bg-mk-off')); }
+        function bgMkInit() { bgMkSetOn(localStorage.getItem('reading_bg_mark') !== '0', true); }   // 没设过＝开
 
         /* 手绘感引线：二次贝塞尔 + 末端箭头（末端切线 = 终点 - 控制点）。
            ⚠️返回**两段** d：曲线 `d` 和箭头 `a`，必须画成两个 <path>，别再合回一条
@@ -26450,6 +26637,11 @@ body {
                 if (!bubbles[i].querySelector('.reading-merged mark.rd-hl[data-gl]')) continue;
                 try { rdGlLayout(bubbles[i]); } catch (e) { console.warn('[手写小注] 排版失败：', e); }
             }
+            /* 背景词的手绘记号搭同一班车（2026-08-10 加）。**必须挂在这里**：字号/段间距/字体/
+               主题/夜间/转屏……每一处会让行位置变的地方，早就都接到 rdGlRelayoutSoon 上了，
+               背景词记号跟小注一样是按行片段的坐标画的，漏挂就会满屏错位。
+               ⚠️它自己有开关和早退（没开、或这条消息没有背景块就立刻返回），不必在这儿判。 */
+            if (typeof bgMkLayoutAll === 'function') { try { bgMkLayoutAll(); } catch (e2) { console.warn('[背景词记号] 排版失败：', e2); } }
         }
         var _rdGlReT = null;
         function rdGlRelayoutSoon(delay) {
