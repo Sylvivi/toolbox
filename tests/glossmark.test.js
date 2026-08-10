@@ -113,7 +113,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.D_没有底色渐变 = !/gradient|rgba?\([^)]*\)\s*(?!.*url)/.test(cs.backgroundColor) || cs.backgroundColor === 'rgba(0, 0, 0, 0)';
             out.D_背景色透明 = cs.backgroundColor === 'rgba(0, 0, 0, 0)';
             out.D_没有柔光 = cs.boxShadow === 'none';
-            out.D_有记号图 = !!mk.style.getPropertyValue('--mk-img');
+            out.D_有记号图 = !!a.box.querySelector('.rd-mk-svg path');
             // 只划线、不写小注的那种：一切照旧
             const b = build([{ para: 2, word: '踟蹰', id: 'hd2' }]);   // ⚠️「踟蹰」在第 2 段，写成 1 会拿到 null
             const plain = b.box.querySelector('mark[data-hlid="hd2"]');
@@ -158,8 +158,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
                 const p = t.box.querySelector('p[data-p="2"]');
                 const base = rowsOf(p), baseH = p.getBoundingClientRect().height;
                 const mk2 = t.box.querySelector('mark[data-hlid="hk' + k + '"]');
-                mk2.classList.add('rd-mk', 'rd-mk-' + k);                    // 强行套上这一种
-                mk2.style.setProperty('--mk-img', rdMkImg(k, '#d9a400', 'rgba(255,207,46,0.55)'));
+                mk2.classList.add('rd-mk', 'rd-mk-' + k);                    // 强行套上这一种（只撤底色）
                 mk2.getBoundingClientRect();                                  // 逼一次重排
                 perKind[k] = JSON.stringify(rowsOf(p)) === JSON.stringify(base)
                           && Math.abs(p.getBoundingClientRect().height - baseH) < 0.5;
@@ -181,15 +180,48 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.F_存了本机 = localStorage.getItem('reading_gl_mark') === '1';
         }
 
-        // ── G：四种图都画得出来，且不同颜色/明暗各生成各的 ──
+        /* ── G：形状是**真的 Rough.js** 画的，不是自己揉的抖动图 ──
+           用户 2026-08-10 看对比图后要求换的（「你这完全没按rough notation来呀」）。
+           钉两件事：① 库真的在（内联在页面顶上）；② 线是 Rough 的多遍描边、画在 .rd-mk-svg 上。 */
         {
-            const imgs = ['u', 'b', 'c', 'h'].map(k => rdMkImg(k, '#d9a400', 'rgba(255,207,46,0.55)'));
-            out.G_四种都有图 = imgs.every(s => s.indexOf('data:image/svg+xml') > 0);
-            out.G_四种互不相同 = new Set(imgs).size === 4;
-            out.G_都带抖动滤镜 = imgs.every(s => decodeURIComponent(s).indexOf('feDisplacementMap') > 0);
-            out.G_荧光用填充色 = decodeURIComponent(imgs[3]).indexOf('rgba(255,207,46,0.55)') > 0;
-            out.G_描边用墨色 = decodeURIComponent(imgs[2]).indexOf('#d9a400') > 0;
-            out.G_换色是另一张 = rdMkImg('c', '#e85f7f', 'x') !== imgs[2];
+            out.G_库在 = typeof rough !== 'undefined' && typeof rough.svg === 'function';
+            const a = build([{ para: 1, word: '氤氲', id: 'hg1', note: 'yīn yūn·雾气弥漫' }]);
+            const svg = a.box.querySelector('.rd-mk-svg');
+            out.G_有记号层 = !!svg;
+            const paths = svg ? svg.querySelectorAll('path') : [];
+            out.G_画了线 = paths.length > 0;
+            /* Rough 的招牌：同一个形状**描两遍**（disableMultiStroke 默认 false）。
+               ⚠️别去数 <path> 的个数——多遍描边是合并进**同一条 d** 的（好几段 M 开头的子路径），
+                 path 元素通常只有一个。数 d 里的 M 才对。 */
+            out.G_子路径数 = svg ? (svg.querySelector('path').getAttribute('d') || '').split('M').length - 1 : 0;
+            out.G_描了不止一遍 = out.G_子路径数 >= 2;
+            out.G_路径不是直的 = svg ? /[cCqQ]/.test(svg.querySelector('path').getAttribute('d') || '') : false;
+            // ⚠️记号必须**单独一层**：混进引线那层会被 `.rd-gl-svg > path` 的虚线 CSS 套上
+            out.G_没混进引线层 = a.box.querySelectorAll('.rd-gl-svg .rd-mk-svg').length === 0
+                              && a.box.querySelectorAll('.rd-mk-svg .rd-gl-svg').length === 0;
+            out.G_引线仍是虚的 = (() => {
+                const lp = a.box.querySelector('.rd-gl-svg > path');
+                return !!lp && /\d/.test(getComputedStyle(lp).strokeDasharray || '');
+            })();
+            out.G_记号不是虚的 = paths.length ? !/\d/.test((getComputedStyle(paths[0]).strokeDasharray || '').replace(/none/, '')) : false;
+        }
+
+        /* ── I：Rough 每次画都会重新随机，**必须钉死种子** ──
+           不钉的话每次重排（换字号/切主题/翻页重渲）同一个圈的歪法都不一样，页面像在抖。 */
+        {
+            const a = build([{ para: 1, word: '氤氲', id: 'hi1', note: 'yīn yūn·雾气弥漫' }]);
+            const d1 = [...a.box.querySelectorAll('.rd-mk-svg path')].map(p => p.getAttribute('d')).join('|');
+            rdGlLayout(a.bub);
+            const d2 = [...a.box.querySelectorAll('.rd-mk-svg path')].map(p => p.getAttribute('d')).join('|');
+            const b = build([{ para: 1, word: '氤氲', id: 'hi1', note: 'yīn yūn·雾气弥漫' }]);
+            const d3 = [...b.box.querySelectorAll('.rd-mk-svg path')].map(p => p.getAttribute('d')).join('|');
+            out.I_有路径 = d1.length > 20;
+            out.I_重排后一模一样 = d1 === d2;
+            out.I_重建后一模一样 = d1 === d3;
+            // 换一个词（换 id）就该是另一副歪法，别退化成所有记号长得一样
+            const c = build([{ para: 1, word: '青苔', id: 'hi2', note: 'tái·潮湿处的绿苔' }]);
+            const d4 = [...c.box.querySelectorAll('.rd-mk-svg path')].map(p => p.getAttribute('d')).join('|');
+            out.I_换个词就换歪法 = d4 !== d1;
         }
 
         document.querySelectorAll('.__mkt').forEach(n => n.remove());
@@ -223,12 +255,18 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('F3 关掉回到原来的底色', R.F_关掉回到底色);
     ok('F4 再打开能补回来', R.F_再开能补回来);
     ok('F5 开关存进本机', R.F_存了本机);
-    ok('G1 四种图都生成得出来', R.G_四种都有图);
-    ok('G2 四种图互不相同', R.G_四种互不相同);
-    ok('G3 都带手绘抖动滤镜', R.G_都带抖动滤镜);
-    ok('G4 荧光用的是原色带那个浓度', R.G_荧光用填充色);
-    ok('G5 框/圈用深色描边', R.G_描边用墨色);
-    ok('G6 换个划线颜色就是另一张图', R.G_换色是另一张);
+    ok('G1 Rough.js 内联进来了', R.G_库在);
+    ok('G2 记号画在自己那层 .rd-mk-svg 上', R.G_有记号层);
+    ok('G3 真的画出线了', R.G_画了线);
+    ok('G4 Rough 招牌：同一形状描了不止一遍', R.G_描了不止一遍, '子路径 ' + R.G_子路径数 + ' 段');
+    ok('G5 路径是弯的（不是规规矩矩的直线段）', R.G_路径不是直的);
+    ok('G6 ⚠️记号层没跟引线层混在一起', R.G_没混进引线层);
+    ok('G7 引线仍是虚线', R.G_引线仍是虚的);
+    ok('G8 记号没被引线那条虚线 CSS 套上', R.G_记号不是虚的);
+    ok('I1 记号确实有路径', R.I_有路径);
+    ok('I2 ⚠️重排后歪法一模一样（种子钉死了）', R.I_重排后一模一样);
+    ok('I3 ⚠️重开一章后也一模一样', R.I_重建后一模一样);
+    ok('I4 换个词就是另一副歪法', R.I_换个词就换歪法);
     ok('H1 无页面报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();
