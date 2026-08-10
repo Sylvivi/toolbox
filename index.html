@@ -25919,33 +25919,30 @@ body {
            · 跨行的词：一律下划线。圈/框套在一个跨行的词上会裂成两半，而线可以每行各画一条。
            ⚠️「随机」必须**钉死**：种子取那条划线自己的 hlid，所以同一条小注刷新、换设备、
              重开一章永远是同一个记号。她原话是「随机一点」，但每次打开都换＝页面在抽风。 */
-        /* 选哪种记号。**小注和背景词共用这一条**（bgMkPick 直接委托过来），
-           2026-08-10 用户连着调了三轮才定稿，整理成一张表：
+        /* 选哪种记号。**小注和背景词共用这一条**（bgMkPick 直接委托过来）。
+           2026-08-10 用户连调四轮才定稿，最终只剩三行：
 
-             底下已经有线？   跨行？   字数      → 记号
-             ─────────────────────────────────────────────
-             有               否      不看      → 方框 / 圈 二选一
-             有               是      不看      → 方框（圈跨行会裂成两个半圆）
-             没有             否      ≤4 字     → 方框 / 圈 二选一
-             没有             否      ≥5 字     → 下划线 / 方框 二选一
-             没有             是      ≤4 字     → 方框（每行一个）
-             没有             是      ≥5 字     → 下划线（每行一条，天然不裂）
+             底下已经有线？   字数      → 记号
+             ──────────────────────────────────────────
+             有               不看      → 方框 / 圈
+             没有             ≤4 字     → 方框 / 圈
+             没有             ≥5 字     → 下划线 / 方框 / 圈
 
-           三条道理，别再来回改：
-           ① **「底下有线」优先于一切字数规则**——她原话「主要是优先让波浪线跟下划线要分开……
-              就不看字数什么的了」。这时候框和圈都行（她随后补的），只有跨行才收窄成框。
-              「有线」**含波浪**，见 rdMkHasUnderline。
-           ② **四字及以内不给下划线**（她定的）：短词底下一条短线看着像笔误。
-           ③ **五字及以上不给圈**：长词的圈会拉成一个很扁的大椭圆。
-              ⚠️但**五字及以上照样能用下划线**——只要底下没线（她特意确认过这一条：
-                「如果没有精句长短句带来的下划线的话，5字及以上下划线是可以用」）。 */
-        function rdMkPick(hlid, len, multiline, noUnderline) {
-            var short = len <= 4;
-            var seed = rdMkSeed(hlid);
-            if (noUnderline) return multiline ? 'b' : ['b', 'c'][seed % 2];
-            if (multiline) return short ? 'b' : 'u';
-            var pool = short ? ['b', 'c'] : ['u', 'b'];
-            return pool[seed % pool.length];
+           ① **方框和圈是完全同等地位的**（她定的：「方框和圆圈完全是同等地位的哈」）。
+              别再给圈加任何额外限制——我先后拿「长词的圈是大扁椭圆」「跨行的圈会裂成两个半圆」
+              两个理由把圈挡掉过，**后者根本不成立**：rdMkDraw 是对每一段行矩形**各画一次**的，
+              所以跨行时圈是「每行一个完整的圈」，跟方框每行一个是一回事。那是凭想象写的限制。
+           ② **「底下有线」时不给下划线**——她原话「主要是优先让波浪线跟下划线要分开」。
+              「有线」含波浪，见 rdMkHasUnderline。
+           ③ **四字及以内不给下划线**：短词底下一条短线看着像笔误。
+              反过来五字及以上照给（她特意确认过：「如果没有精句长短句带来的下划线的话，
+              5字及以上下划线是可以用」）。
+           ⚠️**跨行不再是一个维度**：三种记号都能逐行画（下划线每行一条、框每行一个、圈每行一个），
+             所以这里不必再管，rdMkDraw 自己会按行数画几次。 */
+        function rdMkPick(hlid, len, noUnderline) {
+            var pool = ['b', 'c'];
+            if (!noUnderline && len >= 5) pool = pool.concat(['u']);
+            return pool[rdMkSeed(hlid) % pool.length];
         }
         /* 这个词身上是不是已经有下划线了。三个来源，都是**开关＋位置**同时成立才算：
            ① 精句「划线」——body.reading-ks-ul + 词在 .reading-keysent 里；
@@ -26030,7 +26027,7 @@ body {
             for (var i = 0; i < marks.length; i++) len += (marks[i].textContent || '').length;
             // 压在背景词上 → 退回色带，别让两个手绘记号叠在一处（见 rdMkOverlapsBgTerm）
             if (!document.body.classList.contains('bg-mk-off') && rdMkOverlapsBgTerm(marks)) return null;
-            var kind = rdMkPick(hlid, len, rects.length > 1, rdMkHasUnderline(marks[0]));
+            var kind = rdMkPick(hlid, len, rdMkHasUnderline(marks[0]));
             if (!kind) return null;    // 没有合适的记号 → 不打 class，保留原来的划线底色
             /* 颜色现取现用：--mk-ink（描边）和 --hlc/--hla（荧光的浓度）都定义在 CSS 的划线色板里，
                夜间那几条会自动覆盖 → 切夜间/切主题重排一次就跟着变，JS 这边不用记任何色值。 */
@@ -26096,8 +26093,8 @@ body {
         var BG_MK_INK_WIDTH = { 1: 2.1 };      // 特例线宽；没列的走 1.5
         // ⚠️下划线的字数门槛已并进 rdMkPick 那张表（≥5 字才给），这里不再单独判
         // 背景词用同一条规矩（那张表在 rdMkPick 上面），种子取词本身
-        function bgMkPick(term, multiline, noUnderline) {
-            return rdMkPick(term, (term || '').length, multiline, noUnderline);
+        function bgMkPick(term, noUnderline) {
+            return rdMkPick(term, (term || '').length, noUnderline);
         }
         function bgMkClear(root) {
             var old = (root || document).querySelectorAll('.bg-mk-layer');
@@ -26262,7 +26259,7 @@ body {
                 var noU = rdMkHasUnderline(para);
                 for (var gi = 0; gi < groups.length; gi++) {
                     var rects = groups[gi];
-                    var kind = bgMkPick(useTerm, rects.length > 1, noU);
+                    var kind = bgMkPick(useTerm, noU);
                     try {
                         // ⚠️每一处给个不同的 Rough 种子，否则同一个词的几处歪法一模一样，像复制粘贴
                         var els = rdMkDraw(rc, rects, kind, inks[cIdx], inks[cIdx], (seed + gi * 7919) % 2147483647, inkWidths[cIdx]);

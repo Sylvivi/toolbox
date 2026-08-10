@@ -1,14 +1,15 @@
 /* 小注那个词的「手绘记号」回归测试（2026-08-10 做）。
  *
  * 功能：写过小注的那个词，不再显示划线的底色，改画一个手绘记号——
- * 四种：u 下划线 / b 方框 / c 圈 / h 荧光（荧光＝原色带的手绘版，浓度不变）。
+ * 三种：u 下划线 / b 方框 / c 圈（h 荧光已被用户去掉，画法留着没删）。
  * 用户看了 rough-notation 之后要的，原话「下划线，box，circle，highlight我都喜欢哎」，
  * 并自己划定了适用面：「适合在长度比较短的单字或者词语上面」。
  *
  * 这个文件钉住的是**跟她逐条谈定的那几条规则**，改回去会立刻毁掉观感：
- *  A 组 选记号 = 字数定范围 + 范围内钉死的随机（她原话「我想着随机一点呢，要不按字数来定」）
+ *  A 组 选记号的规则表：底下有线→框/圈；没线时 ≤4 字→框/圈，≥5 字→下划线/框/圈
+ *       ⚠️方框和圈**完全同等地位**，别再单独给圈加限制
  *  B 组 钉死：同一条小注永远同一个记号（每次打开都换＝页面在抽风）
- *  C 组 跨行降级成下划线（圈是绝对定位伪元素，跨行会裂成两个半圆）
+ *  C 组 跨行不影响选哪种（三种都能逐行画）
  *  D 组 取代底色、不叠（她定的），且删掉小注要变回底色
  *  E 组 ⚠️不许推开正文：mark 是行内元素，横向 padding 会让整段位移、还带偏小注引线锚点
  *  F 组 开关（默认开，关掉回到原样）
@@ -61,33 +62,34 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         const kindOf = el => (String(el.className).match(/rd-mk-([ubch])\b/) || [0, null])[1];
 
         /* ── A：选记号的规则表（纯函数直接问，不受随机影响）──
-           表在 index.html 的 rdMkPick 上面，2026-08-10 用户连调三轮定的：
-             底下有线 → 框/圈（跨行只给框）；没线时 ≤4 字 → 框/圈，≥5 字 → 下划线/框。
-           三条道理：① 有线优先于一切字数规则；② 四字及以内不给下划线（像笔误）；
-                     ③ 五字及以上不给圈（大扁椭圆），但下划线照给。 */
+           表在 index.html 的 rdMkPick 上面。2026-08-10 用户连调四轮定稿：
+             底下有线 → 框/圈；没线时 ≤4 字 → 框/圈，≥5 字 → 下划线/框/圈。
+           ⚠️**方框和圈完全同等地位**，别再给圈单独加限制（「长词是扁椭圆」「跨行会裂」
+             两个理由都被推翻过，后者纯属想当然——画的时候是逐行各画一次的）。 */
         {
-            const many = (len, multi, noU) => {
+            const many = (len, noU) => {
                 const s = new Set();
-                for (let i = 0; i < 400; i++) s.add(rdMkPick('a' + i, len, multi, noU));
+                for (let i = 0; i < 400; i++) s.add(rdMkPick('a' + i, len, noU));
                 return [...s].sort().join('');
             };
-            out.A_短词 = many(2, false, false);          // 期望 bc
-            out.A_四字 = many(4, false, false);          // 期望 bc
-            out.A_五字 = many(5, false, false);          // 期望 bu
-            out.A_长词 = many(9, false, false);          // 期望 bu
-            out.A_短词不给下划线 = out.A_短词 === 'bc' && out.A_四字 === 'bc';
-            out.A_长词不给圈但给下划线 = out.A_五字 === 'bu' && out.A_长词 === 'bu';
-            out.A_有线时框或圈 = many(2, false, true) === 'bc' && many(9, false, true) === 'bc';
-            out.A_有线且跨行只给框 = many(9, true, true) === 'b';
-            out.A_跨行短词给框 = many(3, true, false) === 'b';
-            out.A_跨行长词给下划线 = many(9, true, false) === 'u';
-            out.A_没有荧光了 = !(out.A_短词 + out.A_五字).includes('h');
-            // 别退化成「永远同一种」：随机确实在分布
+            out.A_两字 = many(2, false);      // bc
+            out.A_四字 = many(4, false);      // bc
+            out.A_五字 = many(5, false);      // bcu
+            out.A_长词 = many(12, false);     // bcu
+            out.A_有线短 = many(2, true);     // bc
+            out.A_有线长 = many(12, true);    // bc
+            out.A_四字以内不给下划线 = out.A_两字 === 'bc' && out.A_四字 === 'bc';
+            out.A_五字起三种都有 = out.A_五字 === 'bcu' && out.A_长词 === 'bcu';
+            out.A_有线时框圈都在且没下划线 = out.A_有线短 === 'bc' && out.A_有线长 === 'bc';
+            // ⚠️圈在每一档里都必须在场——这条专门盯「圈又被谁挡掉了」
+            out.A_圈处处都在 = [out.A_两字, out.A_四字, out.A_五字, out.A_长词, out.A_有线短, out.A_有线长]
+                .every(x => x.includes('c'));
+            out.A_没有荧光了 = !(out.A_两字 + out.A_五字).includes('h');
             const dist = {};
-            for (let i = 0; i < 600; i++) { const k = rdMkPick('seed' + i, 2, false, false); dist[k] = (dist[k] || 0) + 1; }
+            for (let i = 0; i < 600; i++) { const k = rdMkPick('seed' + i, 9, false); dist[k] = (dist[k] || 0) + 1; }
             out.A_分布 = dist;
-            out.A_真的在随机 = Object.keys(dist).length === 2 && Object.values(dist).every(v => v > 200);
-            out.A_分布够匀 = Object.values(dist).every(v => v > 600 / 2 * 0.75 && v < 600 / 2 * 1.25);
+            out.A_真的在随机 = Object.keys(dist).length === 3 && Object.values(dist).every(v => v > 120);
+            out.A_分布够匀 = Object.values(dist).every(v => v > 200 * 0.7 && v < 200 * 1.3);
         }
 
         // ── B：钉死的随机——同一个 id 永远同一个记号 ──
@@ -105,24 +107,24 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.B_确实打上了 = !!k1;
         }
 
-        // ── C：跨行的词降级成下划线 ──
+        // ── C：跨行 ──
         {
-            /* ⚠️跨行时圈一定会裂成两个半圆，所以只可能是下划线或方框：
-               长词给下划线（每行一条），短词给方框（每行一个，四字以内不给下划线）。 */
-            out.C_跨行长词给下划线 = rdMkPick('anything', 9, true, false) === 'u';
-            out.C_跨行短词给方框 = rdMkPick('anything', 3, true, false) === 'b';
-            out.C_跨行绝不给圈 = (() => {
-                for (let i = 0; i < 300; i++) {
-                    for (const len of [1, 3, 6, 12]) if (rdMkPick('c' + i, len, true, false) === 'c') return false;
+            /* ⚠️**跨行不再影响选哪种记号**（2026-08-10 定稿）：三种都能逐行画——
+               下划线每行一条、方框每行一个、圈每行一个（rdMkDraw 对每段行矩形各画一次）。
+               以前那条「跨行一律降级成下划线」是基于「圈会裂成两个半圆」的想当然，已推翻。 */
+            out.C_跨行不改种类 = (() => {
+                for (let i = 0; i < 200; i++) {
+                    const id = 'c' + i;
+                    if (rdMkPick(id, 9, false) !== rdMkPick(id, 9, false)) return false;
                 }
-                return true;
+                return rdMkPick.length === 3;   // 签名只剩 (hlid, len, noUnderline)
             })();
             // 造一个真的跨行：挑一个正好被行尾折断的词
             const a = build([{ para: 1, word: '门前石阶上生满青苔', id: 'hx1', note: 'tái·潮湿处的绿苔' }]);
             const mk = a.box.querySelector('mark[data-hlid="hx1"]');
             const rects = [...mk.getClientRects()].filter(r => r.width > 0);
             out.C_确实跨行了 = rects.length > 1;         // 前提成立才谈得上降级
-            out.C_跨行是下划线 = kindOf(mk) === 'u';
+            out.C_跨行画上了 = !!kindOf(mk);   // 跨行时照样画，种类不再被限制
         }
 
         // ── D：取代底色、不叠；删掉小注变回底色 ──
@@ -234,12 +236,12 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
                这个时候用方框可能更好一些的，就不看字数什么的了」）。 */
             out.J_有线就不给下划线 = (() => {
                 for (const len of [1, 2, 4, 6, 12]) {
-                    for (let i = 0; i < 60; i++) if (rdMkPick('j' + i, len, false, true) === 'u') return false;
+                    for (let i = 0; i < 60; i++) if (rdMkPick('j' + i, len, true) === 'u') return false;
                 }
                 return true;
             })();
             // 跨行 + 底下有线：仍是方框（每行画一个，不裂）
-            out.J_跨行有线只给框 = rdMkPick('j', 6, true, true) === 'b' && rdMkPick('j2', 2, true, true) === 'b';
+            out.J_有线时圈还在 = (() => { const s = new Set(); for (let i = 0; i < 200; i++) s.add(rdMkPick('j' + i, 6, true)); return s.has('c') && s.has('b'); })();
             // 跨行本来一律降级成下划线，但底下已有线时也得让开
             out.J_跨行时也避开 = rdMkPick('anything', 2, true, true) !== 'u';
             // 真场景：精句划线开着，词在精句里
@@ -259,14 +261,14 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             b.remove('reading-ks-ul'); b.add('reading-ks-wave');
             const wv = a.box.querySelector('mark[data-hlid="hj1"]');
             out.J_波浪也算 = rdMkHasUnderline(wv);
-            out.J_六字遇波浪不给线 = rdMkPick('x', 6, false, rdMkHasUnderline(wv)) !== 'u';
+            out.J_六字遇波浪不给线 = rdMkPick('x', 6, rdMkHasUnderline(wv)) !== 'u';
             b.remove('reading-ks-wave');
             out.J_没开波浪就不算 = !rdMkHasUnderline(wv);
             out.J_真场景不是下划线 = kindOf(a.box.querySelector('mark[data-hlid="hj1"]')) !== 'u';
             if (!hadKs) b.remove('reading-ks-ul');
             // 没有那些下划线时，u 仍然要在池子里（别一刀切）
             // ⚠️用**长词**验：四字以内本来就不给下划线，拿 2 字来验会假红
-            out.J_平时还有u = (() => { const s = new Set(); for (let i = 0; i < 400; i++) s.add(rdMkPick('j' + i, 6, false, false)); return s.has('u'); })();
+            out.J_平时还有u = (() => { const s = new Set(); for (let i = 0; i < 400; i++) s.add(rdMkPick('j' + i, 6, false)); return s.has('u'); })();
         }
 
         /* ── K：荧光不许把字弄糊 ──
@@ -358,23 +360,20 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         return out;
     });
 
-    ok('A1 ⚠️四字及以内不给下划线（只给框/圈）', R.A_短词不给下划线, '2字=' + R.A_短词 + ' 4字=' + R.A_四字);
-    ok('A2 ⚠️五字及以上不给圈、但下划线照给', R.A_长词不给圈但给下划线, '5字=' + R.A_五字 + ' 9字=' + R.A_长词);
-    ok('A3 ⚠️底下有线时：框或圈都行，不看字数', R.A_有线时框或圈);
-    ok('A4 ⚠️底下有线且跨行：只给框（圈会裂）', R.A_有线且跨行只给框);
-    ok('A5 跨行短词给框、跨行长词给下划线', R.A_跨行短词给框 && R.A_跨行长词给下划线);
-    ok('A6 荧光已去掉，不再出现', R.A_没有荧光了);
-    ok('A7 随机是真的在分布', R.A_真的在随机, JSON.stringify(R.A_分布));
-    ok('A8 ⚠️分布够匀（rdMkSeed 那步雪崩混合别删）', R.A_分布够匀, JSON.stringify(R.A_分布));
+    ok('A1 ⚠️四字及以内不给下划线（框/圈）', R.A_四字以内不给下划线, '2字=' + R.A_两字 + ' 4字=' + R.A_四字);
+    ok('A2 五字及以上：下划线/方框/圈 三选一', R.A_五字起三种都有, '5字=' + R.A_五字 + ' 12字=' + R.A_长词);
+    ok('A3 ⚠️底下有线时：框和圈都在、且不给下划线', R.A_有线时框圈都在且没下划线);
+    ok('A4 ⚠️⚠️圈在每一档里都在场（别再单独给圈加限制）', R.A_圈处处都在);
+    ok('A5 荧光已去掉，不再出现', R.A_没有荧光了);
+    ok('A6 随机是真的在分布', R.A_真的在随机, JSON.stringify(R.A_分布));
+    ok('A7 ⚠️分布够匀（rdMkSeed 那步雪崩混合别删）', R.A_分布够匀, JSON.stringify(R.A_分布));
     ok('B1 同一个编号永远同一个记号', R.B_纯函数稳定);
     ok('B2 那个词确实被打上了记号', R.B_确实打上了, '记号=' + JSON.stringify(R.B_记号));
     ok('B3 重排（换字号/主题）后不变', R.B_重排不变);
     ok('B4 整章重建（重开一章）后不变', R.B_重建不变);
-    ok('C1a 跨行长词 → 下划线（每行一条）', R.C_跨行长词给下划线);
-    ok('C1b 跨行短词 → 方框（每行一个）', R.C_跨行短词给方框);
-    ok('C1c ⚠️跨行绝不给圈（会裂成两个半圆）', R.C_跨行绝不给圈);
+    ok('C1 ⚠️跨行不再影响选哪种记号（三种都能逐行画）', R.C_跨行不改种类);
     ok('C2 前提：确实造出了跨行的词', R.C_确实跨行了);
-    ok('C3 真跨行时拿到的是下划线', R.C_跨行是下划线);
+    ok('C3 真跨行时照样画得出记号', R.C_跨行画上了);
     ok('D1 记号取代底色（背景色透明）', R.D_背景色透明);
     ok('D2 底色那圈柔光也去掉了', R.D_没有柔光);
     ok('D3 记号图挂上了', R.D_有记号图);
@@ -399,7 +398,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('G7 引线仍是虚线', R.G_引线仍是虚的);
     ok('G8 记号没被引线那条虚线 CSS 套上', R.G_记号不是虚的);
     ok('J1 ⚠️底下有线时不给下划线（1/2/4/6/12 字都验过）', R.J_有线就不给下划线);
-    ok('J2 跨行 + 底下有线 → 只给方框（每行一个，不裂）', R.J_跨行有线只给框);
+    ok('J2 ⚠️底下有线时圈照样在场（框圈同等）', R.J_有线时圈还在);
     ok('J3 跨行时也避开下划线', R.J_跨行时也避开);
     ok('J4 认得出「词在精句里且精句开了划线」', R.J_识别到了);
     ok('J5 真场景下拿到的不是下划线', R.J_真场景不是下划线);
