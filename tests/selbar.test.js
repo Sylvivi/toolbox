@@ -102,6 +102,35 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             rdHlHideBar();
         }
 
+        /* ── D：⚠️「不连着同色」在**真实路径**上也要成立 ──
+           2026-08-10 用户报：「小注的颜色是随机的吗？感觉有点连着，就是同一种颜色可能出现两次」。
+           根因：躲开上一次靠的是 reading_hl_last_color 这个键，划线那条路径一直写着，
+           而**小注那条路径改成随机取色时漏了写回** → 每次都拿陈旧的值去比，连着注几条必然撞色。
+           ⚠️所以这里**不许手动 setItem 去喂**（B 组那样测只能证明函数本身没问题），
+             必须走真实的创建流程，让代码自己写回。 */
+        {
+            try { localStorage.removeItem('reading_hl_last_color'); } catch (e) {}
+            const RAW = '那年山里落了很大的雪，门前石阶上生满青苔，屋中雾气氤氲。';
+            // ⚠️先复位：C 组留下的 mark 会把段落切成好几个文本节点，selectWord 只认 firstChild
+            box.querySelector('p[data-p="1"]').innerHTML = RAW;
+            const seq = [];
+            for (let i = 0; i < 12; i++) {
+                const w = ['青苔', '氤氲', '石阶', '门前'][i % 4];
+                const bar = selectWord(w);
+                bar.querySelector('[data-act="hl"]').click();
+                const mk = [...box.querySelectorAll('mark.rd-hl')].pop();
+                seq.push((String(mk.className).match(/rd-hl-(\w+)/) || [])[1]);
+                // 清掉这一轮的 mark，下一轮好重新选
+                box.querySelector('p[data-p="1"]').innerHTML = RAW;
+            }
+            out.D_序列 = seq;
+            let rep = 0;
+            for (let i = 1; i < seq.length; i++) if (seq[i] === seq[i - 1]) rep++;
+            out.D_真实路径不连着重复 = rep === 0;
+            // 小注那条路径（rdGlMake）也必须写回这个键——⚠️精确匹配，别只搜键名（注释里提一嘴会假过）
+            out.D_小注路径也写回 = rdGlMake.toString().indexOf("setItem('reading_hl_last_color', color)") >= 0;
+        }
+
         document.querySelectorAll('.__sb').forEach(n => n.remove());
         try { localStorage.removeItem('reading_hl_last_color'); } catch (e) {}
         return out;
@@ -121,6 +150,8 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('C3 ⚠️点已有划线时色板出现（自定义的入口）', R.C_编辑条有色板);
     ok('C4 在那条上换色生效', R.C_换色生效);
     ok('D1 ⚠️「划线样式」键不在选中小条上（跟真·划线键撞脸）', R.D_没有样式键);
+    ok('D2 ⚠️连划 12 条，颜色不连着重复（走真实路径，不手动喂 last_color）', R.D_真实路径不连着重复, (R.D_序列 || []).join('→'));
+    ok('D3 ⚠️小注那条路径也把颜色写回 last_color', R.D_小注路径也写回);
     ok('E1 无页面报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();

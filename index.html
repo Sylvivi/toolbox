@@ -26987,6 +26987,10 @@ body {
                  时代的遗留——现在选中时压根没有色板可点，跟着上一次等于永远一个色。
                  想指定颜色：注完点那个词，色板在那条小条上。 */
             var color = rdHlRandomColor();
+            /* ⚠️**必须写回**（2026-08-10 用户报「感觉有点连着，就是同一种颜色可能出现两次」）：
+               rdHlRandomColor 就是靠这个键「躲开上一次那支笔」的。划线那条路径(rdHlCreate)一直写着，
+               而小注这条改成随机取色时漏了 → 每次都拿一个陈旧的值去比，连着注几条必然撞色。 */
+            try { localStorage.setItem('reading_hl_last_color', color); } catch (eC) {}
             var id = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
             var hl = {
                 id: id, msgIdx: pend.msgIdx, chap: _readerChapOf(pend.msgIdx), p: pend.pNum,
