@@ -3677,6 +3677,25 @@ body {
         }
         .reading-merged p[data-p].rp-active { background: var(--accent-light); }
         .reading-merged blockquote[data-cp].rp-active { box-shadow: 0 0 0 2px var(--accent-mid); }
+        /* ===== 背景块折叠（2026-08-11 用户要的：「插入文中的那个块，能不能折叠起来并且默认折叠呀」）=====
+           只折**背景块**（data-bg），她自己问的问答块不动——那是她主动要的答案，收起来反而碍事。
+           ⚠️默认折叠，展开是临时的：`_rdBgOpen` 只活在内存里，关掉 app 就回到全折叠。
+             但**窗口化重渲会重建 DOM**，所以那个表得存着，不然滚一下就把展开的又合上了。
+           ⚠️折叠只用 display:none 藏正文，**不动 DOM 结构**——背景词的手绘记号是按段落里的字
+             定位的，跟这块没关系；但块的高度会变，所以展开/收起之后要重排一次（见 rdBgFoldToggle）。 */
+        .reading-merged blockquote[data-bg="1"] > .reading-q {
+            cursor: pointer; position: relative; padding-right: 1.2em;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* 小三角贴在标题行右端。⚠️用 ::after 而不是真按钮：块里塞按钮会被长按/双击那两套手势夹到 */
+        .reading-merged blockquote[data-bg="1"] > .reading-q::after {
+            content: '▾'; position: absolute; right: 0; top: 0;
+            font-size: 0.85em; opacity: 0.5; transition: transform 0.15s;
+        }
+        .reading-merged blockquote[data-bg="1"].bg-fold > .reading-q::after { content: '▸'; }
+        .reading-merged blockquote[data-bg="1"].bg-fold > *:not(.reading-q) { display: none; }
+        /* 折叠时把块压薄一点：整块只剩一行字，原来的上下内边距会显得空 */
+        .reading-merged blockquote[data-bg="1"].bg-fold { padding-top: 0.35em !important; padding-bottom: 0.35em !important; }
         /* 共读正文段间距（按设备调节，默认 8px≈原 0.5em）。段落带行内 margin:0.5em 0，
            必须用 !important 才能盖过行内样式。间距只落在「上边距」、下边距归零：
            段落之间靠下一段的 margin-top 拉开＝段间距；而紧跟段落的批注框(blockquote[data-cp])
@@ -26092,6 +26111,26 @@ body {
         var BG_MK_INKS = [2, 3, 4, 5, 6];      // 参与随机的笔号（对应 --bg-ink-N）
         var BG_MK_INK_WIDTH = { 1: 2.1 };      // 特例线宽；没列的走 1.5
         // ⚠️下划线的字数门槛已并进 rdMkPick 那张表（≥5 字才给），这里不再单独判
+        /* 背景块「本次展开过」的记号（2026-08-11）。**只活在内存里**：用户要的是「默认折叠」，
+           所以关掉 app / 重开一章都回到全折叠；但窗口化重渲会重建 DOM，得靠它把展开状态接住。
+           key 带 msgIdx，免得不同章的同段号互相串。 */
+        var _rdBgOpen = {};
+        function _rdBgFoldKey(msgIdx, pNum, ci) {
+            return (typeof msgIdx === 'number' ? msgIdx : 'x') + '|' + pNum + '|' + ci;
+        }
+        // 点背景块的标题行：折叠 / 展开
+        function rdBgFoldToggle(bq) {
+            if (!bq) return;
+            var msg = bq.closest('.chat-msg');
+            var mi = msg ? Number(msg.getAttribute('data-idx')) : NaN;
+            var key = _rdBgFoldKey(isNaN(mi) ? undefined : mi, bq.getAttribute('data-cp'), bq.getAttribute('data-ci'));
+            var willOpen = bq.classList.contains('bg-fold');
+            bq.classList.toggle('bg-fold', !willOpen);
+            if (willOpen) _rdBgOpen[key] = 1; else delete _rdBgOpen[key];
+            /* ⚠️块的高度变了 → 小注和背景词记号都是按行位置画的，必须重排一次，
+               否则整篇的记号和引线会跟字错开（这正是 rdGlRelayoutSoon 存在的理由）。 */
+            if (typeof rdGlRelayoutSoon === 'function') rdGlRelayoutSoon(30);
+        }
         // 背景词用同一条规矩（那张表在 rdMkPick 上面），种子取词本身
         function bgMkPick(term, noUnderline) {
             return rdMkPick(term, (term || '').length, noUnderline);
@@ -28460,6 +28499,21 @@ body {
             });
         })();
 
+        /* 点背景块的标题行 = 折叠/展开（2026-08-11）。
+           ⚠️**只认标题行那一行**，不是整块：整块上已经有两套手势——长按＝删除/重新回答、
+             双击＝接着聊这一段。标题行原本不承担任何手势，拿它来折叠零冲突。
+           ⚠️`stopPropagation` 必须有：不然这一下会继续冒泡去走「左右点击翻页」的连击计数，
+             点一下标题书就翻页了。
+           ⚠️挂在 document 上用事件委托：正文是反复重渲的，绑在元素上会随重渲丢失。 */
+        document.addEventListener('click', function (e) {
+            if (!e.target || !e.target.closest) return;
+            var q = e.target.closest('.reading-merged blockquote[data-bg="1"] > .reading-q');
+            if (!q) return;
+            e.stopPropagation();
+            e.preventDefault();
+            rdBgFoldToggle(q.parentElement);
+        }, true);
+
         // 划线：选区变化 → 选到同一原文段落内就冒「划线小条」；选空 / 点别处 → 收起小条
         (function() {
             var _rdSelTimer = null;
@@ -28924,7 +28978,9 @@ body {
                         var _isBg = _qm && _cmtRaw.replace(/^\s*汐：/, '').indexOf(BG_Q_PREFIX) === 0;
                         // 原文出发点带到 DOM 上，手绘记号直接用它定位（拿不到就回退到题目，见 bgMkTermOf）
                         var _bgAnchor = _isBg ? _rdBgSplitQ((_cmtRaw.split('\n')[0] || '')).anchor : '';
-                        html += '<blockquote data-cp="' + pNum + '" data-ci="' + k + '"' + (_isBg ? ' data-bg="1"' : '')
+                        // 背景块默认折叠；本次手动展开过的（_rdBgOpen）保持展开，免得窗口化重渲一下就合上
+                        var _foldCls = (_isBg && !_rdBgOpen[_rdBgFoldKey(msgIdx, pNum, k)]) ? ' bg-fold' : '';
+                        html += '<blockquote class="' + _foldCls.trim() + '" data-cp="' + pNum + '" data-ci="' + k + '"' + (_isBg ? ' data-bg="1"' : '')
                              + (_bgAnchor ? ' data-anchor="' + esc(_bgAnchor) + '"' : '') + ' style="margin:0.4em 0 0.6em;padding:0.5em 12px 0.4em;border-left:3px solid var(--accent);background:var(--quote-bg, var(--accent-light));border-radius:0 8px 8px 0;font-size:0.92em;color:var(--text-sub);line-height:1.6">' + _cmtRendered + '</blockquote>';
                     }
                 }
