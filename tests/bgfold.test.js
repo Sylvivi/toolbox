@@ -88,6 +88,50 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.E_先藏后画 = src.indexOf("visibility = 'hidden'") > 0;
         }
 
+        /* ── F：⚠️折叠/展开时，块**上方**那条小注不许动 ──
+           2026-08-11 用户报「为什么展开和折叠背景知识块，那个标题附近的小注会跟着动一下」。
+           原因：小注压进块里时按「卡在块的第二行之前」定位，而折叠后块里只剩标题一行、没有第二行，
+           于是退回固定 12px 那一档 → 位置差几个像素，肉眼看到跳一下。
+           修法：量块内文字时**临时把折叠 class 摘掉**，按展开的样子量，量完立刻装回（同一帧，看不见）。
+           ⚠️这样算出的位置仍落在折叠后的块内部，不会跑到块外面压到下一段（下面 F3 钉这条）。 */
+        {
+            document.querySelectorAll('.__fd').forEach(n => n.remove());
+            const box = document.createElement('div');
+            box.className = 'reading-merged';
+            box.style.cssText = 'font-size:16px;line-height:1.9;width:358px';
+            box.innerHTML = readingModeRenderMerged(
+                '智伯死后，豫让逃进了山里，心中只剩一个念头，他要为智伯报仇雪恨，绝不罢休。\n后来豫让改名换姓混进宫里。',
+                '[P1] 汐：背景：士为知己者死 ⟦知己⟧\n这句话在先秦不是文学修辞，是士这个阶层真实的行为准则。士是最低一级的贵族。🍄',
+                0);
+            const p1 = box.querySelector('p[data-p="1"]');
+            p1.innerHTML = p1.innerHTML.replace('雪恨',
+                '<mark class="rd-hl rd-hl-sky" data-hlid="jf1" data-gl="xuě hèn·洗刷仇恨">雪恨</mark>');
+            const bub = document.createElement('div'); bub.className = 'chat-bubble'; bub.appendChild(box);
+            const m = document.createElement('div');
+            m.className = 'chat-msg ai __fd'; m.setAttribute('data-idx', '0'); m.appendChild(bub);
+            document.body.appendChild(m);
+            const bq2 = box.querySelector('blockquote[data-bg="1"]');
+            const pos = () => {
+                const lab = box.querySelector('.rd-gl-label');
+                if (!lab) return null;
+                const r = lab.getBoundingClientRect(), b = box.getBoundingClientRect();
+                return Math.round(r.left - b.left) + ',' + Math.round(r.top - b.top);
+            };
+            rdGlLayout(bub);
+            const folded = pos();
+            bq2.classList.remove('bg-fold'); rdGlLayout(bub);
+            const opened = pos();
+            bq2.classList.add('bg-fold'); rdGlLayout(bub);
+            const refolded = pos();
+            out.F_有小注 = !!folded;
+            out.F_折叠展开位置一致 = !!folded && folded === opened;
+            out.F_来回切换一致 = folded === refolded;
+            out.F_位置 = [folded, opened, refolded];
+            // 小注不许跑到块外面去压下一段
+            const lab = box.querySelector('.rd-gl-label');
+            out.F_没跑到块外 = !!lab && lab.getBoundingClientRect().bottom <= bq2.getBoundingClientRect().bottom + 1;
+        }
+
         document.querySelectorAll('.__fd').forEach(n => n.remove());
         return out;
     });
@@ -106,6 +150,10 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('E1 ⚠️折叠不再触发全量重排（只重排当前这条消息）', R.E_不走全量重排 && R.E_只重排本条);
     ok('E2 ⚠️用 rAF 在下一帧画完，不留「记号停在旧位置」的中间态', R.E_用了rAF);
     ok('E3 重排前先把记号层藏起来（宁可短暂看不见，也别看见错位）', R.E_先藏后画);
+    ok('F1 前提：块上方那条小注排出来了', R.F_有小注);
+    ok('F2 ⚠️折叠和展开时小注位置一模一样（不跳）', R.F_折叠展开位置一致, JSON.stringify(R.F_位置));
+    ok('F3 来回切换也一致', R.F_来回切换一致);
+    ok('F4 ⚠️按展开量之后，小注仍落在折叠块内部（没压到下一段）', R.F_没跑到块外);
     ok('D1 无页面报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();

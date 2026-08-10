@@ -26736,6 +26736,15 @@ body {
             function _glTextRects(el) {
                 if (!el || !el.getClientRects) return [];
                 if (_glRectCache.has(el)) return _glRectCache.get(el);
+                /* ⚠️折叠起来的背景块要**按展开的样子量**（2026-08-11 用户报：「为什么展开和折叠
+                   背景知识块，那个标题附近的小注会跟着动一下」）。
+                   原因：小注压进块里时是按「卡在块的第二行之前」定位的，而折叠后块里只剩标题一行、
+                   **没有第二行**了，于是退回固定 12px 那一档 → 位置跟展开时差几个像素，肉眼就看到跳一下。
+                   办法是量之前把折叠 class 摘掉、量完立刻装回去，全在同一帧里，画面上看不见。
+                   ⚠️这样算出来的位置**仍落在折叠后的块内部**（实测：折叠块高 39px，展开时第二行在
+                     32.6px 处），不会跑到块外面去压到下一段。 */
+                var _wasFolded = el.classList && el.classList.contains('bg-fold');
+                if (_wasFolded) el.classList.remove('bg-fold');
                 var out = [], rng = document.createRange();
                 var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
                 var n;
@@ -26749,6 +26758,7 @@ body {
                         out.push(q);
                     }
                 }
+                if (_wasFolded) el.classList.add('bg-fold');
                 _glRectCache.set(el, out);
                 return out;
             }
