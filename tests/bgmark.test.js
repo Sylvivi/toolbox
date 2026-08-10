@@ -31,7 +31,8 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     const R = await page.evaluate(() => {
         const out = {};
         const N = s => '<span class="reading-name">' + s + '</span>';
-        const bq = (cp, head, body) => '<blockquote data-cp="' + cp + '" data-ci="0" data-bg="1" '
+        const bq = (cp, head, body, anchor) => '<blockquote data-cp="' + cp + '" data-ci="0" data-bg="1" '
+            + (anchor ? 'data-anchor="' + anchor + '" ' : '')
             + 'style="margin:0.4em 0 0.6em;padding:0.5em 12px 0.4em;font-size:0.92em;line-height:1.6">'
             + '<div class="reading-q">' + head + '</div>' + (body || '正文说明。') + '</blockquote>';
 
@@ -41,7 +42,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             let html = '';
             paras.forEach(p => {
                 html += '<p data-p="' + p.n + '">' + p.html + '</p>';
-                blocks.filter(b => String(b.cp) === String(p.n)).forEach(b => { html += bq(b.cp, b.head); });
+                blocks.filter(b => String(b.cp) === String(p.n)).forEach(b => { html += bq(b.cp, b.head, null, b.anchor); });
             });
             const box = document.createElement('div');
             box.className = 'reading-merged';
@@ -246,18 +247,55 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
                上面那套砍字只是兜底（管已经标好的老数据、和模型偶尔没照做）。
                这两条断言防的是：以后有人整理提示词时删了其中一条——
                只删①会让记号又标不上，只删②会让讲解退化成解释字面。 */
-            out.I_提示词要求照抄原文 = BG_SCAN_INSTRUCTION.indexOf('照抄那几个字') > 0
-                                  && BG_SCAN_INSTRUCTION.indexOf('别写「艾陵之战」') > 0;
+            /* ⚠️第一遍要**同时**给出发点和题目（三列）。出发点是原文里逐字有的字，拿来画圈。 */
+            out.I_提示词要出发点 = BG_SCAN_INSTRUCTION.indexOf('原文出发点') > 0
+                              && BG_SCAN_INSTRUCTION.indexOf('原文里逐字出现过的') > 0
+                              && BG_SCAN_INSTRUCTION.indexOf('P12|桑叶|吴楚边境桑女争桑') > 0;
             /* ⚠️⚠️这条盯的是**当天翻过的车**：第一版把「贴着原文」写进了「名称怎么写」那一节，
                模型当成了筛选标准，用户实测「找出来的基本上都是单个的名词」——
                她之前那些最厚的条目（原文里没有现成词、全靠概括命名）全没了。
                所以提示词里必须同时有「这是起名字的偏好、不是挑不挑的标准」和「绝不要因此放弃」
                这两句话，还得留着那三个正例。少一句都可能让覆盖面再塌一次。 */
-            out.I_没把命名当筛选 = BG_SCAN_INSTRUCTION.indexOf('不是挑不挑这条的标准') > 0
-                              && BG_SCAN_INSTRUCTION.indexOf('绝不要因为原文里没有现成的词，就放弃这个背景点') > 0
-                              && BG_SCAN_INSTRUCTION.indexOf('春秋复仇观念') > 0;
-            out.I_讲解要补全称 = BG_EXPLAIN_INSTRUCTION.indexOf('点明完整名称') > 0
-                             && BG_EXPLAIN_INSTRUCTION.indexOf('艾陵之战') > 0;
+            out.I_题目不许改窄 = BG_SCAN_INSTRUCTION.indexOf('不要为了迁就出发点把题目改窄') > 0
+                             && BG_SCAN_INSTRUCTION.indexOf('春秋复仇观念') > 0
+                             && BG_SCAN_INSTRUCTION.indexOf('留空即可，别硬编') > 0;
+            /* ⚠️第二遍**不需要**「开头补全称」那条了：三列之后题目本身就是完整的
+               （「艾陵之战」「吴楚边境桑女争桑」），讲解直接拿题目讲即可。
+               那条是上一版方案（题目＝原文的字）的残留，留着会让每条都画蛇添足加个开场白，
+               2026-08-10 当天撤掉。这条断言盯着它别被人又加回来。 */
+            out.I_讲解没有多余开场白要求 = BG_EXPLAIN_INSTRUCTION.indexOf('点明完整名称') < 0;
+        }
+
+        /* ── J：原文出发点（题目引申、圈画在原文的字上）──
+           2026-08-10 用户点破的：「即便是讲背景，那他也是有出发点的，而那个出发点肯定是在文章里面，
+           像争桑叶那个桑叶就是出发点，所以那个就可以标起来，而不是说就不标了」。
+           所以清单是三列「P段号|出发点|题目」，出发点渲染到 blockquote 的 data-anchor 上，画圈用它。 */
+        {
+            // 解析三列
+            const a1 = _rdBgParseLine('P12|桑叶|吴楚边境桑女争桑');
+            const a2 = _rdBgParseLine('P23||春秋复仇观念');       // ⚠️找不到出发点，中间那格空着
+            const a3 = _rdBgParseLine('P7|共济会');               // 老的两列格式照旧
+            out.J_三列 = a1 && a1.anchor === '桑叶' && a1.term === '吴楚边境桑女争桑';
+            out.J_空格子不留竖线 = a2 && a2.anchor === '' && a2.term === '春秋复仇观念';
+            out.J_两列照旧 = a3 && a3.term === '共济会' && !a3.anchor;
+            // 标题行的 ⟦⟧ 标记：拆得出、且显示时要剥掉
+            const sp = _rdBgSplitQ('背景：吴楚边境桑女争桑 ⟦桑叶⟧');
+            out.J_拆得出 = sp.text === '背景：吴楚边境桑女争桑' && sp.anchor === '桑叶';
+            out.J_没标记也不炸 = _rdBgSplitQ('背景：共济会').text === '背景：共济会';
+            // 真场景：题目是概括的、正文里根本没有，靠出发点画圈
+            const P = '织布的核心在于丝，而生产丝的核心是养蚕，蚕需要桑叶才能生长，两国的女子为了抢夺桑叶起了争执。';
+            const withAnchor = build([{ n: 1, html: P }],
+                [{ cp: 1, head: '汐：背景：吴楚边境桑女争桑', anchor: '桑叶' }]);
+            out.J_靠出发点画上了 = withAnchor.box.querySelectorAll('.bg-mk-svg > g').length === 2;   // 「桑叶」出现两次
+            // 没有出发点时，题目在正文里找不到 → 照旧不画（不硬编、不误标）
+            const noAnchor = build([{ n: 1, html: P }],
+                [{ cp: 1, head: '汐：背景：吴楚边境桑女争桑' }]);
+            out.J_没出发点就不画 = !noAnchor.box.querySelector('.bg-mk-layer');
+            // 出发点优先于题目：两者都能匹配时用出发点
+            const both = build([{ n: 1, html: '孙武带来一部兵法，讲的是用兵之道。' }],
+                [{ cp: 1, head: '汐：背景：孙武', anchor: '兵法' }]);
+            const d = both.box.querySelector('.bg-mk-svg > g');
+            out.J_出发点优先 = !!d && both.box.querySelectorAll('.bg-mk-svg > g').length === 1;
         }
 
         document.querySelectorAll('.__bgt').forEach(n => n.remove());
@@ -299,9 +337,17 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('I1 ⚠️砍词尾最多两字的回退匹配', R.I_对了,
        JSON.stringify([R.I_整词就在, R.I_砍之战, R.I_砍之会, R.I_核心在后不误标, R.I_不砍到单字, R.I_找不到就空]));
     ok('I2 真场景：题目「艾陵之战」、正文只有「艾陵」→ 标出来了', R.I_真场景标上了);
-    ok('I3 ⚠️第一遍：名字尽量照抄原文的字（这样才定位得到）', R.I_提示词要求照抄原文);
-    ok('I3b ⚠️⚠️但那只是起名偏好、不是筛选标准（否则长背景会全丢）', R.I_没把命名当筛选);
-    ok('I4 ⚠️第二遍：开头补完整名称（解释仍要引申，别退化成解释字面）', R.I_讲解要补全称);
+    ok('I3 ⚠️第一遍要给「原文出发点」（三列，出发点用来画圈）', R.I_提示词要出发点);
+    ok('I3b ⚠️⚠️题目照旧该怎么起怎么起，不许为迁就出发点改窄', R.I_题目不许改窄);
+    ok('I4 ⚠️第二遍不再要求「开头补全称」（三列之后题目本就完整，别加回来）', R.I_讲解没有多余开场白要求);
+    ok('J1 清单三列：出发点+题目都解析得出', R.J_三列);
+    ok('J2 ⚠️找不到出发点时中间那格空着，别把竖线留进题目', R.J_空格子不留竖线);
+    ok('J3 老的两列格式照旧认', R.J_两列照旧);
+    ok('J4 标题行的 ⟦出发点⟧ 拆得出（显示时会剥掉）', R.J_拆得出);
+    ok('J5 没有标记的标题行不受影响', R.J_没标记也不炸);
+    ok('J6 ⚠️题目是概括的、正文里没有 → 靠出发点把圈画上', R.J_靠出发点画上了);
+    ok('J7 没有出发点又找不到题目 → 照旧不画（不硬编不误标）', R.J_没出发点就不画);
+    ok('J8 出发点优先于题目', R.J_出发点优先);
     ok('F1 无页面报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();
