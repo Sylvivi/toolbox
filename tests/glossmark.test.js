@@ -238,6 +238,15 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             mk.parentNode.insertBefore(ks, mk); ks.appendChild(mk);   // 把词包进精句里
             rdGlLayout(a.bub);
             out.J_识别到了 = rdMkHasUnderline(a.box.querySelector('mark[data-hlid="hj1"]'));
+            /* ⚠️**波浪也算「字底下有线」**（2026-08-10 用户问的：「6个字，但是有波浪线的情况下，
+               不应该再用下划线吧？」）。第一版漏了它——只按 text-decoration 那种下划线去想的。
+               6 个字只剩下划线可用，波浪不算的话就会画一条压在波浪上。 */
+            b.remove('reading-ks-ul'); b.add('reading-ks-wave');
+            const wv = a.box.querySelector('mark[data-hlid="hj1"]');
+            out.J_波浪也算 = rdMkHasUnderline(wv);
+            out.J_六字遇波浪不画线 = rdMkPick('x', 6, false, rdMkHasUnderline(wv)) === null;
+            b.remove('reading-ks-wave');
+            out.J_没开波浪就不算 = !rdMkHasUnderline(wv);
             out.J_真场景不是下划线 = kindOf(a.box.querySelector('mark[data-hlid="hj1"]')) !== 'u';
             if (!hadKs) b.remove('reading-ks-ul');
             // 没有那些下划线时，u 仍然要在池子里（别一刀切）
@@ -376,6 +385,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('J4 认得出「词在精句里且精句开了划线」', R.J_识别到了);
     ok('J5 真场景下拿到的不是下划线', R.J_真场景不是下划线);
     ok('J6 平时（没有别的下划线）u 照样在池子里', R.J_平时还有u);
+    ok('J7 ⚠️波浪也算「字底下有线」', R.J_波浪也算);
+    ok('J8 ⚠️6 个字 + 波浪 → 不画记号（不再压一条下划线上去）', R.J_六字遇波浪不画线);
+    ok('J9 没开波浪时不误判', R.J_没开波浪就不算);
     ok('K2 荧光的画法还在，且日间是正片叠底（字不被蒙糊）', R.K_日间正片叠底, R.K_混合模式);
     ok('K3 夜间翻成滤色', R.K_夜间滤色, R.K_夜间混合模式);
     ok('I1 记号确实有路径', R.I_有路径);
