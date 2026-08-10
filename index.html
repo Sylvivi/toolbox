@@ -3256,20 +3256,25 @@ body {
            box-shadow 不占布局，画在外面不动一个字。
            ⚠️底色必须用浅亮色才压不住黑字，所以「蓝」用浅亮蓝、不用深蓝。
            ⚠️夜间近黑底会吃掉半透明色，所以反而要「加重」一档才显（只改 --hla，见下）。 */
-        .reading-merged mark.rd-hl.rd-hl-gold   { --hlc: 255,207,46;  --hla: 0.55; }
-        .reading-merged mark.rd-hl.rd-hl-orange { --hlc: 255,154,82;  --hla: 0.36; }
-        .reading-merged mark.rd-hl.rd-hl-green  { --hlc: 95,196,106;  --hla: 0.36; }
-        .reading-merged mark.rd-hl.rd-hl-sky    { --hlc: 124,180,255; --hla: 0.45; }
-        .reading-merged mark.rd-hl.rd-hl-rose   { --hlc: 255,138,163; --hla: 0.36; }
+        /* ⚠️`--mk-ink` ＝ 手写记号（小注那个词的框/圈/下划线）描边用的颜色，跟「下划线款」
+           那套深色是同一批——线条细，用浅色在纸白上根本看不见。**故意放在这儿跟 --hlc 并排**：
+           JS 那边靠 `getComputedStyle(mark).getPropertyValue('--mk-ink')` 现取，所以
+           加/删一个划线颜色时只要改这几行，不用再去 JS 里同步一份色表。 */
+        .reading-merged mark.rd-hl.rd-hl-gold   { --hlc: 255,207,46;  --hla: 0.55; --mk-ink: #d9a400; }
+        .reading-merged mark.rd-hl.rd-hl-orange { --hlc: 255,154,82;  --hla: 0.36; --mk-ink: #e8722a; }
+        .reading-merged mark.rd-hl.rd-hl-green  { --hlc: 95,196,106;  --hla: 0.36; --mk-ink: #3a9a4a; }
+        .reading-merged mark.rd-hl.rd-hl-sky    { --hlc: 124,180,255; --hla: 0.45; --mk-ink: #1E50A2; }
+        .reading-merged mark.rd-hl.rd-hl-rose   { --hlc: 255,138,163; --hla: 0.36; --mk-ink: #e85f7f; }
         /* 墨：中性色。⚠️底色**不能真用黑**，黑底会把正文的黑字吞掉——走一层浅灰纱，
            黑只出现在下划线和小注的笔迹上。夜间整个翻过来：浅色底纱 + 白笔迹。 */
-        .reading-merged mark.rd-hl.rd-hl-ink    { --hlc: 96,102,112;  --hla: 0.24; }
-        body.dark .reading-merged mark.rd-hl.rd-hl-gold   { --hla: 0.46; }
-        body.dark .reading-merged mark.rd-hl.rd-hl-orange { --hla: 0.42; }
-        body.dark .reading-merged mark.rd-hl.rd-hl-green  { --hla: 0.42; }
-        body.dark .reading-merged mark.rd-hl.rd-hl-sky    { --hla: 0.42; }
-        body.dark .reading-merged mark.rd-hl.rd-hl-rose   { --hla: 0.42; }
-        body.dark .reading-merged mark.rd-hl.rd-hl-ink    { --hlc: 226,232,240; --hla: 0.22; }
+        .reading-merged mark.rd-hl.rd-hl-ink    { --hlc: 96,102,112;  --hla: 0.24; --mk-ink: #2f333a; }
+        /* 夜间：记号的描边整个翻过来用浅亮色（就是 --hlc 那批原色）——深色线在近黑的纸上等于没画。 */
+        body.dark .reading-merged mark.rd-hl.rd-hl-gold   { --hla: 0.46; --mk-ink: #ffcf2e; }
+        body.dark .reading-merged mark.rd-hl.rd-hl-orange { --hla: 0.42; --mk-ink: #ff9a52; }
+        body.dark .reading-merged mark.rd-hl.rd-hl-green  { --hla: 0.42; --mk-ink: #5fc46a; }
+        body.dark .reading-merged mark.rd-hl.rd-hl-sky    { --hla: 0.42; --mk-ink: #7cb4ff; }
+        body.dark .reading-merged mark.rd-hl.rd-hl-rose   { --hla: 0.42; --mk-ink: #ff8aa3; }
+        body.dark .reading-merged mark.rd-hl.rd-hl-ink    { --hlc: 226,232,240; --hla: 0.22; --mk-ink: #e2e8f0; }
         body:not(.rd-hl-underline) .reading-merged mark.rd-hl {
             background: rgba(var(--hlc), var(--hla));
             border-radius: 3px;
@@ -3283,6 +3288,47 @@ body {
         body.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-sky    { text-decoration-color: #1E50A2; }
         body.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-rose   { text-decoration-color: #e85f7f; }
         body.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-ink    { text-decoration-color: #2f333a; }
+
+        /* ===== 写过小注的那个词：手绘记号（2026-08-10 做）=====
+           用户看了 rough-notation 之后要的，原话「下划线，box，circle，highlight我都喜欢哎」，
+           并且她自己划定了适用面：「适合在长度比较短的单字或者词语上面」——所以**只给小注的那个词**
+           （人名和普通划线当时明确说先不做，别顺手铺开）。
+           哪个词用哪种记号由 rdMkPick 定：字数定范围、范围内钉死的随机，见那个函数上的注释。
+           图是 JS 现生成的抖动 SVG（data URI），写进行内变量 `--mk-img`；描边色取 --mk-ink。
+
+           ⚠️⚠️**四种记号一律不许加左右 padding**——见上面 mark.rd-hl 那条：mark 是行内元素，
+             横向 padding 会把后面的正文推开（划一下线整段位移），还会带偏小注的引线锚点。
+             所以框和圈走**绝对定位的伪元素**浮一层在上面，一个像素都不占；
+             下划线和荧光只用**上下** padding（行内元素的垂直 padding 不参与行高，行不会变高）。 */
+        body:not(.rd-mk-off) .reading-merged mark.rd-hl[data-gl].rd-mk {
+            /* 记号取代原来那层底色（用户定的：「取代底色，不叠」）。也要盖掉下划线款。 */
+            background: none; box-shadow: none; text-decoration: none;
+        }
+        /* ⚠️⚠️**上下 padding 也不许加**（2026-08-10 实测，`tests/glossmark.test.js` E 组当场逮到）。
+           原以为行内元素的垂直 padding 不参与行高、加一点无所谓——**行高确实没变，但
+           `Range.getClientRects()` 量到的行矩形跟着涨了 1px**，而点击翻页(readingPageDown)
+           正是靠它逐行找「本页最后一整行」。一条小注就能让翻页偏一行的接头。
+           所以四种记号**一律零 padding**，全靠图形自己长在字的框里。 */
+        body:not(.rd-mk-off) .reading-merged mark.rd-hl[data-gl].rd-mk-u {
+            background: var(--mk-img) repeat-x bottom / 60px 8px;
+        }
+        /* 荧光＝原来那条色带的手绘版：浓度一点没动（仍是 --hlc/--hla 那两个值算出来的），
+           只把两端改成不齐、边缘微抖。用户定的：「荧光就是色带的手绘版，直接替掉」。 */
+        body:not(.rd-mk-off) .reading-merged mark.rd-hl[data-gl].rd-mk-h {
+            background: var(--mk-img) no-repeat center / 100% 100%;
+        }
+        /* 框和圈：浮一层。⚠️伪元素贴着**第一段行片段**定位，所以跨行的词一律降级成下划线
+           （在 rdMkPick 里判的），否则一个圈会裂成两个半圆。 */
+        body:not(.rd-mk-off) .reading-merged mark.rd-hl[data-gl].rd-mk-b,
+        body:not(.rd-mk-off) .reading-merged mark.rd-hl[data-gl].rd-mk-c { position: relative; }
+        body:not(.rd-mk-off) .reading-merged mark.rd-hl[data-gl].rd-mk-b::before,
+        body:not(.rd-mk-off) .reading-merged mark.rd-hl[data-gl].rd-mk-c::before {
+            content: ''; position: absolute; pointer-events: none;
+            background: var(--mk-img) no-repeat center / 100% 100%;
+        }
+        body:not(.rd-mk-off) .reading-merged mark.rd-hl[data-gl].rd-mk-b::before { inset: -4px -5px; }
+        /* 圈要比框再往外让一点，不然椭圆的腰会削掉字的四个角 */
+        body:not(.rd-mk-off) .reading-merged mark.rd-hl[data-gl].rd-mk-c::before { inset: -5px -7px; }
         body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-gold  { text-decoration-color: #ffcf2e; }
         body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-orange { text-decoration-color: #ff9a52; }
         body.dark.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-green  { text-decoration-color: #5fc46a; }
@@ -5575,6 +5621,12 @@ body {
                         <button class="chip-btn" id="chipNameDash" onclick="readingToggleNameStyle('dash')" title="名词加虚线下划线（同引号「划线」款）">划线</button>
                         <button class="chip-btn" id="chipNameGlow" onclick="readingToggleNameGlow()" title="名词柔光，单击循环换款：关→光晕→光带→关（夜间会发光）">柔光</button>
                         <button class="chip-btn" id="chipNameList" onclick="readingOpenNamesEditor()" title="填写/自动识别本书名词">名单…</button>
+                    </div>
+                </div>
+                <div id="readingGlossRow" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0" title="选中字→「✍️ 注」写的那种手写小注">小注</span>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
+                        <button class="chip-btn" id="chipGlMark" onclick="rdMkToggle()" title="注过的那个词用手绘记号（下划线/方框/圈/荧光，按字数随机挑一种），关掉就回到原来的底色">手绘</button>
                     </div>
                 </div>
                 <div id="readingFontRow" style="display:flex;align-items:center;justify-content:space-between">
@@ -18528,6 +18580,7 @@ body {
             c = document.getElementById('chipQuoteGlow'); if (c) c.classList.toggle('active', glow);
             c = document.getElementById('chipQuoteLs'); if (c) c.classList.toggle('active', split);
             if (typeof rdHlInitStyle === 'function') rdHlInitStyle();   // 顺带恢复「划线」底色/下划线样式
+            if (typeof rdMkInit === 'function') rdMkInit();             // 小注那个词的手绘记号开关
             readingApplyKeySentStyles();   // 精句样式独立一套，跟着一起初始化
             updateStatusBarColor();
         }
@@ -25682,6 +25735,106 @@ body {
         var RD_GL_ROT_SIN = 0.0436;   // sin(2.5°)：标签是斜的，越宽转完外框越高，排行距要算上
         var RD_GL_TIP   = 3;    // 引线端点离标签/目标字的留缝
 
+        /* ===================== 小注那个词的手绘记号 =====================
+           一条小注 = 一条划线 + 一个手写标签，现在再加一个**手绘记号**画在那个词身上。
+           四种：u 下划线 / b 方框 / c 圈 / h 荧光。图是抖动 SVG，手法跟精句「画框/波浪」同源
+           （feTurbulence 造噪声 → feDisplacementMap 把线推歪），纯背景图，
+           **不逐个算路径**——一章几十条小注，逐个画 SVG 路径会卡。 */
+        var RD_MK_KINDS = ['u', 'b', 'c', 'h'];
+        var _rdMkCache = {};
+        function rdMkImg(kind, ink, fill) {
+            var key = kind + '|' + ink + '|' + fill;
+            if (_rdMkCache[key]) return _rdMkCache[key];
+            // 抖动滤镜：freq 越大越碎，scale 越大越歪
+            var F = function (freq, scale) {
+                return '<filter id="r" x="-25%" y="-35%" width="150%" height="170%">'
+                    + '<feTurbulence type="fractalNoise" baseFrequency="' + freq + '" numOctaves="2" seed="7" result="n"/>'
+                    + '<feDisplacementMap in="SourceGraphic" in2="n" scale="' + scale + '"/></filter>';
+            };
+            var s;
+            if (kind === 'u') {
+                /* 下划线：整段平铺，所以首尾要接得上（x 从 0 画到 60，别留缝——精句波浪踩过）。
+                   ⚠️线画在 y=5.5／共 8 高：记号不许加 padding（见 CSS 那条⚠️⚠️），背景只能画在
+                     字自己的框里，画太高会横穿字、太低会被框底裁掉。抖动 ±2 后仍落在框内。 */
+                s = '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="8">' + F('0.04 0.5', 2)
+                  + '<path d="M0 5.5 L60 5.5" fill="none" stroke="' + ink + '" stroke-width="1.5" stroke-linecap="round" filter="url(#r)"/></svg>';
+            } else if (kind === 'b') {
+                /* ⚠️抖动要比「看着够」再大一档：这张 100×44 的图最后被压到约 40×24 显示，
+                   **毛刺跟着缩一半**。第一版照精句画框用 scale 2，渲出来是个规规矩矩的矩形，
+                   一点手绘味都没有（2026-08-10 实拍逮到）。 */
+                s = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="44">' + F('0.05 0.15', 3.5)
+                  + '<rect x="4" y="4" width="92" height="36" rx="5" fill="none" stroke="' + ink + '" stroke-width="1.5" filter="url(#r)"/></svg>';
+            } else if (kind === 'c') {
+                s = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="52">' + F('0.02 0.06', 3)
+                  + '<ellipse cx="50" cy="26" rx="46" ry="22" fill="none" stroke="' + ink + '" stroke-width="1.5" filter="url(#r)"/></svg>';
+            } else {
+                /* 荧光：填充块 + 把上下缘揉成毛边。⚠️用的是 fill（原色带那两个值算出来的 rgba），不是 ink——
+                   浓度必须跟改前一模一样，用户明确说过日间的底色浓度刚好、别动。 */
+                /* ⚠️铺到 y=2~28（图共 30 高）：原来的底色是整框铺满的，色带矮一截会显得比改前淡。
+                   ⚠️抖动同样要给足（同上面方框那条）：scale 4 那版渲出来还是个方色块，
+                     两端不齐、边缘毛这两件事一件都没看出来。 */
+                s = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="30">' + F('0.07 0.2', 5.5)
+                  + '<rect x="3" y="2" width="94" height="26" fill="' + fill + '" filter="url(#r)"/></svg>';
+            }
+            _rdMkCache[key] = 'url("data:image/svg+xml,' + encodeURIComponent(s) + '")';
+            return _rdMkCache[key];
+        }
+        /* 这个词用哪种记号（用户 2026-08-10 定的规则）：**字数定范围、范围内钉死的随机**。
+           · 1~4 字：四种都行；5 字往上：只在下划线/荧光里挑——长词画圈会变成一个大扁椭圆，
+             那不是风格问题、是难看（框同理，长了以后四条边比例失衡）。
+           · 跨行的词：一律下划线。圈/框是绝对定位的伪元素、只认第一段行片段，跨行会裂成两半。
+           ⚠️「随机」必须**钉死**：种子取那条划线自己的 hlid，所以同一条小注刷新、换设备、
+             重开一章永远是同一个记号。她原话是「随机一点」，但每次打开都换＝页面在抽风。 */
+        function rdMkPick(hlid, len, multiline) {
+            if (multiline) return 'u';
+            var pool = (len <= 4) ? RD_MK_KINDS : ['u', 'h'];
+            var h = 0, s = String(hlid || '');
+            for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+            return pool[h % pool.length];
+        }
+        // 把记号打到这条划线的所有 mark 上（词跨过人名高亮时会被拆成好几个 mark，每个都要）
+        function rdMkApply(marks, hlid, multiline) {
+            if (!marks || !marks.length || document.body.classList.contains('rd-mk-off')) return;
+            var len = 0;
+            for (var i = 0; i < marks.length; i++) len += (marks[i].textContent || '').length;
+            var kind = rdMkPick(hlid, len, multiline);
+            /* 颜色现取现用：--mk-ink（描边）和 --hlc/--hla（荧光的浓度）都定义在 CSS 的划线色板里，
+               夜间那几条会自动覆盖 → 切夜间/切主题重排一次就跟着变，JS 这边不用记任何色值。 */
+            var cs = getComputedStyle(marks[0]);
+            var ink = (cs.getPropertyValue('--mk-ink') || '#888').trim() || '#888';
+            var fill = 'rgba(' + ((cs.getPropertyValue('--hlc') || '128,128,128').trim())
+                     + ',' + ((cs.getPropertyValue('--hla') || '0.4').trim()) + ')';
+            var img = rdMkImg(kind, ink, fill);
+            for (var j = 0; j < marks.length; j++) {
+                marks[j].classList.add('rd-mk', 'rd-mk-' + kind);
+                marks[j].style.setProperty('--mk-img', img);
+            }
+        }
+        /* 清掉旧记号。⚠️必须在 rdGlLayout 的**早退之前**跑：小注被删光时那边直接 return，
+           不清的话那个词会一直顶着圈，可它已经不是小注了。 */
+        function rdMkClear(root) {
+            var ms = (root || document).querySelectorAll('mark.rd-hl.rd-mk');
+            for (var i = 0; i < ms.length; i++) {
+                ms[i].classList.remove('rd-mk', 'rd-mk-u', 'rd-mk-b', 'rd-mk-c', 'rd-mk-h');
+                ms[i].style.removeProperty('--mk-img');
+            }
+        }
+        // 开关（设置面板「小注」那行的「手绘」）。默认开；关掉就回到原来的底色/下划线款。
+        function rdMkSetOn(on, quiet) {
+            document.body.classList.toggle('rd-mk-off', !on);
+            localStorage.setItem('reading_gl_mark', on ? '1' : '0');
+            var chip = document.getElementById('chipGlMark');
+            if (chip) chip.classList.toggle('active', on);
+            /* quiet ＝ 只恢复状态、不动 DOM（初始化时用）。正文这会儿还没渲染出来，
+               在这里跑一趟全篇重排纯属白跑，还会拖慢开书那一下。 */
+            if (quiet) return;
+            // 关→开要把记号补回来（关着的那阵子新写的小注没打过 class）；开→关直接抹干净
+            if (on) { if (typeof rdGlLayoutAll === 'function') rdGlLayoutAll(); }
+            else rdMkClear(document);
+        }
+        function rdMkToggle() { rdMkSetOn(document.body.classList.contains('rd-mk-off')); }
+        function rdMkInit() { rdMkSetOn(localStorage.getItem('reading_gl_mark') !== '0', true); }   // 没设过＝开
+
         /* 手绘感引线：二次贝塞尔 + 末端箭头（末端切线 = 终点 - 控制点）。
            ⚠️返回**两段** d：曲线 `d` 和箭头 `a`，必须画成两个 <path>，别再合回一条
              （2026-08-10 改虚线时拆的）：曲线要 stroke-dasharray，而箭头那两笔总共才
@@ -25719,6 +25872,9 @@ body {
         function rdGlLayout(bubble) {
             if (!bubble) return;
             rdGlClear(bubble);
+            // ⚠️记号的清理要在下面那几条 return 之前：小注被删光时这里直接退出，
+            //   不先清的话那个词会一直顶着圈，可它已经不是小注了。
+            rdMkClear(bubble);
             var box = bubble.querySelector('.reading-merged');
             if (!box || box.closest('.translate-merged')) return;
             if (!box.querySelector('mark.rd-hl[data-gl]')) return;
@@ -25804,6 +25960,11 @@ body {
                         return { left: L, right: R, top: T, bottom: B, width: R - L };
                     };
                     var rTop = _uni(lineGroups[0]), rBot = _uni(lineGroups[lineGroups.length - 1]);
+
+                    /* 顺手把手绘记号打到这个词身上（2026-08-10 加）。**就该在这儿做**：
+                       这一步已经把同一条划线的所有 mark（_sibs）和它占了几行（lineGroups）
+                       都算出来了，而记号正好要这两样——跨行就得降级成下划线。 */
+                    rdMkApply(_sibs, m.getAttribute('data-hlid'), lineGroups.length > 1);
 
                     // 就近为**首选**方向；真正用哪一边等下面排位时定（挤不下会挪到另一条缝）
                     var nearUp = ((rTop.top - cr.top) - pTop) < (pBot - (rBot.bottom - cr.top));
