@@ -107,9 +107,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
                （6 是 3 的倍数）六支笔只剩六种固定搭配。实拍过两个词一模一样都是紫圈。 */
             const kinds = new Set(), colors = new Set();
             const words = ['孙武', '豫章', '囊瓦', '阖闾', '伍子胥', '子常', '唐蔡', '楚昭王', '越国', '居巢', '夫概', '司马迁'];
-            words.forEach(w => { kinds.add(BG_MK_KINDS[rdMkSeed(w) % BG_MK_KINDS.length]); colors.add(rdMkSeed(w + '·色') % 6); });
+            words.forEach(w => { kinds.add(BG_MK_KINDS[rdMkSeed(w) % BG_MK_KINDS.length]); colors.add(rdMkSeed(w + '·色') % 5); });   // 5 ＝ 去掉黄之后的池子大小
             out.C_形状种类 = kinds.size; out.C_颜色种类 = colors.size;
-            out.C_分布够散 = kinds.size >= 2 && colors.size >= 5;
+            out.C_分布够散 = kinds.size >= 2 && colors.size >= 4;   // 五支笔，12 个词里至少摊到 4 支
             /* ⚠️下划线有**三个字的门槛**（用户 2026-08-10 定：「下划线还是可以保留，
                但是得是三个字及以上」）：短词底下一条短线像笔误。 */
             const short2 = new Set(), long3 = new Set();
@@ -185,10 +185,12 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.G_日间色 = [...new Set(dayC)];
             out.G_夜间色 = [...new Set(nightC)];
             out.G_切夜间换了色 = JSON.stringify(dayC) !== JSON.stringify(nightC) && nightC.length === dayC.length;
-            /* 那支荧光黄日夜**不是同一个值**（2026-08-10 来回调了三轮）：
-               夜间 #ffe500（纯荧光黄，她说「夜间不错」）、日间 #eec400（压沉一档，她说「日间还是要压一点」）。
-               ⚠️日间这支别再往深里压——第一轮压成暗金 #b07d00 被她当场纠正。 */
-            out.G_荧光黄两边都在 = out.G_日间色.indexOf('#eec400') >= 0 && out.G_夜间色.indexOf('#ffe500') >= 0;
+            /* ⚠️那支黄**已被移出随机池**（2026-08-10 用户：「背景词的随机颜色中，也把那个黄色出现的
+               可能去掉吧，因为夜间我主色调是黄色，容易重复」）——夜间主题钉死是蓝金，强调色本身就是金黄。
+               ⚠️CSS 变量 --bg-ink-1 和它的加粗设定都留着（想加回来只要把 1 放回 BG_MK_INKS），
+                 所以这里查的是「画出来的颜色里没有它」，不是「变量没了」。 */
+            out.G_黄不参与随机 = out.G_日间色.indexOf('#eec400') < 0 && out.G_夜间色.indexOf('#ffe500') < 0
+                              && getComputedStyle(document.body).getPropertyValue('--bg-ink-1').trim() !== '';
             if (!hadDark) document.body.classList.remove('dark');
             bgMkLayout(a.bub);
         }
@@ -247,7 +249,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('E6 同一个词有两个背景块时不重复画', R.E_同词只画一次);
     ok('G1 ⚠️切夜间确实换了另一套颜色（变量要从 body 读，不是 html）', R.G_切夜间换了色,
        '日 ' + JSON.stringify(R.G_日间色) + ' / 夜 ' + JSON.stringify(R.G_夜间色));
-    ok('G2 荧光黄：日间 #eec400 / 夜间 #ffe500', R.G_荧光黄两边都在);
+    ok('G2 ⚠️黄色已移出随机池（变量本身留着备用）', R.G_黄不参与随机);
     ok('H1 ⚠️写小注之后背景词记号还在（别再被 rdGlClear 连坐删掉）', R.H_没被抹掉, R.H_写之前 + ' → ' + R.H_写之后);
     ok('H2 小注自己那层也正常建起来了', R.H_小注层也在);
     ok('H3 ⚠️背景词层没有蹭 .rd-gl-layer 这个 class', R.H_没蹭小注的class);

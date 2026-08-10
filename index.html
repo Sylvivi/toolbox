@@ -26001,6 +26001,16 @@ body {
            但是得是三个字及以上」）。道理是短词底下一条短线看着像笔误，而三个字以上就够长、
            像真的划了一道。 */
         var BG_MK_KINDS = ['b', 'c'];          // 谁都能用的两种
+        /* ⚠️第 1 支（那支黄）**不参与随机**（2026-08-10 用户：「背景词的随机颜色中，也把那个黄色
+           出现的可能去掉吧，因为夜间我主色调是黄色，容易重复」）——夜间主题钉死是蓝金，
+           强调色本身就是金黄，记号再用黄就跟满屏的主题色混在一起了。
+           ⚠️`--bg-ink-1` 那个变量和它的加粗设定都**留着别删**：想加回来只要把 1 放回 BG_MK_INKS。
+             那支笔的来历（荧光黄、单独加粗到 2.1）见 CSS 里 --bg-ink-* 上面那段。
+           ⚠️这两个常量**必须定义在 bgMkLayout 外面**：第一版顺手写在函数里、还写在了用它的那行
+             *后面* —— `var` 的声明会提升、赋值不会，跑起来就是 undefined.length 当场抛
+             （跟 rdGlLayout 里 _glRectCache 那条⚠️是同一个坑）。 */
+        var BG_MK_INKS = [2, 3, 4, 5, 6];      // 参与随机的笔号（对应 --bg-ink-N）
+        var BG_MK_INK_WIDTH = { 1: 2.1 };      // 特例线宽；没列的走 1.5
         var BG_MK_U_MIN = 3;                   // 下划线的字数门槛
         function bgMkPick(term, multiline, noUnderline) {
             var canU = (term || '').length >= BG_MK_U_MIN && !noUnderline;
@@ -26114,13 +26124,12 @@ body {
                  用户问「你有没有对颜色做日间模式和夜间模式的相适应」时才发现的，
                  光看代码两套都写了、以为没问题。回归 tests/bgmark.test.js G 组钉死。 */
             var rootCs = getComputedStyle(document.body);
-            var inks = [];
-            for (var c = 1; c <= 6; c++) inks.push((rootCs.getPropertyValue('--bg-ink-' + c) || '#888').trim() || '#888');
-            /* ⚠️第 1 支（荧光黄）**单独加粗**：它配纸白对比度只有 1.15，按 1.5px 画细线会发飘。
-               用户要的就是荧光笔那个亮黄（明确纠正过「颜色要改成荧光黄色那种」，别再往深里压），
-               所以走「加粗」这条路——荧光笔本来就比钢笔粗，观感反而更对。 */
-            var inkWidths = [2.1, 1.5, 1.5, 1.5, 1.5, 1.5];
-
+            var inks = [], inkWidths = [];
+            for (var c = 0; c < BG_MK_INKS.length; c++) {
+                var _n = BG_MK_INKS[c];
+                inks.push((rootCs.getPropertyValue('--bg-ink-' + _n) || '#888').trim() || '#888');
+                inkWidths.push(BG_MK_INK_WIDTH[_n] || 1.5);
+            }
             var rc = rough.svg(svg), drawn = 0, seen = {};
             for (var i = 0; i < bqs.length; i++) {
                 var term = bgMkTermOf(bqs[i]);
