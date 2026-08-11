@@ -18608,9 +18608,14 @@ body {
                · 阅读模式（纯看书）——滚到底会自动续章（readerAppendNextChapter），
                  点下去只会弹一句「滚到底部会自动接下一章」，纯占位；
                · 翻译模式——她说「也没必要」。
-               ⚠️clawdNextChapter() 里那道 chatReaderMode 的闸留着当兜底，别一起删。 */
+               ⚠️clawdNextChapter() 里那道 chatReaderMode 的闸留着当兜底，别一起删。
+               ⚠️⚠️**`bmShow` 不等于「共读模式」**（2026-08-11 用户截图报「为啥阅读模式下那个下一章还在呀」）：
+                 它是 `chatView==='conv' && chatReadingMode`，而**进阅读模式时 `chatReadingMode` 也会被置真**
+                 （`readerOpenChapter` 里两个都设），所以阅读模式一直满足它、按钮从来没被藏掉过，
+                 只是点下去弹一句提示，看着像功能坏了。**判「纯看书」只能靠 `chatReaderMode`。**
+                 同一个坑在底栏那条上也踩过（见 readingHintTap），以后凡是想写「只在共读」的地方都要多带这一句。 */
             var clawdNextBtn = document.getElementById('clawdNextChapBtn');
-            if (clawdNextBtn) clawdNextBtn.style.display = bmShow ? '' : 'none';   // bmShow ＝ 共读模式
+            if (clawdNextBtn) clawdNextBtn.style.display = (bmShow && !chatReaderMode) ? '' : 'none';
             // 共读/翻译模式下隐藏「回到底部」按钮（点输入框会自动回到底部）
             var inReading = (chatView === 'conv') && (chatReadingMode || chatTranslateMode);
             var sb = document.getElementById('chatScrollBtn');
