@@ -26731,8 +26731,19 @@ body {
                            两条引线必然交叉。老写法用的是 `字x + 方向偏移 - 标签宽/2`（＝标签想放的位置），
                            而**宽的标签减得多**：用户截图里「撮」(小注宽 89)和「名法」(小注宽 156)
                            两个字才差 21px、宽度却差 34px，宽的那条被排到前面 → 摆左边 → 交叉。
-                           标签宽度只该影响「摆在哪」，不该影响「谁先摆」。回归 tests/gloss.test.js V 组。 */
-                        want: (nearUp ? tx : txDown)
+                           标签宽度只该影响「摆在哪」，不该影响「谁先摆」。回归 tests/gloss.test.js V 组。
+                       ⚠️⚠️**取哪一头的锚点，必须跟真正会用的方向一致 —— 是 `prefUp`，不是 `nearUp`**
+                         （2026-08-11 修，用户截图报「本身在左边的词，小注会放到右边，
+                          而在右边的词，小注会在左边」，两条线交叉）。
+                         `nearUp` 只是"哪边更近"，而**选边的结论是 `prefUp`**：上面那条
+                         「一边会压字就走另一边」的规则会把方向翻过来。
+                         跨行的词两头差着整整一行宽：「兹邑」的兹在行末(x≈343)、邑在下一行开头(x≈0)。
+                         往下会压字 → 实际摆到上面(锚 343)，排队却按下面那头(锚 0)当最左边先摆 →
+                         标签在最左、字在最右，隔壁那条正好相反，两条线必然叉在一起。
+                         ⚠️别以为「跨行的词已经修过了」就不用管：2026-08-04 那次修的是
+                           `wantUp/wantDown`（摆在哪儿），这一处是**排队顺序**，是另一件事。
+                         回归 tests/glosscross.test.js。 */
+                        want: (prefUp ? tx : txDown)
                     });
                 }
             }
@@ -26943,6 +26954,36 @@ body {
             }
             // 万一三条路都没成（理论上不会），丢掉这一条，别让 undefined 流到画线那一步
             all = all.filter(function (it) { return it.lx != null && it.ly != null; });
+            /* 兜底：同一条缝、同一行里，标签的左右顺序**必须**跟它们真正指的那个字的左右顺序一致，
+               否则两条引线必然交叉（用户 2026-08-11 报的就是这个：「本身在左边的词，小注会放到右边，
+               而在右边的词，小注会在左边」）。
+               主因已经在 want 那条修掉了（排队锚点跟着 prefUp 走）；这里挡的是剩下那条小路：
+               某条的首选缝满了、退到了另一条缝（_gl_try 第 ② 步），而它的排队序是按首选那侧
+               的锚点算的 —— 换了缝就可能插错位置。
+               ⚠️只在**真的乱序了**才动手，正常情况一个像素都不动。
+               ⚠️重排只在这一行内部按原宽度紧挨着重摆：总宽没变、起点还是原来最左那个，
+                 所以一定还放得下，不会有谁被推出段落。 */
+            (function _fixCrossing() {
+                var rows = {};
+                for (var i = 0; i < all.length; i++) {
+                    var it = all[i], k = it.gap + '|' + (it.row || 0);
+                    (rows[k] || (rows[k] = [])).push(it);
+                }
+                Object.keys(rows).forEach(function (k) {
+                    var list = rows[k];
+                    if (list.length < 2) return;
+                    var byX = list.slice().sort(function (a, b) { return a.lx - b.lx; });
+                    var byAnchor = list.slice().sort(function (a, b) { return a.tx - b.tx; });
+                    var bad = false;
+                    for (var i2 = 0; i2 < byX.length; i2++) if (byX[i2] !== byAnchor[i2]) { bad = true; break; }
+                    if (!bad) return;
+                    var cur = byX[0].lx;
+                    for (var i3 = 0; i3 < byAnchor.length; i3++) {
+                        byAnchor[i3].lx = cur;
+                        cur += byAnchor[i3].lw + RD_GL_SEP;
+                    }
+                });
+            })();
             /* ⚠️别只看 all：小注标签一条都没排出来、但手绘记号已经收了活儿时，也不许把层删掉，
                否则那个词的底色被 rd-mk 撤了、线又没画上，看着就是一块空白。 */
             if (!all.length && !mkJobs.length) { layer.parentNode.removeChild(layer); return; }
