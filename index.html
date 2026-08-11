@@ -3502,8 +3502,22 @@ body {
         .rd-hl-bar button.rd-act:hover { background: var(--accent-light); color: var(--accent); }
         .rd-hl-bar button.rd-act.rd-del { color: #e5484d; }
         .rd-hl-bar button.rd-act.rd-del.armed { background: #e5484d; color: #fff; }
+        /* 选中态浮动跟随（2026-08-11 用户要的，原话「选中文字的那个小条，可不可以跟着选中走呀，
+           别固定在下面了，但是要注意选中的同时，浏览器自带的那个复制小条会跟着走，所以要注意避让」）。
+           ⚠️位置由 JS 算（rdHlPlaceSelBar），这里只管长相；长相要跟 .rd-dock 一致，
+             因为两者是同一条小条的两种落位，切换时不该看出胖瘦变化。 */
+        .rd-hl-bar.rd-selfloat {
+            padding: 7px 10px; gap: 7px; box-shadow: 0 8px 28px rgba(0,0,0,0.28);
+            flex-wrap: nowrap; white-space: nowrap; max-width: 96vw;
+            animation: rdSelIn 0.16s ease;
+        }
+        .rd-hl-bar.rd-selfloat .rd-sw { width: 26px; height: 26px; }
+        @keyframes rdSelIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
         /* 选中态停靠底部：躲开系统自带的「复制/分享/全选」选区气泡（它贴着选区、位置不可控，只能把颜色条挪远）。
-           固定屏幕底部居中，比选区位置稳、手机也好按；带个小标签提示这是给划线的。 */
+           固定屏幕底部居中，比选区位置稳、手机也好按；带个小标签提示这是给划线的。
+           ⚠️2026-08-11 起这不再是选中态的**默认**落位，而是**最后的兜底**——
+             上下都塞不开时才用它（见 rdHlPlaceSelBar 第 ③ 档）。它永远不会被系统气泡挡住，
+             所以别把这条退路删掉。 */
         .rd-hl-bar.rd-dock {
             left: 50%; right: auto; top: auto; transform: translateX(-50%);
             /* ⚠️72px → 104px（用户 2026-08-05 要求「位置可以上移一些」）：原来贴得太靠下，
@@ -18446,22 +18460,30 @@ body {
             // 窄条提示文字同步首页座右铭
             var m = document.getElementById('readingHintMotto');
             if (m) m.textContent = localStorage.getItem('toolbox_motto') || 'Tomorrow is another day.';
-            /* 阅读模式点它不展开（见 readingHintTap），电脑上光标也别再摆出「这儿能打字」的样子。
+            /* 阅读模式点它不是展开输入框、而是开模型面板（见 readingHintTap），所以电脑上
+               光标要摆成「这是个按钮」的手型，不能是「这儿能打字」的 I 形。
                ⚠️两个分支都要写：同一个页面元素在两种模式间来回用，只写一边会把上一次的留下来。 */
             var h = document.getElementById('readingCollapseHint');
-            if (h) h.style.cursor = chatReaderMode ? 'default' : '';
+            if (h) h.style.cursor = chatReaderMode ? 'pointer' : '';
         }
         /* 收起状态下点那条底栏（一句英文 + 「已读 N%」）＝展开输入框。
-           ⚠️**阅读模式（纯看书）里点它什么都不做**（2026-08-11 用户定的，她的原话：
+           ⚠️**阅读模式（纯看书）里绝不能展开输入框**（2026-08-11 用户定的，她的原话：
              「阅读模式下我不会用下面的输入框打字了，为什么要留入口呢，那个只有共读模式会用到」，
               以及「阅读模式下底下的进度条，点击后不用展开对话框，根本用不上」）。
            为什么值得单独判一下模式：那条底栏正好压在拇指底下，读书时最容易误触，
            一弹键盘正文就被顶上去、还得再点一下空白才收得回去。
+           （阅读模式下它现在改去开模型面板了，见紧跟着的下一段。）
            ⚠️判据只能用 `chatReaderMode`：进阅读模式时 `chatReadingMode` 也会被置真
              （见 readerOpenChapter），拿它判等于把共读模式一起关掉——共读要靠这里打字提问。
            ⚠️翻译模式照旧展开（那边收起时同样只剩这一条，输入框是主要入口）。 */
+        /* ⚠️2026-08-11 再改一次：阅读模式下从「什么都不做」改成**开模型面板**，
+           等同于 clawd 菜单里那颗「🦀 clawd」。用户原话「我希望阅读模式下，
+           点下面的进度条，等同于点 clawd 菜单里的 clawd」。
+           上面那段「点它什么都不做」的理由已作废一半——**不能展开输入框**这条仍然成立
+           （一弹键盘正文就被顶上去），但那条横条正压在拇指底下、是阅读模式里最好按的
+           一块地方，空着才是浪费。别再改回 `return`。 */
         function readingHintTap() {
-            if (chatReaderMode) return;
+            if (chatReaderMode) { chatOpenModelSheet(); return; }
             readingExpandInput();
         }
         function readingExpandInput(focusInput) {
@@ -27340,6 +27362,60 @@ body {
             var bar = document.getElementById('rdHlBar'); if (bar) bar.remove();
             _rdHlPending = null;
         }
+        /* ===== 选中小条的落位：跟着选区走，同时给系统自带的「复制/分享」气泡让路 =====
+           2026-08-11 用户要的，原话：「选中文字的那个小条，可不可以跟着选中走呀，别固定在下面了，
+           但是要注意选中的同时，浏览器自带的那个复制小条会跟着走，所以要注意避让，
+           不然会被挡住，这就是我一开始让小条固定的原因」。
+
+           ⚠️⚠️**系统气泡的位置我们控制不了，只能预判**——它不是页面元素，量不到、也盖不住它。
+             手机浏览器（Chrome Android / iOS Safari）的规矩是：**优先贴在选区上方**，
+             上方放不下才翻到下方。所以我们的规矩必须**反着来**：
+               ① 默认放选区**下方**（系统气泡在上方时那儿是空的）；
+               ② 下方塞不开（选区离屏幕底太近）才翻到上方，且要多空出 RD_SEL_NATIVE_H
+                  这一截，把系统气泡整个跳过去、落在它上面；
+               ③ 上下都塞不开 → 退回老的「底部停靠」(.rd-dock)。那是 2026-08-05～08-11 的行为，
+                  离选区最远、永远不会被挡，是最后一道保险。**别删这档。**
+           ⚠️**千万别改成「一律贴选区上方」**（rdHlPlaceBar 就是那么摆的）——那正好是系统气泡
+             的默认位置，会被整条盖掉。这正是用户当初让它固定在底部的原因，改回去等于回到 bug。
+           ⚠️多行选区要用 getClientRects() 的**首尾两行**、不能只用 getBoundingClientRect()：
+             整段外框的 bottom 是最后一行的底、top 是第一行的顶，但横向中点必须用外框算，
+             否则一条跨三行的选区会把小条甩到某一行的中间去。
+           ⚠️量宽高之前必须先 appendChild + 上好 .rd-selfloat：不上这个 class 量到的是
+             基础样式的 padding(6/8)，跟真正显示时(7/10)差 4px，贴边时会算错该不该换档。 */
+        var RD_SEL_NATIVE_H = 56;   // 系统选区气泡高度的估值（含余量）。宁可多留一点——浮高一点只是不好看，留少了会被挡住
+        var RD_SEL_GAP = 10;        // 小条跟选区之间的呼吸缝
+        function rdHlPlaceSelBar(bar, range) {
+            bar.classList.add('rd-selfloat');
+            document.body.appendChild(bar);
+            var box = null, rects = [];
+            try { box = range.getBoundingClientRect(); } catch (e0) {}
+            try {
+                rects = Array.prototype.slice.call(range.getClientRects())
+                    .filter(function (r) { return r.width > 0 || r.height > 0; });
+            } catch (e1) {}
+            // 量不到选区（理论上不该发生）——直接退回底部停靠，总比甩到屏幕角落强
+            if (!box || (!box.width && !box.height)) { rdHlDockSelBar(bar); return; }
+            var first = rects.length ? rects[0] : box;
+            var last = rects.length ? rects[rects.length - 1] : box;
+            var bw = bar.offsetWidth, bh = bar.offsetHeight;
+            var vw = window.innerWidth, vh = window.innerHeight;
+            var top = null;
+            if (last.bottom + RD_SEL_GAP + bh <= vh - 8) {
+                top = last.bottom + RD_SEL_GAP;                          // ① 选区下方
+            } else if (first.top - RD_SEL_NATIVE_H - bh >= 8) {
+                top = first.top - RD_SEL_NATIVE_H - bh;                  // ② 选区上方，跳过系统气泡
+            }
+            if (top === null) { rdHlDockSelBar(bar); return; }           // ③ 兜底
+            var left = Math.max(8, Math.min(vw - bw - 8, box.left + box.width / 2 - bw / 2));
+            bar.style.left = left + 'px';
+            bar.style.top = top + 'px';
+        }
+        // 退回底部停靠：把浮动那套痕迹擦干净，位置整个交回 CSS
+        function rdHlDockSelBar(bar) {
+            bar.classList.remove('rd-selfloat');
+            bar.classList.add('rd-dock');
+            bar.style.left = ''; bar.style.top = '';
+        }
         function rdHlPlaceBar(bar, rect) {
             document.body.appendChild(bar);
             var bw = bar.offsetWidth, bh = bar.offsetHeight;
@@ -27407,8 +27483,10 @@ body {
             var full = ctx.range.toString().trim();
             _rdHlPending = { msgIdx: ctx.msgIdx, pNum: ctx.pNum, start: off.start, end: off.end, text: full };
             var bar = document.createElement('div');
-            // 停靠底部，躲开系统选区气泡（见 CSS .rd-dock 注释）
-            bar.className = 'rd-hl-bar rd-dock'; bar.id = 'rdHlBar';
+            /* 落位交给 rdHlPlaceSelBar（跟着选区走，同时给系统的复制气泡让路）；
+               ⚠️这里**不要**预先写死 rd-dock —— 那个 class 现在只是塞不开时的兜底档，
+                 提前挂上会让 CSS 的固定定位先生效、闪一下再跳到选区旁边。 */
+            bar.className = 'rd-hl-bar'; bar.id = 'rdHlBar';
             /* ⚠️⚠️**这条小条上没有色板**（2026-08-10 改，用户定的新交互）：
                刚选中时只给动作、颜色随机；想自己挑颜色 → 划完之后**再点那条划线**，
                色板在那条小条上（rdHlShowEditBar）。她的原话：
@@ -27456,7 +27534,7 @@ body {
                 }
                 // 'ask' 分支和它调的那个函数都随按钮一起撤了（见上面注释）
             });
-            document.body.appendChild(bar);   // 位置交给 CSS（固定底部），不按选区 rect 摆
+            rdHlPlaceSelBar(bar, ctx.range);   // 跟着选区走，塞不开才退回底部停靠
         }
         // 新建一条划线（从暂存选区）
         function rdHlCreate(color) {
