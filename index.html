@@ -5470,7 +5470,7 @@ body {
                         <button id="clawdNextChapBtn" onclick="clawdMenuAct('nextchap')">⏭️ 下一章</button>
                         <button onclick="clawdMenuAct('model')">🦀 clawd</button>
                     </div>
-                    <div class="reading-collapse-hint" id="readingCollapseHint" onclick="readingExpandInput()"><span class="reading-hint-motto" id="readingHintMotto">Tomorrow is another day.</span><span class="reading-progress-inline" id="readingProgressInline">已读 7%</span></div>
+                    <div class="reading-collapse-hint" id="readingCollapseHint" onclick="readingHintTap()"><span class="reading-hint-motto" id="readingHintMotto">Tomorrow is another day.</span><span class="reading-progress-inline" id="readingProgressInline">已读 7%</span></div>
                     <textarea id="chatInput" placeholder="输入消息…" rows="1" oninput="chatAutoGrow(this);chatUpdateTokenHint()"></textarea>
                     <div class="chat-input-toolbar">
                         <div style="position:relative">
@@ -18434,6 +18434,23 @@ body {
             // 窄条提示文字同步首页座右铭
             var m = document.getElementById('readingHintMotto');
             if (m) m.textContent = localStorage.getItem('toolbox_motto') || 'Tomorrow is another day.';
+            /* 阅读模式点它不展开（见 readingHintTap），电脑上光标也别再摆出「这儿能打字」的样子。
+               ⚠️两个分支都要写：同一个页面元素在两种模式间来回用，只写一边会把上一次的留下来。 */
+            var h = document.getElementById('readingCollapseHint');
+            if (h) h.style.cursor = chatReaderMode ? 'default' : '';
+        }
+        /* 收起状态下点那条底栏（一句英文 + 「已读 N%」）＝展开输入框。
+           ⚠️**阅读模式（纯看书）里点它什么都不做**（2026-08-11 用户定的，她的原话：
+             「阅读模式下我不会用下面的输入框打字了，为什么要留入口呢，那个只有共读模式会用到」，
+              以及「阅读模式下底下的进度条，点击后不用展开对话框，根本用不上」）。
+           为什么值得单独判一下模式：那条底栏正好压在拇指底下，读书时最容易误触，
+           一弹键盘正文就被顶上去、还得再点一下空白才收得回去。
+           ⚠️判据只能用 `chatReaderMode`：进阅读模式时 `chatReadingMode` 也会被置真
+             （见 readerOpenChapter），拿它判等于把共读模式一起关掉——共读要靠这里打字提问。
+           ⚠️翻译模式照旧展开（那边收起时同样只剩这一条，输入框是主要入口）。 */
+        function readingHintTap() {
+            if (chatReaderMode) return;
+            readingExpandInput();
         }
         function readingExpandInput(focusInput) {
             var a = document.getElementById('chatInputArea');
