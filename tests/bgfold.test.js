@@ -1,8 +1,12 @@
-/* 背景块折叠（2026-08-11 用户要的：「插入文中的那个块，能不能折叠起来并且默认折叠呀」）。
+/* 块折叠（2026-08-11 用户要的：「插入文中的那个块，能不能折叠起来并且默认折叠呀」）。
  *
  * 规则：
- *  · **只折背景块**（data-bg）——她自己问的问答块不折，那是主动要的答案，收起来碍事。
+ *  · **背景块 / 问答块 / 社科导读三种都能折**（`data-fold="1"`），⚠️口径当天扩过一次：
+ *    一开始只折背景块，同日她说「问答以及导读也可以折叠的」，并选了「都默认收着」。
+ *    判据是**有没有标题行**——三种在存储里都是「汐：…」的问答，所以一条判据全覆盖。
+ *  · **AI 自己的点评不给折**（没有标题行，收起来只剩一个空条）。
  *  · **默认折叠**；点标题行展开，再点收起。
+ *  · ⚠️**刚问完的那一条例外、默认展开**：她刚点了「问」，答案还要再点一下才看得见等于白问。
  *  · 展开状态只活在内存（`_rdBgOpen`），关掉 app 回到全折叠；但**窗口化重渲会重建 DOM**，
  *    所以那张表得存着，不然滚一下就把展开的又合上了。
  *  · ⚠️只认**标题行**那一行：整块上已经有两套手势——长按＝删除/重新回答、双击＝接着聊这一段。
@@ -25,7 +29,10 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     const R = await page.evaluate(() => {
         const out = {};
         const TXT = '豫让逃进了山里，心中只剩一个念头。\n智伯理解并看重豫让。';
-        const AI = '[P1] 汐：背景：士为知己者死 ⟦知己⟧\n这句话在先秦不是文学修辞。\n[P2] 汐：这一段讲了什么\n讲的是知遇之恩。';
+        const AI = '[P1] 汐：背景：士为知己者死 ⟦知己⟧\n这句话在先秦不是文学修辞。\n'
+                 + '[P1] 这一段的节奏压得很稳。\n'
+                 + '[P2] 汐：这一段讲了什么\n讲的是知遇之恩。\n'
+                 + '[P2] 汐：导读：《士的行为准则》\n这一节讲的是士这个阶层。';
         function render() {
             document.querySelectorAll('.__fd').forEach(n => n.remove());
             const box = document.createElement('div');
@@ -41,10 +48,20 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
 
         const box = render();
         const bg = box.querySelector('blockquote[data-bg="1"]');
-        const qa = box.querySelector('blockquote[data-cp]:not([data-bg])');
+        // ⚠️「问答块」要按标题行认，别用 :not([data-bg])——AI 自己的点评也满足那个选择器
+        const qa = [...box.querySelectorAll('blockquote[data-fold="1"]:not([data-bg])')]
+            .find(b => b.querySelector('.reading-q').textContent.indexOf('这一段讲了什么') >= 0);
+        const guide = [...box.querySelectorAll('blockquote[data-fold="1"]')]
+            .find(b => (b.querySelector('.reading-q') || {}).textContent.indexOf('导读') >= 0);
+        const plain = box.querySelector('blockquote[data-cp]:not([data-fold])');   // AI 自己的点评
         out.A_有背景块和问答块 = !!bg && !!qa;
+        out.A_有导读块 = !!guide;
+        out.A_有点评块 = !!plain;
         out.A_默认折叠 = bg.classList.contains('bg-fold');
-        out.A_问答块不折 = !qa.classList.contains('bg-fold');
+        out.A_问答块也折 = qa.classList.contains('bg-fold');          // ⚠️2026-08-11 改了口径
+        out.A_导读块也折 = !!guide && guide.classList.contains('bg-fold');
+        out.A_点评块不给折 = !!plain && !plain.hasAttribute('data-fold') && !plain.classList.contains('bg-fold');
+        out.A_三种都带fold标 = !!bg.getAttribute('data-fold') && !!qa.getAttribute('data-fold');
         out.A_折叠时正文隐藏 = getComputedStyle(bodyOf(bg)).display === 'none';
         out.A_折叠时标题还在 = getComputedStyle(bg.querySelector('.reading-q')).display !== 'none';
         // 折叠不该动 DOM 结构（正文还在，只是不显示）——背景词记号/引线都靠真实文本定位
@@ -70,10 +87,14 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         bg4.querySelector('.reading-q').click();          // 先展开
         bodyOf(bg4).click();                               // 点正文
         out.C_点正文不收起 = !bg4.classList.contains('bg-fold');
-        // 点问答块的标题也不该有折叠行为
-        const qa4 = box4.querySelector('blockquote[data-cp]:not([data-bg])');
+        // 问答块的标题现在也能折（口径已扩，见文件头）
+        const qa4 = [...box4.querySelectorAll('blockquote[data-fold="1"]:not([data-bg])')]
+            .find(b => b.querySelector('.reading-q').textContent.indexOf('这一段讲了什么') >= 0);
+        const qa4Folded = qa4.classList.contains('bg-fold');
         qa4.querySelector('.reading-q').click();
-        out.C_问答块点了也不折 = !qa4.classList.contains('bg-fold');
+        out.C_问答块点了会展开 = qa4Folded && !qa4.classList.contains('bg-fold');
+        qa4.querySelector('.reading-q').click();
+        out.C_问答块再点收起 = qa4.classList.contains('bg-fold');
 
         /* ── E：⚠️折叠的重排只碰**这一条消息**，别再走全量 ──
            2026-08-11 用户报「展开收起的过程中，感觉框框和圈圈的渲染有点跟不上，会有点卡顿」。
@@ -138,7 +159,10 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
 
     ok('A1 背景块和问答块都渲染出来了', R.A_有背景块和问答块);
     ok('A2 ⚠️背景块默认折叠', R.A_默认折叠);
-    ok('A3 ⚠️问答块不折（那是她主动要的答案）', R.A_问答块不折);
+    ok('A3 ⚠️问答块也默认折叠（2026-08-11 口径扩了）', R.A_问答块也折);
+    ok('A3b 导读块也默认折叠', R.A_有导读块 && R.A_导读块也折);
+    ok('A3c ⚠️AI 点评不给折（没标题行，收起来只剩空条）', R.A_有点评块 && R.A_点评块不给折);
+    ok('A3d 能折的块都带 data-fold', R.A_三种都带fold标);
     ok('A4 折叠时正文不显示、标题还在', R.A_折叠时正文隐藏 && R.A_折叠时标题还在);
     ok('A5 折叠只是不显示，正文节点仍在（记号/引线靠真实文本定位）', R.A_正文节点还在);
     ok('B1 点标题 → 展开', R.B_点一下展开);
@@ -146,7 +170,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('B3 再点 → 收起', R.B_再点收起);
     ok('B4 收起后重渲仍是折叠', R.B_收起后重渲仍折叠);
     ok('C1 ⚠️点块里的正文不会收起（那是双击追问的地盘）', R.C_点正文不收起);
-    ok('C2 问答块的标题点了也不折叠', R.C_问答块点了也不折);
+    ok('C2 问答块点标题也能展开/收起', R.C_问答块点了会展开 && R.C_问答块再点收起);
     ok('E1 ⚠️折叠不再触发全量重排（只重排当前这条消息）', R.E_不走全量重排 && R.E_只重排本条);
     ok('E2 ⚠️用 rAF 在下一帧画完，不留「记号停在旧位置」的中间态', R.E_用了rAF);
     ok('E3 重排前先把记号层藏起来（宁可短暂看不见，也别看见错位）', R.E_先藏后画);

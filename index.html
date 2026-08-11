@@ -3677,25 +3677,32 @@ body {
         }
         .reading-merged p[data-p].rp-active { background: var(--accent-light); }
         .reading-merged blockquote[data-cp].rp-active { box-shadow: 0 0 0 2px var(--accent-mid); }
-        /* ===== 背景块折叠（2026-08-11 用户要的：「插入文中的那个块，能不能折叠起来并且默认折叠呀」）=====
-           只折**背景块**（data-bg），她自己问的问答块不动——那是她主动要的答案，收起来反而碍事。
+        /* ===== 块折叠（2026-08-11 用户要的：「插入文中的那个块，能不能折叠起来并且默认折叠呀」）=====
+           **三种块都能折**（`data-fold="1"`）：背景块、问答块、社科导读。
+           ⚠️2026-08-11 当天扩过一次口径：一开始只折背景块（理由是"问答是她主动要的答案，
+             收起来反而碍事"），当天她自己提「问答以及导读也可以折叠的」，并选了**都默认收着**。
+             口径改成「凡是有标题行(.reading-q)的块都能折」——导读和问答在存储里本来就是问答
+             （`汐：导读：《…》` / `汐：问题`），所以一条判据全覆盖，不用逐种加。
+           ⚠️**没有标题行的块（AI 自己的点评）不给折**：收起来什么都不剩，只留一个空条。
+           ⚠️刚问完的那一条例外，默认是**展开**的（见 readingAskOne 末尾）——
+             她刚点了「问」，答案却要再点一下才看得到，那是白问。批量生成的背景块不在此列。
            ⚠️默认折叠，展开是临时的：`_rdBgOpen` 只活在内存里，关掉 app 就回到全折叠。
              但**窗口化重渲会重建 DOM**，所以那个表得存着，不然滚一下就把展开的又合上了。
            ⚠️折叠只用 display:none 藏正文，**不动 DOM 结构**——背景词的手绘记号是按段落里的字
              定位的，跟这块没关系；但块的高度会变，所以展开/收起之后要重排一次（见 rdBgFoldToggle）。 */
-        .reading-merged blockquote[data-bg="1"] > .reading-q {
+        .reading-merged blockquote[data-fold="1"] > .reading-q {
             cursor: pointer; position: relative; padding-right: 1.2em;
             -webkit-tap-highlight-color: transparent;
         }
         /* 小三角贴在标题行右端。⚠️用 ::after 而不是真按钮：块里塞按钮会被长按/双击那两套手势夹到 */
-        .reading-merged blockquote[data-bg="1"] > .reading-q::after {
+        .reading-merged blockquote[data-fold="1"] > .reading-q::after {
             content: '▾'; position: absolute; right: 0; top: 0;
             font-size: 0.85em; opacity: 0.5; transition: transform 0.15s;
         }
-        .reading-merged blockquote[data-bg="1"].bg-fold > .reading-q::after { content: '▸'; }
-        .reading-merged blockquote[data-bg="1"].bg-fold > *:not(.reading-q) { display: none; }
+        .reading-merged blockquote[data-fold="1"].bg-fold > .reading-q::after { content: '▸'; }
+        .reading-merged blockquote[data-fold="1"].bg-fold > *:not(.reading-q) { display: none; }
         /* 折叠时把块压薄一点：整块只剩一行字，原来的上下内边距会显得空 */
-        .reading-merged blockquote[data-bg="1"].bg-fold { padding-top: 0.35em !important; padding-bottom: 0.35em !important; }
+        .reading-merged blockquote[data-fold="1"].bg-fold { padding-top: 0.35em !important; padding-bottom: 0.35em !important; }
         /* 共读正文段间距（按设备调节，默认 8px≈原 0.5em）。段落带行内 margin:0.5em 0，
            必须用 !important 才能盖过行内样式。间距只落在「上边距」、下边距归零：
            段落之间靠下一段的 margin-top 拉开＝段间距；而紧跟段落的批注框(blockquote[data-cp])
@@ -24591,6 +24598,13 @@ body {
                 /* ⚠️下标必须现查，别用进函数时那个 msgIdx：这一笔几十秒，期间只要往上滑补了
                    上一章，所有消息下标就整体挪过位（同 readerMarkBg 里那条注释的坑）。 */
                 var _mi = chatMessages.indexOf(msg);
+                /* 刚问完的这一条**默认展开**（2026-08-11）：三种块现在都默认折叠，可她刚点了「问」，
+                   答案却要再点一下才看得见，那等于白问。只标这一条——批量生成的背景块照旧折着。
+                   ⚠️ci ＝ 这一条在该段问答里的下标，取"现在有几条减一"（刚接在最后）。 */
+                try {
+                    var _newCi = readingModeParseComments(msg.content).filter(function (c) { return c.p === pNum; }).length - 1;
+                    if (_newCi >= 0) _rdBgOpen[_rdBgFoldKey(_mi, pNum, String(_newCi))] = 1;
+                } catch (eOpen) {}
                 readerPersistQA(_mi); // 阅读模式：把该章问答整体抽出存进可同步的 reader_qa
                 readingAddQuestionBookmark(_mi, pNum, question);
                 readingRemovePending(_pd.id);
@@ -28620,7 +28634,7 @@ body {
             });
         })();
 
-        /* 点背景块的标题行 = 折叠/展开（2026-08-11）。
+        /* 点块的标题行 = 折叠/展开（2026-08-11；当天从「只有背景块」扩到背景/问答/导读三种）。
            ⚠️**只认标题行那一行**，不是整块：整块上已经有两套手势——长按＝删除/重新回答、
              双击＝接着聊这一段。标题行原本不承担任何手势，拿它来折叠零冲突。
            ⚠️`stopPropagation` 必须有：不然这一下会继续冒泡去走「左右点击翻页」的连击计数，
@@ -28628,7 +28642,7 @@ body {
            ⚠️挂在 document 上用事件委托：正文是反复重渲的，绑在元素上会随重渲丢失。 */
         document.addEventListener('click', function (e) {
             if (!e.target || !e.target.closest) return;
-            var q = e.target.closest('.reading-merged blockquote[data-bg="1"] > .reading-q');
+            var q = e.target.closest('.reading-merged blockquote[data-fold="1"] > .reading-q');
             if (!q) return;
             e.stopPropagation();
             e.preventDefault();
@@ -29099,9 +29113,14 @@ body {
                         var _isBg = _qm && _cmtRaw.replace(/^\s*汐：/, '').indexOf(BG_Q_PREFIX) === 0;
                         // 原文出发点带到 DOM 上，手绘记号直接用它定位（拿不到就回退到题目，见 bgMkTermOf）
                         var _bgAnchor = _isBg ? _rdBgSplitQ((_cmtRaw.split('\n')[0] || '')).anchor : '';
-                        // 背景块默认折叠；本次手动展开过的（_rdBgOpen）保持展开，免得窗口化重渲一下就合上
-                        var _foldCls = (_isBg && !_rdBgOpen[_rdBgFoldKey(msgIdx, pNum, k)]) ? ' bg-fold' : '';
-                        html += '<blockquote class="' + _foldCls.trim() + '" data-cp="' + pNum + '" data-ci="' + k + '"' + (_isBg ? ' data-bg="1"' : '')
+                        /* 能不能折 ＝ 有没有标题行。背景/问答/导读在存储里都是「汐：…」的问答，
+                           所以 `_qm` 一条判据全覆盖；AI 自己的点评没有标题行，收起来只剩空条，不给折。 */
+                        var _foldable = _qm;
+                        // 三种块都默认折叠（2026-08-11 用户选的「都默认收着」）；
+                        // 本次展开过的（_rdBgOpen）保持展开，免得窗口化重渲一下就合上。
+                        var _foldCls = (_foldable && !_rdBgOpen[_rdBgFoldKey(msgIdx, pNum, k)]) ? ' bg-fold' : '';
+                        html += '<blockquote class="' + _foldCls.trim() + '" data-cp="' + pNum + '" data-ci="' + k + '"'
+                             + (_foldable ? ' data-fold="1"' : '') + (_isBg ? ' data-bg="1"' : '')
                              + (_bgAnchor ? ' data-anchor="' + esc(_bgAnchor) + '"' : '') + ' style="margin:0.4em 0 0.6em;padding:0.5em 12px 0.4em;border-left:3px solid var(--accent);background:var(--quote-bg, var(--accent-light));border-radius:0 8px 8px 0;font-size:0.92em;color:var(--text-sub);line-height:1.6">' + _cmtRendered + '</blockquote>';
                     }
                 }
