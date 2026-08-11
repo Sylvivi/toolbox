@@ -13441,6 +13441,11 @@ body {
                 readingApplyTopbarMode(view === 'conv');   // 进对话时瞬间藏横栏（无动画），避免高度跳变；其余照常
             }
             readingSyncAutoScrollUI();
+            /* ⚠️进对话时补一次小注/记号（2026-08-11 加）。**这是「只排看得见的」那套的安全带**：
+               消息可能是在这个面板还藏着的时候渲染的，那会儿量到的位置全是 0、一条都不算"看得见"，
+               于是全被记成待补。如果这一章短到不用滚，就再没有任何滚动事件来把账还上——
+               表现是「小注一条都不显示，滚一下才出来」。 */
+            if (view === 'conv' && typeof rdGlRelayoutSoon === 'function') rdGlRelayoutSoon(60);
         }
 
         function chatRenderHistoryList() {
@@ -25803,9 +25808,17 @@ body {
             /* ⚠️必须 try 住：这里在**正文渲染的主路径**上（chatRenderMessage → 每条共读消息都走），
                小注排版一旦抛异常，整篇正文就渲染不出来了。小注只是装饰，坏了顶多不显示，
                绝不能连累正文。（同理，rdGlLayoutAll 里也逐条 try。） */
-            try { rdGlLayout(bubble); } catch (eGl) { console.warn('[手写小注] 排版失败：', eGl); }
-            // 背景词的记号：跟小注一样先画一次，量不准也没关系，下面那次延迟重排会重来
-            if (typeof bgMkLayout === 'function') { try { bgMkLayout(bubble); } catch (eN) { console.warn('[背景词记号] 排版失败：', eN); } }
+            /* ⚠️视口外的这一步直接跳过（2026-08-11 加）：进一次会话要渲十几条消息，每条都当场
+               排一遍小注 + 画一遍记号，是「打开卡一下」的主要来源，而其中绝大多数根本不在屏幕上。
+               记一笔 data-gl-pend，滚近了由 rdGlFlushPending 补；下面那次 rdGlRelayoutSoon(80)
+               也会照顾到当时真在视口里的那几条。 */
+            if (typeof _glNearView === 'function' && !_glNearView(bubble)) {
+                bubble.setAttribute('data-gl-pend', '1');
+            } else {
+                try { rdGlLayout(bubble); } catch (eGl) { console.warn('[手写小注] 排版失败：', eGl); }
+                // 背景词的记号：跟小注一样先画一次，量不准也没关系，下面那次延迟重排会重来
+                if (typeof bgMkLayout === 'function') { try { bgMkLayout(bubble); } catch (eN) { console.warn('[背景词记号] 排版失败：', eN); } }
+            }
             /* 再补一次（延迟的）。渲染这一刻浏览器未必已经完成排版——窗口化是分批渲染的，
                重进时尤其明显。第一次量不到就靠这一次兜住。 */
             _rdGlRetry = 0;
@@ -26378,6 +26391,12 @@ body {
             var bubbles = document.querySelectorAll('.chat-msg.ai .chat-bubble');
             for (var i = 0; i < bubbles.length; i++) {
                 if (!bubbles[i].querySelector('.reading-merged blockquote[data-bg="1"]')) continue;
+                /* 跟小注同一条规矩：视口外的先记一笔，滚近了再画（见 rdGlLayoutAll 上那段）。
+                   ⚠️记号和小注必须同进同出，所以补排走的是 rdGlLayoutBubble（两件一起做）。 */
+                if (typeof _glNearView === 'function' && !_glNearView(bubbles[i])) {
+                    bubbles[i].setAttribute('data-gl-pend', '1');
+                    continue;
+                }
                 try { bgMkLayout(bubbles[i]); } catch (e) { console.warn('[背景词记号] 排版失败：', e); }
             }
         }
@@ -27074,19 +27093,90 @@ body {
             }
         }
 
+        /* ===== 只排「看得见的」那几条（2026-08-11 加，用户报「页面打开、电脑窗口调整后有点卡顿」）=====
+           实测（这台服务器 CPU，12 条消息 / 96 条小注 / 24 个背景块）：
+             整页重排一次 **340ms**（小注 259 + 背景词记号 41 + 其余），单条只要 **20ms**；
+             而 1280×800 的窗口里当时**只有 1 条消息在视口内**——339ms 花在看不见的章节上。
+             手机再乘 3~5 倍，「打开卡一下、拖窗口卡一下」就是这么来的。
+           办法：视口上下各留 1.2 屏当预排区，区外的**只打个记号**（data-gl-pend）先不排，
+           等它滚近了再补（rdGlFlushPending 挂在滚动上）。
+           ⚠️为什么这么改是安全的：小注和记号全都画在**绝对定位的独立层**上，不进正文流、
+             不影响任何一行字的位置，所以晚画一会儿动不了排版，
+             「记住阅读位置」「点击翻页按行对齐」那两套按段落量位置的逻辑一个像素都不受影响。
+           ⚠️区外那条的旧层**故意不删**：留着旧的比留一片空白好，滚近了会整层重建（rdGlClear）。 */
+        /* 两档：**露脸的**（margin 0）当场排，**一屏多以内的**留到接下来几帧慢慢补。
+           这样「打开的那一下」只花一条消息的钱，滚动之前预排区也早就填满了。 */
+        var RD_GL_VIEW_MARGIN = 1.2;      // 预排区：视口上下各多算这么多屏
+        function _glNearView(el, margin) {
+            var r = el.getBoundingClientRect();
+            var h = window.innerHeight || 800;
+            var m = h * (margin == null ? RD_GL_VIEW_MARGIN : margin);
+            return r.bottom > -m && r.top < h + m;
+        }
+        // 这条消息值不值得排（没小注也没背景块就别费事）
+        function _glWorth(bub) {
+            return !!bub.querySelector('.reading-merged mark.rd-hl[data-gl], .reading-merged blockquote[data-bg="1"]');
+        }
+        /* 真正干活的一条：小注 + 背景词记号一起。
+           ⚠️两者必须同进同出——它们都按行片段的坐标画，漏掉一个就会「圈还在老位置、线已经跟过去了」。 */
+        function rdGlLayoutBubble(bub) {
+            bub.removeAttribute('data-gl-pend');
+            try { rdGlLayout(bub); } catch (e) { console.warn('[手写小注] 排版失败：', e); }
+            if (typeof bgMkLayout === 'function') { try { bgMkLayout(bub); } catch (e2) { console.warn('[背景词记号] 排版失败：', e2); } }
+        }
         // 全屏重排（换字号/段间距/字体、转屏时用）。逐条消息重排，不碰正文本身。
         function rdGlLayoutAll() {
             var bubbles = document.querySelectorAll('.chat-msg.ai .chat-bubble');
+            var _done = 0, _pend = 0;
             for (var i = 0; i < bubbles.length; i++) {
-                if (!bubbles[i].querySelector('.reading-merged mark.rd-hl[data-gl]')) continue;
-                try { rdGlLayout(bubbles[i]); } catch (e) { console.warn('[手写小注] 排版失败：', e); }
+                var b = bubbles[i];
+                if (!_glWorth(b)) continue;
+                // ⚠️这里用 margin 0：**只有真在屏幕上的**才当场排，其余（含预排区里的）都记一笔
+                if (!_glNearView(b, 0)) { b.setAttribute('data-gl-pend', '1'); _pend++; continue; }
+                rdGlLayoutBubble(b); _done++;
             }
-            /* 背景词的手绘记号搭同一班车（2026-08-10 加）。**必须挂在这里**：字号/段间距/字体/
-               主题/夜间/转屏……每一处会让行位置变的地方，早就都接到 rdGlRelayoutSoon 上了，
-               背景词记号跟小注一样是按行片段的坐标画的，漏挂就会满屏错位。
-               ⚠️它自己有开关和早退（没开、或这条消息没有背景块就立刻返回），不必在这儿判。 */
-            if (typeof bgMkLayoutAll === 'function') { try { bgMkLayoutAll(); } catch (e2) { console.warn('[背景词记号] 排版失败：', e2); } }
+            /* ⚠️一条都没排、却还欠着账 ⇒ 多半是这会儿整个面板还藏着（量到的位置全是 0）。
+               不重试的话，短到不用滚的章节就永远等不到补排——症状是「小注一条不显示，滚一下才出来」。
+               `rdGlRetryLater` 自带次数上限，不会空转。 */
+            if (!_done && _pend) { rdGlRetryLater(); return; }
+            rdGlFlushPending();   // 预排区那几条交给分帧的链子，一帧一条，不挡这一下
         }
+        /* 滚动时把已经靠近视口的那几条补排掉。
+           ⚠️挂在**滚动**上而不是 IntersectionObserver：正文是反复重渲的（窗口化渲染每次都重建
+             DOM 节点），observer 要跟着不断 observe/unobserve，反而更容易漏。
+             这里每次只是对最多二十来个元素各取一次 getBoundingClientRect，几乎不花时间。
+           ⚠️首尾都跑（leading + trailing）：刚开始滚就补一次，免得滚得快时先看见旧的； */
+        /* ⚠️**一帧只补一条**（实测：一条约 20~25ms，一次补三条就是 76ms ＝ 明显掉帧）。
+           分帧之后每帧只干一条，滚动照样跟手；剩下的下一帧接着来。
+           ⚠️`_glFlushRaf` 既是「已经在补了」的闸，也保证不会有两条链同时跑。 */
+        var _glFlushT = null, _glFlushLast = 0, _glFlushRaf = 0;
+        function _glFlushStep() {
+            _glFlushRaf = 0;
+            var list = document.querySelectorAll('.chat-msg.ai .chat-bubble[data-gl-pend]');
+            for (var i = 0; i < list.length; i++) {
+                if (!_glNearView(list[i])) continue;
+                rdGlLayoutBubble(list[i]);
+                _glFlushRaf = requestAnimationFrame(_glFlushStep);   // 还欠着就下一帧再来一条
+                return;
+            }
+        }
+        function rdGlFlushPending() {
+            _glFlushLast = Date.now();
+            if (_glFlushRaf) return;          // 已经在分帧补了，别插队
+            _glFlushStep();
+        }
+        function rdGlFlushSoon() {
+            if (!document.querySelector('.chat-msg.ai .chat-bubble[data-gl-pend]')) return;   // 没欠账，直接走
+            var now = Date.now();
+            if (now - _glFlushLast > 120) { rdGlFlushPending(); return; }
+            if (_glFlushT) return;
+            _glFlushT = setTimeout(function () { _glFlushT = null; rdGlFlushPending(); }, 120);
+        }
+        (function _glBindScroll() {
+            var el = document.getElementById('chatMessages');
+            if (el) el.addEventListener('scroll', rdGlFlushSoon, { passive: true });
+            window.addEventListener('scroll', rdGlFlushSoon, { passive: true });
+        })();
         var _rdGlReT = null;
         function rdGlRelayoutSoon(delay) {
             if (_rdGlReT) clearTimeout(_rdGlReT);
