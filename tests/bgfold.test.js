@@ -112,7 +112,11 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.E_不走全量重排 = src.indexOf('rdGlLayoutAll') < 0 && src.indexOf('rdGlRelayoutSoon') < 0;
             out.E_只重排本条 = src.indexOf('rdGlLayout(bub)') > 0 && src.indexOf('bgMkLayout(bub)') > 0;
             out.E_用了rAF = src.indexOf('requestAnimationFrame') > 0;
-            out.E_先藏后画 = src.indexOf("visibility = 'hidden'") > 0;
+            /* ⚠️2026-08-11 第三轮改口径：**不许再把记号层藏起来**。
+               用户原话「动画我挺喜欢的，但为何要让小注的渲染消失一会呢，如果这个问题
+               没办法解决，我宁愿你回退到之前的版本」。现在改成动画期间跟着一起平移。 */
+            out.E_不再藏记号层 = src.indexOf("visibility = 'hidden'") < 0;
+            out.E_改成跟着平移 = src.indexOf('translateY') > 0 && src.indexOf('_rdBgFoldMovers') > 0;
         }
 
         /* ── F：⚠️折叠/展开时，块**上方**那条小注不许动 ──
@@ -187,12 +191,21 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         try { Object.keys(_rdBgOpen).forEach(k => delete _rdBgOpen[k]); } catch (e) {}
         const box = document.createElement('div');
         box.className = 'reading-merged';
+        box.style.cssText = 'font-size:16px;line-height:1.9;width:358px';
         box.innerHTML = readingModeRenderMerged(
-            '豫让逃进了山里，心中只剩一个念头。\n智伯理解并看重豫让。',
+            '豫让逃进了山里，心中只剩一个念头。\n后来豫让改名换姓混进宫里，只为报仇雪恨。\n他吞炭漆身，形貌大变，连妻子都认不出他来了。', 
             '[P1] 汐：背景：士为知己者死 ⟦知己⟧\n这句话在先秦不是文学修辞，是士这个阶层真实的行为准则，写下来要占好几行才够高。', 0);
+        /* ⚠️给**块下方**那一段挂一条小注：这一组的重点就是「动画期间它得跟着块一起走、
+           而且不许消失」。挂在块上方的话平移量恒为 0，什么都验不出来。 */
+        const p2 = box.querySelector('p[data-p="2"]');
+        p2.innerHTML = p2.innerHTML.replace('雪恨',
+            '<mark class="rd-hl rd-hl-sky" data-hlid="fg1" data-gl="xuě hèn·洗刷仇恨">雪恨</mark>');
+        // ⚠️必须套一层 .chat-bubble：挑「要跟着走的元素」是从 bubble 往下找的
+        const bub = document.createElement('div'); bub.className = 'chat-bubble'; bub.appendChild(box);
         const msg = document.createElement('div');
         msg.className = 'chat-msg ai __fg'; msg.setAttribute('data-idx', '7');   // ⚠️别用 0，见上面
-        msg.appendChild(box); document.body.appendChild(msg);
+        msg.appendChild(bub); document.body.appendChild(msg);
+        rdGlLayout(bub);
         const bq = box.querySelector('blockquote[data-bg="1"]');
         const title = bq.querySelector('.reading-q');
         const H = () => Math.round(bq.getBoundingClientRect().height);
@@ -213,17 +226,39 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             return xs;
         };
 
+        /* ⚠️盯「真正被判定要跟随的那批元素」，别盯某一个标签：小注排到哪条缝里是排版
+           算法定的，它完全可能把标签甩到块**上方**去（实测就见过 y=-4，在分界线之上），
+           那种情况下标签本来就不该跟着走，盯它只会测出假失败。
+           这里挑出来的既有小注标签、也有引线和手绘记号的 svg 笔画。 */
+        const 跟随 = _rdBgFoldMovers(bub, bq);
+        out.G_跟随元素数 = 跟随.length;
         // ── 展开：class 立刻摘掉（正文要一开始就在，靠 overflow 裁着露出来）──
         const h折叠 = H();
         title.click();
         out.G_展开时class立刻摘掉 = !bq.classList.contains('bg-fold');
         out.G_展开中在动画里 = bq.classList.contains('bg-folding');
+        /* ── ⚠️核心：动画期间小注不许消失，而且要跟着块一起往下走 ──
+           （2026-08-11 用户否掉了「藏一会儿」的做法） */
+        const 标签 = () => box.querySelector('.rd-gl-label');
+        const 层可见 = () => [...box.querySelectorAll('.rd-gl-layer, .bg-mk-layer')]
+            .every(l => getComputedStyle(l).visibility !== 'hidden');
+        out.G_动画中层没被藏 = 层可见();
+        out.G_动画中标签还在 = !!标签() && getComputedStyle(标签()).visibility !== 'hidden';
+        await new Promise(r => requestAnimationFrame(r));
+        await new Promise(r => requestAnimationFrame(r));
+        const 位移 = 跟随.map(el => parseFloat((String(el.style.transform)
+            .match(/translateY\(([-\d.]+)px\)/) || [0, 0])[1]) || 0);
+        out.G_标签跟着走了 = 跟随.length > 0 && 位移.every(d => d > 1);
+        out.G_位移量 = 位移.join('/');
         const 展开样本 = await 取样(200);
         await 等动画停(bq);
         const h展开 = H();
         out.G_展开是渐变的 = 展开样本.some(h => h > h折叠 + 1 && h < h展开 - 1);
         out.G_展开高度 = [h折叠, h展开, 展开样本.slice(0, 8).join('/')];
         out.G_展开后擦干净 = !bq.classList.contains('bg-folding') && !bq.style.height;
+        // 停稳之后平移必须擦掉（否则会永远歪着那么多）
+        out.G_停稳后擦掉平移 = 跟随.every(el => !el.style.transform);
+        out.G_停稳后层还是可见的 = 层可见();
 
         // ── 收起：正文要留到动画结束，但箭头和状态立刻翻 ──
         title.click();
@@ -257,7 +292,8 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('C2 问答块点标题也能展开/收起', R.C_问答块点了会展开 && R.C_问答块再点收起);
     ok('E1 ⚠️折叠不再触发全量重排（只重排当前这条消息）', R.E_不走全量重排 && R.E_只重排本条);
     ok('E2 ⚠️用 rAF 在下一帧画完，不留「记号停在旧位置」的中间态', R.E_用了rAF);
-    ok('E3 重排前先把记号层藏起来（宁可短暂看不见，也别看见错位）', R.E_先藏后画);
+    ok('E3 ⚠️不再把记号层藏起来（她明确否掉了「消失一会」）', R.E_不再藏记号层);
+    ok('E3b 改成动画期间跟着一起平移', R.E_改成跟着平移);
     ok('F1 前提：块上方那条小注排出来了', R.F_有小注);
     ok('F2 ⚠️折叠和展开时小注位置一模一样（不跳）', R.F_折叠展开位置一致, JSON.stringify(R.F_位置));
     ok('F3 来回切换也一致', R.F_来回切换一致);
@@ -265,6 +301,10 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('G1 展开：class 立刻摘掉、进入动画', G.G_展开时class立刻摘掉 && G.G_展开中在动画里);
     ok('G2 ⚠️展开是渐变的，不是一帧跳到位', G.G_展开是渐变的, '高度 ' + JSON.stringify(G.G_展开高度));
     ok('G3 展开完把行内样式擦干净', G.G_展开后擦干净);
+    ok('G3b ⚠️动画期间小注层没有被藏起来', G.G_动画中层没被藏 && G.G_动画中标签还在);
+    ok('G3c ⚠️块下方的小注跟着块一起走', G.G_标签跟着走了,
+       '位移 ' + G.G_位移量 + ' | 跟随元素 ' + G.G_跟随元素数 + ' 个');
+    ok('G3d 停稳后把平移擦掉、层仍可见', G.G_停稳后擦掉平移 && G.G_停稳后层还是可见的);
     ok('G4 ⚠️收起时正文还看得见（否则成了「字先没、空盒子再塌」）', G.G_收起时正文还看得见);
     ok('G5 ⚠️收起的 bg-fold 推迟到动画结束才落地', G.G_收起时class还没落地);
     ok('G6 收起时箭头立刻翻，不等动画', G.G_收起时箭头已翻);

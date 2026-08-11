@@ -26232,8 +26232,16 @@ body {
              第一帧会突然变瘦、看着像抖一下。`box-sizing:border-box` 全局开着，所以量到的
              rect 高度已经把 padding 算在内，两者同时插值才严丝合缝。
            ⚠️量目标高度靠**临时把最终 class 切上去量一下再切回来**（同一帧内，画不出来、看不见）。
-           ⚠️手绘圈和引线是按正文每一行的真实位置画的，动画期间每一行都在动，
-             跟着一帧一帧重画只会更卡 → 全程先藏着，停稳了再重排一次（沿用旧做法）。
+           ⚠️⚠️**手绘圈和引线在动画期间要跟着一起走，不许藏起来**（2026-08-11 用户第三轮反馈：
+             「动画我挺喜欢的，但为何要让小注的渲染消失一会呢，如果这个问题没办法解决，
+              我宁愿你回退到之前的版本」——初版图省事把那两层 visibility 藏掉了 180ms，
+              她一眼就看出来了）。
+             能跟着走的关键发现：**块以上的东西一个像素都不动，块以下的全部平移同样的距离**
+             （＝高度差）。所以不需要一帧一帧重排（那才是真卡），只要把「分界线以下」那些
+             元素挨个打上 translateY 就行——transform 不触发重排、只走合成，几十个元素也不掉帧。
+             分界线 = 块的上边缘（它在两个方向上都不动）。停稳后再照常重排一次校准。
+           ⚠️动画开始那一刻，记号还停在**动画起点那一侧**的正确位置上（展开前是折叠态、
+             收起前是展开态），所以位移量就是 高度差 × 缓动后的进度，起点为 0，天然对齐。
            ⚠️`_rdBgOpen` 的状态要在**动画开始前**就记好，别等 settle：动画中途被打断
              （连点、或者窗口化重渲把这个块换掉了）时，状态不能丢。
            ⚠️连点：先量高度**再** cancel 上一次动画——量在前才拿得到"动到一半"的当前高度，
@@ -26243,6 +26251,38 @@ body {
         function _rdBgFoldMetrics(el) {
             var cs = getComputedStyle(el);
             return { h: el.getBoundingClientRect().height, pt: cs.paddingTop, pb: cs.paddingBottom };
+        }
+        /* 挑出「块的上边缘以下」那些小注标签和手绘笔画——动画期间它们要跟着块一起平移。
+           ⚠️两层里装的东西不一样：`.rd-gl-layer` 里既有绝对定位的 `.rd-gl-label`（每条小注一个），
+             也有一张 `svg` 装引线和记号；`.bg-mk-layer` 里只有一张 svg。
+             **svg 整张覆盖整个容器**，不能整张平移（那会把块上面的圈也带走），
+             必须下钻到 svg 里**逐个子元素**判断。
+           ⚠️svg 自己带 `top: -RD_GL_PAD`，所以 `getBBox().y` 要加回这个偏移才是容器坐标。 */
+        function _rdBgFoldMovers(bub, bq) {
+            var out = [];
+            if (!bub) return out;
+            var box = bub.querySelector('.reading-merged');
+            if (!box) return out;
+            var boxTop = box.getBoundingClientRect().top;
+            var cut = bq.getBoundingClientRect().top - boxTop;   // 分界线：这条线以下的都要跟着走
+            var layers = bub.querySelectorAll('.rd-gl-layer, .bg-mk-layer');
+            for (var i = 0; i < layers.length; i++) {
+                var labs = layers[i].querySelectorAll('.rd-gl-label');
+                for (var j = 0; j < labs.length; j++) {
+                    if (labs[j].getBoundingClientRect().top - boxTop >= cut) out.push(labs[j]);
+                }
+                var svgs = layers[i].querySelectorAll('svg');
+                for (var k = 0; k < svgs.length; k++) {
+                    var off = parseFloat(svgs[k].style.top || '0') || 0;
+                    var kids = svgs[k].children;
+                    for (var n = 0; n < kids.length; n++) {
+                        var y = null;
+                        try { y = kids[n].getBBox().y; } catch (e) { y = null; }
+                        if (y != null && y + off >= cut) out.push(kids[n]);
+                    }
+                }
+            }
+            return out;
         }
         function rdBgFoldToggle(bq) {
             if (!bq) return;
@@ -26263,11 +26303,16 @@ body {
             if (!willOpen) bq.classList.remove('bg-fold');   // 收起：先摘回来，让正文在缩的过程中还看得见
 
             var bub = bq.closest('.chat-bubble');
+            var movers = [];
             function settle() {
                 bq._rdFoldAnim = null;
                 bq.classList.toggle('bg-fold', !willOpen);   // 落地到最终状态（展开方向是幂等的）
                 bq.classList.remove('bg-folding', 'bg-folding-close');
                 bq.style.height = ''; bq.style.paddingTop = ''; bq.style.paddingBottom = '';
+                /* 把平移擦掉。⚠️不能只指望「反正马上要重排、层会被整个重建」——
+                   这条消息没小注也没背景词时 rdGlLayout 会早退、层原样留着，
+                   不擦就会永远歪着 delta 那么多。 */
+                for (var t = 0; t < movers.length; t++) movers[t].style.transform = '';
                 if (!bub) return;
                 if (_rdBgFoldRaf) cancelAnimationFrame(_rdBgFoldRaf);
                 _rdBgFoldRaf = requestAnimationFrame(function () {
@@ -26280,17 +26325,13 @@ body {
                 });
             }
 
-            if (bub) {
-                var layers = bub.querySelectorAll('.rd-gl-layer, .bg-mk-layer');
-                for (var i = 0; i < layers.length; i++) layers[i].style.visibility = 'hidden';
-            }
-
             /* 不做动画的三种情况，直接落地：系统开了「减少动效」（无障碍设置，必须尊重）、
                浏览器没有 Element.animate、以及高度几乎没变（量不出差别时动画只是白闪一下）。 */
             var _reduce = false;
             try { _reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e1) {}
             if (_reduce || typeof bq.animate !== 'function' || Math.abs(m1.h - m0.h) < 2) { settle(); return; }
 
+            movers = _rdBgFoldMovers(bub, bq);
             bq.classList.add('bg-folding');
             if (!willOpen) bq.classList.add('bg-folding-close');   // 收起时箭头提前翻，别慢半拍
             var anim = bq.animate(
@@ -26300,6 +26341,24 @@ body {
             bq._rdFoldAnim = anim;
             // ⚠️只在跑完时落地；被下一次点击 cancel 时不要 settle——那一次会自己接管
             anim.onfinish = settle;
+
+            /* 每帧把「分界线以下」那些小注和笔画平移同样的距离，让它们跟着块一起动。
+               ⚠️进度取 `getComputedTiming().progress`，那是**缓动之后**的进度，
+                 跟 height 用的是同一条曲线；自己按时间线性算会跟高度对不上、看着像滑一下。
+               ⚠️循环只写 transform、不读布局，所以不会造成重排抖动。
+               ⚠️`anim !== bq._rdFoldAnim` 是退出条件：连点时上一轮的循环必须自己停掉，
+                 否则两个循环会抢着写同一批元素。 */
+            var delta = m1.h - m0.h;
+            if (movers.length) {
+                (function tick() {
+                    if (bq._rdFoldAnim !== anim) return;
+                    var pr = 1;
+                    try { var ct = anim.effect.getComputedTiming(); pr = (ct && ct.progress != null) ? ct.progress : 1; } catch (e2) {}
+                    var dy = delta * pr;
+                    for (var q = 0; q < movers.length; q++) movers[q].style.transform = 'translateY(' + dy + 'px)';
+                    if (anim.playState === 'running') requestAnimationFrame(tick);
+                })();
+            }
         }
         // 背景词用同一条规矩（那张表在 rdMkPick 上面），种子取词本身
         function bgMkPick(term, noUnderline) {
