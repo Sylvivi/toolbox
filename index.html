@@ -27052,6 +27052,12 @@ body {
                 it2.ly = it2.up ? (it2.ly - rowOff) : (it2.ly + rowOff);
                 it2.lab.style.left = it2.lx.toFixed(1) + 'px';
                 it2.lab.style.top = it2.ly.toFixed(1) + 'px';
+                /* 排版结论就地留痕（2026-08-11 加，纯诊断用、不影响显示）：落在哪条缝、朝上还是朝下、
+                   有没有被迫另起一行。这块反复修了七八轮，每次排查都要从头猜"它到底走了哪条分支"；
+                   有这三个属性，一条 querySelector 就能把可疑的那条挑出来（tests/glossaudit.test.js 就靠它分类）。 */
+                it2.lab.setAttribute('data-gl-gap', String(it2.gap));
+                it2.lab.setAttribute('data-gl-dir', it2.up ? 'up' : 'down');
+                it2.lab.setAttribute('data-gl-row', String(it2.row || 0));
 
                 /* ⚠️引线起点取「标签边上、距目标字 RD_GL_DX 的那个点」，不是标签正中。
                    标签有七八十像素宽，这个点几乎总落在标签范围内，所以**防撞怎么推、横向偏移都保得住**。
