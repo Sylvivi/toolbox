@@ -3716,6 +3716,19 @@ body {
         }
         .reading-merged blockquote[data-fold="1"].bg-fold > .reading-q::after { content: '▸'; }
         .reading-merged blockquote[data-fold="1"].bg-fold > *:not(.reading-q) { display: none; }
+        /* 展开/收起的那 0.18 秒（2026-08-11 加，见 rdBgFoldToggle 上那段）。
+           ⚠️`overflow:hidden` 是这套动画的地基：**展开**时正文一开始就整份在那儿、靠它裁着慢慢露出来；
+             **收起**时正文要一直看得见、靠它裁着慢慢吃掉。没有它两个方向都会溢出来糊住下一段。 */
+        /* ⚠️⚠️必须是 `clip` 不是 `hidden`（实测踩到）：`overflow:hidden` 会把这个块变成
+             独立的布局环境（BFC），块内子元素的上下外边距**不再跟外面合并**，于是动画期间
+             高度比真实展开态**多出约 11px**；动画一结束把 class 撤掉，高度又缩回去——
+             肉眼就是"展开到位之后还回弹一下"。`clip` 只裁剪、不改布局，两边高度严丝合缝。
+             回归 tests/bgfold.test.js G2/G7 会打印整条高度取样序列，回弹一眼就看得出来。
+             写两行是给不支持 clip 的浏览器留退路（她三个入口都是 Chrome，实际都走 clip）。 */
+        .reading-merged blockquote[data-fold="1"].bg-folding { overflow: hidden; overflow: clip; }
+        /* ⚠️收起的动画期间 `.bg-fold` 还没落地（正文得留着给人看），所以箭头要单独提前翻过来，
+           否则箭头会比动作慢半拍——她对这种延迟很敏感。必须排在上面那条 .bg-fold 之后才盖得住。 */
+        .reading-merged blockquote[data-fold="1"].bg-folding-close > .reading-q::after { content: '▸'; }
         /* 折叠时把块压薄一点：整块只剩一行字，原来的上下内边距会显得空 */
         .reading-merged blockquote[data-fold="1"].bg-fold { padding-top: 0.35em !important; padding-bottom: 0.35em !important; }
         /* 共读正文段间距（按设备调节，默认 8px≈原 0.5em）。段落带行内 margin:0.5em 0，
@@ -26203,30 +26216,90 @@ body {
              ③ 保险起见先把记号层**藏起来**再重排：万一某一帧没赶上，宁可短暂看不见，
                 也别看见一堆错位的圈。重排会重建这两层（rdGlClear/bgMkClear 先删旧的），
                 所以不用手动恢复 visibility。 */
+        /* ⚠️⚠️展开/收起要有**动画**（2026-08-11 用户提，原话「折叠起来的背景块这些，展开和收起时，
+             总有点卡顿，就是不太跟手」，并特意澄清「是折叠和展开的动作本身」、不是当天早些时候
+             那个"圈圈渲染跟不上"）。
+           根因不是慢，是**根本没有过程**：折叠靠 `display:none`，那是"有/无"的开关、没有中间态，
+           所以块的高度在一帧之内从一行变成整块、底下正文瞬间跳一大截，眼睛没有可跟随的运动。
+           修法：量出「当前高度」和「目标高度」，用 Web Animations 把 height 从一头动到另一头。
+
+           ⚠️⚠️**两个方向的做法必须不一样**，这是这段代码最容易写错的地方：
+             · **展开**：`bg-fold` 一开始就摘掉，正文整份都在，靠 overflow 裁着慢慢露出来；
+             · **收起**：`bg-fold` **不能立刻加**——一加正文就 `display:none` 当场消失，
+               看到的就成了「字先没、再看着一个空盒子塌下去」。所以先把 class 摘回来让正文留着，
+               等动画跑完再落地（`settle` 里那句 toggle）。
+           ⚠️高度和上下内边距**一起动**：折叠态的 padding 被压到 0.35em，只动 height 的话
+             第一帧会突然变瘦、看着像抖一下。`box-sizing:border-box` 全局开着，所以量到的
+             rect 高度已经把 padding 算在内，两者同时插值才严丝合缝。
+           ⚠️量目标高度靠**临时把最终 class 切上去量一下再切回来**（同一帧内，画不出来、看不见）。
+           ⚠️手绘圈和引线是按正文每一行的真实位置画的，动画期间每一行都在动，
+             跟着一帧一帧重画只会更卡 → 全程先藏着，停稳了再重排一次（沿用旧做法）。
+           ⚠️`_rdBgOpen` 的状态要在**动画开始前**就记好，别等 settle：动画中途被打断
+             （连点、或者窗口化重渲把这个块换掉了）时，状态不能丢。
+           ⚠️连点：先量高度**再** cancel 上一次动画——量在前才拿得到"动到一半"的当前高度，
+             反过来写会先被 cancel 弹回终点、于是新动画从错误的起点开始，看着就是跳一下。 */
+        var RD_BG_FOLD_MS = 180;
         var _rdBgFoldRaf = 0;
+        function _rdBgFoldMetrics(el) {
+            var cs = getComputedStyle(el);
+            return { h: el.getBoundingClientRect().height, pt: cs.paddingTop, pb: cs.paddingBottom };
+        }
         function rdBgFoldToggle(bq) {
             if (!bq) return;
             var msg = bq.closest('.chat-msg');
             var mi = msg ? Number(msg.getAttribute('data-idx')) : NaN;
             var key = _rdBgFoldKey(isNaN(mi) ? undefined : mi, bq.getAttribute('data-cp'), bq.getAttribute('data-ci'));
             var willOpen = bq.classList.contains('bg-fold');
-            bq.classList.toggle('bg-fold', !willOpen);
+            // 状态立刻记（见上面⚠️：动画可能被打断，状态不能等到动画结束才写）
             if (willOpen) _rdBgOpen[key] = 1; else delete _rdBgOpen[key];
 
+            // ⚠️顺序：先量当前（可能是上一次动画的中间态），再取消上一次动画
+            var m0 = _rdBgFoldMetrics(bq);
+            if (bq._rdFoldAnim) { try { bq._rdFoldAnim.cancel(); } catch (e0) {} bq._rdFoldAnim = null; }
+
+            // 临时切到最终状态量一下目标高度，然后按方向决定 class 现在留不留
+            bq.classList.toggle('bg-fold', !willOpen);
+            var m1 = _rdBgFoldMetrics(bq);
+            if (!willOpen) bq.classList.remove('bg-fold');   // 收起：先摘回来，让正文在缩的过程中还看得见
+
             var bub = bq.closest('.chat-bubble');
-            if (!bub) return;
-            var layers = bub.querySelectorAll('.rd-gl-layer, .bg-mk-layer');
-            for (var i = 0; i < layers.length; i++) layers[i].style.visibility = 'hidden';
-            // 连点时只留最后一次（rAF 本来就合并到下一帧，这里再挡掉重复排队）
-            if (_rdBgFoldRaf) cancelAnimationFrame(_rdBgFoldRaf);
-            _rdBgFoldRaf = requestAnimationFrame(function () {
-                _rdBgFoldRaf = 0;
-                try { rdGlLayout(bub); } catch (e) { console.warn('[折叠重排] 小注：', e); }
-                try { bgMkLayout(bub); } catch (e) { console.warn('[折叠重排] 背景词：', e); }
-                // 兜底：万一上面两步都早退（这条消息没小注也没背景词），把层显示回来
-                var ls = bub.querySelectorAll('.rd-gl-layer, .bg-mk-layer');
-                for (var j = 0; j < ls.length; j++) ls[j].style.visibility = '';
-            });
+            function settle() {
+                bq._rdFoldAnim = null;
+                bq.classList.toggle('bg-fold', !willOpen);   // 落地到最终状态（展开方向是幂等的）
+                bq.classList.remove('bg-folding', 'bg-folding-close');
+                bq.style.height = ''; bq.style.paddingTop = ''; bq.style.paddingBottom = '';
+                if (!bub) return;
+                if (_rdBgFoldRaf) cancelAnimationFrame(_rdBgFoldRaf);
+                _rdBgFoldRaf = requestAnimationFrame(function () {
+                    _rdBgFoldRaf = 0;
+                    try { rdGlLayout(bub); } catch (e) { console.warn('[折叠重排] 小注：', e); }
+                    try { bgMkLayout(bub); } catch (e) { console.warn('[折叠重排] 背景词：', e); }
+                    // 兜底：万一上面两步都早退（这条消息没小注也没背景词），把层显示回来
+                    var ls = bub.querySelectorAll('.rd-gl-layer, .bg-mk-layer');
+                    for (var j = 0; j < ls.length; j++) ls[j].style.visibility = '';
+                });
+            }
+
+            if (bub) {
+                var layers = bub.querySelectorAll('.rd-gl-layer, .bg-mk-layer');
+                for (var i = 0; i < layers.length; i++) layers[i].style.visibility = 'hidden';
+            }
+
+            /* 不做动画的三种情况，直接落地：系统开了「减少动效」（无障碍设置，必须尊重）、
+               浏览器没有 Element.animate、以及高度几乎没变（量不出差别时动画只是白闪一下）。 */
+            var _reduce = false;
+            try { _reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e1) {}
+            if (_reduce || typeof bq.animate !== 'function' || Math.abs(m1.h - m0.h) < 2) { settle(); return; }
+
+            bq.classList.add('bg-folding');
+            if (!willOpen) bq.classList.add('bg-folding-close');   // 收起时箭头提前翻，别慢半拍
+            var anim = bq.animate(
+                [{ height: m0.h + 'px', paddingTop: m0.pt, paddingBottom: m0.pb },
+                 { height: m1.h + 'px', paddingTop: m1.pt, paddingBottom: m1.pb }],
+                { duration: RD_BG_FOLD_MS, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' });
+            bq._rdFoldAnim = anim;
+            // ⚠️只在跑完时落地；被下一次点击 cancel 时不要 settle——那一次会自己接管
+            anim.onfinish = settle;
         }
         // 背景词用同一条规矩（那张表在 rdMkPick 上面），种子取词本身
         function bgMkPick(term, noUnderline) {
