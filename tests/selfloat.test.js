@@ -80,7 +80,12 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.A_横向没出界 = !!(r.br && r.br.left >= 7 && r.br.right <= VW - 7);
             // 横向大致对着选区中心（贴边被夹住时不强求，这里选区在中间不会被夹）
             out.A_对着选区中心 = !!(r.br && Math.abs((r.br.left + r.br.right) / 2 - (r.sr.left + r.sr.right) / 2) < 2);
-            out.A_离选区不远 = !!(r.br && r.br.top - r.sr.bottom < 30);
+            /* ⚠️呼吸缝是她当天调过的值（10 → 20，原话「略微有点近，可以往下移一些更好，
+               留出些空间，也防止点错」）。上下都留窗口：太小＝手指够小条时蹭到正文取消选区，
+               太大＝不像从这几个字身上长出来的，而且下方那档余量本来就紧。 */
+            out.A_呼吸缝 = r.br ? Math.round(r.br.top - r.sr.bottom) : -1;
+            out.A_缝够宽不误触 = out.A_呼吸缝 >= 15;
+            out.A_离选区不远 = out.A_呼吸缝 <= 28;
         }
 
         // ── B：选区贴近屏幕底部 → 翻到上方，且必须给系统气泡留出整整一截 ──
@@ -127,6 +132,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('A 没盖住选中的字', R.A_没盖住选中的字);
     ok('A 横向没出屏幕', R.A_横向没出界);
     ok('A 横向对着选区中心', R.A_对着选区中心);
+    ok('A 呼吸缝够宽、不容易点错', R.A_缝够宽不误触, '实测 ' + R.A_呼吸缝 + 'px（要 15~28）');
     ok('A 就跟在选区旁边（不是甩到远处）', R.A_离选区不远);
     ok('B 选区贴底时翻到选区上方', R.B_是浮动档 && R.B_翻到上方);
     ok('B ⚠️给系统复制气泡留够了空档', R.B_给气泡留够空档, '实测空档 ' + R.B_空档 + 'px（要 ≥50）');

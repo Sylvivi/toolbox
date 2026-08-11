@@ -3513,15 +3513,16 @@ body {
         }
         .rd-hl-bar.rd-selfloat .rd-sw { width: 26px; height: 26px; }
         @keyframes rdSelIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-        /* 选中态停靠底部：躲开系统自带的「复制/分享/全选」选区气泡（它贴着选区、位置不可控，只能把颜色条挪远）。
-           固定屏幕底部居中，比选区位置稳、手机也好按；带个小标签提示这是给划线的。
+        /* 选中态的**兜底落位**：固定屏幕底部居中，离选区最远，所以系统自带的
+           「复制/分享/全选」气泡（贴着选区、位置不可控）无论落在哪都挡不到它。
            ⚠️2026-08-11 起这不再是选中态的**默认**落位，而是**最后的兜底**——
              上下都塞不开时才用它（见 rdHlPlaceSelBar 第 ③ 档）。它永远不会被系统气泡挡住，
              所以别把这条退路删掉。 */
         .rd-hl-bar.rd-dock {
             left: 50%; right: auto; top: auto; transform: translateX(-50%);
             /* ⚠️72px → 104px（用户 2026-08-05 要求「位置可以上移一些」）：原来贴得太靠下，
-               离输入区/clawd 那排太近，手指去点色块时容易连带碰到底下的东西。
+               离输入区/clawd 那排太近，手指去点条上的键时容易连带碰到底下的东西。
+               （当时条上还有色板，她说的是"点色块"；色板 2026-08-10 已撤，理由本身仍成立。）
                只抬这一条（选中文字冒出来的）；改错字编辑框 .rd-edit-box 仍在 72px——
                两者从不同时出现（开编辑框时这条会被 rdHlShowSelBar 主动挡掉），不必对齐。 */
             bottom: calc(104px + env(safe-area-inset-bottom, 0px));
@@ -27383,7 +27384,12 @@ body {
            ⚠️量宽高之前必须先 appendChild + 上好 .rd-selfloat：不上这个 class 量到的是
              基础样式的 padding(6/8)，跟真正显示时(7/10)差 4px，贴边时会算错该不该换档。 */
         var RD_SEL_NATIVE_H = 56;   // 系统选区气泡高度的估值（含余量）。宁可多留一点——浮高一点只是不好看，留少了会被挡住
-        var RD_SEL_GAP = 10;        // 小条跟选区之间的呼吸缝
+        /* 小条跟选区之间的呼吸缝。⚠️10 → 20（2026-08-11 用户当天反馈「小条跟手可以，
+           但是略微有点近，可以往下移一些更好，留出些空间，**也防止点错**」）。
+           别再改小：贴着选区时，手指去够小条上那三颗键，很容易蹭到正文上、把选区取消掉。
+           也别再放大——放远了就不像是"从这几个字身上长出来的"，而且下方那一档的余量本来就紧
+           （放不下就会翻到上方去，反而离得更远）。 */
+        var RD_SEL_GAP = 20;
         function rdHlPlaceSelBar(bar, range) {
             bar.classList.add('rd-selfloat');
             document.body.appendChild(bar);
