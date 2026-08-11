@@ -26962,11 +26962,80 @@ body {
                 (rowItems[key] || (rowItems[key] = [])).push(it);
                 return true;
             }
+            /* ===== 更远的那几条缝（2026-08-11 加）=====
+               用户拍板：「**宁可引线拉长，也别压字**」。原来上下两条缝都塞满时只剩「另起一行」，
+               而另起的行按设计就往隔壁段的字上叠——自查实测：段间距 28 下**一行**的小注压到正文的
+               13 条**全部**出自这条退路（见 tests/glossaudit.test.js）。
+               现在在它前面插一步：往外再找一两条缝，**但只认「整条塞得进去、两边的字都碰不着」的**，
+               所以这一步永远不会制造新的压字，代价只是引线变长、斜度变大。
+               ⚠️编号沿用 gapUp/gapDown 那一套：第 i 条缝 ＝ 第 i 个孩子的下沿 → 下一个孩子的上沿；
+                 -2 ＝ 容器顶上那条。**别自己另起一套编号**，占位表 rowRight/rowItems 是按它索引的。 */
+            var _glBands = null;
+            function _glBandList() {
+                if (_glBands) return _glBands;
+                _glBands = {};
+                var kids = box.children, first = null, prevIdx = -1, prevEl = null;
+                for (var i = 0; i < kids.length; i++) {
+                    var el = kids[i];
+                    // 小注层/记号层是我们自己加的浮层，不算「孩子」
+                    if (el.classList && (el.classList.contains('rd-gl-layer') || el.classList.contains('bg-mk-layer'))) continue;
+                    var r = el.getBoundingClientRect();
+                    if (!first) {
+                        first = el;
+                        _glBands[-2] = { top: 0, bottom: r.top - cr.top };          // 容器顶上那条
+                    }
+                    if (prevEl) {
+                        _glBands[prevIdx] = { top: prevEl.getBoundingClientRect().bottom - cr.top, bottom: r.top - cr.top };
+                    }
+                    prevEl = el; prevIdx = i;
+                }
+                if (prevEl) _glBands[prevIdx] = { top: prevEl.getBoundingClientRect().bottom - cr.top, bottom: cr.height };
+                return _glBands;
+            }
+            /* 把一条小注塞进指定的远缝。**塞不进（会碰到两边的字）就返回 false**，绝不硬塞。 */
+            function _gl_tryBand(it, g) {
+                var band = _glBandList()[g];
+                if (!band) return false;
+                var room = band.bottom - band.top;
+                var lhR = it.lh + it.lw * RD_GL_ROT_SIN;       // 标签是斜的，按外框算才不会蹭到字
+                if ((room - lhR) / 2 < 0.5) return false;      // 只要外框整条落在缝里就行，不必再留 2px
+                var ly = band.top + (room - it.lh) / 2;
+                // 缝在字的上面 → 锚第一行片段；在下面 → 锚最后一行片段（跟就近那两条同一套规矩）
+                var up = band.bottom <= it.tyUp + 1;
+                var tx = up ? it.txUp : it.txDown, wantHere = up ? it.wantUp : it.wantDown;
+                var left = it.pLeft, right = left + it.pW;
+                var key = String(g), prev = rowRight[key];
+                var x = Math.max(wantHere, left);
+                if (prev != null && x < prev + RD_GL_SEP) x = prev + RD_GL_SEP;
+                if (x + it.lw > right) {
+                    var xr = Math.max(left, right - it.lw);
+                    if (prev != null && xr < prev + RD_GL_SEP && !_glCompact(key, prev + RD_GL_SEP - xr)) return false;
+                    x = xr;
+                }
+                it.up = up; it.gap = g; it.lx = x; it.ly = ly;
+                it.tx = tx; it.ty = up ? it.tyUp : it.tyDown;
+                it.row = rowNum[key] || 0;
+                it.dodge = null;                               // 整条都在缝里，没有要躲的字
+                rowRight[key] = x + it.lw;
+                (rowItems[key] || (rowItems[key] = [])).push(it);
+                return true;
+            }
+            // 由近及远试：先首选那一侧，再另一侧；最多往外两条，再远引线就真成了横穿半页
+            function _gl_tryFar(it) {
+                for (var d = 1; d <= 2; d++) {
+                    var a = it.prefUp ? (it.gapUp - d) : (it.gapDown + d);
+                    var b = it.prefUp ? (it.gapDown + d) : (it.gapUp - d);
+                    if (it.gapUp >= -2 && _gl_tryBand(it, a)) return true;
+                    if (_gl_tryBand(it, b)) return true;
+                }
+                return false;
+            }
             all.sort(function (x, y) { return x.want - y.want; });
             for (var a2 = 0; a2 < all.length; a2++) {
                 var it0 = all[a2];
                 if (_gl_try(it0, it0.prefUp, false)) continue;      // ① 就近那条缝
                 if (_gl_try(it0, !it0.prefUp, false)) continue;     // ② 挪到另一条缝
+                if (_gl_tryFar(it0)) continue;                      // ②b 再往外找一两条**整条塞得下**的缝
                 // ③ 都满了，另起一行。⚠️首选那侧可能压根没有缝（第一段上面），要能退到另一侧，
                 //    否则这一条的 ly/lx 全是 undefined，画的时候 toFixed 直接抛（踩过）。
                 if (!_gl_try(it0, it0.prefUp, true)) _gl_try(it0, !it0.prefUp, true);
