@@ -123,7 +123,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
                 const path = b.box.querySelector('.rd-gl-svg path[data-glid="' + id + '"]');
                 const mk = b.box.querySelector('mark[data-hlid="' + id + '"]');
                 if (!path || !mk) { bad.push(id + ':缺'); return; }
-                const m = path.getAttribute('d').match(/Q[-\d.]+ [-\d.]+ ([-\d.]+) /);
+                // ⚠️箭头掉头之后（2026-08-11：箭头指小注），曲线是**从字出发**的，
+                //   所以「指没指对」要看起点 M，不是终点 Q…那一头。
+                const m = path.getAttribute('d').match(/^M([-\d.]+) /);
                 const svgR = path.ownerSVGElement.getBoundingClientRect();
                 const mr = mk.getBoundingClientRect();
                 const off = Math.abs(svgR.left + (+m[1]) - (mr.left + mr.width / 2));
@@ -184,6 +186,46 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.X_箭头没跟着虚 = !/\d/.test(out.X_箭头实线);
             // 箭头也得跟着墨色走，不然虚线线是彩的、箭头是黑的
             out.X_箭头同色 = !!(ps[1] && getComputedStyle(ps[1]).stroke === getComputedStyle(ps[0]).stroke);
+            document.querySelectorAll('.__glt').forEach(n => n.remove());
+        }
+
+        /* ── Y：箭头指的是**小注**、不是那个词（2026-08-11 用户要的）──
+           她的原话：「我希望箭头是指着小注，而不是小注指向被解释的词」。
+           实现是把曲线两头对调（起点＝字、终点＝标签），箭头永远长在终点上。
+           ⚠️反过来写回去（起点＝标签）不会报错、也不会有任何一条别的测试变红，
+             只是箭头默默指回那个字——所以这一组必须直接量箭尖落在哪边。 */
+        {
+            const b = build([{ para: 1, word: '雾气氤氲', note: 'yīn yūn·雾气弥漫', color: 'sky' }]);
+            const curve = b.box.querySelector('.rd-gl-svg path:not(.rd-gl-arrow)');
+            const arrow = b.box.querySelector('.rd-gl-svg path.rd-gl-arrow');
+            const labEl = b.box.querySelector('.rd-gl-label');
+            const lab = labEl.getBoundingClientRect();
+            const mk = b.box.querySelector('mark[data-hlid="h1雾气氤氲"]').getBoundingClientRect();
+            const svgR = curve.ownerSVGElement.getBoundingClientRect();
+            // 箭尖 = 箭头那条 `M b1 L 尖 L b2` 中间那个点
+            const am = arrow.getAttribute('d').match(/L([-\d.]+) ([-\d.]+) L/);
+            const tip = { x: svgR.left + (+am[1]), y: svgR.top + (+am[2]) };
+            const cm = curve.getAttribute('d').match(/^M([-\d.]+) ([-\d.]+)/);
+            const start = { x: svgR.left + (+cm[1]), y: svgR.top + (+cm[2]) };
+            const dist = (p, r) => Math.hypot(p.x - (r.left + r.width / 2), p.y - (r.top + r.height / 2));
+            out.Y_箭尖离小注更近 = dist(tip, lab) < dist(tip, mk);
+            out.Y_起点落在那个字上 = Math.abs(start.x - (mk.left + mk.width / 2)) <= 2;
+            /* 箭尖要贴着标签、但不许扎进字里。
+               ⚠️不能拿 `lab.getBoundingClientRect()` 的上下沿来判：标签是斜的（rotate -2.5deg），
+                 那个框是「外接矩形」、比真正的边沿胖一圈，永远判成"扎进去了"。
+                 这里按**未旋转的排版盒 + 计算出来的旋转角**现算该 x 处的真实边沿——
+                 跟实现里的 _rotGap 是同一套几何，但角度和盒子都是从 DOM 现读的，
+                 所以「忘了留旋转余量」照样会红（1px vs 实际要 4~5px）。 */
+            const par = b.box.getBoundingClientRect();      // 小注层是 inset:0，坐标就等于正文容器
+            const uTop = par.top + parseFloat(labEl.style.top), uH = labEl.offsetHeight;
+            const uMidX = par.left + parseFloat(labEl.style.left) + labEl.offsetWidth / 2;
+            const mtx = (getComputedStyle(labEl).transform.match(/matrix\(([^)]+)\)/) || [0, '1,0,0,1,0,0'])[1].split(',');
+            const sin = Math.abs(parseFloat(mtx[1]) || 0);      // matrix 的第 2 个数 = sinθ
+            const up = lab.top < mk.top;                        // 标签在字上面 → 线从下沿出发
+            const edge = up ? (uTop + uH + (uMidX - tip.x) * sin) : (uTop - (tip.x - uMidX) * sin);
+            out.Y_箭尖没戳进标签 = up ? (tip.y >= edge - 0.5) : (tip.y <= edge + 0.5);
+            out.Y_余量 = Math.round((up ? tip.y - edge : edge - tip.y) * 10) / 10;
+            out.Y_箭尖离标签够近 = Math.min(Math.abs(tip.y - lab.top), Math.abs(tip.y - lab.bottom)) <= 8;
             document.querySelectorAll('.__glt').forEach(n => n.remove());
         }
 
@@ -248,7 +290,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             const lr = lab.getBoundingClientRect();
             const bq = box.querySelector('blockquote').getBoundingClientRect();
             const path = box.querySelector('.rd-gl-svg path');
-            const mm = path.getAttribute('d').match(/Q[-\d.]+ [-\d.]+ ([-\d.]+) /);
+            const mm = path.getAttribute('d').match(/^M([-\d.]+) /);   // ⚠️起点＝那个字（箭头已掉头指小注）
             const svgR = path.ownerSVGElement.getBoundingClientRect();
             let L = Infinity, Rr = -Infinity;
             mks.forEach(m => { const r = m.getBoundingClientRect(); L = Math.min(L, r.left); Rr = Math.max(Rr, r.right); });
@@ -295,7 +337,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
                 rdGlLayout(hit.bub);
                 const lab = hit.box.querySelector('.rd-gl-label'), lr = lab.getBoundingClientRect();
                 const path = hit.box.querySelector('.rd-gl-svg path');
-                const mm = path.getAttribute('d').match(/Q[-\d.]+ [-\d.]+ ([-\d.]+) ([-\d.]+)/);
+                const mm = path.getAttribute('d').match(/^M([-\d.]+) ([-\d.]+)/);   // ⚠️同上：看起点
                 const svgR = path.ownerSVGElement.getBoundingClientRect();
                 const ax = svgR.left + (+mm[1]), ay = svgR.top + (+mm[2]);
                 const up = lr.bottom <= rects[0].top;
@@ -691,6 +733,10 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('X4 曲线是虚线', R.X_曲线是虚的, 'dasharray=' + R.X_曲线虚线);
     ok('X5 箭头没跟着变虚（虚了就碎成小点）', R.X_箭头没跟着虚, 'dasharray=' + (R.X_箭头实线 || 'none'));
     ok('X6 箭头跟曲线同色', R.X_箭头同色);
+    ok('Y1 箭尖指着小注（不是那个词）', R.Y_箭尖离小注更近);
+    ok('Y2 曲线从那个字出发', R.Y_起点落在那个字上);
+    ok('Y3 箭尖没戳进小注的字里', R.Y_箭尖没戳进标签, '离边沿 ' + R.Y_余量 + 'px');
+    ok('Y4 箭尖离小注够近（不是飘在半路）', R.Y_箭尖离标签够近);
     ok('F1 重复排版不叠加图层', R.F_重排不叠加);
     ok('F2 没小注时不留空层', R.F_没小注就不留层);
     ok('G1 清洗：去引号句号', R.G_去引号句号);

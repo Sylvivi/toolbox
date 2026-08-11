@@ -26980,10 +26980,22 @@ body {
                 var labMid = it2.lx + it2.lw / 2;
                 var sd = (labMid >= it2.tx) ? 1 : -1;
                 var sx = Math.max(it2.lx, Math.min(it2.lx + it2.lw, it2.tx + sd * RD_GL_DX));
-                var sy = it2.up ? (it2.ly + it2.lh + 1) : (it2.ly - 1);
+                /* ⚠️标签是斜的（rotate -2.5deg），所以「离标签多远」要按**引线出发的那个 x**
+                   现算，不能一律 1px：右端翘起、左端压低。箭头掉头指向标签之后（见下面），
+                   1px 的余量会让箭尖直接扎进花体字里——只在会更近的那一侧补，另一侧本来就更远。 */
+                var _rotGap = (it2.up ? Math.max(0, labMid - sx) : Math.max(0, sx - labMid)) * RD_GL_ROT_SIN;
+                var sy = it2.up ? (it2.ly + it2.lh + 1 + _rotGap) : (it2.ly - 1 - _rotGap);
                 var bow = Math.min(9, 2 + Math.abs(it2.ty - sy) * 0.05) * (n % 2 === 0 ? 1 : -1);
 
-                var seg = rdGlPath(sx, sy + RD_GL_PAD, it2.tx, it2.ty + RD_GL_PAD, bow);
+                /* ⚠️⚠️**箭头指的是小注、不是那个词**（2026-08-11 用户要的，她的原话：
+                     「我希望箭头是指着小注，而不是小注指向被解释的词」）。
+                   实现就是把两头对调：曲线从**字**出发、画到**标签**边上，
+                   `rdGlPath` 的箭头永远长在终点，于是自动掉头。
+                   ⚠️`bow` 要跟着取负：弓形是按「起点→终点」的左右手方向算的，
+                     两头一换、同一个正负号会让曲线朝反方向鼓出去（弯法看着像换了个人写的）。
+                   ⚠️凡是解析这条 `d` 的地方，「指对没指对」现在要看 `M` 那一头（起点＝那个字），
+                     不再是 `Q` 后面那一头（终点＝标签）。tests/gloss.test.js 里好几处按这个改过。 */
+                var seg = rdGlPath(it2.tx, it2.ty + RD_GL_PAD, sx, sy + RD_GL_PAD, -bow);
                 var ink = getComputedStyle(it2.lab).color;
                 var glid = it2.lab.getAttribute('data-glid');
                 // 曲线（虚线）——⚠️必须先加，见 rdGlPath 上那条注释
