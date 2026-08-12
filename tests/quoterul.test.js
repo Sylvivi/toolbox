@@ -13,6 +13,7 @@
  *  F 组 ⚠️自己的 layer class，不许蹭 .rd-gl-layer（会被 rdGlClear 连坐删掉）
  *  G 组 ⚠️颜色必须从 body 读（主题/夜间都定义在 body 上，从 <html> 读会永远拿默认色）
  *  H 组 ⚠️没开手绘线时，别把「有引号的消息」判成值得排版（_glWorth 白烧）
+ *  I 组 ⚠️性能：必须「先量完再画」，改回边量边画会退回逐句整页重排（用户报过卡）
  *
  * 跑法：node tests/quoterul.test.js   或   bash tests/p.sh quoterul
  */
@@ -186,6 +187,27 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.H_开了才值得排 = _glWorth(a.bub) === true;
         }
 
+        /* ── I：⚠️性能护栏——「先量完、再画」不许改回去 ──
+           第一版是「建好层 → 边量边往层里加线」：每加一条线就把排版标脏，下一句的
+           getClientRects() 又逼浏览器整页重排一遍。40 句对白 ＝ 40 次整页重排，
+           实测这台服务器 32ms/条消息，手机乘 3~5 倍，用户当天就报「有点卡」。
+           拆成「只读一段 + 离屏画一段 + 最后挂一次」之后同样 40 句降到 3ms 上下。
+           ⚠️这里的门槛（15ms）是**回归绊线**、不是精确基准：新写法有四倍余量，
+             改回交叉写法必然撞线。跑得慢的机器上略有浮动也不至于假红。 */
+        {
+            setOn(true);
+            const many = [];
+            for (let i = 0; i < 40; i++) many.push('他放下茶盏，缓缓说' + Q('这事我早有耳闻，只是不便明说' + i) + '，屋里一时静了下来。');
+            const a = build(many);
+            out.I_引号数 = a.box.querySelectorAll('.reading-quote-inner').length;
+            const ts = [];
+            for (let k = 0; k < 5; k++) { const t0 = performance.now(); qUlLayout(a.bub); ts.push(performance.now() - t0); }
+            ts.sort((x, y) => x - y);
+            out.I_中位耗时 = +ts[2].toFixed(1);
+            out.I_没退回逐句重排 = out.I_中位耗时 < 15;
+            out.I_线还是画满的 = a.box.querySelectorAll('.q-ul-svg path').length >= 40;
+        }
+
         document.querySelectorAll('.__qult').forEach(n => n.remove());
         setOn(false);
         return out;
@@ -212,6 +234,8 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('G2 换了强调色，线跟得上', R.G_换色跟得上);
     ok('H1 ⚠️没开手绘线时不判为值得排版', R.H_没开时不值得排);
     ok('H2 开了才判为值得排版', R.H_开了才值得排);
+    ok('I1 ⚠️⚠️没退回「边量边画」（40 句应在 15ms 内）', R.I_没退回逐句重排, R.I_引号数 + ' 句 / 中位 ' + R.I_中位耗时 + 'ms');
+    ok('I2 快了之后线一条没少', R.I_线还是画满的);
     ok('Z 页面没报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();
