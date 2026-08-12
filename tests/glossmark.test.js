@@ -12,7 +12,7 @@
  *  C 组 跨行不影响选哪种（三种都能逐行画）
  *  D 组 取代底色、不叠（她定的），且删掉小注要变回底色
  *  E 组 ⚠️不许推开正文：mark 是行内元素，横向 padding 会让整段位移、还带偏小注引线锚点
- *  F 组 开关（默认开，关掉回到原样）
+ *  F 组 ⚠️常开、没有开关（用户 2026-08-12 去掉的：「这肯定是默认开的呀，没必要弄开关」）
  *
  * 跑法：node tests/glossmark.test.js   或   bash tests/p.sh glossmark
  */
@@ -189,17 +189,19 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.E_四种都不动版面 = ['u', 'b', 'c', 'h'].every(k => perKind[k]);
         }
 
-        // ── F：开关（默认开、关掉回原样、再开回来）──
+        /* ── F：手绘记号是**常开**的，没有开关 ──
+           ⚠️2026-08-12 用户把「手绘」那个 chip 去掉了，原话「这肯定是默认开的呀，没必要弄开关」。
+             所以这一组从「开关三态」改成钉住「开关真的没了」：函数、body class、chip 一个都不许回来。
+             写过小注的词照样打上 rd-mk、照样撤掉底色。 */
         {
             const a = build([{ para: 1, word: '氤氲', id: 'hf1', note: 'yīn yūn·雾气弥漫' }]);
             const mk = a.box.querySelector('mark[data-hlid="hf1"]');
-            out.F_默认是开的 = !document.body.classList.contains('rd-mk-off') && mk.classList.contains('rd-mk');
-            rdMkSetOn(false);
-            out.F_关掉就撤class = !mk.classList.contains('rd-mk');
-            out.F_关掉回到底色 = getComputedStyle(mk).backgroundColor !== 'rgba(0, 0, 0, 0)';
-            rdMkSetOn(true);
-            out.F_再开能补回来 = a.box.querySelector('mark[data-hlid="hf1"]').classList.contains('rd-mk');
-            out.F_存了本机 = localStorage.getItem('reading_gl_mark') === '1';
+            out.F_照样打记号 = mk.classList.contains('rd-mk');
+            out.F_没有开关函数 = typeof window.rdMkSetOn === 'undefined'
+                              && typeof window.rdMkToggle === 'undefined'
+                              && typeof window.rdMkInit === 'undefined';
+            out.F_没有关闭态 = !document.body.classList.contains('rd-mk-off');
+            out.F_没有chip = !document.getElementById('chipGlMark');
         }
 
         /* ── G：形状是**真的 Rough.js** 画的，不是自己揉的抖动图 ──
@@ -349,11 +351,8 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             // 段落里压根没有背景块 → 照常画记号（别误伤）
             const nobq = mk1('雾气氤氲', false);
             out.L_没背景块照常画 = nobq.有记号 && !nobq.有色带;
-            // 背景词记号被关掉时不必避让（那边压根没画东西）
-            document.body.classList.add('bg-mk-off');
-            const off = mk1('雾气氤氲', true);
-            out.L_关了记号就不避让 = off.有记号 && !off.有色带;
-            document.body.classList.remove('bg-mk-off');
+            /* ⚠️原来这儿还有一条「背景词记号关掉时不必避让」——2026-08-12 那个开关被用户去掉了
+               （「这肯定是默认开的呀」），背景词记号现在恒开，这条前提不存在了，随开关一起删。 */
         }
 
         document.querySelectorAll('.__mkt').forEach(n => n.remove());
@@ -384,11 +383,10 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('E3 每一行的位置一个像素都没动', R.E_行位置没变);
     ok('E4 段落没有变高', R.E_段落没变高);
     ok('E5 ⚠️四种记号逐个验：一种都不许动版面', R.E_四种都不动版面, JSON.stringify(R.E_逐种明细));
-    ok('F1 默认开', R.F_默认是开的);
-    ok('F2 关掉就撤记号', R.F_关掉就撤class);
-    ok('F3 关掉回到原来的底色', R.F_关掉回到底色);
-    ok('F4 再打开能补回来', R.F_再开能补回来);
-    ok('F5 开关存进本机', R.F_存了本机);
+    ok('F1 照样打上手绘记号', R.F_照样打记号);
+    ok('F2 ⚠️开关函数没回来（用户 2026-08-12 去掉的，别再加）', R.F_没有开关函数);
+    ok('F3 ⚠️没有 rd-mk-off 这个关闭态', R.F_没有关闭态);
+    ok('F4 ⚠️设置面板里没有「手绘」chip', R.F_没有chip);
     ok('G1 Rough.js 内联进来了', R.G_库在);
     ok('G2 记号画在自己那层 .rd-mk-svg 上', R.G_有记号层);
     ok('G3 真的画出线了', R.G_画了线);
@@ -416,7 +414,6 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('L2 ⚠️只沾到其中几个字 → 也退回色带', R.L_只沾几个字_也退色带);
     ok('L3 同段落里没碰到背景词的 → 照常画记号', R.L_没碰到的照常画);
     ok('L4 段落没有背景块 → 照常画记号（别误伤）', R.L_没背景块照常画);
-    ok('L5 背景词记号关掉时不必避让', R.L_关了记号就不避让);
     ok('H1 无页面报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();

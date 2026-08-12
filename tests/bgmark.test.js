@@ -11,7 +11,7 @@
  *  B 组 词是从背景块第一行 `汐：背景：X` 抠出来的，且只认第一行
  *  C 组 同一个词全书同色同款；不同词要真的不一样（哈希分布）
  *  D 组 不动版面（记号全在绝对定位的 SVG 层上）
- *  E 组 开关 + 段落里找不到那个词时安静跳过
+ *  E 组 ⚠️常开、没有开关（2026-08-12 去掉）+ 段落里找不到那个词时安静跳过
  *
  * 跑法：node tests/bgmark.test.js   或   bash tests/p.sh bgmark
  */
@@ -161,13 +161,14 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             const a = build([{ n: 1, html: P1 }], [{ cp: 1, head: '汐：背景：兵圣' }]);
             out.E_找不到就不画 = !a.box.querySelector('.bg-mk-layer');
             const b = build([{ n: 1, html: P1 }], [{ cp: 1, head: '汐：背景：孙武' }]);
-            out.E_默认是开的 = !document.body.classList.contains('bg-mk-off')
-                            && !!b.box.querySelector('.bg-mk-svg > g');
-            bgMkSetOn(false);
-            out.E_关掉就没了 = !document.querySelector('.bg-mk-layer');
-            bgMkSetOn(true);
-            out.E_再开能补回来 = !!document.querySelector('.bg-mk-svg > g');
-            out.E_存了本机 = localStorage.getItem('reading_bg_mark') === '1';
+            /* ⚠️2026-08-12 用户把「手绘」那个 chip 去掉了（「这肯定是默认开的呀，没必要弄开关」）。
+               原来的「关掉/再开」三态没了，改成钉住「开关真的没回来」。 */
+            out.E_照样画 = !!b.box.querySelector('.bg-mk-svg > g');
+            out.E_没有开关函数 = typeof window.bgMkSetOn === 'undefined'
+                              && typeof window.bgMkToggle === 'undefined'
+                              && typeof window.bgMkInit === 'undefined';
+            out.E_没有关闭态 = !document.body.classList.contains('bg-mk-off');
+            out.E_没有chip = !document.getElementById('chipBgMark');
             // 同一个词讲两次，只画一次（别叠两个圈）
             const c = build([{ n: 1, html: P1 }], [{ cp: 1, head: '汐：背景：孙武' }, { cp: 1, head: '汐：背景：孙武' }]);
             // 同一个词有**两个背景块**时只处理一次（别把同几处各画两遍）
@@ -352,10 +353,10 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('D3 段落没有变高', R.D_段落没变高);
     ok('D4 记号层不吃点击（不挡划线/翻页）', R.D_层不吃点击);
     ok('E1 段落里找不到那个词 → 安静跳过', R.E_找不到就不画);
-    ok('E2 默认开', R.E_默认是开的);
-    ok('E3 关掉就没了', R.E_关掉就没了);
-    ok('E4 再开能补回来', R.E_再开能补回来);
-    ok('E5 开关存进本机', R.E_存了本机);
+    ok('E2 照样画出手绘记号', R.E_照样画);
+    ok('E3 ⚠️开关函数没回来（用户 2026-08-12 去掉的，别再加）', R.E_没有开关函数);
+    ok('E4 ⚠️没有 bg-mk-off 这个关闭态', R.E_没有关闭态);
+    ok('E5 ⚠️设置面板里没有「手绘」chip', R.E_没有chip);
     ok('E6 同一个词有两个背景块时不重复画', R.E_同词只画一次);
     ok('G1 ⚠️切夜间确实换了另一套颜色（变量要从 body 读，不是 html）', R.G_切夜间换了色,
        '日 ' + JSON.stringify(R.G_日间色) + ' / 夜 ' + JSON.stringify(R.G_夜间色));

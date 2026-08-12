@@ -3296,7 +3296,7 @@ body {
              横向 padding 会把后面的正文推开（划一下线整段位移），还会带偏小注的引线锚点。
              所以框和圈走**绝对定位的伪元素**浮一层在上面，一个像素都不占；
              下划线和荧光只用**上下** padding（行内元素的垂直 padding 不参与行高，行不会变高）。 */
-        body:not(.rd-mk-off) .reading-merged mark.rd-hl[data-gl].rd-mk {
+        .reading-merged mark.rd-hl[data-gl].rd-mk {
             /* 记号取代原来那层底色（用户定的：「取代底色，不叠」）。也要盖掉下划线款。 */
             background: none; box-shadow: none; text-decoration: none;
         }
@@ -5666,18 +5666,6 @@ body {
                         <button class="chip-btn" id="chipNameDash" onclick="readingToggleNameStyle('dash')" title="名词加虚线下划线（同引号「划线」款）">划线</button>
                         <button class="chip-btn" id="chipNameGlow" onclick="readingToggleNameGlow()" title="名词柔光，单击循环换款：关→光晕→光带→关（夜间会发光）">柔光</button>
                         <button class="chip-btn" id="chipNameList" onclick="readingOpenNamesEditor()" title="填写/自动识别本书名词">名单…</button>
-                    </div>
-                </div>
-                <div id="readingBgMarkRow" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-                    <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0" title="「标背景」讲解过的那个词">背景词</span>
-                    <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
-                        <button class="chip-btn" id="chipBgMark" onclick="bgMkToggle()" title="给「有背景解释」的那个词画手绘记号（下划线/方框/圈，Rough.js 画的）。同一个词固定一种画法、一种颜色">手绘</button>
-                    </div>
-                </div>
-                <div id="readingGlossRow" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-                    <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0" title="选中字→「✍️ 注」写的那种手写小注">小注</span>
-                    <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
-                        <button class="chip-btn" id="chipGlMark" onclick="rdMkToggle()" title="注过的那个词用手绘记号（下划线/方框/圈/荧光，按字数随机挑一种），关掉就回到原来的底色">手绘</button>
                     </div>
                 </div>
                 <div id="readingFontRow" style="display:flex;align-items:center;justify-content:space-between">
@@ -18703,8 +18691,6 @@ body {
             c = document.getElementById('chipQuoteGlow'); if (c) c.classList.toggle('active', glow);
             c = document.getElementById('chipQuoteLs'); if (c) c.classList.toggle('active', split);
             if (typeof rdHlInitStyle === 'function') rdHlInitStyle();   // 顺带恢复「划线」底色/下划线样式
-            if (typeof rdMkInit === 'function') rdMkInit();             // 小注那个词的手绘记号开关
-            if (typeof bgMkInit === 'function') bgMkInit();             // 背景词的手绘记号开关（默认开）
             readingApplyKeySentStyles();   // 精句样式独立一套，跟着一起初始化
             updateStatusBarColor();
         }
@@ -26060,11 +26046,10 @@ body {
            rects ＝ 它占的每一行（容器坐标），跨行时每行各画一条线。 */
         function rdMkPlan(marks, hlid, rects) {
             if (!marks || !marks.length || !rects || !rects.length) return null;
-            if (document.body.classList.contains('rd-mk-off')) return null;
             var len = 0;
             for (var i = 0; i < marks.length; i++) len += (marks[i].textContent || '').length;
             // 压在背景词上 → 退回色带，别让两个手绘记号叠在一处（见 rdMkOverlapsBgTerm）
-            if (!document.body.classList.contains('bg-mk-off') && rdMkOverlapsBgTerm(marks)) return null;
+            if (rdMkOverlapsBgTerm(marks)) return null;
             var kind = rdMkPick(hlid, len, rdMkHasUnderline(marks[0]));
             if (!kind) return null;    // 没有合适的记号 → 不打 class，保留原来的划线底色
             /* 颜色现取现用：--mk-ink（描边）和 --hlc/--hla（荧光的浓度）都定义在 CSS 的划线色板里，
@@ -26087,21 +26072,6 @@ body {
                 ms[i].style.removeProperty('--mk-img');   // 老版本留下的行内变量，顺手清掉
             }
         }
-        // 开关（设置面板「小注」那行的「手绘」）。默认开；关掉就回到原来的底色/下划线款。
-        function rdMkSetOn(on, quiet) {
-            document.body.classList.toggle('rd-mk-off', !on);
-            localStorage.setItem('reading_gl_mark', on ? '1' : '0');
-            var chip = document.getElementById('chipGlMark');
-            if (chip) chip.classList.toggle('active', on);
-            /* quiet ＝ 只恢复状态、不动 DOM（初始化时用）。正文这会儿还没渲染出来，
-               在这里跑一趟全篇重排纯属白跑，还会拖慢开书那一下。 */
-            if (quiet) return;
-            // 关→开要把记号补回来（关着的那阵子新写的小注没打过 class）；开→关直接抹干净
-            if (on) { if (typeof rdGlLayoutAll === 'function') rdGlLayoutAll(); }
-            else rdMkClear(document);
-        }
-        function rdMkToggle() { rdMkSetOn(document.body.classList.contains('rd-mk-off')); }
-        function rdMkInit() { rdMkSetOn(localStorage.getItem('reading_gl_mark') !== '0', true); }   // 没设过＝开
 
         /* ===================== 背景词的手绘记号 =====================
            用户 2026-08-10 定的范围（**先做成满篇人名，她当场否了**，原话：
@@ -26291,7 +26261,6 @@ body {
         function bgMkLayout(bubble) {
             if (!bubble) return;
             bgMkClear(bubble);
-            if (document.body.classList.contains('bg-mk-off')) return;
             var box = bubble.querySelector('.reading-merged');
             if (!box || box.closest('.translate-merged')) return;
             var bqs = box.querySelectorAll('blockquote[data-bg="1"]');
@@ -26370,17 +26339,6 @@ body {
                 try { bgMkLayout(bubbles[i]); } catch (e) { console.warn('[背景词记号] 排版失败：', e); }
             }
         }
-        // 开关（设置面板「背景」那行的「手绘」）。默认开：一段最多一两个，不花。
-        function bgMkSetOn(on, quiet) {
-            document.body.classList.toggle('bg-mk-off', !on);
-            localStorage.setItem('reading_bg_mark', on ? '1' : '0');
-            var chip = document.getElementById('chipBgMark');
-            if (chip) chip.classList.toggle('active', on);
-            if (quiet) return;
-            if (on) bgMkLayoutAll(); else bgMkClear(document);
-        }
-        function bgMkToggle() { bgMkSetOn(document.body.classList.contains('bg-mk-off')); }
-        function bgMkInit() { bgMkSetOn(localStorage.getItem('reading_bg_mark') !== '0', true); }   // 没设过＝开
 
         /* 手绘感引线：二次贝塞尔 + 末端箭头（末端切线 = 终点 - 控制点）。
            ⚠️返回**两段** d：曲线 `d` 和箭头 `a`，必须画成两个 <path>，别再合回一条
