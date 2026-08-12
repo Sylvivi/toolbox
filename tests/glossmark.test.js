@@ -62,34 +62,38 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         const kindOf = el => (String(el.className).match(/rd-mk-([ubch])\b/) || [0, null])[1];
 
         /* ── A：选记号的规则表（纯函数直接问，不受随机影响）──
-           表在 index.html 的 rdMkPick 上面。2026-08-10 用户连调四轮定稿：
-             底下有线 → 框/圈；没线时 ≤4 字 → 框/圈，≥5 字 → 下划线/框/圈。
+           表在 index.html 的 rdMkPick 上面。2026-08-10 用户连调四轮定稿、2026-08-12 加回荧光：
+             底下有线 → 框/圈/荧光；没线时 ≤4 字 → 框/圈/荧光，≥5 字 → 下划线/框/圈/荧光。
            ⚠️**方框和圈完全同等地位**，别再给圈单独加限制（「长词是扁椭圆」「跨行会裂」
-             两个理由都被推翻过，后者纯属想当然——画的时候是逐行各画一次的）。 */
+             两个理由都被推翻过，后者纯属想当然——画的时候是逐行各画一次的）。
+           ⚠️荧光**跟框/圈同档**（用户 2026-08-12 原话「跟圈和框同档」）：进基础池、不带任何
+             字数或跨行门槛，「底下有线」也照给——它铺在字身上，跟字底下那道线不在一个位置。 */
         {
             const many = (len, noU) => {
                 const s = new Set();
                 for (let i = 0; i < 400; i++) s.add(rdMkPick('a' + i, len, noU));
                 return [...s].sort().join('');
             };
-            out.A_两字 = many(2, false);      // bc
-            out.A_四字 = many(4, false);      // bc
-            out.A_五字 = many(5, false);      // bcu
-            out.A_长词 = many(12, false);     // bcu
-            out.A_有线短 = many(2, true);     // bc
-            out.A_有线长 = many(12, true);    // bc
-            out.A_四字以内不给下划线 = out.A_两字 === 'bc' && out.A_四字 === 'bc';
-            out.A_五字起三种都有 = out.A_五字 === 'bcu' && out.A_长词 === 'bcu';
-            out.A_有线时框圈都在且没下划线 = out.A_有线短 === 'bc' && out.A_有线长 === 'bc';
+            out.A_两字 = many(2, false);      // bch
+            out.A_四字 = many(4, false);      // bch
+            out.A_五字 = many(5, false);      // bchu
+            out.A_长词 = many(12, false);     // bchu
+            out.A_有线短 = many(2, true);     // bch
+            out.A_有线长 = many(12, true);    // bch
+            out.A_四字以内不给下划线 = out.A_两字 === 'bch' && out.A_四字 === 'bch';
+            out.A_五字起四种都有 = out.A_五字 === 'bchu' && out.A_长词 === 'bchu';
+            out.A_有线时框圈荧光都在且没下划线 = out.A_有线短 === 'bch' && out.A_有线长 === 'bch';
             // ⚠️圈在每一档里都必须在场——这条专门盯「圈又被谁挡掉了」
             out.A_圈处处都在 = [out.A_两字, out.A_四字, out.A_五字, out.A_长词, out.A_有线短, out.A_有线长]
                 .every(x => x.includes('c'));
-            out.A_没有荧光了 = !(out.A_两字 + out.A_五字).includes('h');
+            // ⚠️荧光同理，每一档都得在（2026-08-12 加回来的，同一条「跟圈和框同档」）
+            out.A_荧光处处都在 = [out.A_两字, out.A_四字, out.A_五字, out.A_长词, out.A_有线短, out.A_有线长]
+                .every(x => x.includes('h'));
             const dist = {};
             for (let i = 0; i < 600; i++) { const k = rdMkPick('seed' + i, 9, false); dist[k] = (dist[k] || 0) + 1; }
             out.A_分布 = dist;
-            out.A_真的在随机 = Object.keys(dist).length === 3 && Object.values(dist).every(v => v > 120);
-            out.A_分布够匀 = Object.values(dist).every(v => v > 200 * 0.7 && v < 200 * 1.3);
+            out.A_真的在随机 = Object.keys(dist).length === 4 && Object.values(dist).every(v => v > 90);
+            out.A_分布够匀 = Object.values(dist).every(v => v > 150 * 0.7 && v < 150 * 1.3);
         }
 
         // ── B：钉死的随机——同一个 id 永远同一个记号 ──
@@ -273,10 +277,12 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
 
         /* ── K：荧光不许把字弄糊 ──
            用户 2026-08-10 报：「荧光笔似乎是盖在字体上的，像一层纱使它显得有点糊，
-           我觉得你可以参考一下之前的那个色带，因为色带盖在上面没有影响字的本色」。
-           记号这层画在正文**上面**，所以必须靠正片叠底（夜间滤色）保住字的本色。 */
-        /* ⚠️荧光已被用户去掉，不再会被 rdMkPick 抽中；但**画法留着**（万一哪天加回来）。
-           所以这里直接调 rdMkDraw 验它的混合模式还在——不然下次加回来又会把字蒙糊一遍。 */
+           我觉得你可以参考一下之前的那个色带，因为色带盖在上面没有影响字的本色」，
+           当时没治好根源，她把荧光整个砍了；2026-08-12 找到两条根源后加回来（见 rdMkDraw 的 'h'）。
+           记号这层画在正文**上面**，所以形状和混合模式两头都得钉住：
+             · 单笔（disableMultiStroke）——Rough 默认来回描两遍，半透明色的重叠区浓一圈，
+               就是那层「纱」。数 d 里有几个 M 就知道描了几遍。
+             · 日间 darken / 夜间 screen——日间**别再退回 multiply**，乘法会把纸和字一起压暗。 */
         {
             const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
             document.body.appendChild(svg);
@@ -285,7 +291,11 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             const g = rdMkDraw(rc, rects, 'h', '#d9a400', 'rgba(255,207,46,0.55)', 7)[0];
             svg.appendChild(g);
             out.K_混合模式 = getComputedStyle(g).mixBlendMode;
-            out.K_日间正片叠底 = out.K_混合模式 === 'multiply';
+            out.K_日间取更暗 = out.K_混合模式 === 'darken';
+            // 描了几遍：单笔只有一个 M，双笔会有两个（那正是「像一层纱」的来源）
+            out.K_描边遍数 = [...g.querySelectorAll('path')]
+                .reduce((n, p) => n + (p.getAttribute('d') || '').split('M').length - 1, 0);
+            out.K_只描一遍 = out.K_描边遍数 === 1;
             const hadDark = document.body.classList.contains('dark');
             document.body.classList.add('dark');
             const g2 = rdMkDraw(rc, rects, 'h', '#ffcf2e', 'rgba(255,207,46,0.46)', 7)[0];
@@ -360,11 +370,11 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         return out;
     });
 
-    ok('A1 ⚠️四字及以内不给下划线（框/圈）', R.A_四字以内不给下划线, '2字=' + R.A_两字 + ' 4字=' + R.A_四字);
-    ok('A2 五字及以上：下划线/方框/圈 三选一', R.A_五字起三种都有, '5字=' + R.A_五字 + ' 12字=' + R.A_长词);
-    ok('A3 ⚠️底下有线时：框和圈都在、且不给下划线', R.A_有线时框圈都在且没下划线);
+    ok('A1 ⚠️四字及以内不给下划线（框/圈/荧光）', R.A_四字以内不给下划线, '2字=' + R.A_两字 + ' 4字=' + R.A_四字);
+    ok('A2 五字及以上：下划线/方框/圈/荧光 四选一', R.A_五字起四种都有, '5字=' + R.A_五字 + ' 12字=' + R.A_长词);
+    ok('A3 ⚠️底下有线时：框/圈/荧光都在、且不给下划线', R.A_有线时框圈荧光都在且没下划线);
     ok('A4 ⚠️⚠️圈在每一档里都在场（别再单独给圈加限制）', R.A_圈处处都在);
-    ok('A5 荧光已去掉，不再出现', R.A_没有荧光了);
+    ok('A5 ⚠️荧光在每一档里都在场（跟圈和框同档，别再给它加门槛）', R.A_荧光处处都在);
     ok('A6 随机是真的在分布', R.A_真的在随机, JSON.stringify(R.A_分布));
     ok('A7 ⚠️分布够匀（rdMkSeed 那步雪崩混合别删）', R.A_分布够匀, JSON.stringify(R.A_分布));
     ok('B1 同一个编号永远同一个记号', R.B_纯函数稳定);
@@ -406,8 +416,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('J7 ⚠️波浪也算「字底下有线」', R.J_波浪也算);
     ok('J8 ⚠️6 个字 + 波浪 → 框或圈，不再压一条下划线上去', R.J_六字遇波浪不给线);
     ok('J9 没开波浪时不误判', R.J_没开波浪就不算);
-    ok('K2 荧光的画法还在，且日间是正片叠底（字不被蒙糊）', R.K_日间正片叠底, R.K_混合模式);
+    ok('K2 ⚠️日间取更暗 darken（别退回 multiply，纸和字会一起被压暗）', R.K_日间取更暗, R.K_混合模式);
     ok('K3 夜间翻成滤色', R.K_夜间滤色, R.K_夜间混合模式);
+    ok('K4 ⚠️⚠️荧光只描一遍（描两遍＝重叠处浓一圈＝那层「纱」）', R.K_只描一遍, '遍数=' + R.K_描边遍数);
     ok('I1 记号确实有路径', R.I_有路径);
     ok('I2 ⚠️重排后歪法一模一样（种子钉死了）', R.I_重排后一模一样);
     ok('I3 ⚠️重开一章后也一模一样', R.I_重建后一模一样);
