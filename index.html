@@ -25949,14 +25949,19 @@ body {
         var RD_GL_DODGE_SEP = 3;
         var RD_GL_DX    = 22;   // 引线横向偏移（唯一的手感旋钮，调大就开始花）
         var RD_GL_ROT_SIN = 0.0436;   // sin(2.5°)：标签是斜的，越宽转完外框越高，排行距要算上
-        /* 「为了保持倾斜，最远愿意跑多远」（2026-08-12 实测定的，见 docs/阅读排版与小注.md）。
+        /* 「为了保持倾斜，**最多比最近那条缝多跑多少**」（2026-08-12 实测定的）。
+           ⚠️⚠️量的是**多跑的那一截**，不是绝对距离——第一版写成绝对 200px，结果她截图报
+             「为啥那个居然会不往下呢，这不又舍近求远了」：那条注下面 30px 就有缝（窄、得压平），
+             它却因为「180px 还在 200px 以内」跑到整段最上面去保持倾斜。
+             绝对距离根本判不出"值不值"，只有跟最近那条比才判得出。
+           下面这段是老的绝对限距扫出来的曲线，留着当参考：
            大样本 400 页/1310 条上扫出来的取舍曲线——放平占比 ↔ 引线交叉率：
              不限距 31.9%/0.5%（＝没这道闸门，满屏都是平的，她不满意）
              120px  26.1%/0.8%    **200px 20.8%/1.2%（选它）**    300px 17.1%/1.5%（顶到红线）
              完全不限 15.5%/1.5%（另外还会撞上 2026-08-06「别一律往上」那条决定，W2 变红）
            ⚠️别往大调：交叉率一过 1.5% 就是她 2026-08-11 截图报过的「线条形成了交叉」。
            ⚠️别删：删了就退回「每条注一撞窄缝就地压平」，418/1310 都是平的。 */
-        var RD_GL_TILT_REACH = 200;
+        var RD_GL_TILT_EXTRA = 60;
         var RD_GL_TIP   = 3;    // 引线端点离标签/目标字的留缝
 
         /* ===================== 小注那个词的手绘记号 =====================
@@ -26823,14 +26828,7 @@ body {
                         txUp: tx, txDown: txDown,
                         tyUp: (rTop.top - cr.top) - RD_GL_TIP,
                         tyDown: (rBot.bottom - cr.top) + RD_GL_TIP,
-                        /* ⚠️「为了保持倾斜，最远愿意跑多远」＝ 2 行正文（2026-08-12 用户拍板的折中）。
-                           她先说「宁可跑远一点，也要保持倾斜」，我做出来实测：放平确实从 31.9% 砍到 15.5%，
-                           但**引线交叉翻了三倍（0.5%→1.5%）**，还撞上她 2026-08-06 的另一条决定
-                           （「别把不压字做成一律往上：下面明明更近」，tests/gloss.test.js W2 当场变红），
-                           更出现过「一条没被挤的注、为了保持倾斜被送到离词 63px 外」。
-                           于是加这条闸门：**放得下斜的那条缝在两行以内才值得跑过去，远了就地放平**。
-                           ⚠️调大就退回上面那三个毛病，删掉就退回满屏都是平的。 */
-                        reach: RD_GL_TILT_REACH,
+
                         /* ⚠️离正文的距离**固定 7px，不随缝宽缩**（2026-08-04 用户报「杯葛显得很挤」）。
                            原来写的是 min(7, (缝宽-标签高)/2)：紧跟背景块的段落那道缝只有 0.4em≈5.6px、
                            比标签还窄，算下来取到下限 2px，小注就贴在正文屁股上，看着憋屈。
@@ -27047,9 +27045,9 @@ body {
                 if (!allowFlat) {
                     // 这条缝得放平才塞得下 → 第一轮先跳过，让它去别处找放得下斜的
                     if (useUp ? it.flatUp : it.flatDown) return false;
-                    // 还要够得着：为保持倾斜跑太远反而更别扭
+                    // 还要「多跑的这一截」值得：比最近那条缝远出 RD_GL_TILT_EXTRA 以上就不值（见常量那段⚠️⚠️）
                     var _bd = _glBandList()[g];
-                    if (_bd && _gl_bandDist(_bd, it) > it.reach) return false;
+                    if (_bd && _gl_bandDist(_bd, it) > _glNearDist(it) + RD_GL_TILT_EXTRA) return false;
                 }
                 var left = it.pLeft, right = left + it.pW;
                 /* ⚠️排队的键**只能按缝号**，绝不能带上下方向。
@@ -27188,6 +27186,17 @@ body {
                 (rowItems[key] || (rowItems[key] = [])).push(it);
                 return true;
             }
+            /* 「最近那条缝」离目标字多远——第一轮判「为保持倾斜多跑这一截值不值」的基准。
+               ⚠️取的是它**自己上下那两条缝**：第二轮兜底就落在其中一条，所以它俩才是真正的对照组。 */
+            function _glNearDist(it) {
+                if (it._dNear != null) return it._dNear;
+                var bands = _glBandList(), best = Infinity;
+                [it.gapUp, it.gapDown].forEach(function (g) {
+                    var b = bands[g]; if (b) best = Math.min(best, _gl_bandDist(b, it));
+                });
+                it._dNear = best;
+                return best;
+            }
             // 一条远缝离目标字有多远（缝跟字重叠就算 0）。⚠️上下判定要跟 _gl_tryBand 里那句 up 同一套
             function _gl_bandDist(band, it) {
                 if (band.bottom <= it.tyUp + 1) return it.tyUp - band.bottom;   // 缝在字上面
@@ -27210,7 +27219,7 @@ body {
                     if (bands[it.gapDown + d]) cands.push(it.gapDown + d);
                 }
                 cands.sort(function (p, q) { return _gl_bandDist(bands[p], it) - _gl_bandDist(bands[q], it); });
-                if (!allowFlat) cands = cands.filter(function (g) { return _gl_bandDist(bands[g], it) <= it.reach; });
+                if (!allowFlat) cands = cands.filter(function (g) { return _gl_bandDist(bands[g], it) <= _glNearDist(it) + RD_GL_TILT_EXTRA; });
                 for (var i = 0; i < cands.length; i++) if (_gl_tryBand(it, cands[i], allowFlat)) return true;
                 return false;
             }
