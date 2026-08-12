@@ -6,7 +6,7 @@
  *
  * 钉住的几条：
  *  A 组 开了才画、关了要擦干净（它是画出来的，不是改个 class 就完事的 CSS 装饰）
- *  B 组 跟画框/波浪/柔光**四选一**（都铺在句底，同时开会叠成一团）
+ *  B 组 跟波浪**二选一**（都铺在句底）；顺带钉住画框/柔光已被去掉、别再回来
  *  C 组 长短分工开着时，长句(rq-wide)不画——跟波浪/画框那条 strip 规则一致
  *  D 组 钉死：同一句话重排永远同一条歪线；同一句出现两次歪法要不同（别像复制粘贴）
  *  E 组 ⚠️不许动版面（线全在绝对定位的 SVG 层上）
@@ -57,7 +57,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
 
         const setOn = on => {
             localStorage.setItem('reading_quote_rul', on ? '1' : '0');
-            if (on) { localStorage.setItem('reading_quote_box', '0'); localStorage.setItem('reading_quote_wave', '0'); localStorage.setItem('reading_quote_glow', '0'); }
+            if (on) localStorage.setItem('reading_quote_wave', '0');
             readingApplyQuoteStyles();
         };
         const paths = box => box.querySelectorAll('.q-ul-svg path').length;
@@ -81,7 +81,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             setOn(true);
         }
 
-        // ── B：跟画框/波浪/柔光四选一 ──
+        /* ── B：跟波浪二选一 ──
+           ⚠️画框/柔光 2026-08-12 被用户去掉了（「把画框和柔光去掉，不只是样式，精句里的也去掉」），
+             「铺句底」这一组现在只剩波浪和手绘线两档，互斥要双向都成立。 */
         {
             const b = document.body.classList;
             // ⚠️toggle 是「反转」不是「打开」：进这一组时手绘线还开着，不先关掉的话第一次 toggle 是在关它
@@ -89,12 +91,14 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             localStorage.setItem('reading_quote_wave', '1'); readingApplyQuoteStyles();
             readingToggleQuoteRul();     // 开手绘线 → 波浪要被顶掉
             out.B_开线关波浪 = b.contains('reading-rul-on') && !b.contains('reading-wave-on');
-            readingToggleQuoteBox();     // 开画框 → 手绘线要被顶掉
-            out.B_开框关线 = b.contains('reading-box-on') && !b.contains('reading-rul-on');
-            readingToggleQuoteRul();
-            readingToggleQuoteGlow();    // 开柔光 → 手绘线要被顶掉
-            out.B_开柔光关线 = b.contains('reading-glow-on') && !b.contains('reading-rul-on');
-            localStorage.setItem('reading_quote_glow', '0');
+            readingToggleQuoteWave();    // 反过来：开波浪 → 手绘线要被顶掉
+            out.B_开波浪关线 = b.contains('reading-wave-on') && !b.contains('reading-rul-on');
+            out.B_画框柔光没了 = typeof window.readingToggleQuoteBox === 'undefined'
+                              && typeof window.readingToggleQuoteGlow === 'undefined'
+                              && !document.getElementById('chipQuoteBox')
+                              && !document.getElementById('chipQuoteGlow')
+                              && !document.getElementById('chipKsBox')
+                              && !document.getElementById('chipKsGlow');
             setOn(true);
         }
 
@@ -218,8 +222,8 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('A3 关掉不画', R.A_关掉不画);
     ok('A4 ⚠️关掉会把画好的擦干净', R.A_关掉会擦干净);
     ok('B1 开手绘线→波浪被顶掉', R.B_开线关波浪);
-    ok('B2 开画框→手绘线被顶掉', R.B_开框关线);
-    ok('B3 开柔光→手绘线被顶掉', R.B_开柔光关线);
+    ok('B2 开波浪→手绘线被顶掉', R.B_开波浪关线);
+    ok('B3 ⚠️画框/柔光四处入口都没了（引号+精句，用户 2026-08-12 去掉的）', R.B_画框柔光没了);
     ok('C1 长短关时长句照画', R.C_长短关时长句照画);
     ok('C2 长短开时长句不画（装饰让给短句）', R.C_长短开时长句不画);
     ok('C3 长短开时短句照画', R.C_短句照画);
