@@ -25949,6 +25949,14 @@ body {
         var RD_GL_DODGE_SEP = 3;
         var RD_GL_DX    = 22;   // 引线横向偏移（唯一的手感旋钮，调大就开始花）
         var RD_GL_ROT_SIN = 0.0436;   // sin(2.5°)：标签是斜的，越宽转完外框越高，排行距要算上
+        /* 「为了保持倾斜，最远愿意跑多远」（2026-08-12 实测定的，见 docs/阅读排版与小注.md）。
+           大样本 400 页/1310 条上扫出来的取舍曲线——放平占比 ↔ 引线交叉率：
+             不限距 31.9%/0.5%（＝没这道闸门，满屏都是平的，她不满意）
+             120px  26.1%/0.8%    **200px 20.8%/1.2%（选它）**    300px 17.1%/1.5%（顶到红线）
+             完全不限 15.5%/1.5%（另外还会撞上 2026-08-06「别一律往上」那条决定，W2 变红）
+           ⚠️别往大调：交叉率一过 1.5% 就是她 2026-08-11 截图报过的「线条形成了交叉」。
+           ⚠️别删：删了就退回「每条注一撞窄缝就地压平」，418/1310 都是平的。 */
+        var RD_GL_TILT_REACH = 200;
         var RD_GL_TIP   = 3;    // 引线端点离标签/目标字的留缝
 
         /* ===================== 小注那个词的手绘记号 =====================
@@ -26815,6 +26823,14 @@ body {
                         txUp: tx, txDown: txDown,
                         tyUp: (rTop.top - cr.top) - RD_GL_TIP,
                         tyDown: (rBot.bottom - cr.top) + RD_GL_TIP,
+                        /* ⚠️「为了保持倾斜，最远愿意跑多远」＝ 2 行正文（2026-08-12 用户拍板的折中）。
+                           她先说「宁可跑远一点，也要保持倾斜」，我做出来实测：放平确实从 31.9% 砍到 15.5%，
+                           但**引线交叉翻了三倍（0.5%→1.5%）**，还撞上她 2026-08-06 的另一条决定
+                           （「别把不压字做成一律往上：下面明明更近」，tests/gloss.test.js W2 当场变红），
+                           更出现过「一条没被挤的注、为了保持倾斜被送到离词 63px 外」。
+                           于是加这条闸门：**放得下斜的那条缝在两行以内才值得跑过去，远了就地放平**。
+                           ⚠️调大就退回上面那三个毛病，删掉就退回满屏都是平的。 */
+                        reach: RD_GL_TILT_REACH,
                         /* ⚠️离正文的距离**固定 7px，不随缝宽缩**（2026-08-04 用户报「杯葛显得很挤」）。
                            原来写的是 min(7, (缝宽-标签高)/2)：紧跟背景块的段落那道缝只有 0.4em≈5.6px、
                            比标签还窄，算下来取到下限 2px，小注就贴在正文屁股上，看着憋屈。
@@ -27018,9 +27034,23 @@ body {
                 rowRight[key] -= d;
                 return true;
             }
-            function _gl_try(it, useUp, force) {
+            /* ⚠️⚠️`allowFlat`：这一轮许不许「放平」（2026-08-12 用户拍板「宁可跑远一点，也要保持倾斜」）。
+               排位分两轮：**先带着倾斜、在两行以内把够得着的缝找一遍**（近缝两条 + 远缝），
+               都放不下了，第二轮才允许就地放平。
+               为什么必须分轮：她的书里几乎每段前后都跟着背景块，段落↔块之间那道缝天生只有十几 px、
+               斜着一律塞不下。不分轮的话每条注一撞上窄缝就地压平，**418/1310 = 31.9% 变成平的**，
+               她一眼看出来「有些似乎并非出于多条的挤压，而是专门往缝里去的，我不是很满意」。
+               为什么又要 `reach` 限距：见 `it.reach` 上那段——不限的话交叉率翻三倍、还会飞刀。 */
+            function _gl_try(it, useUp, force, allowFlat) {
                 var g = useUp ? it.gapUp : it.gapDown;
                 if (g < 0) return false;                       // 第一段上面没有缝
+                if (!allowFlat) {
+                    // 这条缝得放平才塞得下 → 第一轮先跳过，让它去别处找放得下斜的
+                    if (useUp ? it.flatUp : it.flatDown) return false;
+                    // 还要够得着：为保持倾斜跑太远反而更别扭
+                    var _bd = _glBandList()[g];
+                    if (_bd && _gl_bandDist(_bd, it) > it.reach) return false;
+                }
                 var left = it.pLeft, right = left + it.pW;
                 /* ⚠️排队的键**只能按缝号**，绝不能带上下方向。
                    「第 N 段往下」和「第 N+1 段往上」落进的是**同一条物理缝**，
@@ -27121,7 +27151,7 @@ body {
                 return _glBands;
             }
             /* 把一条小注塞进指定的远缝。**塞不进（会碰到两边的字）就返回 false**，绝不硬塞。 */
-            function _gl_tryBand(it, g) {
+            function _gl_tryBand(it, g, allowFlat) {
                 var band = _glBandList()[g];
                 if (!band) return false;
                 var room = band.bottom - band.top;
@@ -27132,7 +27162,7 @@ body {
                    而自家的段间缝有二十几。只按自家的缝判会得出「不用放平」，
                    到了远缝这儿又因为斜着的外框高出十几 px 被卡掉，于是继续往更远的地方赶。
                    这里补一次：斜着塞不下、平着塞得下 → 就地放平。 */
-                if ((room - lhR) / 2 < 0.5 && !it.flat && (room - it.lh) / 2 >= 0.5) {
+                if (allowFlat && (room - lhR) / 2 < 0.5 && !it.flat && (room - it.lh) / 2 >= 0.5) {
                     it.flat = true; lhR = it.lh;
                     if (it.lab) it.lab.classList.add('rd-gl-flat');
                 }
@@ -27173,25 +27203,31 @@ body {
                  一旦要往外找，唯一该看的就是谁离得近。**
                ⚠️这一步仍然只认「整条外框塞得进去、两边的字都碰不着」的缝（_gl_tryBand 自己把关），
                  所以排序换法不会制造任何新的压字——代价只是引线长短，那正是要优化的东西。 */
-            function _gl_tryFar(it) {
+            function _gl_tryFar(it, allowFlat) {
                 var bands = _glBandList(), cands = [];
                 for (var d = 1; d <= 2; d++) {
                     if (it.gapUp >= -2 && bands[it.gapUp - d]) cands.push(it.gapUp - d);
                     if (bands[it.gapDown + d]) cands.push(it.gapDown + d);
                 }
                 cands.sort(function (p, q) { return _gl_bandDist(bands[p], it) - _gl_bandDist(bands[q], it); });
-                for (var i = 0; i < cands.length; i++) if (_gl_tryBand(it, cands[i])) return true;
+                if (!allowFlat) cands = cands.filter(function (g) { return _gl_bandDist(bands[g], it) <= it.reach; });
+                for (var i = 0; i < cands.length; i++) if (_gl_tryBand(it, cands[i], allowFlat)) return true;
                 return false;
             }
             all.sort(function (x, y) { return x.want - y.want; });
             for (var a2 = 0; a2 < all.length; a2++) {
                 var it0 = all[a2];
-                if (_gl_try(it0, it0.prefUp, false)) continue;      // ① 就近那条缝
-                if (_gl_try(it0, !it0.prefUp, false)) continue;     // ② 挪到另一条缝
-                if (_gl_tryFar(it0)) continue;                      // ②b 再往外找一两条**整条塞得下**的缝
+                /* 第一轮：**带着倾斜**、在两行以内找（见 _gl_try 上那段⚠️⚠️） */
+                if (_gl_try(it0, it0.prefUp, false, false)) continue;    // ① 就近那条缝
+                if (_gl_try(it0, !it0.prefUp, false, false)) continue;   // ② 挪到另一条缝
+                if (_gl_tryFar(it0, false)) continue;                    // ②b 往外一两条整条塞得下的缝
+                /* 第二轮：两行以内都放不下斜的了，才允许放平（放平是特例，别提前用掉） */
+                if (_gl_try(it0, it0.prefUp, false, true)) continue;
+                if (_gl_try(it0, !it0.prefUp, false, true)) continue;
+                if (_gl_tryFar(it0, true)) continue;
                 // ③ 都满了，另起一行。⚠️首选那侧可能压根没有缝（第一段上面），要能退到另一侧，
                 //    否则这一条的 ly/lx 全是 undefined，画的时候 toFixed 直接抛（踩过）。
-                if (!_gl_try(it0, it0.prefUp, true)) _gl_try(it0, !it0.prefUp, true);
+                if (!_gl_try(it0, it0.prefUp, true, true)) _gl_try(it0, !it0.prefUp, true, true);
             }
             // 万一三条路都没成（理论上不会），丢掉这一条，别让 undefined 流到画线那一步
             all = all.filter(function (it) { return it.lx != null && it.ly != null; });

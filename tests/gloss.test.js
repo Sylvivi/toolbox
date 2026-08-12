@@ -567,10 +567,21 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             const labR = lab.getBoundingClientRect();
             out.R_离字实测 = Math.round((labR.top - 字底R) * 10) / 10;
             out.R_放平了 = lab.classList.contains('rd-gl-flat');
-            out.R_没碰到字 = labR.top >= 字底R - 0.5;
-            out.R_还留得下空 = (labR.top - 字底R) >= 3;
-            // 两条合格出路必居其一：放平待在缝里，或者用大内缩落进块的留白带
-            out.R_走的是合格出路 = out.R_放平了 || Math.abs(inset - RD_GL_INSET_OVER) < 1.5;
+            /* ⚠️2026-08-12 第二次改口径：用户拍板「宁可跑远一点，也要保持倾斜」，
+               于是这条注**可能根本不待在这道窄缝里**了——实测它跑到正文上方 63px 处保持了倾斜。
+               别再钉「它在这条缝里离字多远」，那是在钉实现。钉真正要守的两件事：
+               ① 不管落在哪儿都不许碰到字；② 走的是三条合格出路之一。 */
+            const _allTextRects = [];
+            box.querySelectorAll('p[data-p], blockquote').forEach(el => {
+                const rg2 = document.createRange(); rg2.selectNodeContents(el);
+                [...rg2.getClientRects()].filter(r => r.width > 1 && r.height > 1).forEach(r => _allTextRects.push(r));
+            });
+            out.R_碰到几行字 = _allTextRects.filter(t =>
+                labR.left < t.right && t.left < labR.right && labR.top < t.bottom && t.top < labR.bottom).length;
+            out.R_没碰到字 = out.R_碰到几行字 === 0;
+            out.R_跑去别处了 = labR.bottom < 字底R;      // 整条跑到正文上方＝换了条缝
+            // 三条合格出路：跑去别处保持倾斜 / 放平塞进缝里 / 大内缩落进块的留白带
+            out.R_走的是合格出路 = out.R_跑去别处了 || out.R_放平了 || Math.abs(inset - RD_GL_INSET_OVER) < 1.5;
             // 宽缝（正常段间距）那一路必须还用小内缩，别被这次改动误伤
             {
                 // ⚠️这一小段测的是「宽缝」，而外面为了 R2/R3 把段间距压成了 6px，
@@ -797,9 +808,10 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('S5 让位之后没伸出段落右边', R.S_没伸出右边);
     ok('R1 前提：紧跟背景块那道缝确实很窄', R.R_下面那道缝很窄);
     ok('R6 宽缝（正常段间距）里，标签外框离字仍是那一小段留白', R.R_宽缝仍用小内缩, '实测留白 ' + R.R_宽缝留白 + 'px（要 ≈' + 7 + '）');
-    ok('R2 ⚠️窄缝里没碰到字，也没被挤扁', R.R_没碰到字 && R.R_还留得下空,
-       '离字 ' + R.R_离字实测 + 'px｜放平=' + R.R_放平了);
-    ok('R3 窄缝走的是两条合格出路之一（放平塞进缝里 / 大内缩落进块的留白带）', R.R_走的是合格出路);
+    ok('R2 ⚠️不管落在哪儿，一个字都不许碰到', R.R_没碰到字,
+       '碰到 ' + R.R_碰到几行字 + ' 行｜离字 ' + R.R_离字实测 + 'px｜放平=' + R.R_放平了
+       + '｜跑去别处=' + R.R_跑去别处了);
+    ok('R3 窄缝走的是三条合格出路之一（跑去别处保持倾斜 / 放平塞进缝里 / 大内缩落进块的留白带）', R.R_走的是合格出路);
     ok('R4 大内缩确实比常规大', R.R_大内缩比小的大);
     ok('R5 大内缩没大到撞上块里的字', R.R_大内缩没大过头);
     ok('Q1 没拼音时整条走中文字体（不掉回溪涧）', R.Q_无拼音走中文字体);
@@ -947,6 +959,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             const lab = host.querySelector('.rd-gl-label');
             if (!lab) return { err: '没生成小注' };
             const lb = lab.getBoundingClientRect();
+            const _flat = lab.classList.contains('rd-gl-flat');
             const para = host.querySelector('p[data-p="1"]');
             const pr = para.getBoundingClientRect();
             /* ⚠️数「压到字」也只能数**文字节点**的矩形，理由同上：对元素整体取 rects 会把
@@ -967,7 +980,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
                 Math.min(lb.right, q.right) - Math.max(lb.left, q.left) > 1).length;
             let bq2 = 0; host.querySelectorAll('blockquote').forEach(e => { bq2 += hits(e); });
             const r = { 压隔壁块的字: bq2, 压正文的字: hits(para), 在段落上方: lb.bottom <= pr.top,
-                        标签宽: +lb.width.toFixed(1), 标签左: +lb.left.toFixed(1) };
+                        标签宽: +lb.width.toFixed(1), 放平: _flat, 标签左: +lb.left.toFixed(1) };
             host.remove();
             return r;
         }, pspace);
@@ -975,8 +988,16 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     const W28 = await _wCase(28);
     const W8 = await _wCase(8);
     ok('W1 段间距 28（用户实际设置）时，一个字都不压', !W28.err && W28.压隔壁块的字 === 0, JSON.stringify(W28));
-    ok('W2 ⚠️别把「不压字」做成「一律往上」：躲得开时要保持就近（词在段落下半→往下）',
-        !W28.err && !W28.在段落上方, JSON.stringify(W28));
+    /* ⚠️⚠️W2 的口径 2026-08-12 改过一次，改前先读这段，别当成放水：
+       原口径是「词在段落下半 → 标签必须在下面」，钉的是 2026-08-06 那个真 bug——
+       下面明明宽敞、躲得开，却因为「怕压字」被一律赶到上面去。
+       这个场景里段落**前后都夹着背景块**，两边的缝都窄、斜着都塞不下。
+       而用户 2026-08-12 拍板：「**宁可跑远一点，也要保持倾斜**」（放平占比 31.9% 她不接受），
+       所以这种两边都放不下的情况，往上跑到一条放得下斜标签的缝**是对的**。
+       现在钉的是：**往上可以，但必须是为了保持倾斜**——真回到「一律往上」那个 bug 时，
+       上面那条也会是压平的，这条照样红。 */
+    ok('W2 ⚠️往上可以，但必须是为了保持倾斜（不许退回 2026-08-06 那个「一律往上」）',
+        !W28.err && (!W28.在段落上方 || !W28.放平), JSON.stringify(W28));
     ok('W3 ⚠️不是靠压缩换的：标签宽度跟窄缝时一模一样', !W28.err && !W8.err && Math.abs(W28.标签宽 - W8.标签宽) < 1,
         '宽缝 ' + W28.标签宽 + ' / 窄缝 ' + W8.标签宽);
     ok('W4 ⚠️也不许压到正文自己的字', !W28.err && W28.压正文的字 === 0, JSON.stringify(W28));
