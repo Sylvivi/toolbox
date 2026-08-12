@@ -1,0 +1,223 @@
+/* 引号「手绘线」回归测试（2026-08-12 做）。
+ *
+ * 功能：引号里的话底下画一条 Rough.js 手绘下划线，作为「样式」那行的一档，
+ * 跟画框/波浪/柔光并列。用户原话：「把 rough notation 里面的下划线作为样式之一，
+ * 加到画框波浪柔光就是长短句里面的那个装饰里去，作为一个选项」。
+ *
+ * 钉住的几条：
+ *  A 组 开了才画、关了要擦干净（它是画出来的，不是改个 class 就完事的 CSS 装饰）
+ *  B 组 跟画框/波浪/柔光**四选一**（都铺在句底，同时开会叠成一团）
+ *  C 组 长短分工开着时，长句(rq-wide)不画——跟波浪/画框那条 strip 规则一致
+ *  D 组 钉死：同一句话重排永远同一条歪线；同一句出现两次歪法要不同（别像复制粘贴）
+ *  E 组 ⚠️不许动版面（线全在绝对定位的 SVG 层上）
+ *  F 组 ⚠️自己的 layer class，不许蹭 .rd-gl-layer（会被 rdGlClear 连坐删掉）
+ *  G 组 ⚠️颜色必须从 body 读（主题/夜间都定义在 body 上，从 <html> 读会永远拿默认色）
+ *  H 组 ⚠️没开手绘线时，别把「有引号的消息」判成值得排版（_glWorth 白烧）
+ *
+ * 跑法：node tests/quoterul.test.js   或   bash tests/p.sh quoterul
+ */
+const { chromium } = require('playwright');
+const APP = 'file://' + require('path').resolve(__dirname, '..', 'index.html');
+const results = [];
+function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); }
+
+(async () => {
+    const browser = await chromium.launch();
+    const page = await browser.newPage({ viewport: { width: 390, height: 780 } });
+    const pageErrs = [];
+    page.on('pageerror', e => pageErrs.push(e.message.slice(0, 200)));
+    await page.goto(APP);
+    await page.waitForTimeout(6000);
+
+    const R = await page.evaluate(() => {
+        const out = {};
+        const Q = (s, wide) => '<span class="reading-quote' + (wide ? ' rq-wide' : '')
+            + '">「<span class="reading-quote-inner">' + s + '</span>」</span>';
+
+        // paras: 每段一串 html
+        function build(paras) {
+            document.querySelectorAll('.__qult').forEach(n => n.remove());
+            const html = paras.map((h, i) => '<p data-p="' + (i + 1) + '">' + h + '</p>').join('');
+            const box = document.createElement('div');
+            box.className = 'reading-merged';
+            box.style.cssText = 'font-size:14px;line-height:1.8;width:358px';
+            box.innerHTML = html;
+            const bub = document.createElement('div'); bub.className = 'chat-bubble'; bub.appendChild(box);
+            const msg = document.createElement('div');
+            msg.className = 'chat-msg ai __qult'; msg.setAttribute('data-idx', '0'); msg.appendChild(bub);
+            document.body.appendChild(msg);
+            qUlLayout(bub);
+            return { box, bub };
+        }
+        const P1 = '他放下茶盏，说' + Q('这事我早有耳闻') + '，屋里一时静下来。';
+        const P2 = '她摇头，只答' + Q('不必再提') + '，转身出了门。';
+        // 长句：留着做长短分工那组
+        const PW = '他叹了口气，慢慢说' + Q('当年那桩事牵连甚广，如今再翻出来，怕是谁也担待不起，不如就此揭过', true) + '。';
+
+        const setOn = on => {
+            localStorage.setItem('reading_quote_rul', on ? '1' : '0');
+            if (on) { localStorage.setItem('reading_quote_box', '0'); localStorage.setItem('reading_quote_wave', '0'); localStorage.setItem('reading_quote_glow', '0'); }
+            readingApplyQuoteStyles();
+        };
+        const paths = box => box.querySelectorAll('.q-ul-svg path').length;
+
+        // ── A：开了才画、关了要擦干净 ──
+        {
+            setOn(true);
+            const a = build([P1, P2]);
+            out.A_开着有线 = paths(a.box) > 0;
+            out.A_有身份class = !!a.box.querySelector('.q-ul-layer');
+            setOn(false);
+            const b = build([P1, P2]);
+            out.A_关掉不画 = paths(b.box) === 0 && !b.box.querySelector('.q-ul-layer');
+            /* ⚠️关掉那一下必须**擦掉已经画好的**：清理不能挂在「开着」的分支里，
+               否则线会一直留在屏幕上（readingApplyQuoteStyles 里那条无条件 qUlClear）。 */
+            setOn(true);
+            const c = build([P1, P2]);
+            const 画过 = paths(c.box) > 0;
+            setOn(false);
+            out.A_关掉会擦干净 = 画过 && c.box.querySelectorAll('.q-ul-svg path').length === 0;
+            setOn(true);
+        }
+
+        // ── B：跟画框/波浪/柔光四选一 ──
+        {
+            const b = document.body.classList;
+            // ⚠️toggle 是「反转」不是「打开」：进这一组时手绘线还开着，不先关掉的话第一次 toggle 是在关它
+            localStorage.setItem('reading_quote_rul', '0');
+            localStorage.setItem('reading_quote_wave', '1'); readingApplyQuoteStyles();
+            readingToggleQuoteRul();     // 开手绘线 → 波浪要被顶掉
+            out.B_开线关波浪 = b.contains('reading-rul-on') && !b.contains('reading-wave-on');
+            readingToggleQuoteBox();     // 开画框 → 手绘线要被顶掉
+            out.B_开框关线 = b.contains('reading-box-on') && !b.contains('reading-rul-on');
+            readingToggleQuoteRul();
+            readingToggleQuoteGlow();    // 开柔光 → 手绘线要被顶掉
+            out.B_开柔光关线 = b.contains('reading-glow-on') && !b.contains('reading-rul-on');
+            localStorage.setItem('reading_quote_glow', '0');
+            setOn(true);
+        }
+
+        // ── C：长短分工——长句不画 ──
+        {
+            localStorage.setItem('reading_quote_split', '0'); setOn(true);
+            const a = build([PW]);
+            out.C_长短关时长句照画 = paths(a.box) > 0;
+            localStorage.setItem('reading_quote_split', '1'); readingApplyQuoteStyles();
+            const b = build([PW]);
+            out.C_长短开时长句不画 = paths(b.box) === 0;
+            const c = build([P1]);       // 短句照画
+            out.C_短句照画 = paths(c.box) > 0;
+            localStorage.setItem('reading_quote_split', '0'); readingApplyQuoteStyles();
+        }
+
+        // ── D：钉死的歪法 ──
+        {
+            setOn(true);
+            const a = build([P1]);
+            const d1 = [...a.box.querySelectorAll('.q-ul-svg path')].map(p => p.getAttribute('d')).join('|');
+            qUlLayout(a.bub);            // 重排一次（相当于换字号/切主题）
+            const d2 = [...a.box.querySelectorAll('.q-ul-svg path')].map(p => p.getAttribute('d')).join('|');
+            out.D_重排一模一样 = d1 === d2 && d1.length > 0;
+            const b = build([P1]);       // 整个重建（相当于重开一章）
+            const d3 = [...b.box.querySelectorAll('.q-ul-svg path')].map(p => p.getAttribute('d')).join('|');
+            out.D_重建一模一样 = d1 === d3;
+            // 同一句话在一章里出现两次 → 歪法要不同，否则像复制粘贴
+            const c = build([P1, P1]);
+            const ds = [...c.box.querySelectorAll('.q-ul-svg path')].map(p => p.getAttribute('d'));
+            out.D_同句两处歪法不同 = ds.length >= 2 && new Set(ds).size === ds.length;
+        }
+
+        /* ── E：⚠️不许动版面 ──
+           线画在绝对定位的 SVG 层上，开关它不该让任何一个字挪位置。
+           （小注那边踩过：行内元素加 padding 会让整段位移、还带偏引线锚点。） */
+        {
+            setOn(false);
+            const a = build([P1, P2]);
+            const before = a.box.querySelector('p[data-p="2"]').getBoundingClientRect();
+            const h0 = a.box.getBoundingClientRect().height;
+            setOn(true); qUlLayout(a.bub);
+            const after = a.box.querySelector('p[data-p="2"]').getBoundingClientRect();
+            out.E_没推开正文 = Math.abs(before.top - after.top) < 0.5 && Math.abs(before.left - after.left) < 0.5;
+            out.E_没撑高容器 = Math.abs(h0 - a.box.getBoundingClientRect().height) < 0.5;
+        }
+
+        // ── F：⚠️自己的 class，不许蹭 .rd-gl-layer ──
+        {
+            setOn(true);
+            const a = build([P1]);
+            const layer = a.box.querySelector('.q-ul-layer');
+            out.F_不蹭引线层 = !!layer && !layer.classList.contains('rd-gl-layer');
+            // rdGlClear 删的是 .rd-gl-layer，删完手绘线必须还在
+            rdGlClear(a.box);
+            out.F_清引线时线还在 = a.box.querySelectorAll('.q-ul-svg path').length > 0;
+        }
+
+        /* ── G：⚠️⚠️颜色必须从 document.body 取，不能从 documentElement(<html>) 取 ──
+           主题（含夜间那套 `-night`）都是挂在 **body** 上的 class 在定义 --accent，
+           而 CSS 变量只往**下**继承：从 <html> 读永远只能拿到 :root 那份默认色，
+           表现就是「换了主题/切了夜间，线还是原来的颜色」。
+           背景词 2026-08-10 实测踩过一模一样的坑（见 bgMkLayout 里那条⚠️⚠️）。
+           ⚠️这里**故意不靠切主题类来测**：那样得写死某个主题的名字和色值，主题一改测试就假红。
+             直接在两个层级各钉一个不同的 --accent，看画出来的线跟了谁——要的就是这个因果。 */
+        {
+            setOn(true);
+            const HTML_色 = 'rgb(1, 2, 3)', BODY_色 = 'rgb(9, 8, 7)';
+            document.documentElement.style.setProperty('--accent', HTML_色);
+            document.body.style.setProperty('--accent', BODY_色);
+            out.G_画出来的色 = build([P1]).box.querySelector('.q-ul-svg path').getAttribute('stroke');
+            document.documentElement.style.removeProperty('--accent');
+            document.body.style.removeProperty('--accent');
+            out.G_跟的是body = out.G_画出来的色 === BODY_色;
+            // 顺带确认它真的会跟着变（不是写死的常量）
+            document.body.style.setProperty('--accent', 'rgb(4, 5, 6)');
+            const 换一个 = build([P1]).box.querySelector('.q-ul-svg path').getAttribute('stroke');
+            document.body.style.removeProperty('--accent');
+            out.G_换色跟得上 = 换一个 === 'rgb(4, 5, 6)' && 换一个 !== out.G_画出来的色;
+        }
+
+        /* ── H：⚠️没开手绘线时别白烧 ──
+           _glWorth 是懒加载的闸门。如果不带「手绘线开着」这个前提，凡是有「」的消息都会被判为
+           值得排版，等于给每条正文都摊上一次逐句量位置。 */
+        {
+            const a = build([P1, P2]);      // 只有引号，没有小注/背景块
+            setOn(false);
+            out.H_没开时不值得排 = _glWorth(a.bub) === false;
+            setOn(true);
+            out.H_开了才值得排 = _glWorth(a.bub) === true;
+        }
+
+        document.querySelectorAll('.__qult').forEach(n => n.remove());
+        setOn(false);
+        return out;
+    });
+
+    ok('A1 开着就画出线', R.A_开着有线);
+    ok('A2 层有自己的身份 class', R.A_有身份class);
+    ok('A3 关掉不画', R.A_关掉不画);
+    ok('A4 ⚠️关掉会把画好的擦干净', R.A_关掉会擦干净);
+    ok('B1 开手绘线→波浪被顶掉', R.B_开线关波浪);
+    ok('B2 开画框→手绘线被顶掉', R.B_开框关线);
+    ok('B3 开柔光→手绘线被顶掉', R.B_开柔光关线);
+    ok('C1 长短关时长句照画', R.C_长短关时长句照画);
+    ok('C2 长短开时长句不画（装饰让给短句）', R.C_长短开时长句不画);
+    ok('C3 长短开时短句照画', R.C_短句照画);
+    ok('D1 重排后歪法一模一样', R.D_重排一模一样);
+    ok('D2 重建后歪法一模一样', R.D_重建一模一样);
+    ok('D3 同一句出现两次，歪法不同', R.D_同句两处歪法不同);
+    ok('E1 ⚠️没推开正文', R.E_没推开正文);
+    ok('E2 ⚠️没撑高容器', R.E_没撑高容器);
+    ok('F1 ⚠️不蹭 .rd-gl-layer', R.F_不蹭引线层);
+    ok('F2 ⚠️rdGlClear 删引线层时手绘线还在', R.F_清引线时线还在);
+    ok('G1 ⚠️⚠️颜色从 body 取（从 <html> 取会永远拿默认色、切主题不换色）', R.G_跟的是body, '画出来=' + R.G_画出来的色);
+    ok('G2 换了强调色，线跟得上', R.G_换色跟得上);
+    ok('H1 ⚠️没开手绘线时不判为值得排版', R.H_没开时不值得排);
+    ok('H2 开了才判为值得排版', R.H_开了才值得排);
+    ok('Z 页面没报错', pageErrs.length === 0, pageErrs.join(' | '));
+
+    await browser.close();
+    const bad = results.filter(r => !r.pass);
+    results.forEach(r => console.log((r.pass ? '  ✅ ' : '  ❌ ') + r.name + (r.detail ? '  — ' + r.detail : '')));
+    console.log(bad.length ? ('❌ 引号手绘线：' + bad.length + '/' + results.length + ' 条失败')
+                           : ('✅ 引号手绘线：' + results.length + ' 条全过'));
+    process.exit(bad.length ? 1 : 0);
+})();

@@ -3092,6 +3092,18 @@ body {
             padding-bottom: 8px;
             -webkit-box-decoration-break: clone; box-decoration-break: clone;
         }
+        /* ===== 引号「手绘线」（2026-08-12 做）=====
+           波浪/画框那几档是**背景图**：一张毛边 SVG 横向平铺，长句子看得出接缝，而且是滤镜把
+           规整的线整体扭一下——远看像手绘，近看是水波纹。这一档改用**真的 Rough.js**
+           （同一条线来回描两遍、每遍都歪一点），跟小注记号同一个引擎，逐句按真实宽度现画。
+           ⚠️因此它**没有对应的 CSS**：线全部画在下面这层绝对定位的 SVG 上（见 qUlLayout）。
+             这里一个 padding 都不加——加了会让 `Range.getClientRects()` 量到的行矩形变高，
+             而点击翻页正是靠它找「本页最后一整行」，一条线就能让翻页接头偏掉（小注那边踩过，
+             见 .rd-mk-svg 上面那条⚠️）。线画在行矩形下方 2px，本来就不需要占位。
+           ⚠️⚠️自己的 class，**绝不能蹭 `.rd-gl-layer`**——那个会被 rdGlClear 连坐删掉，
+             而 rdGlLayout 不会重建这一层（背景词记号 2026-08-10 就是这么踩的）。 */
+        .q-ul-layer { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
+        .q-ul-svg { position: absolute; left: 0; overflow: visible; pointer-events: none; z-index: 1; }
         /* 长短分工(reading-ls-on)：着色归长句、波浪/画框归短句。
            着色落短句的部分已被上面那条着色 strip 去掉；这里把长句(rq-wide)的画框/波浪背景清掉，长句只着色。 */
         body.reading-ls-on .reading-merged .reading-quote.rq-wide { background-image: none !important; padding: 0; }
@@ -5641,6 +5653,7 @@ body {
                     <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
                         <button class="chip-btn" id="chipQuoteBox" onclick="readingToggleQuoteBox()" style="">画框</button>
                         <button class="chip-btn active" id="chipQuoteWave" onclick="readingToggleQuoteWave()" style="">波浪</button>
+                        <button class="chip-btn" id="chipQuoteRul" onclick="readingToggleQuoteRul()" title="引号底下画一条手绘下划线。用的是 Rough.js（跟小注的记号同一个引擎）：逐句按真实宽度现画，来回描两遍、每遍歪一点，比「波浪」那种平铺的毛边图更像手写">手绘线</button>
                         <button class="chip-btn" id="chipQuoteGlow" onclick="readingToggleQuoteGlow()" title="引号内文字背后铺一条柔和的强调色光带" style="">柔光</button>
                         <button class="chip-btn" id="chipQuoteUl" onclick="readingToggleQuoteUl()" style="">划线</button>
                         <button class="chip-btn active" id="chipQuoteHl" onclick="readingToggleQuoteHl()" style="">着色</button>
@@ -18660,6 +18673,7 @@ body {
             var ul = localStorage.getItem('reading_quote_ul') === '1';
             var wave = localStorage.getItem('reading_quote_wave') === '1';
             var glow = localStorage.getItem('reading_quote_glow') === '1';
+            var rul = localStorage.getItem('reading_quote_rul') === '1';   // 手绘线（Rough.js 现画）
             // 「长短」是显式开关：开=着色归长句、画框/波浪/划线归短句；关=所选样式一视同仁。
             // 旧版靠隐形的点击顺序(pick)凑分工，这里一次性迁移成显式开关，之后只认 reading_quote_split。
             var splitRaw = localStorage.getItem('reading_quote_split');
@@ -18673,14 +18687,15 @@ body {
             }
             // 不变量：长短「关」时，划线绝不与波浪/画框落在同一句上（长短关=所有引号一视同仁，三者互斥）。
             // 加载/迁移出来的异常状态在这里兜底：若同时开着，丢掉划线、保留波浪/画框。
-            if (!split && ul && (box || wave || glow)) { ul = false; localStorage.setItem('reading_quote_ul', '0'); }
-            var primaryDecor = box || wave || glow; // 铺在句底、占住短句的装饰
+            if (!split && ul && (box || wave || glow || rul)) { ul = false; localStorage.setItem('reading_quote_ul', '0'); }
+            var primaryDecor = box || wave || glow || rul; // 铺在句底、占住短句的装饰
             var b = document.body;
             b.classList.toggle('reading-quote-on', hl);
             b.classList.toggle('reading-box-on', box);
             b.classList.toggle('reading-uline-on', ul);
             b.classList.toggle('reading-wave-on', wave);
             b.classList.toggle('reading-glow-on', glow);
+            b.classList.toggle('reading-rul-on', rul);
             b.classList.toggle('reading-ls-on', split);
             b.classList.toggle('reading-ls-pd', split && primaryDecor); // 长短分工且短句被波浪/画框占住→划线让给长句
             var c;
@@ -18689,8 +18704,14 @@ body {
             c = document.getElementById('chipQuoteUl'); if (c) c.classList.toggle('active', ul);
             c = document.getElementById('chipQuoteWave'); if (c) c.classList.toggle('active', wave);
             c = document.getElementById('chipQuoteGlow'); if (c) c.classList.toggle('active', glow);
+            c = document.getElementById('chipQuoteRul'); if (c) c.classList.toggle('active', rul);
             c = document.getElementById('chipQuoteLs'); if (c) c.classList.toggle('active', split);
             if (typeof rdHlInitStyle === 'function') rdHlInitStyle();   // 顺带恢复「划线」底色/下划线样式
+            /* 手绘线是**画出来的**，不像别的装饰改个 class 就完事：关掉要把画好的层抹干净，
+               开着要重画一遍。⚠️先无条件清，再按需重画——清这一步不能挂在「开着」的分支里，
+               否则关掉的那一下没人去擦，线会一直留在屏幕上。 */
+            if (typeof qUlClear === 'function') qUlClear(document);
+            if (rul && typeof rdGlLayoutAll === 'function') rdGlLayoutAll();
             readingApplyKeySentStyles();   // 精句样式独立一套，跟着一起初始化
             updateStatusBarColor();
         }
@@ -18781,8 +18802,9 @@ body {
             var on = localStorage.getItem('reading_quote_box') === '1';
             localStorage.setItem('reading_quote_box', on ? '0' : '1');
             if (!on) {
-                localStorage.setItem('reading_quote_wave', '0'); // 画框/波浪/柔光都铺句底，三选一
+                localStorage.setItem('reading_quote_wave', '0'); // 画框/波浪/柔光/手绘线都铺句底，四选一
                 localStorage.setItem('reading_quote_glow', '0');
+                localStorage.setItem('reading_quote_rul', '0');
                 if (localStorage.getItem('reading_quote_split') !== '1') localStorage.setItem('reading_quote_ul', '0'); // 长短关：跟划线也互斥
             }
             readingApplyQuoteBox();
@@ -18793,11 +18815,25 @@ body {
             var on = localStorage.getItem('reading_quote_wave') === '1';
             localStorage.setItem('reading_quote_wave', on ? '0' : '1');
             if (!on) {
-                localStorage.setItem('reading_quote_box', '0'); // 画框/波浪/柔光都铺句底，三选一
+                localStorage.setItem('reading_quote_box', '0'); // 画框/波浪/柔光/手绘线都铺句底，四选一
                 localStorage.setItem('reading_quote_glow', '0');
+                localStorage.setItem('reading_quote_rul', '0');
                 if (localStorage.getItem('reading_quote_split') !== '1') localStorage.setItem('reading_quote_ul', '0'); // 长短关：跟划线也互斥
             }
             readingApplyQuoteWave();
+        }
+        /* 共读：手绘线（Rough.js 逐句现画的下划线，见 qUlLayout）。
+           ⚠️跟画框/波浪/柔光同组互斥——四个都是「铺在句底、占住短句」的装饰，同时开会叠成一团。 */
+        function readingToggleQuoteRul() {
+            var on = localStorage.getItem('reading_quote_rul') === '1';
+            localStorage.setItem('reading_quote_rul', on ? '0' : '1');
+            if (!on) {
+                localStorage.setItem('reading_quote_box', '0'); // 画框/波浪/柔光/手绘线都铺句底，四选一
+                localStorage.setItem('reading_quote_wave', '0');
+                localStorage.setItem('reading_quote_glow', '0');
+                if (localStorage.getItem('reading_quote_split') !== '1') localStorage.setItem('reading_quote_ul', '0'); // 长短关：跟划线也互斥
+            }
+            readingApplyQuoteStyles();
         }
         // 共读：柔光色带（独立开关，引号内文字背后铺一条淡出的强调色光带，学自酒馆「止叹迹」美化）
         function readingApplyQuoteGlow() { readingApplyQuoteStyles(); }
@@ -18805,8 +18841,9 @@ body {
             var on = localStorage.getItem('reading_quote_glow') === '1';
             localStorage.setItem('reading_quote_glow', on ? '0' : '1');
             if (!on) {
-                localStorage.setItem('reading_quote_box', '0'); // 画框/波浪/柔光都铺句底，三选一
+                localStorage.setItem('reading_quote_box', '0'); // 画框/波浪/柔光/手绘线都铺句底，四选一
                 localStorage.setItem('reading_quote_wave', '0');
+                localStorage.setItem('reading_quote_rul', '0');
                 if (localStorage.getItem('reading_quote_split') !== '1') localStorage.setItem('reading_quote_ul', '0'); // 长短关：跟划线也互斥
             }
             readingApplyQuoteGlow();
@@ -18826,6 +18863,9 @@ body {
             root.setProperty('--quote-wave-img', 'url("data:image/svg+xml,' + encodeURIComponent(wave) + '")');
             root.setProperty('--quote-band-img', 'url("data:image/svg+xml,' + encodeURIComponent(band(0.24)) + '")');
             root.setProperty('--quote-band-img-dark', 'url("data:image/svg+xml,' + encodeURIComponent(band(0.5)) + '")');
+            /* 手绘线的颜色也是现取 --accent 画进 SVG 的（不是 CSS 变量，改不了已画好的线），
+               所以切主题/切夜间时得跟着重画一遍——上面那几张图刷新的是同一件事。 */
+            if (document.body.classList.contains('reading-rul-on') && typeof rdGlLayoutAll === 'function') rdGlLayoutAll();
         }
         // 共读：白底遮罩（独立开关，跟「遮罩」配合——遮罩开了再开白底，遮罩就从主题色换成选中的那种白）
         // 读出当前选的白：暖白/米白/月白/关；带两段历史迁移，老用户观感不突变。
@@ -25986,6 +26026,8 @@ body {
                ⚠️判断的是「字底下有没有线」，不是「叫不叫下划线」——以后再加别的底部装饰，也得加到这儿。 */
             if (b.contains('reading-ks-wave') && el.closest('.reading-keysent')) return true;
             if (b.contains('reading-wave-on') && el.closest('.reading-quote')) return true;
+            // 手绘线（2026-08-12 加）：跟波浪同一个位置——字底下那道线，叠上去一样脏
+            if (b.contains('reading-rul-on') && el.closest('.reading-quote')) return true;
             return false;
         }
         /* 由 hlid（或一个词）算一个稳定的数：既定记号种类，也当 Rough 的随机种子（见 rdMkDraw 那条⚠️）。
@@ -26322,6 +26364,68 @@ body {
                         for (var e = 0; e < els.length; e++) if (els[e]) svg.appendChild(els[e]);
                         drawn++;
                     } catch (eB) { /* 单个画不出来就跳过，别拖累整篇 */ }
+                }
+            }
+            if (!drawn) layer.parentNode.removeChild(layer);
+        }
+        /* ===================== 引号「手绘线」（2026-08-12 做）=====================
+           用户要的：把 rough-notation 的下划线做成引号装饰的一档，跟画框/波浪/柔光并列。
+           跟波浪的区别见 .q-ul-layer 上面那段——那个是平铺的毛边背景图，这个是逐句现画的真笔迹。
+           ⚠️只画**引号内层** `.reading-quote-inner`（不含「」两个符号），跟波浪的作用面一致。 */
+        function qUlClear(root) {
+            var old = (root || document).querySelectorAll('.q-ul-layer');
+            for (var i = 0; i < old.length; i++) old[i].parentNode.removeChild(old[i]);
+        }
+        /* ⚠️种子取「这句话的字 + 它在本条消息里的序号」：
+             · 取字 → 同一句话刷新/换字号/切主题永远是同一条歪线（不取的话每次重排都在抖）；
+             · 加序号 → 同一句话在一章里出现两次时歪法不同，不然像复制粘贴（背景词踩过，见那条⚠️）。 */
+        function qUlLayout(bubble) {
+            if (!bubble) return;
+            qUlClear(bubble);
+            if (!document.body.classList.contains('reading-rul-on')) return;
+            var box = bubble.querySelector('.reading-merged');
+            if (!box || box.closest('.translate-merged')) return;
+            if (typeof rough === 'undefined' || !rough.svg) return;
+            var inners = box.querySelectorAll('.reading-quote .reading-quote-inner');
+            if (!inners.length) return;
+            if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
+            var cr = box.getBoundingClientRect();
+            if (cr.width < 1) return;              // 还没排好版，等下一次重排
+
+            /* ⚠️颜色从 **document.body** 取，不能从 documentElement 取：夜间那套定义在 `body.dark` 上，
+               CSS 变量只往下继承，从 <html> 读永远拿到日间色＝切夜间等于没换色
+               （背景词 2026-08-10 实测逮到过，见 bgMkLayout 里那条⚠️⚠️）。 */
+            var ink = (getComputedStyle(document.body).getPropertyValue('--accent') || '#888').trim() || '#888';
+            // 长短分工开着时，长句(rq-wide)只着色、不要装饰——跟波浪/画框那条 strip 规则同一个意思
+            var split = document.body.classList.contains('reading-ls-on');
+
+            var layer = document.createElement('div');
+            layer.className = 'q-ul-layer';    // ⚠️别加 rd-gl-layer，会被 rdGlClear 连坐删掉
+            box.appendChild(layer);
+            var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('class', 'q-ul-svg');
+            svg.setAttribute('width', String(Math.round(cr.width)));
+            svg.setAttribute('height', String(Math.round(cr.height)));
+            layer.appendChild(svg);
+
+            var rc = rough.svg(svg), drawn = 0;
+            for (var i = 0; i < inners.length; i++) {
+                var el = inners[i];
+                if (split && el.closest('.reading-quote.rq-wide')) continue;
+                var seed = rdMkSeed((el.textContent || '') + '#' + i);
+                var rects = el.getClientRects();
+                for (var r = 0; r < rects.length; r++) {
+                    var q = rects[r];
+                    if (q.width < 2) continue;
+                    // 容器坐标；线落在行矩形下方 2px，太贴会糊进笔画里（跟小注下划线同一个数）
+                    var x0 = q.left - cr.left, x1 = q.right - cr.left, y = q.bottom - cr.top + 2;
+                    try {
+                        var g = rc.linearPath([[x0, y], [x1, y]], {
+                            seed: (seed + r * 977) % 2147483647,
+                            stroke: ink, strokeWidth: 1.5, roughness: 1.4, bowing: 1.6
+                        });
+                        if (g) { svg.appendChild(g); drawn++; }
+                    } catch (e) { /* 单句画不出来就跳过，别拖累整篇 */ }
                 }
             }
             if (!drawn) layer.parentNode.removeChild(layer);
@@ -27231,7 +27335,11 @@ body {
             return r.bottom > -m && r.top < h + m;
         }
         // 这条消息值不值得排（没小注也没背景块就别费事）
+        /* ⚠️引号那一项**必须带 reading-rul-on 这个前提**：不加的话，凡是有「」的消息都会被判为
+             「值得排版」，等于给每条正文都摊上一次逐句量位置——手绘线没开的时候纯属白烧。 */
         function _glWorth(bub) {
+            if (document.body.classList.contains('reading-rul-on')
+                && bub.querySelector('.reading-merged .reading-quote .reading-quote-inner')) return true;
             return !!bub.querySelector('.reading-merged mark.rd-hl[data-gl], .reading-merged blockquote[data-bg="1"]');
         }
         /* 真正干活的一条：小注 + 背景词记号一起。
@@ -27240,6 +27348,9 @@ body {
             bub.removeAttribute('data-gl-pend');
             try { rdGlLayout(bub); } catch (e) { console.warn('[手写小注] 排版失败：', e); }
             if (typeof bgMkLayout === 'function') { try { bgMkLayout(bub); } catch (e2) { console.warn('[背景词记号] 排版失败：', e2); } }
+            /* ⚠️手绘线也必须跟这两个同进同出：三者都按行片段的坐标画，漏掉一个就会出现
+               「线还在老位置、圈已经跟过去了」。 */
+            if (typeof qUlLayout === 'function') { try { qUlLayout(bub); } catch (e3) { console.warn('[引号手绘线] 排版失败：', e3); } }
         }
         // 全屏重排（换字号/段间距/字体、转屏时用）。逐条消息重排，不碰正文本身。
         function rdGlLayoutAll() {
