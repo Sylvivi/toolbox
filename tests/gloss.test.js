@@ -556,6 +556,21 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             const pBot = pr.bottom - cr2.top;
             const inset = parseFloat(lab.style.top) - pBot;
             out.R_下面那道缝很窄 = (bq.top - pr.bottom) < 12;          // 前提成立
+            /* ⚠️2026-08-12 起 R2/R3 改成量**肉眼看到的那段空白**（标签外框 → 段落最后一行的字底），
+               不再量 `style.top - 段落盒子底`。两个原因：
+                 ① 缝一律改成按字量了（见 index.html 的 _glInkTop），盒子口径已经对不上；
+                 ② 这一档现在有**两条合格出路**——缝紧时把标签「放平」塞在缝里，或者沿用老办法
+                    用大内缩整条落进背景块的留白带。两条都不碰字，硬钉住其中一条就是在钉实现。
+               所以改成钉**结果**：不碰字 + 离字还留得下一点空。 */
+            const rgR = document.createRange(); rgR.selectNodeContents(p2);
+            const 字底R = Math.max(...[...rgR.getClientRects()].filter(r => r.height > 1).map(r => r.bottom));
+            const labR = lab.getBoundingClientRect();
+            out.R_离字实测 = Math.round((labR.top - 字底R) * 10) / 10;
+            out.R_放平了 = lab.classList.contains('rd-gl-flat');
+            out.R_没碰到字 = labR.top >= 字底R - 0.5;
+            out.R_还留得下空 = (labR.top - 字底R) >= 3;
+            // 两条合格出路必居其一：放平待在缝里，或者用大内缩落进块的留白带
+            out.R_走的是合格出路 = out.R_放平了 || Math.abs(inset - RD_GL_INSET_OVER) < 1.5;
             // 宽缝（正常段间距）那一路必须还用小内缩，别被这次改动误伤
             {
                 // ⚠️这一小段测的是「宽缝」，而外面为了 R2/R3 把段间距压成了 6px，
@@ -574,17 +589,22 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
                 rdHlWrapRange(q1, qa, qa + 2, 'gold', 'r9', false);
                 q1.querySelector('mark[data-hlid="r9"]').setAttribute('data-gl', '测试用');
                 rdGlLayout(b2bub);
+                /* ⚠️2026-08-12 改了量法：以前量的是「标签的 style.top 到段落**盒子**底」，
+                   现在缝一律按**字**量（见 index.html 里 _glInkTop 那段），而且内缩里含了
+                   标签旋转多出来的那半截，所以那个旧口径已经对不上了。
+                   改成量**肉眼真正看到的那段空白**：标签外框的上沿 到 上一段最后一行字的字底。
+                   这个口径跟坐标系无关，也正是用户说的「肉眼无违和」要盯的那个量。 */
                 const l9 = b2box.querySelector('.rd-gl-label');
-                const c9 = b2box.getBoundingClientRect();
-                const p9 = q1.getBoundingClientRect();
-                const in9 = parseFloat(l9.style.top) - (p9.bottom - c9.top);
+                const rg9 = document.createRange(); rg9.selectNodeContents(q1);
+                const 字底 = Math.max(...[...rg9.getClientRects()].filter(r => r.height > 1).map(r => r.bottom));
+                const in9 = l9.getBoundingClientRect().top - 字底;
+                out.R_宽缝留白 = Math.round(in9 * 10) / 10;
                 out.R_宽缝仍用小内缩 = Math.abs(in9 - RD_GL_INSET) < 1.5;
                 document.documentElement.style.setProperty('--reading-pspace', '6px');   // 还给外面那段窄缝场景
             }
             /* 缝装不下时用更大的 RD_GL_INSET_OVER，让小注整个落进隔壁块的留白带里。
                ⚠️别以为「越远越好」：渲过 7/12/16 三版，16px 会直接撞上块里的第一行字。 */
-            out.R_没被挤扁 = inset >= 6;                                // 老代码这里会缩到 2
-            out.R_窄缝用大内缩 = Math.abs(inset - RD_GL_INSET_OVER) < 1.5;
+            out.R_内缩实测 = Math.round(inset * 10) / 10;
             out.R_大内缩比小的大 = RD_GL_INSET_OVER > RD_GL_INSET;
             out.R_大内缩没大过头 = RD_GL_INSET_OVER <= 14;              // 再大就撞块里的字了
             // ⚠️用完把段间距还回去，别把这一组的窄缝设置漏给后面的组
@@ -776,9 +796,10 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('S4 也没掉到缝外面去', R.S_也没掉出缝, '内缩 ' + R.S_内缩 + 'px');
     ok('S5 让位之后没伸出段落右边', R.S_没伸出右边);
     ok('R1 前提：紧跟背景块那道缝确实很窄', R.R_下面那道缝很窄);
-    ok('R6 宽缝（正常段间距）仍用小内缩，没被误伤', R.R_宽缝仍用小内缩);
-    ok('R2 小注没被挤扁（离正文≥6px）', R.R_没被挤扁);
-    ok('R3 窄缝时用更大的内缩（落进隔壁块留白带）', R.R_窄缝用大内缩);
+    ok('R6 宽缝（正常段间距）里，标签外框离字仍是那一小段留白', R.R_宽缝仍用小内缩, '实测留白 ' + R.R_宽缝留白 + 'px（要 ≈' + 7 + '）');
+    ok('R2 ⚠️窄缝里没碰到字，也没被挤扁', R.R_没碰到字 && R.R_还留得下空,
+       '离字 ' + R.R_离字实测 + 'px｜放平=' + R.R_放平了);
+    ok('R3 窄缝走的是两条合格出路之一（放平塞进缝里 / 大内缩落进块的留白带）', R.R_走的是合格出路);
     ok('R4 大内缩确实比常规大', R.R_大内缩比小的大);
     ok('R5 大内缩没大到撞上块里的字', R.R_大内缩没大过头);
     ok('Q1 没拼音时整条走中文字体（不掉回溪涧）', R.Q_无拼音走中文字体);

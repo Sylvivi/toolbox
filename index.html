@@ -3429,6 +3429,11 @@ body {
            它是 rdGlPath 返回的第二段 d，画成独立的 <path class="rd-gl-arrow">。 */
         .rd-gl-svg path.rd-gl-arrow { stroke-dasharray: none; }
         /* 夜间维持原来那点淡淡的透明（用户说夜间已经很满意），只有日间实打实地上色 */
+        /* ⚠️「放平」那一档（2026-08-12 用户要的：「也可以平着放进去，当然这个是特例哈，
+           正常情况下还是要保持原本的倾斜」）。斜着的外框比自身高 lw×sin(2.5°)，
+           一条 200px 宽的注要多占 8.7px；缝差这一点点时放平就塞得进去，
+           不必压字、也不必被赶去老远。挂这个 class 的判定在 rdGlLayout 里的 `_flat`。 */
+        .rd-gl-label.rd-gl-flat { transform: none; }
         body.dark .rd-gl-label { opacity: 0.94; }
         body.dark .rd-gl-svg path { opacity: 0.82; }
         /* 小注的墨色。⚠️**和划线底色是两套颜色、互不影响**——
@@ -26505,7 +26510,11 @@ body {
                 var ms = pa.querySelectorAll('mark.rd-hl[data-gl]');
                 if (!ms.length) continue;
                 var pr = pa.getBoundingClientRect();
-                var pTop = pr.top - cr.top, pBot = pr.bottom - cr.top;
+                /* ⚠️纵向一律用「字」的位置、不用盒子（见 _glInkTop 上那段）。pTop/pBot 一改，
+                   底下所有依赖它俩的判断（选边就近、折行的 limit、标签 y、越界检查）就自动统一到
+                   同一套坐标里了——**别只改 roomUp/roomDown**，那样量的和摆的会对不上。
+                   横向的 pLeft/pr.width 仍是盒子：那是栏宽。 */
+                var pTop = _glInkTop(pa) - cr.top, pBot = _glInkBottom(pa) - cr.top;
                 var pLeft = pr.left - cr.left;
 
                 /* ⚠️上下有多少空当**必须实测**，不能假设就是段间距（2026-08-04 用户截图报
@@ -26516,8 +26525,8 @@ body {
                 var _prev = pa.previousElementSibling, _next = pa.nextElementSibling;
                 while (_prev && _prev.classList && _prev.classList.contains('rd-gl-layer')) _prev = _prev.previousElementSibling;
                 while (_next && _next.classList && _next.classList.contains('rd-gl-layer')) _next = _next.nextElementSibling;
-                var roomUp = _prev ? (pr.top - _prev.getBoundingClientRect().bottom) : (pr.top - cr.top);
-                var roomDown = _next ? (_next.getBoundingClientRect().top - pr.bottom) : (cr.bottom - pr.bottom);
+                var roomUp = _prev ? (pTop - (_glInkBottom(_prev) - cr.top)) : pTop;
+                var roomDown = _next ? ((_glInkTop(_next) - cr.top) - pBot) : (cr.height - pBot);
                 // 缝的编号＝容器里的兄弟序号（见下面 gapUp/gapDown 那条 ⚠️）
                 var _kids = box.children;
                 var _selfIdx = -1, _prevIdx = -1;
@@ -26636,7 +26645,20 @@ body {
                        而且这个代理本来就偏严：缝比标签只宽一点点时照样能不压字，却被判成装不下。
                        现在直接量：把标签按各自方向摆好，看那条水平带有没有撞上隔壁块**字**的行。
                        没撞的那一侧优先——这才是她要的「能不遮挡字就好了」。 */
-                    var _lhR = lh + lw * RD_GL_ROT_SIN;      // 标签是斜的，实际外框比 lh 高
+                    /* ⚠️⚠️**缝紧的时候可以把这一条「放平」**（2026-08-12 用户提的，原话
+                       「那个倾斜的角度其实是可以调的，不一定说就一非要保持那个倾斜，也可以平着
+                       放进去，当然这个是特例哈，正常情况下还是要保持原本的倾斜」）。
+                       手写的时候本来就是这样：缝够宽就随手写斜一点，缝紧了自然写平。
+                       斜着的标签外框比 lh 高 `lw × sin(2.5°)`，一条 200px 宽的注要多占 8.7px——
+                       很多「差一点点就放得下」的缝就是被这一截卡掉的，结果要么压字、要么被赶去远处。
+                       ⚠️判据：**转着放不下、平着放得下**才放平；只要斜着放得下就一律保持斜的（她定的「特例」）。
+                       ⚠️量的是这条注**够得着的最宽那条缝**（上下取大），别拿单侧判——
+                         单侧窄不代表这条注要放平，它还能挪到另一侧去。 */
+                    var _lhFlat = lh + RD_GL_INSET_MIN * 2;
+                    var _flat = (Math.max(roomUp, roomDown) < lh + lw * RD_GL_ROT_SIN + RD_GL_INSET_MIN * 2)
+                             && (Math.max(roomUp, roomDown) >= _lhFlat);
+                    if (_flat) lab.classList.add('rd-gl-flat');
+                    var _lhR = _flat ? lh : (lh + lw * RD_GL_ROT_SIN);   // 放平了就没有斜出来的那一截
                     var _pad = (_lhR - lh) / 2;              // 斜出来的那点，上下各一半
                     /* 这条缝该留多少白，四档（2026-08-06 定，全都是为了「别压到字」）：
                        ① 缝宽裕 → 7px 居中，老行为；
@@ -26661,21 +26683,37 @@ body {
                     var _isBodyPara = function (el) {
                         return !!(el && el.tagName === 'P' && el.hasAttribute('data-p'));
                     };
+                    /* 返回「标签(未旋转)的上沿 距离 自己这段的字」有多远。
+                       ⚠️⚠️**旋转多出来的那一截要补，而且是不对称的**（2026-08-12 连踩两次）：
+                         标签是 `rotate(-2.5deg)` ＋ **`transform-origin: left center`**，
+                         绕左端逆时针转 → **右端整个往上翘**。相对未旋转的盒子：
+                           · 上方多探出 `_over = lw × sin(2.5°)` ——**一整截，不是一半**
+                           · 下方几乎不多探出
+                         所以**只有「往下摆」才要补 `_over`**（怕上沿扎进自己上面那行字），往上摆补 0。
+                       ⚠️两次踩坑记这儿，别再来第三遍：
+                         ① 完全不补 → tests/glosspack.test.js Y1「压了 4 行」，
+                            实测标签顶 67.6→63.2，而正文末行字底在 64.8；
+                         ② 按「上下各一半」补 → 只补了一半，自查里 28px 一行的压字
+                            4.2%→9.5%，明细全是 `down/row0` 压到**自己这段最后一行** 0~4px。
+                       ⚠️以前没露馅，是因为 pTop/pBot 取的是**段落盒子**，那一截正好被盒子比字
+                         多出来的行距留白吃掉了；2026-08-12 改成按**字**量（见 _glInkTop）就藏不住了。
+                       ⚠️判「这条缝够不够宽」拿 `_lhR` 比（它正好 ＝ lh + _over），别拿 `lh`。 */
                     var _insetToward = function (room, nbEl, down) {
-                        if (room >= lh + RD_GL_INSET * 2) return RD_GL_INSET;
-                        if ((room - _lhR) / 2 >= RD_GL_INSET_MIN) return (room - lh) / 2;
+                        var _over = down ? Math.max(0, _lhR - lh) : 0;   // ⚠️见上：只有往下摆才要补
+                        if (room >= _lhR + RD_GL_INSET * 2) return _over + RD_GL_INSET;
+                        if ((room - _lhR) / 2 >= RD_GL_INSET_MIN) return _over + (room - _lhR) / 2;
                         /* 隔壁是正文段落：缩在缝里，别往它的字上抬（见上面那条⚠️⚠️）。
                            缝比标签还窄时这个值会是负的，夹到 RD_GL_INSET_MIN——
                            那时标签确实会蹭到几个像素，但那是「差几px」，不是「高一整行」。 */
-                        if (_isBodyPara(nbEl)) return Math.max(RD_GL_INSET_MIN, (room - lh) / 2);
+                        if (_isBodyPara(nbEl)) return _over + Math.max(RD_GL_INSET_MIN, (room - _lhR) / 2);
                         var rows = _glRowsOf(nbEl);
                         if (rows.length >= 2) {
                             // 往下：卡在第二行上沿之前；往上：卡在倒数第二行下沿之后
-                            var limit = down ? (rows[1].top - pBot - lh - _pad)
-                                             : (pTop - rows[rows.length - 2].bottom - lh - _pad);
-                            if (limit >= RD_GL_INSET_MIN) return limit;
+                            var limit = down ? (rows[1].top - pBot - _lhR - _pad)
+                                             : (pTop - rows[rows.length - 2].bottom - _lhR - _pad);
+                            if (limit >= RD_GL_INSET_MIN) return _over + limit;
                         }
-                        return RD_GL_INSET_OVER;
+                        return _over + RD_GL_INSET_OVER;
                     };
                     var _lyU = pTop - _insetToward(roomUp, _prev, false) - lh;
                     var _lyD = pBot + _insetToward(roomDown, _next, true);
@@ -26736,6 +26774,7 @@ body {
                     all.push({
                         pIdx: j, pLeft: pLeft, pW: pr.width, lab: lab, lw: lw, lh: lh,
                         prefUp: prefUp,
+                        flat: _flat,          // 缝太紧、放平才塞得下的那一条（见 _flat 上那段⚠️⚠️）
                         /* ⚠️缝的编号要按**容器里的兄弟节点**算，不能按「第几个段落」。
                            写成 j-1 时，凡是段落上面隔着背景/点评块(blockquote)的，
                            都会因为「它是第 0 个段落」被判成"上面没有缝"，小注全被赶到下面去。
@@ -26851,6 +26890,37 @@ body {
                 _glRectCache.set(el, out);
                 return out;
             }
+            /* ===== 「缝」按**字到字**量，不按盒子到盒子（2026-08-12 用户拍板）=====
+               起因：她截图问「最下面伊尹那条小注的上方不是有位置吗？为什么晨蔡那条要延伸到
+               上一条缝去呢？」，并把原则说清楚了——**「不是就近原则，而是肉眼无违和感原则」**，
+               「是正常人会写小注的思路，是正常人看了小注位置不会提出质疑的思路」。
+               照她那张截图直接量：一条小注高 **23px**，而正文最后一行的字到背景块第一行字之间
+               有 **30px** 空白。**肉眼判断是对的，那儿放得下**，可代码判定"塞不下"。
+
+               差在哪：代码量的是**元素盒子**，中间夹着两样看不见却被算作"已占用"的东西——
+                 ① 每行文字自带的行距留白（字的上下各有一圈空，属于段落的盒子）；
+                 ② 背景/问答/导读块自己的 padding（块的边框到块里第一行字之间那圈空）。
+               盒子对盒子只剩 0.4em≈5.6px，于是塞不下 21px 的标签；而字对字有 30px，绰绰有余。
+
+               ⚠️**这条推翻了 2026-08-10 那次的结论**（当时记的是「她眼里那片空隙是背景块自己的
+                 padding、是块的身体、不是缝，维持原样」）。旁证：伊尹那条现在就待在块的 padding 里，
+                 她不但不觉得违和，还拿它当「这儿明明能放」的例子。
+               ⚠️**判据是「碰不碰得到字」，不留最小呼吸缝**（同日她选的：「只要不碰到字就行」）。
+               ⚠️`_glInkBottom` 必须**钳回盒子底**：`_glTextRects` 遇到折叠块会临时展开来量，
+                 不钳的话「折叠块下面那条缝」会拿到展开后的字底，算出负的缝宽。
+               ⚠️只改**纵向**。横向仍按段落盒子（pLeft/pW）——那是栏宽，跟"字到哪儿"无关。 */
+            function _glInkTop(el) {
+                var rs = _glTextRects(el), t = null;
+                for (var i = 0; i < rs.length; i++) if (t === null || rs[i].top < t) t = rs[i].top;
+                var b = el.getBoundingClientRect();
+                return t === null ? b.top : Math.max(t, b.top);
+            }
+            function _glInkBottom(el) {
+                var rs = _glTextRects(el), v = null;
+                for (var i = 0; i < rs.length; i++) if (v === null || rs[i].bottom > v) v = rs[i].bottom;
+                var b = el.getBoundingClientRect();
+                return v === null ? b.bottom : Math.min(v, b.bottom);   // ⚠️钳回盒子底，见上面
+            }
             function _glRowsOf(el) {
                 if (!el) return [];
                 var rs = [], list = _glTextRects(el);
@@ -26942,7 +27012,7 @@ body {
                 it.dodge = null;              // 这条为了躲隔壁块的字，横向不许再退回哪一段（给 _glCompact 用）
                 if (_nb) {
                     var _ly0 = useUp ? it.lyUp : it.lyDown;
-                    var _rot = it.lw * RD_GL_ROT_SIN / 2;     // 标签是斜的，实际外框比 lh 高一圈
+                    var _rot = it.flat ? 0 : (it.lw * RD_GL_ROT_SIN / 2);   // 放平的那条没有这一截
                     var _sp = _glGlyphSpan(_nb, _ly0 - _rot, _ly0 + it.lh + _rot);
                     if (_sp) it.dodge = _sp;
                     if (_sp && x < _sp.r && x + it.lw > _sp.l) {      // 横向真的压在字上了
@@ -27002,17 +27072,18 @@ body {
                     var el = kids[i];
                     // 小注层/记号层是我们自己加的浮层，不算「孩子」
                     if (el.classList && (el.classList.contains('rd-gl-layer') || el.classList.contains('bg-mk-layer'))) continue;
-                    var r = el.getBoundingClientRect();
+                    // ⚠️跟近处那两条缝同一套量法：字到字，不是盒子到盒子（见 _glInkTop 上那段）
+                    var rTopY = _glInkTop(el) - cr.top;
                     if (!first) {
                         first = el;
-                        _glBands[-2] = { top: 0, bottom: r.top - cr.top };          // 容器顶上那条
+                        _glBands[-2] = { top: 0, bottom: rTopY };                   // 容器顶上那条
                     }
                     if (prevEl) {
-                        _glBands[prevIdx] = { top: prevEl.getBoundingClientRect().bottom - cr.top, bottom: r.top - cr.top };
+                        _glBands[prevIdx] = { top: _glInkBottom(prevEl) - cr.top, bottom: rTopY };
                     }
                     prevEl = el; prevIdx = i;
                 }
-                if (prevEl) _glBands[prevIdx] = { top: prevEl.getBoundingClientRect().bottom - cr.top, bottom: cr.height };
+                if (prevEl) _glBands[prevIdx] = { top: _glInkBottom(prevEl) - cr.top, bottom: cr.height };
                 return _glBands;
             }
             /* 把一条小注塞进指定的远缝。**塞不进（会碰到两边的字）就返回 false**，绝不硬塞。 */
@@ -27020,7 +27091,7 @@ body {
                 var band = _glBandList()[g];
                 if (!band) return false;
                 var room = band.bottom - band.top;
-                var lhR = it.lh + it.lw * RD_GL_ROT_SIN;       // 标签是斜的，按外框算才不会蹭到字
+                var lhR = it.flat ? it.lh : (it.lh + it.lw * RD_GL_ROT_SIN);   // 放平的没有斜出来那一截
                 if ((room - lhR) / 2 < 0.5) return false;      // 只要外框整条落在缝里就行，不必再留 2px
                 var ly = band.top + (room - it.lh) / 2;
                 // 缝在字的上面 → 锚第一行片段；在下面 → 锚最后一行片段（跟就近那两条同一套规矩）
@@ -27043,14 +27114,29 @@ body {
                 (rowItems[key] || (rowItems[key] = [])).push(it);
                 return true;
             }
-            // 由近及远试：先首选那一侧，再另一侧；最多往外两条，再远引线就真成了横穿半页
+            // 一条远缝离目标字有多远（缝跟字重叠就算 0）。⚠️上下判定要跟 _gl_tryBand 里那句 up 同一套
+            function _gl_bandDist(band, it) {
+                if (band.bottom <= it.tyUp + 1) return it.tyUp - band.bottom;   // 缝在字上面
+                if (band.top >= it.tyDown - 1) return band.top - it.tyDown;     // 缝在字下面
+                return 0;
+            }
+            /* 往外最多找两条缝，**按离目标字的真实距离从近到远试**。
+               ⚠️⚠️别再写成「先首选那一侧、再另一侧」（2026-08-12 用户截图报的就是这个）：
+                 她那一段特别长——「一个社会为什么需要侠？…党羽颂赞他」是**同一段、约 690px**，
+                 于是段内的词离自己那段的上下两条缝都很远。「陈、蔡」往上跨约 690px、
+                 往下只要约 330px，可老代码因为 prefUp 是「上」，先试上面、成了就定了，
+                 引线横穿了大半屏。**首选那一侧只决定「就近那两条缝」谁先试（_gl_try 那两步），
+                 一旦要往外找，唯一该看的就是谁离得近。**
+               ⚠️这一步仍然只认「整条外框塞得进去、两边的字都碰不着」的缝（_gl_tryBand 自己把关），
+                 所以排序换法不会制造任何新的压字——代价只是引线长短，那正是要优化的东西。 */
             function _gl_tryFar(it) {
+                var bands = _glBandList(), cands = [];
                 for (var d = 1; d <= 2; d++) {
-                    var a = it.prefUp ? (it.gapUp - d) : (it.gapDown + d);
-                    var b = it.prefUp ? (it.gapDown + d) : (it.gapUp - d);
-                    if (it.gapUp >= -2 && _gl_tryBand(it, a)) return true;
-                    if (_gl_tryBand(it, b)) return true;
+                    if (it.gapUp >= -2 && bands[it.gapUp - d]) cands.push(it.gapUp - d);
+                    if (bands[it.gapDown + d]) cands.push(it.gapDown + d);
                 }
+                cands.sort(function (p, q) { return _gl_bandDist(bands[p], it) - _gl_bandDist(bands[q], it); });
+                for (var i = 0; i < cands.length; i++) if (_gl_tryBand(it, cands[i])) return true;
                 return false;
             }
             all.sort(function (x, y) { return x.want - y.want; });
