@@ -27219,7 +27219,28 @@ body {
                     if (bands[it.gapDown + d]) cands.push(it.gapDown + d);
                 }
                 cands.sort(function (p, q) { return _gl_bandDist(bands[p], it) - _gl_bandDist(bands[q], it); });
-                if (!allowFlat) cands = cands.filter(function (g) { return _gl_bandDist(bands[g], it) <= _glNearDist(it) + RD_GL_TILT_EXTRA; });
+                /* ⚠️⚠️第一轮（为保持倾斜而往外找）**不许跨过背景/问答/导读块**（2026-08-12 加）。
+                   她发了折叠/展开的两张对照图问「为什么会出现这样的位置变化呢，
+                   明明展开之后保持那一种变化就好了不是吗」——
+                   块**折叠**时只有一行高，「块下面那条缝」按纯像素算才多跑 40px、没超闸门，
+                   于是那条注为了保持倾斜**穿过整个块**跑到块下面去了；块一展开那条路超距，
+                   它又缩回块顶那圈留白。同一条注在折叠/展开之间跳来跳去，正是她受不了的。
+                   **跨过一整块在肉眼上远得多，不能只按像素算**——所以这一轮直接不给跨。
+                   ⚠️只管第一轮：第二轮（允许放平）照旧，否则实在没地方去的注会无处安放。 */
+                if (!allowFlat) {
+                    var _kids = box.children;
+                    var _crossesBlock = function (g) {
+                        var lo = Math.min(g, it.gapUp < 0 ? it.gapDown : it.gapUp) + 1;
+                        var hi = Math.max(g, it.gapDown);
+                        for (var k = lo; k <= hi && k < _kids.length; k++) {
+                            if (k >= 0 && _kids[k] && _kids[k].tagName === 'BLOCKQUOTE') return true;
+                        }
+                        return false;
+                    };
+                    cands = cands.filter(function (g) {
+                        return !_crossesBlock(g) && _gl_bandDist(bands[g], it) <= _glNearDist(it) + RD_GL_TILT_EXTRA;
+                    });
+                }
                 for (var i = 0; i < cands.length; i++) if (_gl_tryBand(it, cands[i], allowFlat)) return true;
                 return false;
             }
