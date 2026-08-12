@@ -27092,6 +27092,16 @@ body {
                 if (!band) return false;
                 var room = band.bottom - band.top;
                 var lhR = it.flat ? it.lh : (it.lh + it.lw * RD_GL_ROT_SIN);   // 放平的没有斜出来那一截
+                /* ⚠️⚠️「放平」必须**逐条缝**判，不能只在建条目时按自己那两条缝定一次
+                   （2026-08-12 用户截图报的就是这个：陈蔡那条还是飞到屏幕最顶上）。
+                   原因：远缝常常比自家那两条**窄得多**——两个折叠的背景块之间只有十几 px，
+                   而自家的段间缝有二十几。只按自家的缝判会得出「不用放平」，
+                   到了远缝这儿又因为斜着的外框高出十几 px 被卡掉，于是继续往更远的地方赶。
+                   这里补一次：斜着塞不下、平着塞得下 → 就地放平。 */
+                if ((room - lhR) / 2 < 0.5 && !it.flat && (room - it.lh) / 2 >= 0.5) {
+                    it.flat = true; lhR = it.lh;
+                    if (it.lab) it.lab.classList.add('rd-gl-flat');
+                }
                 if ((room - lhR) / 2 < 0.5) return false;      // 只要外框整条落在缝里就行，不必再留 2px
                 var ly = band.top + (room - it.lh) / 2;
                 // 缝在字的上面 → 锚第一行片段；在下面 → 锚最后一行片段（跟就近那两条同一套规矩）
