@@ -26662,10 +26662,24 @@ body {
                          整条注跑到别的缝去：实测 `glosshigh` ② 的标签直接掉出缝外（缝 69~97、标签 234~247），
                          `glosscross` 的前提也被打乱。探测范围保守一点没坏处。 */
                     var _rotAdd = lw * RD_GL_ROT_SIN;                    // 斜着比平着高出来的那一截
-                    var _flatOf = function (room) {                       // 这条缝：斜着塞不下、平着塞得下
-                        return (room < lh + _rotAdd + RD_GL_INSET_MIN * 2) && (room >= lh + RD_GL_INSET_MIN * 2);
+                    /* 这条缝该斜着还是放平，三档（2026-08-12）：
+                       ① 斜着塞得下 → 保持倾斜（常态，她要的「特例」之外一律不动）
+                       ② 斜着塞不下、平着塞得下 → 放平
+                       ③ **平着也塞不下 → 注定要伸进隔壁**。隔壁是块（背景/问答/导读，第一行往往
+                          只有「汐：背景：…」十来个字、右边空一大片）就也放平：放平之后没有旋转
+                          多出来的那一截，能紧贴正文摆进块顶那圈留白里，横向再靠已有的避让绕开标题字。
+                          ⚠️她 2026-08-12 圈出来的正是这一片：正文末行字底 y906 → 伊尹那条注 y933，
+                            中间 26px 一直空着，而一条注才 25px 高。空着的原因是两层叠加——
+                            斜着光旋转就吃掉 11px，再加上「伸进块里就往下坐 12px」的老规则。
+                          ⚠️隔壁是**正文段落**时维持老行为（不放平）：正文的行是满宽的、横向无处可躲，
+                            贴上去就是实打实压字，见 `_isBodyPara` 那条⚠️⚠️。 */
+                    var _flatOf = function (room, nbEl) {
+                        if (room >= lh + _rotAdd + RD_GL_INSET_MIN * 2) return false;
+                        if (room >= lh + RD_GL_INSET_MIN * 2) return true;
+                        return !!nbEl && !_isBodyPara(nbEl);
                     };
-                    var _flatUp = _flatOf(roomUp), _flatDown = _flatOf(roomDown);
+                    // ⚠️_flatUp/_flatDown 的**求值**挪到 _isBodyPara 赋值之后了（它是 var 函数表达式，
+                    //   在这儿调用会 "not a function"，实测炸过一次）。这里只留定义。
                     var _pad = _rotAdd / 2;                  // ⚠️恒按斜着算，见上面那条⚠️
                     /* 这条缝该留多少白，四档（2026-08-06 定，全都是为了「别压到字」）：
                        ① 缝宽裕 → 7px 居中，老行为；
@@ -26690,6 +26704,8 @@ body {
                     var _isBodyPara = function (el) {
                         return !!(el && el.tagName === 'P' && el.hasAttribute('data-p'));
                     };
+                    // 这两个要等 _isBodyPara 赋值完才能算（见 _flatOf 那儿的⚠️）
+                    var _flatUp = _flatOf(roomUp, _prev), _flatDown = _flatOf(roomDown, _next);
                     /* 返回「标签(未旋转)的上沿 距离 自己这段的字」有多远。
                        ⚠️⚠️**旋转多出来的那一截要补，而且是不对称的**（2026-08-12 连踩两次）：
                          标签是 `rotate(-2.5deg)` ＋ **`transform-origin: left center`**，
@@ -26715,6 +26731,10 @@ body {
                            缝比标签还窄时这个值会是负的，夹到 RD_GL_INSET_MIN——
                            那时标签确实会蹭到几个像素，但那是「差几px」，不是「高一整行」。 */
                         if (_isBodyPara(nbEl)) return _over + Math.max(RD_GL_INSET_MIN, (room - _lhR) / 2);
+                        /* 放平了就紧贴正文摆（第 ③ 档，见 _flatOf 上那段）：不再往下坐进块的留白带，
+                           而是落在块顶那圈空里；横向靠 _gl_try 的避让绕开标题那十来个字。
+                           ⚠️别改回 RD_GL_INSET_OVER——那 12px 正是把它按到标题下面去的那一下。 */
+                        if (_flat) return RD_GL_INSET;
                         var rows = _glRowsOf(nbEl);
                         if (rows.length >= 2) {
                             // 往下：卡在第二行上沿之前；往上：卡在倒数第二行下沿之后
