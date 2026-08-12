@@ -14,6 +14,7 @@
  *  G 组 ⚠️颜色必须从 body 读（主题/夜间都定义在 body 上，从 <html> 读会永远拿默认色）
  *  H 组 ⚠️没开手绘线时，别把「有引号的消息」判成值得排版（_glWorth 白烧）
  *  I 组 ⚠️性能：必须「先量完再画」，改回边量边画会退回逐句整页重排（用户报过卡）
+ *  J 组 ⚠️⚠️图层体量：全章合成一个 path + 只覆盖视口附近（用户报过「clawd 卡十秒」）
  *
  * 跑法：node tests/quoterul.test.js   或   bash tests/p.sh quoterul
  */
@@ -60,7 +61,17 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             if (on) localStorage.setItem('reading_quote_wave', '0');
             readingApplyQuoteStyles();
         };
-        const paths = box => box.querySelectorAll('.q-ul-svg path').length;
+        /* ⚠️全章的线合成**一个** <path>（2026-08-12 性能修的），所以「画了几条」不能再数元素个数，
+           要数那条 d 里有几个 M ＝ 几笔。一句引号 = 2 笔（Rough 的 doubleLine 来回描两遍）。 */
+        const segs = box => {
+            const pp = box.querySelector('.q-ul-svg path');
+            return pp ? (pp.getAttribute('d').match(/M/g) || []).length : 0;
+        };
+        const paths = segs;
+        const dOf = box => {
+            const pp = box.querySelector('.q-ul-svg path');
+            return pp ? pp.getAttribute('d') : '';
+        };
 
         // ── A：开了才画、关了要擦干净 ──
         {
@@ -119,17 +130,15 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         {
             setOn(true);
             const a = build([P1]);
-            const d1 = [...a.box.querySelectorAll('.q-ul-svg path')].map(p => p.getAttribute('d')).join('|');
+            const d1 = dOf(a.box);
             qUlLayout(a.bub);            // 重排一次（相当于换字号/切主题）
-            const d2 = [...a.box.querySelectorAll('.q-ul-svg path')].map(p => p.getAttribute('d')).join('|');
-            out.D_重排一模一样 = d1 === d2 && d1.length > 0;
+            out.D_重排一模一样 = dOf(a.box) === d1 && d1.length > 0;
             const b = build([P1]);       // 整个重建（相当于重开一章）
-            const d3 = [...b.box.querySelectorAll('.q-ul-svg path')].map(p => p.getAttribute('d')).join('|');
-            out.D_重建一模一样 = d1 === d3;
-            // 同一句话在一章里出现两次 → 歪法要不同，否则像复制粘贴
+            out.D_重建一模一样 = dOf(b.box) === d1;
+            // 同一句话在一章里出现两次 → 每一笔的歪法都要不一样，否则像复制粘贴
             const c = build([P1, P1]);
-            const ds = [...c.box.querySelectorAll('.q-ul-svg path')].map(p => p.getAttribute('d'));
-            out.D_同句两处歪法不同 = ds.length >= 2 && new Set(ds).size === ds.length;
+            const ds = dOf(c.box).split('M').filter(x => x.trim());
+            out.D_同句两处歪法不同 = ds.length >= 4 && new Set(ds).size === ds.length;
         }
 
         /* ── E：⚠️不许动版面 ──
@@ -209,7 +218,39 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             ts.sort((x, y) => x - y);
             out.I_中位耗时 = +ts[2].toFixed(1);
             out.I_没退回逐句重排 = out.I_中位耗时 < 15;
-            out.I_线还是画满的 = a.box.querySelectorAll('.q-ul-svg path').length >= 40;
+            out.I_带子里画上了 = segs(a.box) > 0;
+        }
+
+        /* ── J：⚠️⚠️图层体量护栏——这是「clawd 点下去卡十秒」的根因 ──
+           共读模式下**一条消息就是一整章**，正文容器实测 36000px 高。第一版干了两件蠢事：
+             ① 一句引号一个 <g><path>，600 句就是 1200 个 SVG 节点塞进正文树；
+             ② SVG 跟容器一样高 —— 358×36000 的图层，手机得为它开一块巨大的光栅缓存。
+           用户报「clawd 图标点下去要卡十秒才弹菜单，把手绘线换成波浪线就立刻好」——波浪是
+           一张小图平铺、零新增图层，对比非常干净。现在：全章合成一个 path，图层只覆盖
+           「可见区上下各一屏」，实测 36217px → 979px（2.7%）、1200 节点 → 2 个。 */
+        {
+            setOn(true);
+            const many = [];
+            for (let i = 0; i < 300; i++) many.push('他放下茶盏，缓缓说' + Q('这事我早有耳闻，只是不便明说' + i) + '，屋里一时静了下来，谁也没有接话。');
+            const a = build(many);
+            const svg = a.box.querySelector('.q-ul-svg');
+            out.J_容器高 = Math.round(a.box.getBoundingClientRect().height);
+            out.J_图层高 = svg ? +svg.getAttribute('height') : 0;
+            // 图层不许跟整章一样高：给三屏的宽裕度（当前是上下各一屏＝三屏），仍远小于整章
+            out.J_只画视口附近 = out.J_图层高 > 0
+                              && out.J_图层高 <= window.innerHeight * 3.2
+                              && out.J_图层高 < out.J_容器高 / 2;
+            // 全章只许有一个 path（svg + path = 2 个节点）
+            out.J_节点数 = a.box.querySelectorAll('.q-ul-layer *').length;
+            out.J_合成了一条路径 = out.J_节点数 === 2;
+            /* 滚出带子之后要补画。⚠️这条钉的是「补画真的会发生」——不补的话滚下去就是一片空白，
+               而空白比卡顿更难发现（看着像功能没开）。 */
+            const band0 = a.box.querySelector('.q-ul-layer').getAttribute('data-band');
+            window.scrollTo(0, document.body.scrollHeight / 2);
+            qUlRefresh();
+            const layer1 = a.box.querySelector('.q-ul-layer');
+            out.J_滚过去会补画 = !!layer1 && layer1.getAttribute('data-band') !== band0 && segs(a.box) > 0;
+            window.scrollTo(0, 0);
         }
 
         document.querySelectorAll('.__qult').forEach(n => n.remove());
@@ -239,7 +280,10 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('H1 ⚠️没开手绘线时不判为值得排版', R.H_没开时不值得排);
     ok('H2 开了才判为值得排版', R.H_开了才值得排);
     ok('I1 ⚠️⚠️没退回「边量边画」（40 句应在 15ms 内）', R.I_没退回逐句重排, R.I_引号数 + ' 句 / 中位 ' + R.I_中位耗时 + 'ms');
-    ok('I2 快了之后线一条没少', R.I_线还是画满的);
+    ok('I2 快了之后带子里照样画上', R.I_带子里画上了);
+    ok('J1 ⚠️⚠️图层只覆盖视口附近，不是整章', R.J_只画视口附近, '容器 ' + R.J_容器高 + 'px / 图层 ' + R.J_图层高 + 'px');
+    ok('J2 ⚠️⚠️全章合成一个 path（不是一句一个节点）', R.J_合成了一条路径, 'SVG 节点 ' + R.J_节点数 + ' 个');
+    ok('J3 滚出带子会补画上', R.J_滚过去会补画);
     ok('Z 页面没报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();

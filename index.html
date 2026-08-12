@@ -26262,6 +26262,35 @@ body {
             var old = (root || document).querySelectorAll('.q-ul-layer');
             for (var i = 0; i < old.length; i++) old[i].parentNode.removeChild(old[i]);
         }
+        /* ⚠️⚠️**只画视口上下各一屏，别画整章**（2026-08-12 第二轮性能修的，别改回去）。
+           共读模式下**一条消息就是一整章**，正文容器动辄几万像素高。第一版给它配了一张
+           同样高的 SVG——手机要为这么大一张图层开光栅缓存，代价是整个界面发木：用户报
+           「clawd 图标点下去要卡十秒才弹菜单」，而换成波浪线（一张小图平铺、零新增图层）立刻就好。
+           现在 SVG 只覆盖「可见区上下各一屏」这条带子，滚出安全范围再补画（见 qUlRefresh）。 */
+        var Q_UL_MARGIN = 1.0;      // 视口上下各多画几屏
+        function qUlBand(cr) {
+            var vh = window.innerHeight || 800, m = vh * Q_UL_MARGIN;
+            return { top: Math.max(0, -cr.top - m), bottom: Math.min(cr.height, -cr.top + vh + m) };
+        }
+        /* 滚动时看看已经画好的那条带子还够不够用，不够就重画一次。
+           ⚠️跟小注的补排共用同一个滚动事件和同一套节流（见 rdGlFlushSoon 旁边那个绑定），
+             别自己再加一个 scroll 监听——两个监听各跑各的节流，滚动时反而更抖。 */
+        function qUlRefresh() {
+            if (!document.body.classList.contains('reading-rul-on')) return;
+            var layers = document.querySelectorAll('.q-ul-layer');
+            for (var i = 0; i < layers.length; i++) {
+                var box = layers[i].parentNode;
+                if (!box) continue;
+                var cr = box.getBoundingClientRect();
+                if (cr.width < 1) continue;
+                var drawn = (layers[i].getAttribute('data-band') || '').split(',');
+                var vh = window.innerHeight || 800;
+                var visTop = Math.max(0, -cr.top), visBottom = Math.min(cr.height, -cr.top + vh);
+                if (visTop >= (+drawn[0] - 1) && visBottom <= (+drawn[1] + 1)) continue;   // 还在已画范围里
+                var bub = box.closest ? box.closest('.chat-bubble') : null;
+                if (bub) { try { qUlLayout(bub); } catch (e) { /* 补画失败不影响正文 */ } }
+            }
+        }
         /* ⚠️种子取「这句话的字 + 它在本条消息里的序号」：
              · 取字 → 同一句话刷新/换字号/切主题永远是同一条歪线（不取的话每次重排都在抖）；
              · 加序号 → 同一句话在一章里出现两次时歪法不同，不然像复制粘贴（背景词踩过，见那条⚠️）。 */
@@ -26291,8 +26320,8 @@ body {
                整页重排。实测这台服务器 32ms/条消息，手机乘 3~5 倍，用户报「有点卡」。
                拆成两段之后同样 40 句只剩 3ms 上下：量的时候页面是静的，画的时候 SVG 还在
                文档外面（往没进 DOM 的节点里塞东西不触发排版），最后整层挂上去只脏一次。 */
-            // ① 只读：把所有线的位置一次量完
-            var jobs = [];
+            // ① 只读：把带子范围内所有线的位置一次量完（带子＝可见区上下各一屏，见 qUlBand）
+            var band = qUlBand(cr), jobs = [];
             for (var i = 0; i < inners.length; i++) {
                 var el = inners[i];
                 if (split && el.closest('.reading-quote.rq-wide')) continue;
@@ -26302,33 +26331,54 @@ body {
                     var q = rects[r];
                     if (q.width < 2) continue;
                     // 容器坐标；线落在行矩形下方 2px，太贴会糊进笔画里（跟小注下划线同一个数）
-                    jobs.push({ x0: q.left - cr.left, x1: q.right - cr.left, y: q.bottom - cr.top + 2,
+                    var y = q.bottom - cr.top + 2;
+                    if (y < band.top || y > band.bottom) continue;      // 带子外的先不画，滚过去再补
+                    jobs.push({ x0: q.left - cr.left, x1: q.right - cr.left, y: y - band.top,
                                 seed: (seed + r * 977) % 2147483647 });
                 }
             }
-            if (!jobs.length) return;
-
-            // ② 只写：SVG 先在文档外面画完
+            /* ② 只写：SVG 先在文档外面画完。
+               ⚠️**就算这条带子里一句对白都没有，层也要建**并记下画到哪了——不然滚进一段没有
+                 「」的正文时层被丢掉，qUlRefresh 就再也找不到它，滚回来时线补不上。 */
             var layer = document.createElement('div');
             layer.className = 'q-ul-layer';    // ⚠️别加 rd-gl-layer，会被 rdGlClear 连坐删掉
+            layer.setAttribute('data-band', Math.round(band.top) + ',' + Math.round(band.bottom));
             var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
             svg.setAttribute('class', 'q-ul-svg');
+            svg.style.top = Math.round(band.top) + 'px';
             svg.setAttribute('width', String(Math.round(cr.width)));
-            svg.setAttribute('height', String(Math.round(cr.height)));
+            svg.setAttribute('height', String(Math.round(band.bottom - band.top)));
             layer.appendChild(svg);
 
-            var rc = rough.svg(svg), drawn = 0;
+            /* ⚠️⚠️**全章合成一个 <path>，别一句一个**（2026-08-12 第二轮性能修的，别改回去）。
+               `rc.linearPath()` 每调一次都吐一个 <g><path>，一章 600 句 ＝ 1200 个 SVG 节点
+               凭空塞进正文树里。节点本身不慢，但它把**每一次重排/重绘都变贵了**——
+               用户报「clawd 图标点下去要卡十秒才弹菜单，换成波浪线就立刻好」，波浪是一张小图平铺、
+               零新增节点，对比非常干净。
+               这些线颜色/粗细/端点全一样，本来就该是一条路径：只借 Rough 的**几何**
+               （generator 出 ops，opsToPath 转成 d），把所有 d 首尾拼起来挂成一个 path。
+               1200 节点 → 1 个，画面一模一样。 */
+            var rc = rough.svg(svg), gen = rc.generator, d = '', drawn = 0;
             for (var j = 0; j < jobs.length; j++) {
                 var job = jobs[j];
                 try {
-                    var g = rc.linearPath([[job.x0, job.y], [job.x1, job.y]], {
-                        seed: job.seed, stroke: ink, strokeWidth: 1.5, roughness: 1.4, bowing: 1.6
+                    var drw = gen.linearPath([[job.x0, job.y], [job.x1, job.y]], {
+                        seed: job.seed, strokeWidth: 1.5, roughness: 1.4, bowing: 1.6
                     });
-                    if (g) { svg.appendChild(g); drawn++; }
+                    for (var k = 0; k < drw.sets.length; k++) d += rc.opsToPath(drw.sets[k]) + ' ';
+                    drawn++;
                 } catch (e) { /* 单句画不出来就跳过，别拖累整篇 */ }
             }
+            if (!drawn) { box.appendChild(layer); return; }   // 这段没对白，只留个空层记住画到哪了
+            var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', d.trim());
+            path.setAttribute('fill', 'none');
+            path.setAttribute('stroke', ink);
+            path.setAttribute('stroke-width', '1.5');
+            path.setAttribute('stroke-linecap', 'round');
+            svg.appendChild(path);
             // ③ 一次性挂上去
-            if (drawn) box.appendChild(layer);
+            box.appendChild(layer);
         }
         function bgMkLayoutAll() {
             var bubbles = document.querySelectorAll('.chat-msg.ai .chat-bubble');
@@ -27294,6 +27344,8 @@ body {
             _glFlushStep();
         }
         function rdGlFlushSoon() {
+            // 引号手绘线只画了视口附近那一段，滚动时顺带看看要不要补画（跟小注共用这一个滚动事件）
+            if (typeof qUlRefresh === 'function') qUlRefresh();
             if (!document.querySelector('.chat-msg.ai .chat-bubble[data-gl-pend]')) return;   // 没欠账，直接走
             var now = Date.now();
             if (now - _glFlushLast > 120) { rdGlFlushPending(); return; }
