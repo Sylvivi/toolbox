@@ -26652,14 +26652,21 @@ body {
                        斜着的标签外框比 lh 高 `lw × sin(2.5°)`，一条 200px 宽的注要多占 8.7px——
                        很多「差一点点就放得下」的缝就是被这一截卡掉的，结果要么压字、要么被赶去远处。
                        ⚠️判据：**转着放不下、平着放得下**才放平；只要斜着放得下就一律保持斜的（她定的「特例」）。
-                       ⚠️量的是这条注**够得着的最宽那条缝**（上下取大），别拿单侧判——
-                         单侧窄不代表这条注要放平，它还能挪到另一侧去。 */
-                    var _lhFlat = lh + RD_GL_INSET_MIN * 2;
-                    var _flat = (Math.max(roomUp, roomDown) < lh + lw * RD_GL_ROT_SIN + RD_GL_INSET_MIN * 2)
-                             && (Math.max(roomUp, roomDown) >= _lhFlat);
-                    if (_flat) lab.classList.add('rd-gl-flat');
-                    var _lhR = _flat ? lh : (lh + lw * RD_GL_ROT_SIN);   // 放平了就没有斜出来的那一截
-                    var _pad = (_lhR - lh) / 2;              // 斜出来的那点，上下各一半
+                       ⚠️⚠️**上下两条缝各判各的，不能"一条注只判一次"**（2026-08-12 用户连问三轮才定位）。
+                         初版按「上下两条缝里更宽的那条」判：伊尹那条上方的段间缝很宽 → 判定"不用放平"
+                         → 保持倾斜；可它实际要去的是**下方那道只有 24px 的窄缝**，斜着塞不进，
+                         于是掉进背景块里，**那道空白就一直空着**。她的原话就是
+                         「伊尹上方的那块空白为什么不放字」。
+                       ⚠️只让 `_insetToward` 按侧取高度就够了。**别顺手把 `_pad` 也改成按侧取**——
+                         `_pad` 还被 `_touch`/`_stuck` 当探测范围用，改小了会翻转 `prefUp`（选边结论），
+                         整条注跑到别的缝去：实测 `glosshigh` ② 的标签直接掉出缝外（缝 69~97、标签 234~247），
+                         `glosscross` 的前提也被打乱。探测范围保守一点没坏处。 */
+                    var _rotAdd = lw * RD_GL_ROT_SIN;                    // 斜着比平着高出来的那一截
+                    var _flatOf = function (room) {                       // 这条缝：斜着塞不下、平着塞得下
+                        return (room < lh + _rotAdd + RD_GL_INSET_MIN * 2) && (room >= lh + RD_GL_INSET_MIN * 2);
+                    };
+                    var _flatUp = _flatOf(roomUp), _flatDown = _flatOf(roomDown);
+                    var _pad = _rotAdd / 2;                  // ⚠️恒按斜着算，见上面那条⚠️
                     /* 这条缝该留多少白，四档（2026-08-06 定，全都是为了「别压到字」）：
                        ① 缝宽裕 → 7px 居中，老行为；
                        ② 塞得下但紧 → 按实际缝宽居中，只要还剩得下 RD_GL_INSET_MIN；
@@ -26699,7 +26706,9 @@ body {
                          多出来的行距留白吃掉了；2026-08-12 改成按**字**量（见 _glInkTop）就藏不住了。
                        ⚠️判「这条缝够不够宽」拿 `_lhR` 比（它正好 ＝ lh + _over），别拿 `lh`。 */
                     var _insetToward = function (room, nbEl, down) {
-                        var _over = down ? Math.max(0, _lhR - lh) : 0;   // ⚠️见上：只有往下摆才要补
+                        var _flat = down ? _flatDown : _flatUp;         // ⚠️按这一侧那条缝判，见上面
+                        var _lhR = _flat ? lh : (lh + _rotAdd);
+                        var _over = (down && !_flat) ? _rotAdd : 0;     // ⚠️只有斜着往下摆才要补
                         if (room >= _lhR + RD_GL_INSET * 2) return _over + RD_GL_INSET;
                         if ((room - _lhR) / 2 >= RD_GL_INSET_MIN) return _over + (room - _lhR) / 2;
                         /* 隔壁是正文段落：缩在缝里，别往它的字上抬（见上面那条⚠️⚠️）。
@@ -26774,7 +26783,8 @@ body {
                     all.push({
                         pIdx: j, pLeft: pLeft, pW: pr.width, lab: lab, lw: lw, lh: lh,
                         prefUp: prefUp,
-                        flat: _flat,          // 缝太紧、放平才塞得下的那一条（见 _flat 上那段⚠️⚠️）
+                        flat: false,          // 最终放不放平，等排好位、确定用哪条缝时才定
+                        flatUp: _flatUp, flatDown: _flatDown,
                         /* ⚠️缝的编号要按**容器里的兄弟节点**算，不能按「第几个段落」。
                            写成 j-1 时，凡是段落上面隔着背景/点评块(blockquote)的，
                            都会因为「它是第 0 个段落」被判成"上面没有缝"，小注全被赶到下面去。
@@ -27046,6 +27056,10 @@ body {
                         x = Math.min(Math.max(wantHere, left), xr);
                     }
                 }
+                /* 「放平」跟着**最终落在哪条缝**走：排位前两侧各判各的，到这儿才知道用的哪侧。
+                   ⚠️用 toggle 不用 add——同一条注可能先试上、失败再试下，两侧结论可能不同。 */
+                it.flat = useUp ? !!it.flatUp : !!it.flatDown;
+                if (it.lab) it.lab.classList.toggle('rd-gl-flat', it.flat);
                 it.up = useUp; it.gap = g; it.lx = x;
                 it.ly = useUp ? it.lyUp : it.lyDown;
                 it.ty = useUp ? it.tyUp : it.tyDown;

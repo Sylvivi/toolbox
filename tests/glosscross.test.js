@@ -91,8 +91,21 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         });
         out.前提_两条都有引线 = segs.length === 2;
         const a = segs.find(s => s.id === 'h兹邑'), b = segs.find(s => s.id === 'h颠越');
-        // 「兹邑」跨行：往上锚第一行片段(行末，靠右)；「颠越」在左边
-        out.前提_兹邑锚在右 = !!a && !!b && a.x1 > b.x1;
+        /* 「兹邑」是**跨行**的词，规则是：标签往上摆就锚第一行片段(行末、靠右)，
+           往下摆就锚最后一行片段(行首、靠左)。
+           ⚠️2026-08-12 改成钉这条**规则**，别再写死「兹邑一定锚在右边」——
+             那是把当时的选边结论当成了前提。选边（prefUp）会随排版改动而变，
+             这次「每条缝各判各的放平」就把它翻成了朝下，前提当场假红，
+             而真正要守的四条（顺序一致/不交叉/不重叠/没出界）全是好的。 */
+        const _lab兹邑 = box.querySelector('.rd-gl-label[data-glid="h兹邑"]');
+        const _dir = _lab兹邑 ? _lab兹邑.getAttribute('data-gl-dir') : null;
+        const _frags = [...box.querySelectorAll('mark[data-hlid="h兹邑"]')]
+            .flatMap(m => [...m.getClientRects()]).filter(r => r.width > 1);
+        const _mid = r => r.left + r.width / 2 - cr.left;
+        const _want = _frags.length ? _mid(_dir === 'up' ? _frags[0] : _frags[_frags.length - 1]) : null;
+        out.前提_跨行锚点跟方向一致 = !!a && _want !== null && Math.abs(a.x1 - _want) < 6;
+        out.前提_明细 = '方向=' + _dir + ' 片段数=' + _frags.length
+            + ' 锚x=' + (a ? Math.round(a.x1) : '-') + ' 应为' + (_want === null ? '-' : Math.round(_want));
         out.前提_两条同一行 = !!a && !!b && Math.abs(a.y2 - b.y2) < 6;
         // 核心：字在左边的，标签也该在左边
         out.顺序一致 = !!a && !!b && ((a.x1 - b.x1) > 0) === ((a.x2 - b.x2) > 0);
@@ -122,7 +135,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     });
 
     ok('前提：两条小注都排出来了、落在同一行', R.前提_两条都有引线 && R.前提_两条同一行);
-    ok('前提：跨行的「兹邑」锚在右边、「颠越」在左边', R.前提_兹邑锚在右);
+    ok('前提：跨行的词，锚点跟它标签的方向一致', R.前提_跨行锚点跟方向一致, R.前提_明细);
     ok('⚠️字在左的标签也在左（左右顺序一致）', R.顺序一致, JSON.stringify(R.明细));
     ok('⚠️两条引线不交叉', R.没交叉);
     ok('两条标签不重叠', R.标签不重叠);
