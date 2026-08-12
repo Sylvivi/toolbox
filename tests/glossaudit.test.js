@@ -43,7 +43,7 @@ const N = 400;   // ⚠️别调小：小样本下 E/F 那几个千分之几的�
         const 压字按段间距 = {}, 总数按段间距 = {};
         const 压字_单行 = {}, 总数_单行 = {}, 压字_两行 = {}, 总数_两行 = {};
         const 重叠按段间距 = {}, 乱序按段间距 = {}, 交叉按段间距 = {};
-        const stat = { 页: 0, 小注: 0, 压字: 0, 交叉: 0, 出界: 0, 重叠: 0, 乱序: 0, 指错: 0, 丢条: 0 };
+        const stat = { 页: 0, 小注: 0, 压字: 0, 交叉: 0, 出界: 0, 重叠: 0, 乱序: 0, 指错: 0, 丢条: 0, 放平: 0, 压过角: 0 };
 
         for (let t = 0; t < N; t++) {
             const seed = 1000 + t;
@@ -124,6 +124,13 @@ const N = 400;   // ⚠️别调小：小样本下 E/F 那几个千分之几的�
                     by: m ? svgR.top + (+m[4]) - cr.top : null,
                     mk: box.querySelector('mark[data-hlid="' + id + '"]'),
                     gap: l.getAttribute('data-gl-gap'), dir: l.getAttribute('data-gl-dir'), row: l.getAttribute('data-gl-row'),
+                    /* 倾斜角现在是连续的（按缝宽压小），所以量**行内 transform 里的真实角度**，
+                       别再数 .rd-gl-flat 那个 class——它已经只当兜底样式了，数出来恒为 0。 */
+                    deg: (function () {
+                        if (l.classList.contains('rd-gl-flat')) return 0;      // 「放平」那一档
+                        var m = /rotate\(-?([\d.]+)deg\)/.exec(l.style.transform || '');
+                        return m ? +m[1] : 2.5;                                 // 默认满角度
+                    })(),
                 };
             });
 
@@ -185,6 +192,8 @@ const N = 400;   // ⚠️别调小：小样本下 E/F 那几个千分之几的�
                 const hit = rects.some(q => o.L < q.right - cr.left && q.left - cr.left < o.Rt
                     && o.T < q.bottom - cr.top && q.top - cr.top < o.B);
                 总数按段间距[pspace] = (总数按段间距[pspace] || 0) + 1;
+                if (o.deg < 0.3) stat.放平++;          // 几乎看不出倾斜了
+                else if (o.deg < 2.4) stat.压过角++;   // 少斜了一点，仍是手写的样子
                 var 两行 = (o.B - o.T) > (fs * 1.6);      // 标签比一行还高＝折了两行
                 var T = 两行 ? 总数_两行 : 总数_单行, P = 两行 ? 压字_两行 : 压字_单行;
                 T[pspace] = (T[pspace] || 0) + 1;
@@ -250,7 +259,12 @@ const N = 400;   // ⚠️别调小：小样本下 E/F 那几个千分之几的�
     ok('G2 远缝那一步还在（删了这一档会立刻回到 7.7%）', R.有远缝 === true);
     ok('无页面报错', errs.length === 0, errs.slice(0, 3).join(' | '));
 
-    console.log('样本：' + s.页 + ' 页 / ' + s.小注 + ' 条小注');
+    /* 【放平占比】放平是**特例**：用户 2026-08-12 明确「正常情况下还是要保持原本的倾斜」，
+       看到满屏平的之后又说「有些似乎并非出于多条的挤压，而是专门往缝里去的，我不是很满意」。
+       所以这个比例要一直盯着，涨上去就是跑偏了。 */
+    console.log('样本：' + s.页 + ' 页 / ' + s.小注 + ' 条小注'
+      + '｜倾斜角：满角 ' + (s.小注 - s.放平 - s.压过角) + ' 条 / 压过角 ' + s.压过角
+      + ' 条 / 几乎放平 ' + s.放平 + ' 条 = ' + (s.小注 ? (s.放平 * 100 / s.小注).toFixed(1) : 0) + '%');
     Object.keys(R.压字率).forEach(k => console.log('   压字 ' + k + '：' + R.压字率[k]));
     console.log('   另起一行(row1)参与的重叠/交叉：见 data-gl-row 属性');
     let bad = 0;
