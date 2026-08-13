@@ -156,6 +156,31 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.G_bothDrawn = box.querySelectorAll('.rd-mk-svg path').length >= 2;
         }
 
+        /* ── I：⚠️长下划线的笔触 ──
+           2026-08-13 用户报「划长句感觉下划线有点雷同」，实测证实：Rough.js 的 line 只在
+           两端和中点抖，且偏移是绝对值 → 28px 的线抖动占 14.7%，330px 只剩 1.6% ＝ 看着是直线。
+           解法：沿线每 ~55px 打一个点。⚠️但**必须一笔连续**——她当场追问「线还是连着的对吗，
+           不会拆成一段一段的吧」，而 linearPath 版正是每段各一条独立线、接头错位像断线。 */
+        {
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            document.body.appendChild(svg);
+            const rc = rough.svg(svg);
+            const probe = (len) => {
+                const els = rdMkDraw(rc, [{ left: 0, right: len, top: 0, bottom: 14 }], 'u', '#000', '#000', 1234, 1.5);
+                const d = els[0].querySelector('path').getAttribute('d');
+                const ys = (d.match(/-?\d+\.?\d*/g) || []).map(Number).filter((_, i) => i % 2 === 1);
+                return { pts: ys.length, moves: (d.match(/M/g) || []).length };
+            };
+            const short = probe(28), long = probe(330);
+            out.I_长线抖点更多 = long.pts > short.pts;
+            /* ⚠️⚠️**这条是「不许拆成一段一段」的护栏**：Rough 手绘感靠的是同一笔描两遍，
+               所以一条下划线最多 2 个 M。多段 linearPath 会是 12 个 → 当场红。 */
+            out.I_长线一笔到底 = long.moves <= 2;
+            out.I_短线也一笔到底 = short.moves <= 2;
+            out.I_detail = JSON.stringify({ short, long });
+            svg.remove();
+        }
+
         /* ── H：⚠️不许推开正文（同 glossmark E 组）。加了记号前后，段落宽高必须一模一样 ── */
         {
             const { box } = build([]);
@@ -199,6 +224,10 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('G1 ⚠️只有一张记号层', R.G_layers === 1, '实际 ' + R.G_layers + ' 张');
     ok('G2 ⚠️没有为划线另开图层', R.G_noExtraLayer);
     ok('G3 小注和划线的记号都画上了', R.G_bothDrawn);
+
+    ok('I1 长下划线的抖动点随长度变多', R.I_长线抖点更多, R.I_detail);
+    ok('I2 ⚠️长线一笔到底，没拆成一段一段', R.I_长线一笔到底, R.I_detail);
+    ok('I3 短线也是一笔到底', R.I_短线也一笔到底, R.I_detail);
 
     ok('H1 ⚠️没有撑宽段落', R.H_sameW, R.H_detail);
     ok('H2 ⚠️没有撑高段落（翻页对齐靠它）', R.H_sameH, R.H_detail);
