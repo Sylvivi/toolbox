@@ -136,18 +136,24 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.D_背景色透明 = cs.backgroundColor === 'rgba(0, 0, 0, 0)';
             out.D_没有柔光 = cs.boxShadow === 'none';
             out.D_有记号图 = !!a.box.querySelector('.rd-mk-svg path');
-            // 只划线、不写小注的那种：一切照旧
+            /* ⚠️2026-08-13 改：原来这两条钉的是「普通划线一切照旧（保留色带）」和
+               「删掉小注就变回底色」。**用户当天把记号铺给了全部划线**（原话「我看之前的那个样式
+               很不爽了，线很死板，色带也不好看，希望把 rough notation 里的划线和画框应用过去」），
+               所以那两条旧行为已作废，这里改钉新行为。普通划线那套规则见 tests/hlmark.test.js。 */
             const b = build([{ para: 2, word: '踟蹰', id: 'hd2' }]);   // ⚠️「踟蹰」在第 2 段，写成 1 会拿到 null
             const plain = b.box.querySelector('mark[data-hlid="hd2"]');
-            out.D_普通划线不受影响 = !plain.classList.contains('rd-mk')
-                && getComputedStyle(plain).backgroundColor !== 'rgba(0, 0, 0, 0)';
-            // 删掉小注 → 记号要撤干净（rdGlLayout 会在早退前先清）
+            out.D_普通划线也有记号 = plain.classList.contains('rd-mk')
+                && getComputedStyle(plain).backgroundColor === 'rgba(0, 0, 0, 0)';
+            // ⚠️且只能是 u/b —— 圈是小注专属，别让两套池子串了
+            out.D_普通划线只有UB = ['u', 'b'].indexOf(kindOf(plain)) >= 0;
+            /* 删掉小注 → 记号**不撤**（划线还在），但种类要从小注池(u/b/c)切到划线池(u/b)。
+               ⚠️别改回「变回底色」：那会让「注完又把注删了」的划线变成一段没有任何标记的白。 */
             const c = build([{ para: 1, word: '氤氲', id: 'hd3', note: 'yīn yūn·雾气弥漫' }]);
             const m3 = c.box.querySelector('mark[data-hlid="hd3"]');
             m3.removeAttribute('data-gl');
             rdGlLayout(c.bub);
-            out.D_删掉小注就撤记号 = !m3.classList.contains('rd-mk')
-                && getComputedStyle(m3).backgroundColor !== 'rgba(0, 0, 0, 0)';
+            out.D_删小注后仍有记号 = m3.classList.contains('rd-mk')
+                && ['u', 'b'].indexOf(kindOf(m3)) >= 0;
         }
 
         /* ── E：⚠️不许推开正文 ──
@@ -376,8 +382,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('D1 记号取代底色（背景色透明）', R.D_背景色透明);
     ok('D2 底色那圈柔光也去掉了', R.D_没有柔光);
     ok('D3 记号图挂上了', R.D_有记号图);
-    ok('D4 只划线不写小注的：一切照旧', R.D_普通划线不受影响);
-    ok('D5 删掉小注 → 记号撤掉、变回底色', R.D_删掉小注就撤记号);
+    ok('D4 普通划线也画记号（2026-08-13 起）', R.D_普通划线也有记号);
+    ok('D4b ⚠️普通划线只能是 u/b，圈是小注专属', R.D_普通划线只有UB);
+    ok('D5 删掉小注 → 记号仍在，切到划线池', R.D_删小注后仍有记号);
     ok('E1 ⚠️左右 padding 必须为 0（否则整段正文位移）', R.E_左右零padding, '记号=' + R.E_记号种类);
     ok('E2 加了记号后行数没变', R.E_行数没变);
     ok('E3 每一行的位置一个像素都没动', R.E_行位置没变);

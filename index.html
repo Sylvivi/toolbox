@@ -3224,18 +3224,29 @@ body {
         body.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-purple { text-decoration-color: #6b46c1; }
         body.rd-hl-underline .reading-merged mark.rd-hl.rd-hl-ink    { text-decoration-color: #2f333a; }
 
-        /* ===== 写过小注的那个词：手绘记号（2026-08-10 做）=====
-           用户看了 rough-notation 之后要的，原话「下划线，box，circle，highlight我都喜欢哎」，
-           并且她自己划定了适用面：「适合在长度比较短的单字或者词语上面」——所以**只给小注的那个词**
-           （人名和普通划线当时明确说先不做，别顺手铺开）。
+        /* ===== 划线的手绘记号（2026-08-10 做小注，2026-08-13 铺给全部划线）=====
+           用户看了 rough-notation 之后要的，原话「下划线，box，circle，highlight我都喜欢哎」。
            哪个词用哪种记号由 rdMkPick 定：字数定范围、范围内钉死的随机，见那个函数上的注释。
-           图是 JS 现生成的抖动 SVG（data URI），写进行内变量 `--mk-img`；描边色取 --mk-ink。
 
-           ⚠️⚠️**四种记号一律不许加左右 padding**——见上面 mark.rd-hl 那条：mark 是行内元素，
-             横向 padding 会把后面的正文推开（划一下线整段位移），还会带偏小注的引线锚点。
-             所以框和圈走**绝对定位的伪元素**浮一层在上面，一个像素都不占；
-             下划线和荧光只用**上下** padding（行内元素的垂直 padding 不参与行高，行不会变高）。 */
-        .reading-merged mark.rd-hl[data-gl].rd-mk {
+           ⚠️**2026-08-13 起这条不再限 [data-gl]**（用户：「我看之前的那个样式很不爽了，线很死板，
+             色带也不好看，我希望可以把 rough notation 里的划线和画框应用过去」）。
+             所以旧笔记里「普通划线先不做、别顺手铺开」那条已作废——现在**每条划线都画记号**：
+             · 小注的那个词 → 老池子 u/b/c（她 2026-08-10 连调四轮定的，别动）；
+             · 普通划线 → 只有 **u 下划线 / b 方框** 两种（她 2026-08-13 定的：「只选两种，划线和画框」，
+               并明确「长短不论」——不按字数分档，见 rdHlMkKind）。
+           ⚠️零新增图层：记号一律画在小注那张 `.rd-mk-svg` 上（rdGlLayout 第 3 步）。
+             **绝不能为划线再开一张层**——引号手绘线就是栽在图层体量上被整个撤掉的（见下面那条⚠️⚠️）。
+
+           ⚠️⚠️**记号一律不许加左右 padding**——见上面 mark.rd-hl 那条：mark 是行内元素，
+             横向 padding 会把后面的正文推开（划一下线整段位移），还会带偏小注的引线锚点。 */
+        /* ⚠️⚠️**这两条选择器写得啰嗦是有原因的，别"顺手简化"成 `.reading-merged mark.rd-hl.rd-mk`**
+             （2026-08-13 当场被 tests/hlmark.test.js A3 逮到）：底色那条是
+             `body:not(.rd-hl-underline) .reading-merged mark.rd-hl` ＝ 特异性 (0,3,2)，
+             而简写只有 (0,3,1) —— **压不住，底色照样铺着**，记号和色带叠在一起。
+             原来能压住纯属沾了 `[data-gl]` 的光（属性选择器算一级），铺给全部划线后那一级没了。
+             所以这里跟它同构、并把「下划线款」那条也一起盖掉。 */
+        body:not(.rd-hl-underline) .reading-merged mark.rd-hl.rd-mk,
+        body.rd-hl-underline .reading-merged mark.rd-hl.rd-mk {
             /* 记号取代原来那层底色（用户定的：「取代底色，不叠」）。也要盖掉下划线款。 */
             background: none; box-shadow: none; text-decoration: none;
         }
@@ -25594,6 +25605,38 @@ body {
             var u = document.body.classList.contains('rd-hl-underline');
             return '<button class="rd-act rd-style" data-act="style" title="换划线的长相：底色 ↔ 下划线（不是划线本身；划线请先选中文字、点小条上的「🖍 划线」）">' + (u ? '底色' : '划线') + '</button>';
         }
+        /* ===== 已有划线上的「形状」键（2026-08-13 加）=====
+           用户要的：「划线的颜色以及是下划线还是画框是随机的，我再次点击的时候可以自己选，
+             就跟小注那边差不多」。所以随机只是**初值**，这颗键把它钉死成她挑的那个。
+
+           ⚠️它**取代了原来那颗全局的「底色↔下划线」键**（rdHlStyleBtnHtml，函数留着没删）：
+             记号恒开之后 `.rd-mk` 会把 text-decoration 整个清掉，那颗键点下去几乎看不出变化
+             ＝一颗死键杵在小条上，而它历史上正是「用户以为划线功能坏了」的元凶（见上面那段⚠️⚠️）。
+             换成这颗之后：只影响**这一条**、点完当场变样，那个歧义自然消失。
+           ⚠️标签写「将切换到的那种」＋一个形状符号。别改成光秃秃的「划线」二字——
+             跟「🖍 划线」那个**动作**撞脸的老坑还在（同上）。 */
+        function rdHlMkBtnHtml(hl, el) {
+            var to = rdHlMkKind(hl, el) === 'u' ? 'b' : 'u';
+            return '<button class="rd-act rd-style" data-act="mk" data-to="' + to + '"'
+                 + ' title="换这一条的长相：手绘下划线 ↔ 手绘方框（只改这一条，不影响别的划线）">'
+                 + (to === 'b' ? '▭ 画框' : '﹍ 划线') + '</button>';
+        }
+        /* 把形状钉死在这条划线上。⚠️存进 `hl.mk`＝跟着划线走，云同步/换设备/读痕面板全部白拿
+           （同 note 字段那条路子，零新增存储）。 */
+        function rdHlSetMk(id, kind) {
+            if (kind !== 'u' && kind !== 'b') return;
+            var list = readingGetConvHl();
+            for (var i = 0; i < list.length; i++) { if (list[i].id === id) { list[i].mk = kind; break; } }
+            readingSaveConvHl(list);
+            var m0 = document.querySelector('mark.rd-hl[data-hlid="' + id + '"]');
+            var bub = m0 && m0.closest('.chat-bubble');
+            /* ⚠️必须整条消息重排、不能只重画这一个记号：所有记号共用第 3 步建的那张 `.rd-mk-svg`，
+               而 rdGlLayout 每次都是「清掉整层再重建」。想省这一下就得把单条记号拆出来单独画，
+               那等于给每条划线各开一个 SVG——正是引号手绘线栽掉的那条路，别走。 */
+            if (bub) rdGlLayout(bub);
+            rdHlHideBar();
+            readingRefreshBookmarkUI && readingRefreshBookmarkUI();
+        }
 
         // 把段落 p 内 [start,end) 这段字描成一条 mark（可能横跨人名/引号 span，按文本节点逐段包，不动元素结构）
         function rdHlWrapRange(p, start, end, color, id, noted) {
@@ -25861,6 +25904,23 @@ body {
             if (!noUnderline && len >= 5) pool = pool.concat(['u']);
             return pool[rdMkSeed(hlid) % pool.length];
         }
+        /* ===== 普通划线（没写小注的那些）用哪种记号 —— 2026-08-13 加 =====
+           用户原话：「我看之前的那个样式很不爽了，线很死板，色带也不好看，我希望可以把
+             rough notation 里的划线和画框应用过去」，随后定死范围：「只选两种，划线和画框」
+             ＋「长短不论哈」。
+           ⚠️**别按字数分档**（小注那套 rdMkPick 是按字数的，这条不是）：她明确说了长短不论，
+             所以划一整句照样可能抽到方框——`rdMkDraw` 对每行各画一次，跨行时是每行一个框。
+           ⚠️**别把圈(c)/荧光(h) 加进来**：她只要这两种。圈是小注那边的，荧光 2026-08-10 就被否了。
+           ⚠️随机同样**钉死**在 hlid 上：同一条划线刷新、换设备、重开一章永远是同一种记号。 */
+        var RD_HL_MK_KINDS = ['u', 'b'];
+        function rdHlMkKind(hl, el) {
+            /* 她自己在那条划线上选过 → 一切随机让路（存在 hl.mk，跟着划线走云同步，零新增存储）。
+               ⚠️手选的下划线**即使底下已有线也照给**：那是她看着那一条当场点的，比避让规则更有发言权。 */
+            if (hl && (hl.mk === 'u' || hl.mk === 'b')) return hl.mk;
+            // 底下已经有别的线（精句/引号/名词的划线或波浪）→ 只给方框，别再压一条上去（同 rdMkPick 那条规矩）
+            if (rdMkHasUnderline(el)) return 'b';
+            return RD_HL_MK_KINDS[rdMkSeed((hl && hl.id) || '') % RD_HL_MK_KINDS.length];
+        }
         /* 这个词身上是不是已经有下划线了。三个来源，都是**开关＋位置**同时成立才算：
            ① 精句「划线」——body.reading-ks-ul + 词在 .reading-keysent 里；
            ② 引号「划线」——body.reading-uline-on + 词在 .reading-quote 里；
@@ -25937,13 +25997,16 @@ body {
         /* 收一条记号的活儿（真正画是在 rdGlLayout 第 3 步，那时 SVG 才建好）。
            marks ＝ 同一条划线的所有 mark（词跨过人名高亮时会被拆成好几个）；
            rects ＝ 它占的每一行（容器坐标），跨行时每行各画一条线。 */
-        function rdMkPlan(marks, hlid, rects) {
+        /* ⚠️`kindFixed`＝调用方已经定好用哪种（2026-08-13 加，普通划线走这条：种类由 rdHlMkKind 算，
+             那边的规则跟小注不是一套——只有 u/b、长短不论、她手选过的优先）。
+             传了就不再问 rdMkPick，别在这里再叠一层判断。 */
+        function rdMkPlan(marks, hlid, rects, kindFixed) {
             if (!marks || !marks.length || !rects || !rects.length) return null;
             var len = 0;
             for (var i = 0; i < marks.length; i++) len += (marks[i].textContent || '').length;
             // 压在背景词上 → 退回色带，别让两个手绘记号叠在一处（见 rdMkOverlapsBgTerm）
             if (rdMkOverlapsBgTerm(marks)) return null;
-            var kind = rdMkPick(hlid, len, rdMkHasUnderline(marks[0]));
+            var kind = kindFixed || rdMkPick(hlid, len, rdMkHasUnderline(marks[0]));
             if (!kind) return null;    // 没有合适的记号 → 不打 class，保留原来的划线底色
             /* 颜色现取现用：--mk-ink（描边）和 --hlc/--hla（荧光的浓度）都定义在 CSS 的划线色板里，
                夜间那几条会自动覆盖 → 切夜间/切主题重排一次就跟着变，JS 这边不用记任何色值。 */
@@ -26278,7 +26341,10 @@ body {
             rdMkClear(bubble);
             var box = bubble.querySelector('.reading-merged');
             if (!box || box.closest('.translate-merged')) return;
-            if (!box.querySelector('mark.rd-hl[data-gl]')) return;
+            /* ⚠️2026-08-13 放宽：**有任何一条划线就得进来**，不再限「有小注」。
+               记号现在铺给全部划线（见 .rd-mk 那条 CSS），而画记号的 SVG 就建在这个函数里——
+               还按老条件早退的话，一章里没写过小注、只划过线时整章一个记号都不会画。 */
+            if (!box.querySelector('mark.rd-hl')) return;
 
             // 坐标全部相对**容器**算（小注不进段落，见 .rd-gl-layer 上那条 ⚠️）
             if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
@@ -26296,11 +26362,22 @@ body {
             var paras = box.querySelectorAll('p[data-p]');
             var all = [];
             var mkJobs = [];        // 手绘记号的活儿，第 1 步收、第 3 步画（见 rdMkPlan）
+            /* 划线数据表（id → hl），给记号那条路读 `hl.mk`＝她在那条划线上手选过的形状。
+               ⚠️**在循环外取一次**：readingGetConvHl 每次都要解析一遍 localStorage，
+                 放进逐段逐条的循环里等于一页几十次反复解析。 */
+            var _hlById = {};
+            try {
+                var _hlAll = readingGetConvHl();
+                for (var _hi = 0; _hi < _hlAll.length; _hi++) _hlById[_hlAll[_hi].id] = _hlAll[_hi];
+            } catch (eHl) { /* 取不到就全走随机，记号照画 */ }
+            var _mkDone = {};       // 这一轮已经收过记号的 hlid（一条划线可能被拆成好几个 mark，见下）
 
             // 1) 量目标、建标签（要真实宽高才能排布）
             for (var j = 0; j < paras.length; j++) {
                 var pa = paras[j];
-                var ms = pa.querySelectorAll('mark.rd-hl[data-gl]');
+                /* ⚠️2026-08-13 放宽到**所有划线**（原来是 `mark.rd-hl[data-gl]` ＝只要小注那些）。
+                   带 data-gl 的照旧往下走建标签；不带的只在下面收一份记号的活儿就 continue。 */
+                var ms = pa.querySelectorAll('mark.rd-hl');
                 if (!ms.length) continue;
                 var pr = pa.getBoundingClientRect();
                 /* ⚠️纵向一律用「字」的位置、不用盒子（见 _glInkTop 上那段）。pTop/pBot 一改，
@@ -26377,8 +26454,26 @@ body {
                         _mkRects.push({ left: _u.left - cr.left, right: _u.right - cr.left,
                                         top: _u.top - cr.top, bottom: _u.bottom - cr.top });
                     }
-                    var _mkJob = rdMkPlan(_sibs, m.getAttribute('data-hlid'), _mkRects);
-                    if (_mkJob) mkJobs.push(_mkJob);
+                    var _mkId = m.getAttribute('data-hlid') || '';
+                    var _isGl = m.hasAttribute('data-gl');
+                    /* ⚠️**一条划线只收一次记号**（2026-08-13 加）。`_sibs` 收的是同一个 hlid 的**全部** mark，
+                       而外层是逐个 mark 走的——跨人名高亮被拆成 3 个 mark 时，老代码会把同一份活儿
+                       push 三遍、同一个圈原地画三次（重叠所以看不出来，但白烧三倍的画图开销）。
+                       划线铺开之后条数上来了，这笔浪费必须掐掉。 */
+                    if (!_mkDone[_mkId]) {
+                        _mkDone[_mkId] = 1;
+                        /* 小注的词走老池子(u/b/c，rdMkPick 按字数分档)；普通划线走 rdHlMkKind（只有 u/b、
+                           长短不论、她手选过的优先）。⚠️两套规则别合并——小注那套是她 2026-08-10 连调四轮定的。 */
+                        /* ⚠️`|| { id: _mkId }` 不是防御性废话：划线表取不上来时（换设备第一帧、
+                           localStorage 被清）`hl` 会是 undefined，种子就成了空字符串 →
+                           **整章划线抽到同一种记号**，看着像功能坏了。兜底至少保住「按 hlid 随机」。 */
+                        var _mkJob = rdMkPlan(_sibs, _mkId, _mkRects,
+                            _isGl ? null : rdHlMkKind(_hlById[_mkId] || { id: _mkId }, _sibs[0]));
+                        if (_mkJob) mkJobs.push(_mkJob);
+                    }
+                    /* 没写小注的划线到此为止：记号已经收下，下面全是**小注标签**的排版（量宽高、
+                       选哪条缝、画引线），跟它没关系。⚠️别把它也放进 `all`，那会凭空多出一个空标签。 */
+                    if (!_isGl) continue;
 
                     // 就近为**首选**方向；真正用哪一边等下面排位时定（挤不下会挪到另一条缝）
                     var nearUp = ((rTop.top - cr.top) - pTop) < (pBot - (rBot.bottom - cr.top));
@@ -27124,8 +27219,11 @@ body {
             return r.bottom > -m && r.top < h + m;
         }
         // 这条消息值不值得排（没小注也没背景块就别费事）
+        /* ⚠️2026-08-13 起第一条选择器去掉了 `[data-gl]`：记号铺给全部划线之后，
+           「只划过线、没写小注」的消息也得排（否则整章划线一个记号都不画，且底色已被 .rd-mk 撤掉
+             ＝那几个字变成一块白，比不做还糟）。 */
         function _glWorth(bub) {
-            return !!bub.querySelector('.reading-merged mark.rd-hl[data-gl], .reading-merged blockquote[data-bg="1"]');
+            return !!bub.querySelector('.reading-merged mark.rd-hl, .reading-merged blockquote[data-bg="1"]');
         }
         /* 真正干活的一条：小注 + 背景词记号一起。
            ⚠️两者必须同进同出——它们都按行片段的坐标画，漏掉一个就会「圈还在老位置、线已经跟过去了」。 */
@@ -27450,6 +27548,11 @@ body {
             try { window.getSelection().removeAllRanges(); } catch (e) {}
             var p = document.querySelector('.chat-msg.ai[data-idx="' + hl.msgIdx + '"] .reading-merged p[data-p="' + hl.p + '"]');
             if (p) rdHlWrapRange(p, hl.start, hl.end, hl.color, hl.id, false);
+            /* ⚠️必须当场排一次（2026-08-13 加）：`.rd-mk` 一挂上，那几个字的底色就被撤掉了，
+               而记号是 rdGlLayout 画的——不排的话划完只看见一段**没有任何标记的白**，
+               要等下次换字号/滚动补排才冒出来，看着就是「划线没生效」。 */
+            var _cb = p && p.closest('.chat-bubble');
+            if (_cb) { try { rdGlLayout(_cb); } catch (eL) { console.warn('[划线记号] 排版失败：', eL); } }
             rdHlHideBar();
             if (typeof showToast === 'function') showToast('已划线');
             readingRefreshBookmarkUI && readingRefreshBookmarkUI();
@@ -27529,6 +27632,9 @@ body {
             try { window.getSelection().removeAllRanges(); } catch (e) {}
             var pEl = document.querySelector('.chat-msg.ai[data-idx="' + hl.msgIdx + '"] .reading-merged p[data-p="' + hl.p + '"]');
             if (pEl) rdHlWrapRange(pEl, hl.start, hl.end, hl.color, hl.id, false);
+            // 同 rdHlCreate：先把记号画上，别让「等 AI 回来」这几秒里那个词是一片白（AI 失败时更是一直白着）
+            var _cb2 = pEl && pEl.closest('.chat-bubble');
+            if (_cb2) { try { rdGlLayout(_cb2); } catch (eL2) { console.warn('[划线记号] 排版失败：', eL2); } }
             readingRefreshBookmarkUI && readingRefreshBookmarkUI();
 
             await rdGlFetch(hl);
@@ -27616,7 +27722,8 @@ body {
             bar.className = 'rd-hl-bar'; bar.id = 'rdHlBar';
             bar.innerHTML = rdHlSwatchHtml(hl.color) +
                 '<span class="rd-sep"></span>' +
-                rdHlStyleBtnHtml() +
+                // 形状（这一条）。⚠️2026-08-13 顶掉了原来那颗全局「底色↔下划线」，理由见 rdHlMkBtnHtml
+                rdHlMkBtnHtml(hl, markEl) +
                 /* 「✍️ 注」也要挂在这条上（2026-08-04 补）。
                    原来它只在「选中文字」那条小条上，于是**已经划过线的字想重注就没门**——
                    得先把整条划线删掉、再重新选字。用户正是照着这个笨办法删了一批，
@@ -27632,7 +27739,8 @@ body {
                 if (sw) { rdHlRecolor(id, sw.getAttribute('data-c')); return; }
                 var act = e.target.closest('.rd-act'); if (!act) return;
                 var a = act.getAttribute('data-act');
-                if (a === 'style') { rdHlToggleStyle(); return; }
+                if (a === 'mk') { rdHlSetMk(id, act.getAttribute('data-to')); return; }
+                if (a === 'style') { rdHlToggleStyle(); return; }   // 键已撤，分支留着兜老缓存里的那条小条
                 if (a === 'note') { rdHlOpenNote(id); return; }
                 if (a === 'gloss') { rdHlHideBar(); rdGlRedo(id); return; }
                 if (a === 'del') {

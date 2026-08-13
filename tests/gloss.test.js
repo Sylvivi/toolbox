@@ -235,9 +235,15 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             rdGlLayout(b.bub); rdGlLayout(b.bub);   // 重复排版不该越堆越多
             out.F_重排不叠加 = b.box.querySelectorAll('.rd-gl-layer').length === 1;
             const mk = b.box.querySelector('mark[data-hlid="h1雾气氤氲"]');
+            /* ⚠️2026-08-13 改判定：删掉小注**不再**等于该清空图层——记号已经铺给全部划线
+               （见 tests/hlmark.test.js），划线还在就还得留着这一层画记号。
+               「不留孤儿」这条本身没作废，只是要等**连划线也没了**才成立，所以往下多走一步。 */
             mk.removeAttribute('data-gl');
             rdGlLayout(b.bub);
-            out.F_没小注就不留层 = b.box.querySelectorAll('.rd-gl-layer').length === 0;
+            out.F_只剩划线仍留层 = b.box.querySelectorAll('.rd-gl-layer').length === 1;
+            mk.replaceWith(document.createTextNode(mk.textContent));   // 连划线一起拆掉
+            rdGlLayout(b.bub);
+            out.F_全空才不留层 = b.box.querySelectorAll('.rd-gl-layer').length === 0;
         }
 
         // ── G：AI 回复的清洗 ──
@@ -769,7 +775,8 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('Y3 箭尖没戳进小注的字里', R.Y_箭尖没戳进标签, '离边沿 ' + R.Y_余量 + 'px');
     ok('Y4 箭尖离小注够近（不是飘在半路）', R.Y_箭尖离标签够近);
     ok('F1 重复排版不叠加图层', R.F_重排不叠加);
-    ok('F2 没小注时不留空层', R.F_没小注就不留层);
+    ok('F2 只剩划线时留着层画记号', R.F_只剩划线仍留层);
+    ok('F2b 划线也没了才清空层（不留孤儿）', R.F_全空才不留层);
     ok('G1 清洗：去引号句号', R.G_去引号句号);
     ok('G2 清洗：只取第一行', R.G_只取第一行);
     ok('G3 清洗：去「拼音：」前缀', R.G_去前缀);
