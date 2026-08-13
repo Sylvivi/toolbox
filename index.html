@@ -25863,10 +25863,45 @@ body {
                              `curve` 是一笔穿过所有点，整条线连续，只是起伏变多。
                            ⚠️别为了"更抖"把 55 调小：段越密越接近折线；也别调大到 90 以上，
                              实拍那版起伏又摊平了、退回雷同。
-                           短线（≤55px，小注和背景词那些）useg 恒为 1 ＝ 两点一线，跟以前一样。 */
-                        var uy = y1 + 1.5, upts = [], useg = Math.max(1, Math.round(w / 55));
-                        for (var us = 0; us <= useg; us++) upts.push([r.left + w * us / useg, uy]);
-                        out.push(useg > 1 ? rc.curve(upts, base) : rc.linearPath(upts, base));
+                           ⚠️⚠️**短线（≤55px）必须走原来那条 linearPath，一个字都别改**——
+                             用户 2026-08-13 明确要求「短线保持之前的那样子，长线再给他加抖动点」。
+                             小注和背景词的记号几乎全是短的，等于完全不受这次改动影响。 */
+                        var uy = y1 + 1.5, useg = Math.max(1, Math.round(w / 55));
+                        if (useg === 1) {
+                            out.push(rc.linearPath([[r.left, uy], [r.right, uy]], base));
+                        } else {
+                        /* ===== 长线：三层随机（2026-08-13 定稿，用户在四个方案里选的"最乱的那个"）=====
+                           起因：上一版长线改用 curve 之后她报「没有再出现以前的那种宽线了，都是那种窄线」。
+                           原因是 curve 的两遍描共用同一组控制点、被逐点拉回对齐 → 贴成一条窄线，
+                           而旧版 linearPath 的两笔各自乱跑，才有那种「两根线分开」的宽。
+                           ⚠️中间试过「两笔同形、整体错开」和「梭形错开」两档，**她当场否掉**：
+                             「都不是我想要的，缺少随机性，挺套路了」——那两版的宽度是**公式**算的
+                             （中间宽两头收），每条线一个模子，一眼看得出规律。她是对的。
+                           所以三样东西各自随机，谁也不跟谁绑定：
+                             ① 两笔**各自**的 rough 抖动（两个不同的 seed）；
+                             ② 两笔之间的间距**沿线乱变**（-1~3.6px，负值＝这一处穿过去贴合）；
+                             ③ 连抖动点**横向落在哪**都不均匀（±该段长的四分之一）。
+                           ⚠️三层都得在。少任何一层都会重新露出规律——②没了是窄线，③没了起伏节奏
+                             整齐得像波浪，①没了两笔平行像双线。 */
+                            var _rnd = function (s) { var x = Math.sin(s * 12.9898) * 43758.5453; return x - Math.floor(x); };
+                            var p1 = [], p2 = [], seg = w / useg;
+                            for (var us = 0; us <= useg; us++) {
+                                // 两端不挪，不然线会缩进去/伸出来，跟字对不齐
+                                var jx = (us > 0 && us < useg) ? (_rnd(base.seed + us * 77) - 0.5) * seg * 0.5 : 0;
+                                var ux = r.left + seg * us + jx;
+                                p1.push([ux, uy]);
+                                p2.push([ux, uy - 1 + _rnd(base.seed + us * 131) * 4.6]);
+                            }
+                            var o1 = {}, o2 = {};
+                            for (var bk in base) { o1[bk] = base[bk]; o2[bk] = base[bk]; }
+                            /* ⚠️`disableMultiStroke` 必须开：rough 默认自己就画两遍，不关掉就是四笔，
+                               墨量翻倍、糊成一条粗带（实测过）。这里的"两遍"由我们自己控制。 */
+                            o1.disableMultiStroke = true;
+                            o2.disableMultiStroke = true;
+                            o2.seed = (base.seed + 4001) % 2147483647;
+                            out.push(rc.curve(p1, o1));
+                            out.push(rc.curve(p2, o2));
+                        }
                     } else if (kind === 'b') {
                         out.push(rc.rectangle(r.left - 3, y0 - 2, w + 6, h + 4, base));
                     } else if (kind === 'c') {

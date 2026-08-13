@@ -165,19 +165,42 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
             document.body.appendChild(svg);
             const rc = rough.svg(svg);
-            const probe = (len) => {
-                const els = rdMkDraw(rc, [{ left: 0, right: len, top: 0, bottom: 14 }], 'u', '#000', '#000', 1234, 1.5);
-                const d = els[0].querySelector('path').getAttribute('d');
-                const ys = (d.match(/-?\d+\.?\d*/g) || []).map(Number).filter((_, i) => i % 2 === 1);
-                return { pts: ys.length, moves: (d.match(/M/g) || []).length };
+            const probe = (len, seed) => {
+                const els = rdMkDraw(rc, [{ left: 0, right: len, top: 0, bottom: 14 }], 'u', '#000', '#000', seed || 1234, 1.5);
+                const ds = els.map(e => e.querySelector('path').getAttribute('d'));
+                const ys = ds.map(d => (d.match(/-?\d+\.?\d*/g) || []).map(Number).filter((_, i) => i % 2 === 1));
+                return {
+                    strokes: ds.length,                                        // 几笔
+                    pts: ys.reduce((a, y) => a + y.length, 0),                 // 总抖动点
+                    moves: ds.reduce((a, d) => a + (d.match(/M/g) || []).length, 0),   // 总起笔数
+                    ys: ys
+                };
             };
             const short = probe(28), long = probe(330);
             out.I_长线抖点更多 = long.pts > short.pts;
-            /* ⚠️⚠️**这条是「不许拆成一段一段」的护栏**：Rough 手绘感靠的是同一笔描两遍，
-               所以一条下划线最多 2 个 M。多段 linearPath 会是 12 个 → 当场红。 */
+            /* ⚠️⚠️**「不许拆成一段一段」的护栏**（她原话「线还是连着的对吗，不会拆成一段一段的吧」）。
+               手绘感＝同一道线描两遍，所以起笔数最多 2 个：短线走 rough 自带的 multiStroke（1 个元素
+               里 2 个 M），长线是我们自己画的两笔（2 个元素各 1 个 M）——两种都是 2。
+               分段 linearPath 那版会是 12 个 → 当场红。 */
             out.I_长线一笔到底 = long.moves <= 2;
             out.I_短线也一笔到底 = short.moves <= 2;
-            out.I_detail = JSON.stringify({ short, long });
+            /* ⚠️长线要有「宽」：两笔之间得真的分开（她报过「都是那种窄线」）。
+               量同序号点的纵向间距，最宽处至少 1.5px。 */
+            const gaps = long.ys.length === 2
+                ? long.ys[0].map((v, i) => Math.abs(v - long.ys[1][i])).filter(v => isFinite(v)) : [];
+            out.I_长线有宽度 = gaps.length > 0 && Math.max(...gaps) >= 1.5;
+            /* ⚠️宽度必须**沿线乱变**，不能是公式（她否掉过「中间宽两头收」那两版：「缺少随机性，
+               挺套路了」）。判据：最宽处和最窄处差得够开，且最窄的地方不在正中间。 */
+            out.I_宽度非公式 = gaps.length > 0 && (Math.max(...gaps) - Math.min(...gaps)) >= 1.2;
+            // 两条不同的长线，宽度分布不该一样
+            const g2 = (() => {
+                const L = probe(330, 8888);
+                return L.ys.length === 2 ? L.ys[0].map((v, i) => Math.abs(v - L.ys[1][i])) : [];
+            })();
+            out.I_两条线不同 = gaps.length && g2.length && JSON.stringify(gaps) !== JSON.stringify(g2);
+            out.I_detail = JSON.stringify({ short: { strokes: short.strokes, pts: short.pts, moves: short.moves },
+                                            long: { strokes: long.strokes, pts: long.pts, moves: long.moves,
+                                                    宽: gaps.length ? +Math.max(...gaps).toFixed(2) : null } });
             svg.remove();
         }
 
@@ -228,6 +251,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('I1 长下划线的抖动点随长度变多', R.I_长线抖点更多, R.I_detail);
     ok('I2 ⚠️长线一笔到底，没拆成一段一段', R.I_长线一笔到底, R.I_detail);
     ok('I3 短线也是一笔到底', R.I_短线也一笔到底, R.I_detail);
+    ok('I4 ⚠️长线两笔真的分开（有"宽"）', R.I_长线有宽度, R.I_detail);
+    ok('I5 ⚠️宽度沿线乱变，不是公式', R.I_宽度非公式, R.I_detail);
+    ok('I6 两条长线的宽度分布不一样', R.I_两条线不同);
 
     ok('H1 ⚠️没有撑宽段落', R.H_sameW, R.H_detail);
     ok('H2 ⚠️没有撑高段落（翻页对齐靠它）', R.H_sameH, R.H_detail);
