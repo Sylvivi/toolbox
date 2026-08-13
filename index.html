@@ -10610,6 +10610,10 @@ body {
                 bookmarksTs: readingGetBookmarksTs(),
                 highlights: readingGetAllHl(),
                 highlightsTs: readingGetHlTs(),
+                /* 划线/读痕的删除墓碑。⚠️**必须挂进 manifest**——不同步的话，另一台设备
+                   （它没有这块碑）会把它本地还留着的那条又推上来，删除等于没删。
+                   见 readingSaveAllHl 下面 rdMarksGetTombs 那段。 */
+                marksDeleted: rdMarksGetTombs(),
                 userName: (localStorage.getItem('toolbox_user_name') || ''),
                 userNameTs: (localStorage.getItem('toolbox_user_name_ts') || ''),
                 bookTitles: rbTitlesLoad(),
@@ -10874,6 +10878,25 @@ body {
                         localStorage.setItem('reading_bookmarks', JSON.stringify(_localBm));
                         localStorage.setItem('reading_bookmarks_ts', new Date().toISOString());
                         marksDirty = true;   // 并进了云端新读痕 → 稍后把并集回推，好让被覆盖过的设备也补回来
+                    }
+                }
+
+                /* 删除墓碑：双向取并集，**必须在下面合并划线/读痕之前跑完**（2026-08-13 加）。
+                   顺序反了的话，这一轮合并用的还是旧碑 → 别的设备删掉的那条会先并进来、
+                   还会被回推，下一轮才剔掉，表现就是「删掉的东西闪一下又出现」。
+                   ⚠️墓碑只进不退（取时间较新的那个），别改成「按时间戳后写覆盖」——
+                     两台设备各删各的，覆盖会把对方的碑抹掉，那条就复活了。 */
+                if (manifest.marksDeleted) {
+                    var _localTombs = rdMarksGetTombs(), _tombChanged = false;
+                    Object.keys(manifest.marksDeleted).forEach(function (id) {
+                        var ct = manifest.marksDeleted[id];
+                        if (!_localTombs[id] || ct > _localTombs[id]) { _localTombs[id] = ct; _tombChanged = true; }
+                    });
+                    if (_tombChanged) {
+                        rdMarksSetTombs(_localTombs);
+                        marksDirty = true;
+                        // 新收到的碑：把本地整个扫一遍（云端没有那本书的数据时，下面的合并扫不到）
+                        try { rdMarksSweepTombs(); } catch (eSw) {}
                     }
                 }
 
@@ -11305,6 +11328,18 @@ body {
                 if (manifest.checkinTasks) { idbSet(CHECKIN_TASKS_KEY, manifest.checkinTasks); if (manifest.checkinTasksTs) idbSet(CHECKIN_TASKS_TS_KEY, manifest.checkinTasksTs); }
                 if (manifest.bookmarks) { localStorage.setItem('reading_bookmarks', JSON.stringify(manifest.bookmarks)); if (manifest.bookmarksTs) localStorage.setItem('reading_bookmarks_ts', manifest.bookmarksTs); }
                 if (manifest.highlights) { localStorage.setItem('reading_highlights', JSON.stringify(manifest.highlights)); if (manifest.highlightsTs) localStorage.setItem('reading_highlights_ts', manifest.highlightsTs); }
+                /* ⚠️这条路径是**整包覆盖写入**、不经过 `_mergeMarksBlobs`，所以那道墓碑筛子在这儿不生效。
+                   不补的话，新设备/重新登录时会把云端还留着的、早就删掉的划线整批带回来
+                   （2026-08-13 修「删除之后自己回来」时一并堵的）。碑取并集、别直接覆盖：
+                   本地可能已经有自己的碑（重新登录的情形）。 */
+                if (manifest.marksDeleted) {
+                    var _mt = rdMarksGetTombs();
+                    Object.keys(manifest.marksDeleted).forEach(function (id) {
+                        if (!_mt[id] || manifest.marksDeleted[id] > _mt[id]) _mt[id] = manifest.marksDeleted[id];
+                    });
+                    rdMarksSetTombs(_mt);
+                    try { rdMarksSweepTombs(); } catch (eSw2) {}
+                }
                 if (manifest.userName !== undefined) { localStorage.setItem('toolbox_user_name', manifest.userName || ''); if (manifest.userNameTs) localStorage.setItem('toolbox_user_name_ts', manifest.userNameTs); }
                 if (manifest.bookTitles) { localStorage.setItem('reading_book_titles', JSON.stringify(manifest.bookTitles)); if (manifest.bookTitlesTs) localStorage.setItem('reading_book_titles_ts', manifest.bookTitlesTs); }
                 if (manifest.bookFolders) { localStorage.setItem('reading_book_folders', JSON.stringify(manifest.bookFolders)); if (manifest.bookFoldersTs) localStorage.setItem('reading_book_folders_ts', manifest.bookFoldersTs); }
@@ -21707,12 +21742,28 @@ body {
         // 读痕(书签/划线)整份跨设备合并：逐「会话键」取并集（按签名去重，同源标记签名相同不会重复）。
         // 就地并进 localBlob，返回是否有新增（云端带来了本地没有的标记）。替代旧的「整块按时间戳覆盖」，
         // 那种方式一台设备一保存就把另一台的读痕整块盖没——这才是跨设备读痕丢失的根因。
+        /* ⚠️取并集是**故意的**，别改成「后写覆盖」：它挡的是「另一台设备还没同步就被覆盖」那种
+             真丢数据（见 docs/云同步.md）。但并集有个天生的缺口——**删除传不出去**，
+             本地删掉、云端还在，下一次就并回来（2026-08-13 用户报「划线删除之后为啥还会自己回来呀」）。
+           所以补墓碑：合并完按碑再筛一遍，见 rdMarksGetTombs 上面那段。 */
         function _mergeMarksBlobs(localBlob, cloudBlob) {
             cloudBlob = cloudBlob || {};
             var changed = false;
+            var tombs = (typeof rdMarksGetTombs === 'function') ? rdMarksGetTombs() : {};
+            var hasTomb = false;
+            for (var _t in tombs) { hasTomb = true; break; }
             Object.keys(cloudBlob).forEach(function (k) {
                 var before = (localBlob[k] && localBlob[k].length) || 0;
                 var merged = _readerMergeMarks(localBlob[k], cloudBlob[k]);
+                if (hasTomb && merged && merged.length) {
+                    var kept = merged.filter(function (m) { return !(m && m.id && tombs[m.id]); });
+                    /* ⚠️剔掉了东西就得算 changed，哪怕条数正好跟本地原来一样——
+                       changed 会触发「把本地这份回推上去」，云端那条才真正消失。
+                       不这么做的话本地虽然不显示了，但云端那条永远在，每次同步都要白剔一遍，
+                       换一台没碑的设备（碑过期后）它还会复活。回推一次云端就干净了，不会来回循环。 */
+                    if (kept.length !== merged.length) changed = true;
+                    merged = kept;
+                }
                 if (merged.length !== before || !localBlob[k]) { localBlob[k] = merged; if (merged.length !== before) changed = true; }
             });
             return changed;
@@ -25564,6 +25615,61 @@ body {
                 _rdHlPushTimer = setTimeout(syncPushData, 3000);
             }
         }
+
+        /* ===== 划线/读痕的删除墓碑（2026-08-13 加）=====
+           用户报「划线删除之后为啥还会自己回来呀」。根因是同步方式：划线和读痕走
+           **逐会话取并集**（`_mergeMarksBlobs` → `_readerMergeMarks`），本地删掉一条、
+           云端那份还在，下一次同步就把它并回来了；而同步是**先拉后推**，所以并回来的
+           那条紧接着又被推上去，删除被彻底抹平——不是偶发，是必然。
+
+           并集本身不能去掉：它挡的是「另一台设备还没同步就被覆盖」那种真丢数据
+           （见 docs/云同步.md 第 40 行那条）。所以按那份笔记里写的正解补墓碑：
+           **删除时立一块碑，同步时按碑剔除，碑本身也跟着同步**。
+
+           ⚠️结构和 30 天清理照抄对话那套（`_chatGetTombstones`），别自创第二种写法。
+           ⚠️划线和读痕**共用这一张表**：两者的 id 都是「时间戳-随机串」，不会撞；
+             而它们共用同一个合并函数，分两张表只会多一份忘记同步的风险。 */
+        var RD_TOMB_KEY = 'reading_marks_tombs';
+        function rdMarksGetTombs() {
+            try { return JSON.parse(localStorage.getItem(RD_TOMB_KEY) || '{}'); } catch (e) { return {}; }
+        }
+        function rdMarksSetTombs(t) {
+            // 清掉 90 天前的碑。⚠️比对话那套的 30 天长：书是慢慢读的，一本书搁两个月再打开很正常，
+            //   碑过期太早，那台设备一开机就会把早就删掉的划线又并回来。
+            var cutoff = Date.now() - 90 * 86400000;
+            Object.keys(t).forEach(function (id) { if (!(t[id] > cutoff)) delete t[id]; });
+            try { localStorage.setItem(RD_TOMB_KEY, JSON.stringify(t)); } catch (e) {}
+        }
+        // 立碑（删一条划线/读痕时叫一次）
+        function rdMarksTomb(id) {
+            if (!id) return;
+            var t = rdMarksGetTombs();
+            t[id] = Date.now();
+            rdMarksSetTombs(t);
+        }
+        /* 拿本地所有的碑，把划线和读痕整个扫一遍剔干净。返回有没有真删掉东西。
+           ⚠️为什么光靠 `_mergeMarksBlobs` 里那道筛子不够：那里只遍历**云端有的**会话键
+             （`Object.keys(cloudBlob)`）。别的设备删掉一条、碑同步过来了，但云端恰好还没有
+             这本书的划线数据时，这台设备上那条就扫不到、一直留着。 */
+        function rdMarksSweepTombs() {
+            var tombs = rdMarksGetTombs(), has = false;
+            for (var _k in tombs) { has = true; break; }
+            if (!has) return false;
+            var changed = false;
+            var pairs = [[readingGetAllHl, readingSaveAllHl], [readingGetAllBookmarks, readingSaveAllBookmarks]];
+            pairs.forEach(function (pair) {
+                var all, dirty = false;
+                try { all = pair[0]() || {}; } catch (e) { return; }
+                Object.keys(all).forEach(function (k) {
+                    var arr = all[k];
+                    if (!arr || !arr.length) return;
+                    var kept = arr.filter(function (m) { return !(m && m.id && tombs[m.id]); });
+                    if (kept.length !== arr.length) { all[k] = kept; dirty = true; }
+                });
+                if (dirty) { try { pair[1](all); changed = true; } catch (e2) {} }
+            });
+            return changed;
+        }
         function readingGetHlTs() { return localStorage.getItem('reading_highlights_ts') || ''; }
         function readingGetConvHl() {
             var cid = readingMarksConvId();
@@ -27820,6 +27926,10 @@ body {
         }
         function rdHlDelete(id) {
             var list = readingGetConvHl().filter(function(h) { return h.id !== id; });
+            /* ⚠️**必须先立碑再存**（2026-08-13 加，用户报「划线删除之后为啥还会自己回来呀」）：
+               划线是逐会话取并集同步的，不立碑的话云端那份会在下一次同步时把它并回来。
+               见 rdMarksTomb 上面那段。 */
+            rdMarksTomb(id);
             readingSaveConvHl(list);
             // ⚠️先记下所在消息再拆 mark——拆完就找不到它属于哪条了，小注会变成孤儿留在屏幕上
             var _m0 = document.querySelector('mark.rd-hl[data-hlid="' + id + '"]');
