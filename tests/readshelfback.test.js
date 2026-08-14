@@ -156,8 +156,60 @@ function boot() {
     eq('D2 在书里 → 显示', r.inBook, true);
     eq('D3 普通对话 → 隐藏', r.inPlain, false);
 
-    // ── E 组：全程没有 JS 报错 ───────────────────────────────────
-    eq('E1 无 JS 报错', errs, []);
+    /* ── E 组：对话列表底下不许长出正文 ──────────────────────────
+       用户 2026-08-14 报「那个对话列表怎么拉到下面是跟阅读正文衔接着的呢，怪怪的」。
+       根因：**对话列表和阅读正文渲染在同一个 #chatMessages 容器里**，而 #chatMessages
+       的 scroll 监听里那几条「滚到边上自动补内容」当时没判视图，列表拉到底就触发
+       readerAppendNextChapter()/chatLoadLater()，把下一章接在了列表屁股后面。
+       ⚠️这组要同时守两道闸，缺一条都还会复发：
+         ① rbGoChatList 进列表前把会话状态整个清掉；
+         ② scroll 监听开头 `chatView !== 'conv'` 直接 return（**这道才是关得死的**，
+            不然以后新加一个进列表的入口、忘了清状态就又坏）。 */
+    r = await page.evaluate(async () => {
+        rbCloseShelf();
+        // 摆成「正在读第 1 章，后面还有第 2 章」
+        window.rbBooks = [{
+            id: 'bk_t1', fileName: '测试书甲.txt', fileSize: 111, _folder: '测试文件夹',
+            chapters: [{ title: '第一章', body: '第一章正文。'.repeat(80) },
+                       { title: '第二章', body: '第二章正文XYZ。'.repeat(80) }]
+        }];
+        await idbSet('reading_books', { books: window.rbBooks });
+        enterBook();
+        readerChapterIdx = 0;
+        rbGoChatList();
+        await new Promise(r => setTimeout(r, 350));
+        const el = document.getElementById('chatMessages');
+        /* ⚠️种对话记录必须走 `chatSetHistory()`，**不能写 localStorage**：
+           `chatGetHistory()` 有内存缓存 `_chatHistCache`，localStorage 只是一次性
+           迁移源——首次读过之后再往 localStorage 里塞，根本没人看
+           （写这个测试时踩到，表现是列表恒为空）。
+           这几条对话只是给"拉到底"当道具，不是被测对象，所以在切换之后才种。 */
+        chatSetHistory([0, 1, 2].map(i => ({
+            id: 'c' + i, title: '对话' + i, created: Date.now() - i * 1000,
+            updated: Date.now() - i * 1000, messages: [{ role: 'user', content: '喂' }]
+        })));
+        chatRenderHistoryList();
+        const n0 = el.querySelectorAll('.chat-hist-item').length;
+        // 拉到底两次（补渲染是异步的，一次可能还没来得及）
+        for (let i = 0; i < 2; i++) {
+            el.scrollTop = el.scrollHeight;
+            el.dispatchEvent(new Event('scroll'));
+            await new Promise(r => setTimeout(r, 400));
+        }
+        return {
+            列表有条目: n0 > 0,
+            拉到底后条目没变: el.querySelectorAll('.chat-hist-item').length === n0,
+            冒出正文: /第一章正文|第二章正文XYZ/.test(el.textContent),
+            状态清干净: chatMessages.length === 0 && !chatReaderMode && !chatReadingMode
+        };
+    });
+    eq('E1 从书架进对话列表，列表正常', r.列表有条目, true);
+    eq('E2 拉到底不会多长出东西', r.拉到底后条目没变, true);
+    eq('E3 拉到底不会冒出阅读正文', r.冒出正文, false);
+    eq('E4 进列表时会话状态被清干净', r.状态清干净, true);
+
+    // ── F 组：全程没有 JS 报错 ───────────────────────────────────
+    eq('F1 无 JS 报错', errs, []);
 
     await browser.close();
     let bad = 0;

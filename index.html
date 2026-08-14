@@ -13598,7 +13598,12 @@ body {
              （rbPickForReader），点章节直接跳进阅读，而她此刻要的是对话。 */
         function rbGoChatList() {
             rbCloseShelf();
-            chatReaderMode = false;
+            /* ⚠️必须**整个清掉会话状态**，光把 chatReaderMode 置 false 不够（第一版就是那样，
+               用户当天报「对话列表拉到下面跟阅读正文衔接着」）：chatMessages 里还装着刚才那本书的
+               消息、chatReadingMode 也还是真，于是列表滚到底触发窗口化补渲染，正文接在了列表后面。
+               走 chatResetConvState()（阅读顶栏那个入口一直走的就是它），跟它保持一致。 */
+            if (typeof chatSaveCurrentConv === 'function') chatSaveCurrentConv();
+            chatResetConvState();
             rbPickForReader = false;
             if (typeof chatSyncModeButtons === 'function') chatSyncModeButtons();
             openChatModal();
@@ -23656,6 +23661,15 @@ body {
             var ticking = false;
             var saveTimer = null;
             el.addEventListener('scroll', function() {
+                /* ⚠️⚠️**列表视图下这整套「滚到边上自动补内容」一律不许跑**（2026-08-14 修）。
+                   用户报「那个对话列表怎么拉到下面是跟阅读正文衔接着的呢，怪怪的」——
+                   根因是**对话列表和阅读正文渲染在同一个 `#chatMessages` 容器里**：
+                   列表拉到底满足「接近底部」，下面那几条 `readerAppendNextChapter()` /
+                   `chatLoadLater()` 就照跑不误，把下一章正文接在了对话列表屁股后面。
+                   ⚠️别只在调用方（rbGoChatList 之类）清状态了事——那要求**每一个**进列表的
+                     入口都记得清干净，漏一个就复发，而且是这种"看着怪但说不上哪怪"的坏法。
+                     在这儿按视图闸一刀，才是真正关得死的那道。 */
+                if (chatView !== 'conv') return;
                 if (!ticking) {
                     ticking = true;
                     requestAnimationFrame(function() { readingUpdateProgress(); readingAutoHideTopbar(); ticking = false; });
