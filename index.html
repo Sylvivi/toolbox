@@ -5467,8 +5467,18 @@ body {
         <div class="chat-settings-body">
             <div id="rbShelfView">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin:6px 0 14px">
-                    <div id="rbShelfTitle" style="font-size:15px;font-weight:700;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📚 书架</div>
-                    <button class="rb-btn rb-btn-primary" style="flex-shrink:0" onclick="document.getElementById('rbFileInput').click()">＋ 添加书</button>
+                    <!-- 2026-08-14 极简化：📚 emoji + 「书架」两个字 → 一个线条书本图标，文字去掉。
+                         ⚠️这里**不能**改成 display:flex——进文件夹时 setTitle 会往里塞「‹ 📁 文件夹名」，
+                         长名字要靠 text-overflow:ellipsis 截断，一改 flex 那个省略号就失效了。
+                         所以图标用 vertical-align 对齐，保持整块是行内文本。 -->
+                    <div id="rbShelfTitle" style="font-size:15px;font-weight:700;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg></div>
+                    <!-- 2026-08-14：原来是 rb-btn-primary（实心强调色药丸 + 「＋ 添加书」四个字），
+                         改成跟对话列表右上角同款的 chat-sp-btn——透明底、只有一个线条加号。
+                         她的审美是「显眼靠提亮字色＋淡底，别加实心色块零件」，那颗实心药丸正撞枪口。 -->
+                    <!-- ⚠️chat-sp-btn 默认 opacity .7 + accent-mid，在这儿太淡了：
+                         「添加书」是这一页的主要动作，不能比旁边的书本图标还不起眼。
+                         提到实色 accent、不透明——靠提亮字色显眼，不靠加实心底块。 -->
+                    <button class="chat-sp-btn" style="flex-shrink:0;color:var(--accent);opacity:1" title="添加书" aria-label="添加书" onclick="document.getElementById('rbFileInput').click()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
                 </div>
                 <input type="file" id="rbFileInput" accept=".txt,.md,.markdown,.text,.epub,.mobi,.azw,.azw3" style="display:none" onchange="rbOnFilePick(this)">
                 <!-- 追加章节（番外）用的另一个文件框：跟「添加书」分开，免得走串把番外导成一本新书 -->
@@ -5482,7 +5492,9 @@ body {
                     <button class="rb-head-back" onclick="rbBackToShelf()">‹ 书架</button>
                     <div id="rbBookTitle" class="rb-head-title"></div>
                     <button class="rb-btn rb-btn-primary" id="rbNextBtn" onclick="rbSendNext()">发下一章 ›</button>
-                    <button class="rb-head-icon" id="rbSplitToggle" onclick="rbToggleSplitTools()" title="分章设置（导书时才用）">⚙</button>
+                    <!-- 2026-08-14：⚙ emoji → 线条齿轮。svg 要 display:block，否则按行内元素排会带一截基线空隙、看着偏下。
+                         ⚠️别自作聪明画「圆心+8根放射线」的简化齿轮——那个渲染出来是个太阳，试过了。用标准齿轮轮廓。 -->
+                    <button class="rb-head-icon" id="rbSplitToggle" onclick="rbToggleSplitTools()" title="分章设置（导书时才用）"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
                 </div>
                 <input type="text" id="rbChapterSearch" class="rb-search rb-search-full" placeholder="搜索章节 / 小节…" oninput="rbChapterSearchInput()">
                 <!-- 分章工具：一本书导进来时才用一次，平时收起来不占地方 -->
@@ -22073,6 +22085,9 @@ body {
                 if (s) s.scrollTop = 0;
             });
         }
+        // 书架标题上那个线条书本图标。⚠️跟 HTML 里 #rbShelfTitle 初始那份必须一模一样——
+        // rbRenderShelf 一跑就会把标题整个重写，两边不一致的话图标会在渲染前后跳一下。
+        var RB_ICON_SHELF = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>';
         function rbRenderShelf() {
             var box = document.getElementById('rbShelfList');
             var titleEl = document.getElementById('rbShelfTitle');
@@ -22083,7 +22098,7 @@ body {
                 titleEl.style.cursor = back ? 'pointer' : 'default';
             }
             if (!rbBooks.length) {
-                setTitle('📚 书架', null);
+                setTitle(RB_ICON_SHELF, null);
                 rbCurrentFolder = null;
                 box.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:34px 0;line-height:1.7">书架还是空的<br>点右上角「＋ 添加书」上传 txt / md / epub / mobi</div>';
                 return;
@@ -22105,7 +22120,7 @@ body {
             }
             if (rbCurrentFolder === null) {
                 // —— 文件夹列表视图 ——
-                setTitle('📚 书架', null);
+                setTitle(RB_ICON_SHELF, null);
                 // 每个文件夹取「里面所有书里最近一次阅读/打开时间」，用来把最近读过的文件夹排前面
                 var folderTs = {};
                 Object.keys(groups).forEach(function (f) {
