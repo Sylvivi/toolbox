@@ -2653,6 +2653,19 @@ body {
         .chat-settings-body {
             padding: 0 20px; overflow-y: auto; flex: 1;
         }
+        /* ===== 书架/目录＝全屏主界面，不是底部弹出的抽屉（2026-08-14 用户定）=====
+           她的原话：「我不希望目录成为一个弹出来的窗口，而是成为一个全屏的主界面，
+           就像对话列表之前那样」。
+           起因是同一天把「在书里往回退」改成了回书架——书架从此是阅读的上一层、
+           是常驻主界面；而 70vh 的半截抽屉底下还压着工具箱主页，看着仍像个临时浮层。
+           ⚠️尺寸照抄 .modal.chat-modal（对话列表那套），两边才像同一层东西。
+           ⚠️`#rbModal` 是 `.chat-settings-modal` 的**唯一使用者**，所以这里怎么改都
+             不会波及别的面板；仍按 id 写，是为了让「书架全屏」这件事一眼找得到。
+           ⚠️slide-up 那个 transform 动画照旧留着（.show 靠它），只是行程变成整屏高。 */
+        #rbModal {
+            top: 0; max-height: none; height: auto;
+            border-radius: 0; border-top: none; box-shadow: none;
+        }
         /* ===== 阅读书架 ===== */
         .rb-btn { padding: 6px 12px; border: 1px solid var(--card-border); border-radius: 8px; background: var(--input-bg); color: var(--text); font-size: 12px; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
         .rb-btn:hover { border-color: var(--accent); }
@@ -5471,6 +5484,9 @@ body {
             <div id="rbShelfView">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin:6px 0 14px">
                     <div id="rbShelfTitle" style="font-size:15px;font-weight:700;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📚 书架</div>
+                    <!-- 对话入口摆在书架上（2026-08-14）：书架成了主界面之后，用户第一句就问
+                         「那现在对话去哪里了呀」——原来只在阅读顶栏留了一个图标，藏太深了。 -->
+                    <button class="rb-btn" style="flex-shrink:0;margin-left:auto;margin-right:8px" onclick="rbGoChatList()">💬 对话</button>
                     <button class="rb-btn rb-btn-primary" style="flex-shrink:0" onclick="document.getElementById('rbFileInput').click()">＋ 添加书</button>
                 </div>
                 <input type="file" id="rbFileInput" accept=".txt,.md,.markdown,.text,.epub,.mobi,.azw,.azw3" style="display:none" onchange="rbOnFilePick(this)">
@@ -13571,6 +13587,18 @@ body {
             document.getElementById('rbModal').classList.add('show');
             try { bkSyncPullManifest(); } catch (e) {}   // 顺手拉服务器书单（异步）
         }
+        /* 书架上那个「💬 对话」：关掉书架、打开对话列表。
+           ⚠️必须把阅读态(chatReaderMode)一起清掉，否则下次开书架会被当成"为阅读器选书"
+             （rbPickForReader），点章节直接跳进阅读，而她此刻要的是对话。 */
+        function rbGoChatList() {
+            rbCloseShelf();
+            chatReaderMode = false;
+            rbPickForReader = false;
+            if (typeof chatSyncModeButtons === 'function') chatSyncModeButtons();
+            openChatModal();
+            chatSwitchView('list');
+        }
+
         // 在书里时右上角那个「去对话列表」的按钮走这儿：先关书架态，再照常进列表
         function readingGoChatList() {
             if (chatStreaming) return;
