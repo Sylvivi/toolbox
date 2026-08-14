@@ -5367,6 +5367,9 @@ body {
                 <div class="chat-handle-bar"></div>
                 <button class="chat-close-btn" id="chatBackBtn">←</button>
                 <span style="flex:1;min-width:0"></span><span id="chatModelLabel" style="display:none">「按量」claude-opus-4-6-自营</span>
+                <!-- 在书里才出现：左边的 ← 已经改成回书架了，对话列表得留个明面上的入口。
+                     只在「对着某本书的会话」里显示，普通对话不需要（见 readingSyncAutoScrollUI）。 -->
+                <button class="chat-sp-btn" id="chatToListBtn" onclick="readingGoChatList()" title="对话列表" style="display:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></button>
                 <button class="chat-sp-btn" id="chatSearchBtn" onclick="chatToggleSearch()" title="搜索"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></button>
                 <div style="position:relative">
                     <button class="chat-sp-btn" id="chatSpBtn" onclick="chatToggleTopMenu(event)" title="更多">⋮</button>
@@ -13524,6 +13527,61 @@ body {
             chatSwitchView('list');
         }
 
+        /* ===== 在书里的时候，「返回」＝回书架，不是回对话列表（2026-08-14 用户定）=====
+           她的原话：「我希望阅读能成为主界面，现阶段实际上阅读是依附在对话列表上的，这个很反直觉」
+           「现在我觉得不方便的就是阅读界面左滑总是要进入对话列表」。
+           ⚠️她说的这个"反直觉"有实打实的根据：**阅读会话压根不在对话列表里**
+             （id 以 `reader_` 开头的会话在 chatRenderHistoryList / chatOpenMostRecent 里都被过滤掉了），
+             所以从书里退出来，落到的那个列表里连刚才那本书都找不着。
+           ⚠️长按搜索键仍然是**直接续读**，没有改（她 2026-08-10 定的，当天又确认了一次）：
+             开 app 回到书里、后退才是书架，跟 Kindle/苹果图书一个路子。 */
+        function readingBookViewBookId() {
+            /* 当前这个会话对着哪本书；不是"在书里"就返回 null。
+               ⚠️判模式别只看 chatReadingMode：**进纯阅读时它也会被置真**
+                 （readerOpenChapter 里两个都设），这个坑在 readingSyncAutoScrollUI 里记过。
+                 这里两种都要认（纯看书 + 共读），所以只要有书就算。 */
+            if (!(chatReaderMode || chatReadingMode)) return null;
+            if (chatReaderMode && readerBookId) return readerBookId;
+            var b = (typeof rbGetConvBook === 'function') ? rbGetConvBook() : null;
+            return b || null;
+        }
+        function readingBackToShelf() {
+            if (chatStreaming) return;
+            var bid = readingBookViewBookId();
+            /* ⚠️**不能直接调 rbOpenShelf()**：它在阅读模式下会认出 readerBookId，
+               直接把人送进**这本书的目录**——那是右上角 ⋮ 和 clawd 图标那条路要的效果，
+               而这里要的恰恰是退到**书架**去换书。所以自己铺一遍书架层。 */
+            if (typeof rbLoad === 'function') rbLoad();
+            var b = bid && typeof rbGetBook === 'function' ? rbGetBook(bid) : null;
+            // 落在这本书所在的文件夹里，不是最外层文件夹列表——退一步就该看见它的邻居
+            rbCurrentFolder = b ? (rbBookFolder(b) || '') : null;
+            rbActiveBookId = null;
+            if (chatReaderMode) rbPickForReader = true;   // 点章节直接进阅读，跟书架那条路一致
+            /* ⚠️把阅读界面**关掉**再开书架，别让它留在后面当背景：
+               否则在书架上再左滑一下（rbCloseShelf）会退回刚才那本书，绕成一个圈。
+               关掉之后这一路是：书 → 书架 → 文件夹列表 → 工具箱主页，一层一层出得去。 */
+            closeChatModal();
+            var shelf = document.getElementById('rbShelfView');
+            var chap = document.getElementById('rbChapterView');
+            if (shelf) shelf.style.display = '';
+            if (chap) chap.style.display = 'none';
+            if (typeof rbRenderShelf === 'function') rbRenderShelf();
+            if (typeof rbScrollShelfTop === 'function') rbScrollShelfTop();
+            document.getElementById('rbBg').classList.add('show');
+            document.getElementById('rbModal').classList.add('show');
+            try { bkSyncPullManifest(); } catch (e) {}   // 顺手拉服务器书单（异步）
+        }
+        // 在书里时右上角那个「去对话列表」的按钮走这儿：先关书架态，再照常进列表
+        function readingGoChatList() {
+            if (chatStreaming) return;
+            readingSaveScrollPos();
+            chatSaveCurrentConv();
+            chatResetConvState();
+            chatReaderMode = false;
+            if (typeof chatSyncModeButtons === 'function') chatSyncModeButtons();
+            chatSwitchView('list');
+        }
+
         (function() {
             var btn = document.getElementById('chatBackBtn');
             if (!btn) return;
@@ -13536,6 +13594,8 @@ body {
                 } else {
                     tapTimer = setTimeout(function() {
                         tapTimer = null;
+                        // 跟左滑同一个语义：在书里就回书架，别把人甩到对话列表去
+                        if (readingBookViewBookId()) { readingBackToShelf(); return; }
                         chatBackToList();
                     }, 300);
                 }
@@ -13615,7 +13675,12 @@ body {
         // 聊天面板：对话内→返回列表；列表→退回底层标签页（收藏/密钥/日历等）
         attachSwipeBack(document.querySelector('.chat-modal'),
             function() { return !chatStreaming && (chatView === 'conv' || chatView === 'list'); },
-            function() { if (chatView === 'conv') chatBackToList(); else closeChatModal(); });
+            function() {
+                if (chatView !== 'conv') { closeChatModal(); return; }
+                // 在书里 → 回书架；普通对话照旧回对话列表（见 readingBackToShelf 上面那段注释）
+                if (readingBookViewBookId()) { readingBackToShelf(); return; }
+                chatBackToList();
+            });
 
         /* 书架/目录面板：一次退一层 —— 目录 → 书架(某文件夹里) → 文件夹列表 → 关掉面板。
            用户 2026-07-29 要的：「不然老是要用手去点」，且明确文件夹那层也要算一层。
@@ -18586,6 +18651,15 @@ body {
             var inReading = (chatView === 'conv') && (chatReadingMode || chatTranslateMode);
             var sb = document.getElementById('chatScrollBtn');
             if (sb) sb.style.display = inReading ? 'none' : '';
+            /* 「去对话列表」按钮：只在**对着某本书的会话**里露面。
+               左边那个 ← 在书里已经改成回书架了（2026-08-14），对话列表得在明面上留个入口，
+               否则从书里再也点不到它。判据直接复用 readingBookViewBookId()，
+               免得这里和返回键各写一套、哪天走偏。 */
+            var toList = document.getElementById('chatToListBtn');
+            if (toList) {
+                var show = (chatView === 'conv') && !!(typeof readingBookViewBookId === 'function' && readingBookViewBookId());
+                toList.style.display = show ? '' : 'none';
+            }
         }
 
         // 共读：正文字号缩放（按设备保存，倍率 0.8~1.6，默认 1.0）
