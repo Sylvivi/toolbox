@@ -10225,13 +10225,13 @@ body {
         var IMGBED_STORE = 'toolbox_imgbeds';
         /* ⚠️这个防抖计时器**从 2026-05-04 起就一直没声明过**，直到 2026-08-14 用户点
            「拉取云端」时才炸出来：`❌ _cfSyncTimer is not defined`。
-           为什么埋了三个多月没人发现：写的那句 `_cfSyncTimer = setTimeout(...)` 在非严格模式下
-           会**顺手造一个全局变量**，所以只要有谁先跑过一次赋值，后面就都正常了；
-           只有「这辈子第一次执行到这儿」的那一次，`if (_cfSyncTimer)` 会因为读一个
-           从未存在的名字而抛 ReferenceError。而拉取云端里 setImgBedData 恰好是冷启动后
-           第一个碰它的调用点。
-           ⚠️别以为"能跑就没事"——它抛在 cfCloudOverwrite 中间，会把后面那一串
-           （readerQA/readerSummaries 等）整个跳过。 */
+           ⚠️它**不是"偶尔炸"，是每一次都炸、三个月来从没成功过**：`if (_cfSyncTimer)` 是在
+             读一个从未存在的名字，当场 ReferenceError；下一行那句赋值（本来会顺手造出这个
+             全局变量）**根本轮不到执行**。所以这个防抖从来没生效过。
+           埋这么久没被发现，只是因为 setImgBedData 的两个调用点都很冷门：
+           改图床设置、以及拉取云端时 manifest 里带 imgbeds。
+           ⚠️别把它当"报个错而已"——它抛在 cfCloudOverwrite 中间，会把后面那一串
+           （readerQA / readerSummaries 等）整个跳过。 */
         var _cfSyncTimer = null;
         function getImgBedData() { return idbGet(IMGBED_STORE) || []; }
         function setImgBedData(d) {
