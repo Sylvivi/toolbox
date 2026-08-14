@@ -27548,6 +27548,19 @@ body {
            也别再放大——放远了就不像是"从这几个字身上长出来的"，而且下方那一档的余量本来就紧
            （放不下就会翻到上方去，反而离得更远）。 */
         var RD_SEL_GAP = 20;
+        /* ⚠️iPad 上系统气泡是落在选区**下方**的，跟手机相反——于是它跟上面那套「默认放下方」
+           的预判正面撞上，把小条整条盖住（用户 2026-08-14 报：「iPad 上复制粘贴的小条直接
+           正好把它严严实实地覆盖住了」）。
+           手机上 20px 这条缝是她实测说「刚好」的，所以**不能一刀切全平台往下推**，
+           只在 iPad 上多让开一个气泡的高度。
+           ⚠️iPadOS 13 起 Safari 的 UA 自称 Macintosh、里面根本没有 "iPad" 这个词，
+             得靠 maxTouchPoints 把它跟真 Mac 分开（真 Mac 是 0）。 */
+        var RD_IS_IPAD = (function () {
+            try {
+                var ua = navigator.userAgent || '';
+                return /iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+            } catch (e) { return false; }
+        })();
         function rdHlPlaceSelBar(bar, range) {
             bar.classList.add('rd-selfloat');
             document.body.appendChild(bar);
@@ -27564,8 +27577,9 @@ body {
             var bw = bar.offsetWidth, bh = bar.offsetHeight;
             var vw = window.innerWidth, vh = window.innerHeight;
             var top = null;
-            if (last.bottom + RD_SEL_GAP + bh <= vh - 8) {
-                top = last.bottom + RD_SEL_GAP;                          // ① 选区下方
+            var belowGap = RD_SEL_GAP + (RD_IS_IPAD ? RD_SEL_NATIVE_H : 0);   // iPad 的气泡在下方，得整个跳过去
+            if (last.bottom + belowGap + bh <= vh - 8) {
+                top = last.bottom + belowGap;                            // ① 选区下方
             } else if (first.top - RD_SEL_NATIVE_H - bh >= 8) {
                 top = first.top - RD_SEL_NATIVE_H - bh;                  // ② 选区上方，跳过系统气泡
             }
