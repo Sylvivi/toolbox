@@ -16986,9 +16986,18 @@ body {
             if (btn) btn.textContent = _msgToolsShown ? '🙈 隐藏' : '👁 显示';
         }
         function clawdToggleMsgTools() {
+            // ⚠️切换会改变每条消息的高度：工具栏 26~32px 现身，同时 padding 从 17px 缩回 11px
+            // （见样式 body.chat-tools-hidden 那两条）。内容整体变高而 scrollTop 不动，
+            // 就等于被底下多出来的那截顶上去了 → 用户报「点显示之后界面不在最底下、停在比较高的位置」。
+            // 所以切换前先记住是不是贴着底，是就切完滚回去。反方向（隐藏）内容变矮，
+            // 浏览器会自己把超出的 scrollTop 夹回底部，本来就没问题。
+            // ⚠️用 chatIsNearBottom() 当条件顺带挡住了阅读/共读模式：那时人停在章节中间、不算贴底，
+            // 不会被误滚到章末。别改成无条件 chatScrollBottom()。
+            var wasBottom = chatIsNearBottom();
             _msgToolsShown = !_msgToolsShown;
             localStorage.setItem('chat_show_msgtools', _msgToolsShown ? '1' : '0');
             chatApplyMsgTools();
+            if (wasBottom) chatScrollBottom();
         }
         chatApplyMsgTools();
         function clawdMenuAct(what) {
