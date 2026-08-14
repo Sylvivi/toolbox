@@ -13610,8 +13610,17 @@ body {
                 if (canStart && !canStart(e)) return;
                 // 忽略在输入框内的滑动（避免干扰文本选择）——目录里的「搜索章节」框也靠这条
                 if (e.target.closest('textarea, input')) return;
+                // ⚠️正在选字就别抢手势（2026-08-14 修，用户在 iPad 上反复踩到）：
+                //   选中一段文字后再拖动那两个小圆点去调范围，轨迹跟"右滑返回"一模一样，
+                //   于是阅读到一半面板自己关了。有选区时一律不起手。
+                var _sel = window.getSelection && window.getSelection();
+                if (_sel && !_sel.isCollapsed && String(_sel).trim()) return;
                 var t = e.touches[0];
-                if (t.clientX > window.innerWidth * 0.45) return;   // 只认左半屏起手
+                // ⚠️起手区**不能只按百分比**：手机上 45% ≈ 175px 还算克制，
+                //   但 iPad 横屏宽一千多，45% 就是五百多像素——屏幕左边一大半都成了触发区，
+                //   在那儿选字往右拖必然误触发（正是用户报的现象）。所以再压一个 160px 的上限：
+                //   手机上几乎没变化，平板横屏上从 500+ 收到 160。
+                if (t.clientX > Math.min(window.innerWidth * 0.45, 160)) return;
                 startX = t.clientX; startY = t.clientY; swiping = true;
             }, { passive: true });
             el.addEventListener('touchmove', function(e) {
@@ -13619,6 +13628,12 @@ body {
                 var dx = e.touches[0].clientX - startX;
                 var dy = Math.abs(e.touches[0].clientY - startY);
                 if (dy > 60 || dx < 0) { swiping = false; _swipeBackGetHint().style.opacity = '0'; return; }
+                // ⚠️划到一半才出现选区也要立刻收手：iPad 上长按选中后手指往往不抬就继续拖，
+                //   touchstart 那道闸是拦不到的（那时还没有选区）。
+                var _s = window.getSelection && window.getSelection();
+                if (_s && !_s.isCollapsed && String(_s).trim()) {
+                    swiping = false; _swipeBackGetHint().style.opacity = '0'; return;
+                }
                 var progress = Math.min(dx / 80, 1);
                 var h = _swipeBackGetHint();
                 h.style.opacity = String(progress * 0.7);
