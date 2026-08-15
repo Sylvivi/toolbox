@@ -5736,23 +5736,25 @@ body {
                     </div>
                 </div>
                 <div style="margin-top:4px;padding-top:14px;border-top:1px solid var(--card-border)">
-                    <!-- 「发送最近」：2026-08-15 放出来。之前当它跟上下文压缩重复所以藏了，
-                         但翻译/查生词这种一句一问的活要的正是「限量且不要摘要」，压缩帮不上忙。
-                         调到 1 轮以上时会自动停掉本对话的摘要（见 chatCtxCapped）。 -->
-                    <div class="chat-ctx-bar" style="padding:0 0 2px">
-                        <span style="font-size:12px">发送最近</span>
-                        <input type="range" id="chatCtxRange" min="0" max="50" value="0" oninput="chatUpdateCtxLabel()" onchange="chatSaveCurrentConv()" style="background: linear-gradient(to right, var(--accent) 0%, var(--accent) 0%, var(--card-border) 0%, var(--card-border) 100%); border-radius: 3px;">
-                        <span class="ctx-label" id="chatCtxLabel" style="font-size:12px">全部</span>
-                    </div>
-                    <div id="chatCtxHint" style="font-size:11px;color:var(--text-muted);line-height:1.5;padding:0 0 10px"></div>
+                    <!-- 2026-08-15：「发送最近」放出来了（之前当它跟压缩重复所以藏着），
+                         但没有单开一块——它和压缩本来就是同一件事的两头（发多少 / 多了怎么办），
+                         所以一起收进这个折叠里，标题从「上下文压缩」改叫「上下文」。
+                         发送最近 > 0 时压缩那两行自动置灰（见 chatCtxSyncCompressLock），
+                         省得还要自己去判断「那我要不要把压缩关了」。 -->
                     <div id="compressFold">
                         <div onclick="chatToggleCompressFold()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;padding:2px 0">
-                            <span style="font-size:13px;font-weight:600;color:var(--text)">上下文压缩 <span id="compressFoldStatus" style="font-weight:400;font-size:11px;color:var(--text-muted)"></span></span>
+                            <span style="font-size:13px;font-weight:600;color:var(--text)">上下文 <span id="compressFoldStatus" style="font-weight:400;font-size:11px;color:var(--text-muted)"></span></span>
                             <span id="compressFoldArrow" style="font-size:10px;color:var(--text-muted);transition:transform 0.2s;display:inline-block">▶</span>
                         </div>
-                        <div id="compressFoldSection" style="display:none;margin-top:8px">
-                        <div style="display:flex;align-items:center;justify-content:space-between">
-                            <span style="font-size:12px;color:var(--text-muted)">开关</span>
+                        <div id="compressFoldSection" style="display:none;margin-top:0.6em">
+                        <div class="chat-ctx-bar" style="padding:0 0 0.2em">
+                            <span style="font-size:12px;color:var(--text-muted);white-space:nowrap">发送最近</span>
+                            <input type="range" id="chatCtxRange" min="0" max="50" value="0" oninput="chatUpdateCtxLabel()" onchange="chatSaveCurrentConv()" style="background: linear-gradient(to right, var(--accent) 0%, var(--accent) 0%, var(--card-border) 0%, var(--card-border) 100%); border-radius: 3px;">
+                            <span class="ctx-label" id="chatCtxLabel" style="font-size:12px">全部</span>
+                        </div>
+                        <div id="chatCtxHint" style="font-size:11px;color:var(--text-muted);line-height:1.6;padding:0 0 0.9em"></div>
+                        <div id="compressToggleRow" style="display:flex;align-items:center;justify-content:space-between">
+                            <span style="font-size:12px;color:var(--text-muted)">超长自动摘要</span>
                             <label style="position:relative;width:40px;height:22px;cursor:pointer">
                                 <input type="checkbox" id="compressToggle" onchange="toggleCompress(this.checked)" style="display:none">
                                 <span style="position: absolute; inset: 0px; background: var(--accent); border-radius: 11px; transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1);"></span>
@@ -5771,6 +5773,7 @@ body {
                                 <span class="ctx-label" id="compressKeepLabel" style="font-size:11px">5 条</span>
                             </div>
                         </div>
+                        <div id="compressLockNote" style="display:none;font-size:11px;color:var(--text-muted);line-height:1.6;padding-top:0.4em">已按「发送最近」接管，本对话不做摘要。压缩开关不用去关，别的对话照旧。</div>
                         </div>
                     </div>
                 </div>
@@ -14904,8 +14907,12 @@ body {
             if (section) section.style.display = _compressFoldExpanded ? '' : 'none';
             if (arrow) arrow.style.transform = _compressFoldExpanded ? 'rotate(90deg)' : '';
             if (status) {
+                // 收起时一眼看清这个对话的上下文档位：「全部·摘要开」/「只发这句」/「5 轮」
                 var on = document.getElementById('compressToggle');
-                status.textContent = _compressFoldExpanded ? '' : ((on && on.checked) ? '开' : '关');
+                var txt = '';
+                if (typeof chatCtxCapped === 'function' && chatCtxCapped()) txt = chatCtxLabelText(chatContextMax);
+                else txt = (typeof chatCtxLabelText === 'function' ? chatCtxLabelText(chatContextMax) : '全部') + '·摘要' + ((on && on.checked) ? '开' : '关');
+                status.textContent = _compressFoldExpanded ? '' : txt;
             }
         }
         function chatToggleCompressFold() { _compressFoldExpanded = !_compressFoldExpanded; chatApplyCompressFold(); }
@@ -15170,6 +15177,10 @@ body {
             updateRangeFill(document.getElementById('compressThresholdInput'));
             updateRangeFill(document.getElementById('compressKeepInput'));
             chatSyncCompressThresholdUI();
+            document.getElementById('chatCtxRange').value = chatContextMax;
+            document.getElementById('chatCtxLabel').textContent = chatCtxLabelText(chatContextMax);
+            updateRangeFill(document.getElementById('chatCtxRange'));
+            chatCtxSyncHint(); // 顺带刷新置灰态和折叠标题的档位字
             chatRenderCompressModelSelect();
             chatRenderReadingModelSelects();
             syncReadingAskCtxToggleStyle();
@@ -17360,10 +17371,29 @@ body {
         function chatCtxLabelText(v) { return v === 0 ? '全部' : (v === 1 ? '只发这句' : v + ' 轮'); }
         function chatCtxSyncHint() {
             var el = document.getElementById('chatCtxHint');
-            if (!el) return;
-            if (chatContextMax <= 0) { el.textContent = '把整段对话都发出去，超长了才由下面的压缩折成摘要。'; return; }
-            el.textContent = (chatContextMax === 1 ? '每次只把你刚发的这一句发过去，' : '每次只发最近 ' + chatContextMax + ' 轮，')
-                + '本对话不再生成摘要、也不带旧摘要——只有系统提示词起作用。适合翻译、查词。';
+            if (el) {
+                el.textContent = chatContextMax <= 0
+                    ? '整段对话都发出去，太长了由下面的摘要接手。'
+                    : ((chatContextMax === 1 ? '只发你刚打的这一句' : '只发最近 ' + chatContextMax + ' 轮')
+                       + '，本对话不做摘要，等于「只让系统提示词起作用」。适合翻译、查词。');
+            }
+            chatCtxSyncCompressLock();
+            chatApplyCompressFold();
+        }
+        /* 「发送最近」封顶时，摘要那两行自动置灰并写明原因。
+         * 为什么要做这个：她第一版试用后问「我需要把上下文压缩关了吗」——
+         * 界面上两块各说各的，看不出来它们已经联动了。灰掉就等于界面自己回答了这个问题，
+         * 而且**不用她真的去关**：压缩开关是全局的，关了会连累别的对话。 */
+        function chatCtxSyncCompressLock() {
+            var capped = chatCtxCapped();
+            ['compressToggleRow', 'compressThresholdRow'].forEach(function (id) {
+                var row = document.getElementById(id);
+                if (!row) return;
+                row.style.opacity = capped ? '0.4' : '';
+                row.style.pointerEvents = capped ? 'none' : '';
+            });
+            var lbl = document.getElementById('compressLockNote');
+            if (lbl) lbl.style.display = capped ? '' : 'none';
         }
         function chatUpdateCtxLabel() {
             var val = parseInt(document.getElementById('chatCtxRange').value);
@@ -29832,6 +29862,7 @@ body {
             chatUpdateCtxIndicator();
             var tRow = document.getElementById('compressThresholdRow');
             if (tRow) tRow.style.display = on ? '' : 'none';
+            chatApplyCompressFold(); // 折叠标题上的「摘要开/关」跟着变
         }
         function chatGetCompressModel() {
             try { return JSON.parse(localStorage.getItem('chat_compress_model') || 'null'); } catch(e) { return null; }
