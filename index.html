@@ -2351,12 +2351,44 @@ body {
             font-size: 10px; color: var(--text-muted); padding: 2px 14px;
             display: none; line-height: 1; opacity: 0.7;
         }
+        /* 2026-08-16：这行小字从「只读标签」变成「可点的切模型入口」。
+           她原话：「我希望那个地方可以点击，然后切换收藏模型，这样我就不需要点clawd图标去设置里切换了」。
+           ⚠️`pointer-events: none` 必须去掉——原来是它挡着点不到的。 */
         .chat-input-modelmeta {
             flex: 1; min-width: 0;
             font-size: 10px; color: var(--text-muted); opacity: 0.7;
             line-height: 1.5; letter-spacing: 0.03em;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-            padding-left: 6px; padding-right: 8px; pointer-events: none;
+            padding-left: 6px; padding-right: 8px;
+            cursor: pointer; user-select: none;
+        }
+        .chat-input-modelmeta:active { opacity: 1; }
+        .chat-input-modelmeta .mm-arrow { opacity: 0.55; margin-left: 0.35em; font-size: 0.9em; }
+        /* 收藏模型的快选弹层。定位用 fixed + 按小字的位置算，因为输入区在不同模式下
+           父容器的定位上下文不一样（共读折叠态会改布局），absolute 会飘。 */
+        .fav-quick {
+            position: fixed; z-index: 60; display: none;
+            background: var(--modal-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border); border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.14); padding: 6px;
+            max-height: 46vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+        }
+        .fav-quick.show { display: block; }
+        .fav-quick .fq-grp {
+            font-size: 10px; color: var(--text-muted); padding: 7px 10px 3px;
+            letter-spacing: 0.06em;
+        }
+        .fav-quick .fq-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 9px 10px; border-radius: 8px; cursor: pointer;
+            font-size: 13px; color: var(--text); line-height: 1.35;
+        }
+        .fav-quick .fq-item:active { background: var(--card-border); }
+        .fav-quick .fq-item.on { color: var(--accent); }
+        .fav-quick .fq-item .fq-nm { flex: 1; min-width: 0; word-break: break-all; }
+        .fav-quick .fq-more {
+            border-top: 1px solid var(--card-border); margin-top: 4px; padding-top: 4px;
+            color: var(--text-muted); font-size: 12px;
         }
         @keyframes readingCommentIn {
             from { opacity: 1; transform: none; }
@@ -5448,6 +5480,7 @@ body {
                             </div>
                         </div>
                         <div class="chat-input-modelmeta" id="chatInputModelMeta" style="display:none"></div>
+                        <div class="fav-quick" id="favQuick"></div>
                         <input type="file" id="chatAttachPhoto" accept="image/*" multiple="" style="display:none" onchange="chatOnFileSelect(this)">
                         <input type="file" id="chatAttachFile" multiple="" style="display:none" onchange="chatOnFileSelect(this)">
                         <input type="file" id="chatAttachCamera" accept="image/*" capture="environment" style="display:none" onchange="chatOnFileSelect(this)">
@@ -18561,14 +18594,129 @@ body {
             var parts = [];
             if (prov) parts.push(prov);
             if (model) parts.push(model);
-            el.textContent = parts.length ? parts.join(' · ') : '未选择模型';
+            var txt = parts.length ? parts.join(' · ') : '未选择模型';
+            el.textContent = txt;
+            // 带个小箭头，表示这里能点（她发的参考图里就是「模型名 ⌄」这个形状）
+            var a = document.createElement('span');
+            a.className = 'mm-arrow';
+            a.textContent = '⌄';
+            el.appendChild(a);
         }
-        (function() {
+
+        /* ===== 输入框下面那行小字 → 点一下换收藏模型（2026-08-16）=====
+         * 她的原话：「我希望那个地方可以点击，然后切换收藏模型，这样我就不需要点clawd图标去设置里切换了」。
+         * 原来换模型要三步：点 🦀 → 开面板 → 切到「模型」tab → 挑。现在一步。
+         *
+         * ⚠️这里最容易踩的坑：**这行小字是「输入框聚焦时才显示、失焦就藏」的**。
+         *   手指按上去的瞬间输入框就 blur 了，小字先消失 → 点击落空。
+         *   所以：① 用 pointerdown 抢在 blur 之前开弹层 ② blur 时如果弹层开着就不藏小字。
+         * ⚠️共读/翻译模式她说「感觉可以不用改什么」——这里也确实没为它们加分支：
+         *   那两个模式输入区折叠时整条 toolbar 就是隐藏的，展开了能点也是好事，行为一致。 */
+        var _favQuickOpen = false;
+        function favQuickClose() {
+            var p = document.getElementById('favQuick');
+            if (p) p.classList.remove('show');
+            _favQuickOpen = false;
+            // 弹层关了之后，输入框要是已经不在焦点上，小字也该跟着收起来（回到原本的规矩）
             var inp = document.getElementById('chatInput');
             var meta = document.getElementById('chatInputModelMeta');
-            if (!inp || !meta) return;
-            inp.addEventListener('focus', function() { chatUpdateInputModelMeta(); meta.style.display = 'block'; });
-            inp.addEventListener('blur', function() { meta.style.display = 'none'; });
+            if (meta && inp && document.activeElement !== inp) meta.style.display = 'none';
+        }
+        function favQuickOpen() {
+            var pop = document.getElementById('favQuick');
+            var meta = document.getElementById('chatInputModelMeta');
+            if (!pop || !meta) return;
+
+            var cur = chatSelectedModel || '';
+            var curUrl = '';
+            var provItem = getKeyItemById(document.getElementById('chatProviderSelect').value);
+            if (provItem) curUrl = getBaseUrl(provItem.url || '');
+
+            var html = '';
+            if (!chatFavModels.length) {
+                html += '<div class="fq-grp">还没有收藏模型</div>'
+                      + '<div class="fq-item fq-more" data-more="1">在模型列表里点 ⭐ 收藏 · 去挑一个</div>';
+            } else {
+                /* 按中转站分组、组内最近用过的排前面——跟面板里那份收藏区**同一套口径**
+                   （分组键用网址不用名字：两个同名的站会被并成一组，她踩过「选的是这个、
+                   实际选中另一个」，见 chatRenderFavSection 里那段注释）。 */
+                var groups = {}, order = [], label = {};
+                chatFavModels.forEach(function (f, i) {
+                    var k = f.url ? getBaseUrl(f.url) : ('id:' + (f.providerId || '未知'));
+                    if (!groups[k]) { groups[k] = []; order.push(k); label[k] = f.providerName || f.url || '未知'; }
+                    f._qi = i;
+                    groups[k].push(f);
+                });
+                order.forEach(function (k) {
+                    var arr = groups[k].slice();
+                    arr.sort(function (a, b) {
+                        var ua = chatModelUsedAt(a.url, a.model), ub = chatModelUsedAt(b.url, b.model);
+                        if (ub !== ua) return ub - ua;
+                        return a._qi - b._qi;
+                    });
+                    html += '<div class="fq-grp">' + _apiEsc(label[k]) + '</div>';
+                    arr.forEach(function (f) {
+                        var on = (f.model === cur && getBaseUrl(f.url || '') === curUrl);
+                        html += '<div class="fq-item' + (on ? ' on' : '') + '" data-i="' + f._qi + '">'
+                              + '<span class="fq-nm">' + _apiEsc(f.model) + '</span>'
+                              + (on ? '<span>✓</span>' : '') + '</div>';
+                    });
+                });
+                // 留一条通往完整列表的路：收藏里没有的模型还是得能选
+                html += '<div class="fq-item fq-more" data-more="1">其它模型…</div>';
+            }
+            pop.innerHTML = html;
+
+            // 先显示再量尺寸，否则 offsetHeight 是 0，弹层会贴到屏幕底下
+            pop.classList.add('show');
+            var r = meta.getBoundingClientRect();
+            var w = Math.min(Math.max(r.width, 220), window.innerWidth - 20);
+            pop.style.width = w + 'px';
+            var left = Math.min(Math.max(r.left, 10), window.innerWidth - w - 10);
+            pop.style.left = left + 'px';
+            pop.style.top = 'auto';
+            pop.style.bottom = (window.innerHeight - r.top + 8) + 'px';
+            _favQuickOpen = true;
+        }
+        (function () {
+            var inp = document.getElementById('chatInput');
+            var meta = document.getElementById('chatInputModelMeta');
+            var pop = document.getElementById('favQuick');
+            if (!inp || !meta || !pop) return;
+
+            inp.addEventListener('focus', function () { chatUpdateInputModelMeta(); meta.style.display = 'block'; });
+            // ⚠️弹层开着时别把小字藏了——藏了就等于把弹层的锚点抽掉，而且看着像"闪了一下"
+            inp.addEventListener('blur', function () { if (!_favQuickOpen) meta.style.display = 'none'; });
+
+            // ⚠️必须是 pointerdown：等到 click 的时候输入框早就 blur、小字已经 display:none 了
+            meta.addEventListener('pointerdown', function (e) {
+                e.preventDefault();      // 顺带阻止输入框失焦，手机上键盘不会跳一下
+                e.stopPropagation();
+                if (_favQuickOpen) favQuickClose(); else favQuickOpen();
+            });
+
+            pop.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+            pop.addEventListener('click', function (e) {
+                var it = e.target.closest ? e.target.closest('.fq-item') : null;
+                if (!it) return;
+                if (it.getAttribute('data-more')) {
+                    favQuickClose();
+                    chatOpenModelSheet();
+                    switchSheetTab('model');   // 直接落在「模型」那一页，省她一下
+                    return;
+                }
+                var f = chatFavModels[+it.getAttribute('data-i')];
+                if (f) {
+                    chatPickFavModel(f);
+                    chatUpdateInputModelMeta();
+                    showToast('已切到 ' + f.model);
+                }
+                favQuickClose();
+            });
+
+            // 点别处收起来
+            document.addEventListener('pointerdown', function () { if (_favQuickOpen) favQuickClose(); });
+            window.addEventListener('resize', function () { if (_favQuickOpen) favQuickClose(); });
         })();
         function toggleReadingMode(on) {
             var changed = (chatReadingMode !== on);
