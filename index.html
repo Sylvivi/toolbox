@@ -5736,12 +5736,15 @@ body {
                     </div>
                 </div>
                 <div style="margin-top:4px;padding-top:14px;border-top:1px solid var(--card-border)">
-                    <!-- 「发送最近」已隐藏：与上下文压缩功能重复 -->
-                    <div class="chat-ctx-bar" style="display:none;padding:0 0 6px">
+                    <!-- 「发送最近」：2026-08-15 放出来。之前当它跟上下文压缩重复所以藏了，
+                         但翻译/查生词这种一句一问的活要的正是「限量且不要摘要」，压缩帮不上忙。
+                         调到 1 轮以上时会自动停掉本对话的摘要（见 chatCtxCapped）。 -->
+                    <div class="chat-ctx-bar" style="padding:0 0 2px">
                         <span style="font-size:12px">发送最近</span>
-                        <input type="range" id="chatCtxRange" min="0" max="50" value="0" oninput="chatUpdateCtxLabel()" style="background: linear-gradient(to right, var(--accent) 0%, var(--accent) 0%, var(--card-border) 0%, var(--card-border) 100%); border-radius: 3px;">
+                        <input type="range" id="chatCtxRange" min="0" max="50" value="0" oninput="chatUpdateCtxLabel()" onchange="chatSaveCurrentConv()" style="background: linear-gradient(to right, var(--accent) 0%, var(--accent) 0%, var(--card-border) 0%, var(--card-border) 100%); border-radius: 3px;">
                         <span class="ctx-label" id="chatCtxLabel" style="font-size:12px">全部</span>
                     </div>
+                    <div id="chatCtxHint" style="font-size:11px;color:var(--text-muted);line-height:1.5;padding:0 0 10px"></div>
                     <div id="compressFold">
                         <div onclick="chatToggleCompressFold()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;padding:2px 0">
                             <span style="font-size:13px;font-weight:600;color:var(--text)">上下文压缩 <span id="compressFoldStatus" style="font-weight:400;font-size:11px;color:var(--text-muted)"></span></span>
@@ -12163,7 +12166,13 @@ body {
         }
         var chatCurrentConvId = null; // 当前对话 ID
         var chatView = 'list';       // 'list' | 'conv'
-        var chatContextMax = 0;      // 上下文轮数限制，0=全部
+        var chatContextMax = 0;      // 上下文轮数限制，0=全部（按对话保存，各对话互不影响）
+        /* 「发送最近 N 轮」开着时（且是普通对话模式），这一档的含义就是**要限量、不要记忆**：
+         *   ① 不触发摘要压缩（不白花那笔钱）  ② 已有的摘要/大纲也不塞进请求
+         * 场景：翻译台词、查生词这种「一句一问」的活，只要系统提示词生效就够了，
+         *       上下文越少越干净，摘要纯属噪音 + 额外开销。
+         * ⚠️共读按「章」压、翻译模式固定 10 条压，两者各有各的节奏，不受这个滑块影响。 */
+        function chatCtxCapped() { return chatContextMax > 0 && !chatReadingMode && !chatTranslateMode; }
         var chatPendingImages = [];  // 待发送图片 [{base64, type}]
         var chatPendingFiles = [];   // 待发送文件 [{name, content, size}]
         var chatActionMsgIdx = -1;   // 长按操作的消息索引
@@ -13705,6 +13714,7 @@ body {
             document.getElementById('chatCtxRange').value = 0;
             document.getElementById('chatCtxLabel').textContent = '全部';
             updateRangeFill(document.getElementById('chatCtxRange'));
+            chatCtxSyncHint();
             document.getElementById('chatInput').value = '';
             document.getElementById('chatSendBtn').disabled = true;
             document.getElementById('chatModelInput').value = '';
@@ -13813,8 +13823,9 @@ body {
             setTimeout(readingUpdateProgress, 120);
             chatContextMax = conv.contextMax || 0;
             document.getElementById('chatCtxRange').value = chatContextMax;
-            document.getElementById('chatCtxLabel').textContent = chatContextMax === 0 ? '全部' : chatContextMax + ' 轮';
+            document.getElementById('chatCtxLabel').textContent = chatCtxLabelText(chatContextMax);
             updateRangeFill(document.getElementById('chatCtxRange'));
+            chatCtxSyncHint();
 
             chatSwitchView('conv');
             populateChatProviders();
@@ -15769,7 +15780,9 @@ body {
             if (chatReadingMode) _spContent += '\n\n' + READING_MODE_INSTRUCTION;
             if (chatReadingMode && _readingRetry) _spContent += '\n\n' + READING_MODE_RETRY_HINT;
             reqMsgs.push({ role: 'system', content: _spContent });
-            // 插入压缩摘要（如果有）
+            // 插入压缩摘要（如果有）。「发送最近 N 轮」封顶时整块跳过——
+            // 她要的是干净的一句一问，旧摘要塞进来就等于把记忆又带回来了。
+            if (!chatCtxCapped()) {
             if (chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length) || chatCompressOutline || chatCompressSummaries.length) {
                 var _sumParts = [];
                 // 共读模式优先用结构化记忆表格；无表格时 fallback 到旧大纲
@@ -15785,6 +15798,7 @@ body {
                 }
                 _sumParts = _sumParts.concat(chatCompressSummaries.slice((chatMemoryTables && chatReadingMode) ? 0 : (chatOutlineCovers || 0)).slice(-CHAT_SUMMARY_MAX_SEGS));
                 if (_sumParts.length) reqMsgs.push({ role: 'system', content: '以下是之前对话的摘要（当前时间：' + _timeStr.replace('当前时间：','') + '）：\n' + _sumParts.join('\n\n---\n\n') });
+            }
             }
             var src = chatMessages;
             // 如果有压缩，从压缩点之后开始取消息
@@ -16090,7 +16104,7 @@ body {
             document.getElementById('chatSendBtn').disabled = !chatSelectedModel;
             chatSaveCurrentConv();
             // 后台上下文压缩——延迟启动，避免压缩 API 请求抢占下一章评论的浏览器连接队列
-            if (chatCompressEnabled && !chatCompressing) setTimeout(chatCompressContext, 2000);
+            if (chatCompressEnabled && !chatCompressing && !chatCtxCapped()) setTimeout(chatCompressContext, 2000);
             // 首轮对话完成后自动生成AI标题
             if (fullContent && chatMessages.length === 2) {
                 var list = chatGetHistory();
@@ -17342,11 +17356,21 @@ body {
             el.style.background = 'linear-gradient(to right, var(--accent) 0%, var(--accent) ' + pct + '%, var(--card-border) ' + pct + '%, var(--card-border) 100%)';
             el.style.borderRadius = '3px';
         }
+        // 滑块文案：0=全部；1 轮就是「只发当前这一句」，写清楚免得以为 1 轮还带着上一问
+        function chatCtxLabelText(v) { return v === 0 ? '全部' : (v === 1 ? '只发这句' : v + ' 轮'); }
+        function chatCtxSyncHint() {
+            var el = document.getElementById('chatCtxHint');
+            if (!el) return;
+            if (chatContextMax <= 0) { el.textContent = '把整段对话都发出去，超长了才由下面的压缩折成摘要。'; return; }
+            el.textContent = (chatContextMax === 1 ? '每次只把你刚发的这一句发过去，' : '每次只发最近 ' + chatContextMax + ' 轮，')
+                + '本对话不再生成摘要、也不带旧摘要——只有系统提示词起作用。适合翻译、查词。';
+        }
         function chatUpdateCtxLabel() {
             var val = parseInt(document.getElementById('chatCtxRange').value);
             chatContextMax = val;
-            document.getElementById('chatCtxLabel').textContent = val === 0 ? '全部' : val + ' 轮';
+            document.getElementById('chatCtxLabel').textContent = chatCtxLabelText(val);
             updateRangeFill(document.getElementById('chatCtxRange'));
+            chatCtxSyncHint();
             chatUpdateCtxIndicator();
         }
         function chatUpdateCtxIndicator() {
@@ -17364,7 +17388,8 @@ body {
             } else {
                 label = Math.min(totalTurns, chatContextMax) + '/' + totalTurns + ' 轮';
             }
-            if (chatCompressEnabled) label += ' ✓';
+            // 封顶时不打勾：这个对话压根不做摘要，打勾会让人以为还在攒记忆
+            if (chatCompressEnabled && !chatCtxCapped()) label += ' ✓';
             // 有摘要时高亮颜色
             if (chatCompressSummaries.length) {
                 el.classList.add('has-summary');
@@ -18187,6 +18212,7 @@ body {
 
         async function chatCompressContext() {
             if (chatCompressing || chatStreaming) return;
+            if (chatCtxCapped()) return; // 「发送最近 N 轮」已封顶＝这个对话本来就不要记忆，别再花钱做摘要
             // 触发方式按模式区分：
             //   共读模式：按「章」触发——贴入新一章时，把它之前所有未压内容压掉，
             //             正在读的当前章保持原文（方便逐段点评 / 双击提问），不再凑条数。
