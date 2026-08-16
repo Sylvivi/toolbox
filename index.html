@@ -12630,10 +12630,6 @@ body {
             if (typeof s !== 'string' || s.indexOf('⟦genimg:') < 0) return s;
             return s.replace(/(^|\n)[ \t]*(?:\[P\d+\][ \t]*)?⟦genimg:[A-Za-z0-9_]+⟧[ \t]*(?=\n|$)/g, '').replace(/\n{3,}/g, '\n\n').trim();
         }
-        // 是不是生图类模型（这类只能走 /images/generations，绝不能拿去当文字模型调 /chat/completions）
-        function _isImageModelName(m) {
-            return /gpt-image|dall[\-\s]?e|flux|midjourney|\bmj\b|stable[\-\s]?diffusion|sdxl|kolors|seedream|imagen|wanx|cogview|hunyuan[\-\s]?image/i.test(m || '');
-        }
         function genImageSize() { return localStorage.getItem('gen_image_size') || '1024x1024'; }
         function genImageModelCfg() { return _chatResolveModelCfg(_chatGetModelCfg('chat_image_model')); }
         // 生图模型没配好时，说清到底卡在哪（区分「没在设置里选」和「选了但站找不到」）
@@ -25836,15 +25832,6 @@ body {
             var all = readingGetAllBookmarks();
             return all[cid] || [];
         }
-                function readingParaPreview(msgIdx, p) {
-            try {
-                var orig = readingModeStripParaNums(readingModeGetOriginalText(msgIdx));
-                var lines = orig.split('\n').filter(function(l) { return l.trim().length > 0; });
-                var t = (lines[p - 1] || '').trim();
-                if (t.length > 60) t = t.slice(0, 60) + '…';
-                return t || ('第 ' + p + ' 段');
-            } catch (e) { return '第 ' + p + ' 段'; }
-        }
         /* ===================== 划线（读者在正文里划重点 + 批注 + 问 clawd） =====================
            存账思路同书签：按「会话 → 第几条消息 + 第几段 + 段内第几个字到第几个字」记，
            正文内容稳定不变，所以刷新/换设备/窗口化补渲染都能按账把线重新描回去，且不破坏既有人名/引号高亮。 */
@@ -28650,21 +28637,6 @@ body {
             } catch (e) { return ''; }
         }
 
-        function readingToggleBookmark(msgIdx, p) {
-            var cid = readingMarksConvId();
-            if (!cid) return false;
-            var all = readingGetAllBookmarks();
-            var list = all[cid] || [];
-            var _chap = _readerChapOf(msgIdx);
-            var found = -1;
-            for (var i = 0; i < list.length; i++) { if (_markMatchesMsg(list[i], msgIdx, _chap) && list[i].p === p && list[i].type !== 'ask') { found = i; break; } }
-            var nowOn;
-            if (found >= 0) { list.splice(found, 1); nowOn = false; }
-            else { list.push({ msgIdx: msgIdx, chap: _chap, p: p, preview: readingParaPreview(msgIdx, p), type: 'para', ts: Date.now() }); nowOn = true; }
-            all[cid] = list;
-            readingSaveAllBookmarks(all);
-            return nowOn;
-        }
         // 共读提问后，把问题作为「💬 问题书签」加入同一书签列表，便于跳转回该段
         function readingAddQuestionBookmark(msgIdx, p, question, meta) {
             var cid = readingMarksConvId();
