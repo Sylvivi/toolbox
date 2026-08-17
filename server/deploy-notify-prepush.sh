@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ⚠️⚠️【2026-08-06 起已停用，.git/hooks/pre-push 已卸载。别顺手装回去。】
 #   停用原因：线上已从 GitHub Pages 搬到本机 Caddy 伺服（tool.masterofmydomain.top →
-#   43.172.66.189，见 CLAUDE.md「部署」一节 / 记忆 toolbox-self-hosted）。
+#   43.172.64.111，见 CLAUDE.md「部署」一节 / 记忆 toolbox-self-hosted）。
 #   这个钩子盯的是 **Pages**，而 Pages 已经不是线上了，于是它只会发假消息：
 #     · Pages 发布成功 → 告诉用户「刷新页面即可」，可线上根本没变；
 #     · Pages 又抽风   → 告诉用户「部署失败需人工」，可线上好好的。

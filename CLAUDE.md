@@ -11,7 +11,7 @@
   - **上线动作＝ `bash /home/ubuntu/deploy_toolbox_local.sh`**，复制完立刻生效，没有构建队列。**`git push` 不再等于上线**，两件事都要做。
   - **跑完会自动发 Telegram 通知用户**（2026-08-07 加，她原话「你每次这边改完，tg也像部署github一样给我发个提示好吗，这样我会及时来看」）。通知写在脚本内部、不是"记得手动跑一下"；内容带最近一次提交的标题；**内容没变就不发**（比 md5），免得空跑一次也响、把她烦到开始无视通知。
   - ⚠️那个脚本用**白名单**只发 6 样（`index.html`/`sw.js`/`manifest.json`/两个图标/`.well-known/`）。**绝不能把仓库目录整个 root 出去**——里面有 `SERVER-OPS.md`（敏感拓扑、专门 gitignore 过）、`.git`、`tests`。**新增对外文件时要同步改脚本的白名单**，否则线上 404。
-  - Caddy 配置在 `/etc/caddy/Caddyfile` 末尾的 `tool.masterofmydomain.top {}` 块；DNS 在 Cloudflare 是 A 记录 → `43.172.66.189`、**橙云（走 CF 代理）**。
+  - Caddy 配置在 `/etc/caddy/Caddyfile` 末尾的 `tool.masterofmydomain.top {}` 块；DNS 在 Cloudflare 是 A 记录 → `43.172.64.111`、**橙云（走 CF 代理）**。
   - **⚠️必须是橙云，别改回灰云**：服务器在**美国加州**（腾讯云硅谷），国内直连跨太平洋，用户实测「感觉变很慢了」；套上 CF 就近节点后她说「差不多，挺快的」。
   - **⚠️橙云之下 TLS-ALPN 挑战必然失败**（CF 在边缘就把 TLS 握手接掉了），所以 Caddy 那个块里显式 `disable_tlsalpn_challenge`、只走 HTTP-01。CF 的 SSL 模式现在是「完全」——**够用，且比「完全(严格)」更抗造**（万一证书续期失败，CF 仍会照常开着页面）。
   - 顺带记一笔：`index.html` 是 `no-cache`，所以 **CF 不缓存它**（`cf-cache-status: DYNAMIC`），每次仍回源取约 478KB（brotli 后）。她当天仍觉得「开网页还是有点慢」，于是改了 `sw.js`（见下面「更新机制」）。**下一张牌**是让 CF 也缓存首页——要在 CF 面板加一条 Cache Rule（HTML 默认不缓存），并配合 `s-maxage`；目前没做，改前先确认真有必要。

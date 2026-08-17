@@ -1434,6 +1434,25 @@ body {
 
         .modal-overlay:has(.chat-modal) { padding: 0; align-items: stretch; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; overscroll-behavior: contain; }
         .dark .modal-overlay:has(.chat-modal) { background: transparent; }
+
+        /* ⚠️iPad 接蓝牙键盘时，遮罩底下会露出首页（2026-08-17 她发图：
+             「遮罩下面突然短了一截，居然能看到主页的内容，太难看了」）。
+           病理：阅读/共读这个全屏层**自己是透明的**（就在上面两行），纸色是打在 `html` 上的
+           ——那样上下拉的橡皮筋回弹区域才是纸色，不会闪出一截别的颜色。
+           代价是首页的 DOM 正好夹在「html 纸色」和「全屏层」中间：平时全屏层铺满看不见，
+           可一旦 iPadOS 弹出输入法工具条，Safari 把 visual viewport 顶掉一截、
+           `position:fixed` 的层跟着缩，底下那一条首页就露出来了。
+           层级上补不了（首页本来就该在那儿），所以换个思路：**全屏层打开时直接把首页藏掉**，
+           露出来的就是 html 那层纸色，跟阅读底色同色，看不出接缝。
+           ⚠️用 visibility 不用 display:none —— display 会让首页重新布局，
+             退出阅读时滚动位置和卡片展开状态全丢。
+           ⚠️限定 `#chatModalOverlay.show`：别的小弹窗（密钥、导出、确认框）要的是
+             背景虚化透出来，藏了就没那个效果了。 */
+        body.modal-open:has(#chatModalOverlay.show) .global-bar,
+        body.modal-open:has(#chatModalOverlay.show) #gistStatusLine,
+        body.modal-open:has(#chatModalOverlay.show) .tab-content,
+        body.modal-open:has(#chatModalOverlay.show) .fab-add,
+        body.modal-open:has(#chatModalOverlay.show) .fab-search { visibility: hidden; }
         .modal.chat-modal {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             max-height: none; height: auto;
