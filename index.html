@@ -14647,6 +14647,11 @@ body {
             }, { passive: true });
         }
         function chatOpenModelSheet() {
+            // ⚠️手机上点开这个面板时，输入框（textarea）多半还attach着焦点，
+            //   于是键盘跟着弹出来、把底下的模型列表挡掉大半
+            //   （2026-08-18 她报「一点那个模型想选择的时候就会把键盘召唤出来」）。
+            //   开面板前先把焦点摘干净，键盘就会收回去。草稿内容不受影响。
+            if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
             chatBindSheetSwipe();
             switchSheetTab('opts');
             chatInitSheetOpts();
