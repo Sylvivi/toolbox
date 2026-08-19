@@ -1029,6 +1029,11 @@ body {
             background: var(--accent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
             color: #fff; padding: 10px 20px; border-radius: 10px; font-size: 14px;
             opacity: 0; transition: all 0.3s; z-index: 1000; pointer-events: none;
+            /* ⚠️报错信息可能很长（`HTTP 400: {...}` 带一整段接口返回）。
+               不封宽度的话它会撑成一条横贯屏幕的细线、在手机上直接溢出看不全。
+               2026-08-19 加：封到 92vw 并允许折行，配合常驻提示才真的读得到。 */
+            max-width: 92vw; box-sizing: border-box; text-align: left;
+            white-space: pre-wrap; word-break: break-word; line-height: 1.5;
         }
         /* 常驻提示（sticky）：不会自己消失，所以**必须能点掉**。
            ⚠️基础 .toast 是 pointer-events:none（不挡下面的操作），常驻态要单独打开，
@@ -18217,10 +18222,10 @@ body {
                     showToast('♻️ 已重新生成（' + seg.length + ' 字）');
                     chatShowSummaryModal(_summaryModalScroll());
                 } else {
-                    showToast('⚠️ 重新生成失败（模型返回空）');
+                    showToast('⚠️ 重新生成失败（模型返回空）', true);
                 }
             } catch (e) {
-                showToast('⚠️ 重新生成失败：' + (e.message || ''));
+                showToast('⚠️ 重新生成失败：' + (e.message || ''), true);
             }
             _chatRegenBusy = false;
         }
@@ -18523,7 +18528,7 @@ body {
                 }
             } catch(e) {
                 console.warn('[压缩] 失败:', e.message);
-                showToast('⚠️ 摘要生成失败：' + (e.message || ''));
+                showToast('⚠️ 摘要生成失败：' + (e.message || ''), true);
             }
             chatCompressing = false;
         }
@@ -21830,7 +21835,7 @@ body {
                 } catch (e) { console.warn('[前情→人物地点] 失败:', e.message); }
             } catch (e) {
                 console.warn('[前情梳理] 失败:', e.message);
-                if (manual) showToast('⚠️ 剧情压缩失败：' + (e.message || ''));
+                if (manual) showToast('⚠️ 剧情压缩失败：' + (e.message || ''), true);
             } finally {
                 chatTransRecapping = false;
             }
