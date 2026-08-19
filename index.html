@@ -1034,13 +1034,23 @@ body {
                2026-08-19 加：封到 92vw 并允许折行，配合常驻提示才真的读得到。 */
             max-width: 92vw; box-sizing: border-box; text-align: left;
             white-space: pre-wrap; word-break: break-word; line-height: 1.5;
+            /* ⚠️必须是 flex：右边那个 ✕ 是 ::after 伪元素，默认跟文字同属一个行盒，
+               配上 pre-wrap 之后文字末尾一放不下就把它挤到第二行去
+               （2026-08-19 她报「单独一个叉号放在第二排，看起来很不美观」）。
+               改成 flex 后文字和 ✕ 各是一个 item，✕ 再也不参与折行。 */
+            display: inline-flex; align-items: baseline; gap: 10px;
+            /* ⚠️`left:50%` 定位的元素，可用宽度只剩包含块的**右半边**（430 屏上就是 215px），
+               内容再短也在那儿就折行了——这才是 ✕ 被挤到第二行的真正原因，
+               光改 flex 治不好。`width:max-content` 让它先按内容算宽，
+               再由上面的 max-width:92vw 封顶，短的就一行、长的才折。 */
+            width: max-content;
         }
         /* 常驻提示（sticky）：不会自己消失，所以**必须能点掉**。
            ⚠️基础 .toast 是 pointer-events:none（不挡下面的操作），常驻态要单独打开，
            否则它会一直杵在屏幕上、连点都点不着（2026-07-28 用户报「一直不消失，咋办」）。
            右边用 ::after 画个 ✕ 当"可以点"的提示——不用 innerHTML，免得提示文字里的字符被当标签。 */
         .toast.sticky { pointer-events: auto; cursor: pointer; padding-right: 16px; }
-        .toast.sticky::after { content: '✕'; margin-left: 10px; opacity: 0.75; font-size: 13px; }
+        .toast.sticky::after { content: '✕'; opacity: 0.75; font-size: 13px; flex: none; }
         .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
         .tab-content { display: none; }
