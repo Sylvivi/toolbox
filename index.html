@@ -17626,7 +17626,7 @@ body {
                     + '<span class="seg-arrow" style="font-size:10px;color:var(--text-muted)">▸</span>'
                     + '</span></div>'
                     + '<div class="seg-preview" onclick="chatToggleSummarySeg(this)" style="font-size:12.5px;line-height:1.6;color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer">' + escText + '</div>'
-                    + '<textarea ' + taAttrs + ' oninput="' + editCall + ';_segAutoH(this)" style="display:none;width:100%;min-height:120px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:var(--text);resize:vertical;font-family:inherit;outline:none;overflow-y:auto">' + escText + '</textarea>'
+                    + '<textarea ' + taAttrs + ' oninput="' + editCall + ';_segAutoH(this)" style="display:none;width:100%;min-height:120px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:var(--text);max-height:46vh;resize:vertical;font-family:inherit;outline:none;overflow-y:auto">' + escText + '</textarea>'
                     + '<div class="seg-collapse" onclick="chatToggleSummarySeg(this)" style="display:none;text-align:center;font-size:11px;color:var(--accent);padding:7px 0 2px;cursor:pointer">▴ 收起</div>'
                     + '</div>';
             }
@@ -18139,6 +18139,9 @@ body {
             var fit = function () {
                 ta.style.height = 'auto';
                 // +2 补上下 border（border-box 下 height 要把边框算进去，scrollHeight 没算）
+                // ⚠️封顶交给 CSS 的 max-height（46vh）：撑到那儿就停，剩下的在框内滚。
+                //   2026-08-19 她说「展开后太占屏幕」——摘要动辄五百字，
+                //   不封顶的话一段就能把整屏顶满，底下还有几段就全被推走了。
                 ta.style.height = (ta.scrollHeight + 2) + 'px';
             };
             fit();
@@ -18278,7 +18281,7 @@ body {
             }
             prompt += isReading
                 ? '\n请把「本章内容」浓缩成一段连贯、简洁的剧情摘要，供日后回忆前情：\n· 必须保留本章登场人物姓名、关键情节进展、重要设定与伏笔；\n· 若上方提供了前文摘要，只补充本章新增的进展，不要重复前文已写过的内容；\n· 读者讨论（正文里以「汐：」开头的问答，或章节后的多轮对话）最多用一句话带过，没有就不写；\n· 若本段没有新的小说正文、只有讨论，就用一句话概括讨论主题即可，不要硬凑、不要写「本章未涉及正文」之类的说明；\n· 直接输出一段流畅的中文，不分小标题、不加粗、不写「本章」「以下是摘要」之类的开场白或客套话，控制在 200 字以内。'
-                : '\n请用简洁的语言总结以上对话要点，保留关键信息（数据、决策、代码片段名、具体数值等），去除寒暄和重复。直接输出摘要，不要加前缀。';
+                : '\n请把以上对话浓缩成一段连贯、简洁的摘要，供日后回忆前情：\n· 必须保留关键信息（数据、决策、具体数值、代码片段名、结论），去掉寒暄和重复；\n· 直接输出一段流畅的中文，不分小标题、不分条罗列、不加粗、不写「以下是摘要」之类的开场白或客套话，控制在 300 字以内。';
             var summary = await chatStreamChat({
                 baseUrl: useBaseUrl, apiKey: useApiKey, model: useModel,
                 purpose: isReading ? '共读摘要' : '对话摘要',
@@ -18287,7 +18290,7 @@ body {
                         ? (rbCurBookIsSocial()
                             ? '你是社科/学术书的共读摘要助手。把当前章节浓缩成一段连贯、客观的论点摘要：核心概念/术语、主要论点、关键证据或实验、得出的结论不可省略；读者讨论只一句话带过。只输出纯摘要正文，不分小标题、不加粗、不写开场白或客套话。'
                             : '你是小说共读摘要助手。把当前章节浓缩成一段连贯、客观的剧情摘要：人物姓名、关键情节与伏笔不可省略；读者讨论只一句话带过。只输出纯摘要正文，不分小标题、不加粗、不写开场白或客套话。')
-                        : '你是对话摘要助手。简洁准确地总结内容，保留关键信息。控制在 300 字以内。' },
+                        : '你是对话摘要助手。把对话浓缩成一段连贯、客观的摘要，关键信息（数据、决策、数值、结论）不可省略。只输出纯摘要正文，不分小标题、不分条罗列、不加粗、不写开场白或客套话，控制在 300 字以内。' },
                     { role: 'user', content: prompt }
                 ],
                 // 中文 1 字常占 2.5~3 token，旧上限 500/600 实际只够约 180~220 字，
@@ -21149,7 +21152,7 @@ body {
                     + '<span class="seg-label" style="margin-bottom:0">📜 全书大纲（至第 ' + readerChapterNo(_bSum, _ol.upTo) + ' 章）</span>'
                     + '<button onclick="readerDeleteOutline()" style="background:none;border:none;font-size:12px;color:var(--text-muted);cursor:pointer;padding:2px 6px;border-radius:6px;transition:color 0.2s" onmouseover="this.style.color=\'#e55\'" onmouseout="this.style.color=\'var(--text-muted)\'">🗑 删除</button>'
                     + '</div>'
-                    + '<textarea data-rsum-outline="1" oninput="readerEditOutline(this);_segAutoH(this)" style="width:100%;min-height:90px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:var(--text);resize:vertical;font-family:inherit;outline:none;overflow-y:auto">' + _ol.sum.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>'
+                    + '<textarea data-rsum-outline="1" oninput="readerEditOutline(this);_segAutoH(this)" style="width:100%;min-height:90px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:var(--text);max-height:46vh;resize:vertical;font-family:inherit;outline:none;overflow-y:auto">' + _ol.sum.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>'
                     + '</div>';
             }
             if (chaps.length) {
@@ -21168,7 +21171,7 @@ body {
                         + '<span class="seg-arrow" style="font-size:10px;color:var(--text-muted)">▸</span>'
                         + '</span></div>'
                         + '<div class="seg-preview" onclick="chatToggleSummarySeg(this)" style="font-size:12.5px;line-height:1.6;color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer">' + escSum + '</div>'
-                        + '<textarea data-rsum-chap="' + ch + '" oninput="readerEditSummary(this);_segAutoH(this)" style="display:none;width:100%;min-height:90px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:var(--text);resize:vertical;font-family:inherit;outline:none;overflow-y:auto">' + escSum + '</textarea>'
+                        + '<textarea data-rsum-chap="' + ch + '" oninput="readerEditSummary(this);_segAutoH(this)" style="display:none;width:100%;min-height:90px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:var(--text);max-height:46vh;resize:vertical;font-family:inherit;outline:none;overflow-y:auto">' + escSum + '</textarea>'
                         + '<div class="seg-collapse" onclick="chatToggleSummarySeg(this)" style="display:none;text-align:center;font-size:11px;color:var(--accent);padding:7px 0 2px;cursor:pointer">▴ 收起</div>'
                         + '</div>');
                 }
