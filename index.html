@@ -4009,12 +4009,6 @@ body {
         .sp-chip-add, .sp-chip-manage { color: var(--accent); }
         .sp-chip-add { border-style: dashed; }
 
-        /* 内联命名行（新建） */
-        .sp-name-row { display: flex; gap: 6px; margin-bottom: 8px; }
-        .sp-name-row input { flex: 1; min-width: 0; padding: 6px 10px; font-size: 13px; border: 1px solid var(--accent-mid); border-radius: 8px; background: var(--input-bg); color: var(--text); outline: none; }
-        .sp-name-row button { padding: 6px 12px; font-size: 12px; border-radius: 8px; border: 1px solid var(--card-border); background: var(--card-bg); color: var(--text-sub); cursor: pointer; white-space: nowrap; }
-        .sp-name-row .sp-name-ok { background: var(--accent); color: #fff; border-color: var(--accent); }
-
         /* 编辑态横幅 */
         .sp-edit-banner { display: flex; align-items: center; gap: 8px; padding: 6px 10px; margin-bottom: 8px; font-size: 12px; background: var(--accent-light); color: var(--accent); border-radius: 8px; }
         .sp-edit-banner .sp-eb-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -4040,6 +4034,20 @@ body {
         .sp-mrow-rename input { flex: 1; min-width: 0; padding: 5px 8px; font-size: 13px; border: 1px solid var(--accent-mid); border-radius: 7px; background: var(--input-bg); color: var(--text); outline: none; }
         .sp-mrow-rename button { padding: 5px 12px; font-size: 12px; border-radius: 7px; border: none; background: var(--accent); color: #fff; cursor: pointer; }
         .sp-manager-new { margin-top: 10px; padding: 10px; width: 100%; border: 1px dashed var(--accent-mid); border-radius: 10px; background: var(--accent-light); color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer; }
+
+        /* 新建预设 sheet（2026-08-20 改：以前点＋新建是直接拿提示词框现有内容去命名保存，
+         * 用户报「我还没输入呢，它居然直接保存当下的提示」。现在改成弹独立窗空白起稿。
+         * ⚠️外壳复用 .sp-manager-mask / .sp-manager，别再复制一套底部 sheet 的样式。
+         * ⚠️这个窗**绝不碰 #chatSysPrompt**——当前会话正在用的提示词必须原封不动，
+         *   想拷现有内容只能由用户显式点「带入当前提示词框内容」那行小字。 */
+        .sp-new-name { width: 100%; padding: 0.55em 0.8em; font-size: 14px; border: 1px solid var(--accent-mid); border-radius: 9px; background: var(--input-bg); color: var(--text); outline: none; margin-bottom: 0.6em; }
+        .sp-new-body { width: 100%; flex: 1; min-height: 9em; padding: 0.7em 0.8em; font-size: 13px; line-height: 1.6; border: 1px solid var(--card-border); border-radius: 10px; background: var(--input-bg); color: var(--text); outline: none; resize: none; font-family: inherit; }
+        .sp-new-body:focus { border-color: var(--accent-mid); }
+        .sp-new-pull { align-self: flex-start; margin-top: 0.5em; padding: 0.3em 0; border: none; background: none; font-size: 12px; color: var(--accent); cursor: pointer; }
+        .sp-new-foot { display: flex; justify-content: flex-end; gap: 0.6em; margin-top: 0.8em; }
+        .sp-new-foot button { padding: 0.55em 1.4em; font-size: 13px; border-radius: 9px; cursor: pointer; }
+        .sp-new-foot .sp-new-cancel { border: 1px solid var(--card-border); background: var(--card-bg); color: var(--text-sub); }
+        .sp-new-foot .sp-new-ok { border: 1px solid var(--accent); background: var(--accent); color: #fff; font-weight: 600; }
 
 
 /* =========================================================================
@@ -5578,7 +5586,25 @@ body {
         <div class="sp-manager" onclick="event.stopPropagation()">
             <div class="sp-manager-head"><span>管理预设</span><button onclick="chatCloseSpManager()">✕</button></div>
             <div class="sp-manager-list" id="chatSpManagerList"></div>
-            <button class="sp-manager-new" onclick="chatNewSpPreset()">＋ 新建预设（存入当前提示词框内容）</button>
+            <button class="sp-manager-new" onclick="chatNewSpPreset()">＋ 新建预设</button>
+        </div>
+    </div>
+
+    <!-- 新建预设 sheet（2026-08-20 加）
+         为什么单开一个窗：以前两个「＋新建」入口都是读 #chatSysPrompt 的现有内容直接去命名保存，
+         用户报「我还没输入呢，它居然直接保存当下的提示」——套用过别的预设、或框里留着上次的字时，
+         点新建等于把不是她写的内容又存一遍。现在点新建＝空白起稿，写完才保存。
+         ⚠️全程不动 #chatSysPrompt，取消也不会弄丢当前会话正在用的提示词。 -->
+    <div class="sp-manager-mask" id="chatSpNewMask" onclick="chatSpNewCancel()">
+        <div class="sp-manager" onclick="event.stopPropagation()">
+            <div class="sp-manager-head"><span>新建预设</span><button onclick="chatSpNewCancel()">✕</button></div>
+            <input class="sp-new-name" id="chatSpNewName" type="text" placeholder="给这条起个名字…" maxlength="40">
+            <textarea class="sp-new-body" id="chatSpNewContent" placeholder="在这里写提示词…"></textarea>
+            <button class="sp-new-pull" onclick="chatSpNewPull()">↳ 带入当前提示词框内容</button>
+            <div class="sp-new-foot">
+                <button class="sp-new-cancel" onclick="chatSpNewCancel()">取消</button>
+                <button class="sp-new-ok" onclick="chatSpNewConfirm()">保存</button>
+            </div>
         </div>
     </div>
 
@@ -5774,11 +5800,6 @@ body {
                     </div>
                     <div class="sp-preset-bar" id="chatSpBar"></div>
                     <div class="sp-edit-banner" id="chatSpEditBanner" style="display:none"></div>
-                    <div class="sp-name-row" id="chatSpNameRow" style="display:none">
-                        <input id="chatSpNameInput" type="text" placeholder="给这条提示词起个名字…" maxlength="40" onkeydown="if(event.key==='Enter'){event.preventDefault();chatSpNameConfirm();}">
-                        <button class="sp-name-ok" onclick="chatSpNameConfirm()">保存</button>
-                        <button onclick="chatSpNameCancel()">取消</button>
-                    </div>
                     <div id="chatSpFold" style="display:none">
                         <textarea id="chatSysPrompt" placeholder="输入系统提示词（可选）…" rows="6" style="width:100%;padding:12px 14px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;color:var(--text);font-size:14px;outline:none;resize:none;font-family:inherit;line-height:1.6"></textarea>
                     </div>
@@ -15457,37 +15478,50 @@ body {
             chatRenderSpPresets();
             showToast('已套用「' + presets[idx].name + '」');
         }
-        // 新建（chips ＋）：内容取自当前输入框，弹内联命名行
-        function chatNewSpPresetFromBar() {
-            var content = document.getElementById('chatSysPrompt').value.trim();
-            if (!content) { chatExpandSpFold(); showToast('⚠️ 先在下面写好提示词内容'); document.getElementById('chatSysPrompt').focus(); return; }
-            chatShowSpNameRow();
+        // 新建（chips ＋ / 管理面板底部，两个入口同一套）：弹独立小窗、空白起稿。
+        // ⚠️2026-08-20 改。以前这里是读 #chatSysPrompt 的现有内容直接去命名保存，用户报
+        //   「我还没输入呢，它居然直接保存当下的提示」——她刚套用过别的预设时，框里躺着的
+        //   是别人的内容，点＋新建就把它又存了一遍。她要的是「点新建→出现文本框→我输入→才保存」。
+        // ⚠️**不要再把 #chatSysPrompt 当新建的数据源**。它是当前会话正在生效的提示词，
+        //   读它会串味、写它会打断她正聊着的天。要拷现有内容只能由她显式点「带入」那行小字。
+        function chatOpenSpNew() {
+            var mask = document.getElementById('chatSpNewMask');
+            if (!mask) return;
+            document.getElementById('chatSpNewName').value = '';
+            document.getElementById('chatSpNewContent').value = '';
+            mask.classList.add('show');
+            // 等 sheet 的入场动画铺完再聚焦，否则 iOS 上键盘会把动画顶花
+            setTimeout(function () {
+                var c = document.getElementById('chatSpNewContent');
+                if (c) c.focus();
+            }, 60);
         }
-        function chatShowSpNameRow() {
-            var row = document.getElementById('chatSpNameRow');
-            var input = document.getElementById('chatSpNameInput');
-            if (!row) return;
-            row.style.display = 'flex';
-            input.value = '';
-            input.focus();
+        function chatNewSpPresetFromBar() { chatOpenSpNew(); }
+        function chatSpNewCancel() {
+            var mask = document.getElementById('chatSpNewMask');
+            if (mask) mask.classList.remove('show');
         }
-        function chatSpNameConfirm() {
-            var name = document.getElementById('chatSpNameInput').value.trim();
-            if (!name) { showToast('⚠️ 请输入名称'); return; }
-            var content = document.getElementById('chatSysPrompt').value.trim();
-            if (!content) { showToast('⚠️ 提示词为空'); return; }
+        // 显式「带入」：把当前提示词框的内容拷进新建窗（拷贝，不是引用，改这边不影响那边）
+        function chatSpNewPull() {
+            var cur = document.getElementById('chatSysPrompt').value.trim();
+            if (!cur) { showToast('⚠️ 当前提示词框是空的'); return; }
+            document.getElementById('chatSpNewContent').value = cur;
+            showToast('已带入当前内容');
+        }
+        function chatSpNewConfirm() {
+            var name = document.getElementById('chatSpNewName').value.trim();
+            var content = document.getElementById('chatSpNewContent').value.trim();
+            // 先校内容再校名字：内容才是这个窗的主体，名字空着更像是顺手忘了
+            if (!content) { showToast('⚠️ 内容还没写'); document.getElementById('chatSpNewContent').focus(); return; }
+            if (!name) { showToast('⚠️ 请给它起个名字'); document.getElementById('chatSpNewName').focus(); return; }
             var presets = chatGetSpPresets();
             presets.push({ name: name, content: content });
             chatSaveSpPresets(presets);
-            chatActivePresetIdx = presets.length - 1;
-            chatEditingPresetIdx = -1;
-            chatSpNameCancel();
+            // ⚠️故意**不**设 chatActivePresetIdx：新建的内容不在提示词框里，高亮成「当前套用」
+            //   会跟框里实际的内容对不上。她想用点一下那颗 chip 就是了。
+            chatSpNewCancel();
             chatRenderSpPresets();
-            showToast('✅ 已保存「' + name + '」');
-        }
-        function chatSpNameCancel() {
-            var row = document.getElementById('chatSpNameRow');
-            if (row) row.style.display = 'none';
+            showToast('✅ 已保存「' + name + '」，点一下就能用');
         }
         // 编辑某条：载入到输入框 + 显式编辑态横幅；改完点「更新」回写
         function chatEditSpPreset(idx) {
@@ -15581,12 +15615,10 @@ body {
             chatRenderSpPresets();
             showToast('已删除');
         }
-        // 管理 sheet 底部「＋ 新建预设」：存入当前输入框内容
+        // 管理 sheet 底部「＋ 新建预设」：关掉管理面板，走跟 chips ＋ 同一个新建窗
         function chatNewSpPreset() {
-            var content = document.getElementById('chatSysPrompt').value.trim();
             chatCloseSpManager();
-            if (!content) { showToast('⚠️ 先在提示词框里写好内容再保存'); document.getElementById('chatSysPrompt').focus(); return; }
-            chatShowSpNameRow();
+            chatOpenSpNew();
         }
 
         /* ----- 停止生成 ----- */
