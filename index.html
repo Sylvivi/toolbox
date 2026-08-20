@@ -15878,7 +15878,9 @@ body {
             if (chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length) || chatCompressOutline || chatCompressSummaries.length) {
                 var _sumParts = [];
                 // 共读模式优先用结构化记忆表格；无表格时 fallback 到旧大纲
-                if (chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length)) {
+                // 走哪条上层记忆：结构化表格（共读优先）还是全程大纲。下面拼「详细摘要段」要看它。
+                var _usedMemTables = !!(chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length));
+                if (_usedMemTables) {
                     var _memText = '';
                     if (chatMemoryTables.characters.length) _memText += '【人物表】\n| 人物 | 身份 | 关系 | 当前状态 | 备注 |\n| --- | --- | --- | --- | --- |\n' + chatMemoryTables.characters.map(function(r) { return '| ' + (r['人物']||'') + ' | ' + (r['身份']||'') + ' | ' + (r['关系']||'') + ' | ' + (r['当前状态']||'') + ' | ' + (r['备注']||'') + ' |'; }).join('\n');
                     if (chatMemoryTables.places && chatMemoryTables.places.length) _memText += (_memText ? '\n\n' : '') + '【地点表】\n| 地点 | 规模/特征 | 关联 | 简介 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.places.map(function(r) { return '| ' + (r['地点']||'') + ' | ' + (r['规模/特征']||'') + ' | ' + (r['关联']||'') + ' | ' + (r['简介']||'') + ' |'; }).join('\n');
@@ -15888,7 +15890,20 @@ body {
                 } else if (chatCompressOutline) {
                     _sumParts.push('【更早前情的大纲】\n' + chatCompressOutline);
                 }
-                _sumParts = _sumParts.concat(chatCompressSummaries.slice((chatMemoryTables && chatReadingMode) ? 0 : (chatOutlineCovers || 0)).slice(-CHAT_SUMMARY_MAX_SEGS));
+                // ⚠️2026-08-20 修：走大纲那条路**不能再截「最近 N 段」**。
+                //   两层记忆是「超出最近 5 段窗口的旧段，攒满 3 段才折进大纲」，所以正常会有
+                //   1-2 段处在「超窗了、但还没折」的中间态。旧代码 slice(covers) 之后又 slice(-5)，
+                //   把这些中间段两头都漏掉了——大纲没覆盖到，发送时又被截掉，那几段记忆凭空消失。
+                //   （用户 2026-08-20 从「7 段摘要、大纲只折入 1 段」看出来的：第 2 段就是这么丢的。）
+                //   背景追问那条路（chatAskBg 里 `slice(chatOutlineCovers)`）本来就是对的，这里补齐一致。
+                // ⚠️走记忆表那条路照旧只带最近 5 段：远期记忆由四张表兜底，不靠大纲。
+                var _restSegs = _usedMemTables
+                    ? chatCompressSummaries.slice(-CHAT_SUMMARY_MAX_SEGS)
+                    : chatCompressSummaries.slice(chatOutlineCovers || 0);
+                // 兜底闸：正常情况下积压最多 2 段（阈值 3），超过说明大纲一直没生成成功
+                //（网络/回空），这时宁可丢最老的也不能让上下文无限膨胀、烧她的钱。
+                if (_restSegs.length > CHAT_SUMMARY_MAX_SEGS + 3) _restSegs = _restSegs.slice(-(CHAT_SUMMARY_MAX_SEGS + 3));
+                _sumParts = _sumParts.concat(_restSegs);
                 if (_sumParts.length) reqMsgs.push({ role: 'system', content: '以下是之前对话的摘要（当前时间：' + _timeStr.replace('当前时间：','') + '）：\n' + _sumParts.join('\n\n---\n\n') });
             }
             }
