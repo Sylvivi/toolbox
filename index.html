@@ -13763,6 +13763,62 @@ body {
             function() { return chatReaderMode && chatView === 'conv' && !chatStreaming; },
             function() { rbOpenShelf(); });
 
+        /* ===== 下滑收起手势（底部 sheet）=====
+           她 2026-08-21 要的：「目录弹出来的时候从上往下滑他又会收回去」。
+           这个面板是从屏幕底下升上来的 sheet（.chat-settings-modal，translateY 那套），
+           所以「往下推回去＝关掉」是它本来的物理直觉。**直接关整个面板**，不是退一层——
+           退一层是右滑的活（目录→书架→文件夹→关），两个手势各管一件事，别混。
+
+           ⚠️最大的坑是**跟滚动打架**：目录的章节列表(#rbChapterList)、书架的书单
+             (.chat-settings-body) 本身都能上下滚，在列表中间往下滑那是滚动、不是关面板。
+             所以只在「起手那一刻，手指底下那个滚动区已经在最顶上」时才认；
+             表头(.rb-sticky-head)、顶上那条抓手这种不滚的地方随时可认。
+           ⚠️横偏超 60px 立刻放弃：那多半是在划右滑返回或左滑开目录，别互相抢
+             （反过来那两个也有 dy>60 就放弃的闸，所以三个手势互斥）。
+           ⚠️选字守卫照抄 attachEdgeSwipe —— 她 08-21 明确说过手势不能影响长按选字，
+             目录里的章节名同样是能选的。 */
+        function _sheetScrollTopAt(target, root) {
+            var el = target;
+            while (el && el !== root && el.nodeType === 1) {
+                if (el.scrollHeight > el.clientHeight + 1) {
+                    var oy = getComputedStyle(el).overflowY;
+                    if (oy === 'auto' || oy === 'scroll') return el.scrollTop;
+                }
+                el = el.parentElement;
+            }
+            return 0;   // 起手点根本不在滚动区里（表头/抓手）——随时可以起手
+        }
+        function attachSheetDismiss(el, canStart, onDismiss) {
+            if (!el) return;
+            var startX = 0, startY = 0, sliding = false;
+            el.addEventListener('touchstart', function(e) {
+                if (canStart && !canStart(e)) return;
+                if (e.target.closest('textarea, input')) return;   // 目录里那个「搜索章节」框
+                var _sel = window.getSelection && window.getSelection();
+                if (_sel && !_sel.isCollapsed && String(_sel).trim()) return;
+                if (_sheetScrollTopAt(e.target, el) > 0) return;   // 列表还没滚到顶 → 这一下是滚动
+                var t = e.touches[0];
+                startX = t.clientX; startY = t.clientY; sliding = true;
+            }, { passive: true });
+            el.addEventListener('touchmove', function(e) {
+                if (!sliding) return;
+                var t = e.touches[0];
+                var dy = t.clientY - startY;
+                var dx = Math.abs(t.clientX - startX);
+                if (dx > 60 || dy < 0) { sliding = false; return; }
+                // 划到一半才冒出选区也要收手（长按选中后手指不抬接着拖）
+                var _s = window.getSelection && window.getSelection();
+                if (_s && !_s.isCollapsed && String(_s).trim()) { sliding = false; return; }
+                if (dy > 80) { sliding = false; onDismiss(); }
+            }, { passive: true });
+            var cancel = function() { sliding = false; };
+            el.addEventListener('touchend', cancel);
+            el.addEventListener('touchcancel', cancel);
+        }
+        attachSheetDismiss(document.getElementById('rbModal'),
+            function() { return document.getElementById('rbModal').classList.contains('show'); },
+            function() { rbCloseShelf(); });
+
         /* 书架/目录面板：一次退一层 —— 目录 → 书架(某文件夹里) → 文件夹列表 → 关掉面板。
            用户 2026-07-29 要的：「不然老是要用手去点」，且明确文件夹那层也要算一层。
            ⚠️判「在不在目录里」只能看 #rbChapterView 的 display，不能看 rbActiveBookId：
