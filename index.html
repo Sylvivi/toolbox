@@ -28978,6 +28978,10 @@ body {
             } catch (e) {}
             return entries;
         }
+        /* ⚠️「划线」和「小注」只在**筛选**上是两格；**行为**（跳回原文、删除、搜什么、怎么渲染）
+           两者完全一样，一律走这个判据。别再写 `e.type === 'hl'` ——漏掉一处，小注就会
+           点不动/删不掉/搜不到，而且是静默的（面板照常显示，只是那一条没反应）。 */
+        function rdTraceIsMark(e) { return e && (e.type === 'hl' || e.type === 'note'); }
         function rdTraceBuildEntries() {
             var entries;
             if (chatReaderMode) {
@@ -29005,9 +29009,13 @@ body {
                     entries.push({ type: _rdTraceTypeOf(g.map(function (a) { return a.q; }), g.length), msgIdx: g[0].msgIdx, chap: g[0].chap, p: g[0].p, qas: qas, count: g.length, sortTs: lastTs });
                 });
             }
-            // 划线(hl)：两种模式都从 reading_highlights 取（阅读模式已按稳定键存+并集同步）
+            /* 划线(hl)/小注(note)：两种模式都从 reading_highlights 取（阅读模式已按稳定键存+并集同步）。
+               ⚠️**在数据层它俩是同一样东西**——一条划线带了 note 就是小注（见 [3.10.5.12] 那条
+                 「零新增存储：一条小注就是一条划线的 note 字段」）。这里只是**在读痕面板里分成两格**
+                 （2026-08-20 用户要的「把划线和小注分开」），存储、同步、删除一个字都没动。 */
             readingGetConvHl().forEach(function (h) {
-                entries.push({ type: 'hl', msgIdx: h.msgIdx, chap: h.chap, p: h.p, id: h.id, color: h.color, note: h.note || '', preview: h.preview || ('第 ' + h.p + ' 段'), sortTs: h.ts || 0 });
+                var _nt = h.note || '';
+                entries.push({ type: _nt ? 'note' : 'hl', msgIdx: h.msgIdx, chap: h.chap, p: h.p, id: h.id, color: h.color, note: _nt, preview: h.preview || ('第 ' + h.p + ' 段'), sortTs: h.ts || 0 });
             });
             return entries;
         }
@@ -29058,7 +29066,7 @@ body {
             var j = i + dir;
             if (j < 0 || j >= _rdTraceTypes.length) return;
             _rdTraceType = _rdTraceTypes[j];
-            if (_rdTraceType !== 'hl') _rdTraceColor = null;   // 同点击 chip：离开划线就清掉颜色筛选
+            if (_rdTraceType !== 'hl' && _rdTraceType !== 'note') _rdTraceColor = null;   // 同点击 chip：离开划线/小注就清掉颜色筛选
             rdTraceRenderBody();
         }
         function rdTraceRenderBody() {
@@ -29067,12 +29075,13 @@ body {
             var entries = rdTraceBuildEntries();
             if (!entries.length) {
                 _rdTraceTypes = ['all'];   // 一格都没有 → 左右滑无处可去
-                body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">还没有读痕<br><span style="font-size:11px">看书时点一段去问问它、或选中文字划线，都会收进这里</span></div>';
+                body.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">还没有读痕<br><span style="font-size:11px">看书时点一段去问问它、或选中文字划线、写小注，都会收进这里</span></div>';
                 return;
             }
-            var totalQ = 0, threadCnt = 0, hlCnt = 0, guideCnt = 0, colorCnt = {};
+            var totalQ = 0, threadCnt = 0, hlCnt = 0, noteCnt = 0, guideCnt = 0, colorCnt = {};
             entries.forEach(function (e) {
-                if (e.type === 'hl') { hlCnt++; colorCnt[e.color] = (colorCnt[e.color] || 0) + 1; }
+                // 颜色点统计**两类一起数**：小注也是有颜色的，按颜色筛时它不该凭空少掉
+                if (rdTraceIsMark(e)) { if (e.type === 'note') noteCnt++; else hlCnt++; colorCnt[e.color] = (colorCnt[e.color] || 0) + 1; }
                 else { totalQ += e.count; if (e.type === 'thread') threadCnt++; if (e.type === 'guide') guideCnt++; }
             });
             var html = '';
@@ -29081,6 +29090,9 @@ body {
                 + '<div class="rd-trace-card rd-trace-card-main"><div class="rd-tc-n">' + totalQ + '</div><div class="rd-tc-l">提问</div></div>'
                 + '<div class="rd-trace-card"><div class="rd-tc-n">' + threadCnt + '</div><div class="rd-tc-l">追问串</div></div>'
                 + '<div class="rd-trace-card"><div class="rd-tc-n">' + hlCnt + '</div><div class="rd-tc-l">划线</div></div>'
+                /* 小注卡跟「导读」筛选格一个规矩：**有才出现**。没写过小注的书（小说居多）
+                   摆一张常年 0 的卡是纯噪音，还会把另外三张挤窄。 */
+                + (noteCnt ? '<div class="rd-trace-card"><div class="rd-tc-n">' + noteCnt + '</div><div class="rd-tc-l">小注</div></div>' : '')
                 + '</div>';
             // 类型筛选 + 正/倒序
             /* 「导读」这一格**只在真有导读时才出现**（跟下面的划线颜色点一个规矩）：
@@ -29088,6 +29100,7 @@ body {
                ⚠️三个概览卡不动——加第四张会把它们挤到 390px 屏幕上一行放不下，
                而且导读本来就是问答，算进「提问」那张卡不算错。 */
             var types = [['all', '全部'], ['hl', '划线']];
+            if (noteCnt) types.push(['note', '小注']);   // 同「导读」：有才出现
             if (guideCnt) types.push(['guide', '导读']);
             types.push(['single', '单问'], ['thread', '追问']);
             _rdTraceTypes = types.map(function (t) { return t[0]; });   // 给左右滑手势用（顺序＝屏幕上的顺序）
@@ -29096,8 +29109,8 @@ body {
             html += '<button class="rd-trace-sort" id="rdTraceSortBtn">' + (_rdTraceDesc ? '↓ 倒序' : '↑ 正序') + '</button>';
             html += '</div>';
             // 颜色点：仅有划线时出现，放小、次要
-            if (hlCnt) {
-                html += '<div class="rd-trace-colors"><span class="rd-trace-colors-l">划线颜色</span>';
+            if (hlCnt + noteCnt) {
+                html += '<div class="rd-trace-colors"><span class="rd-trace-colors-l">' + (noteCnt && !hlCnt ? '小注颜色' : '划线颜色') + '</span>';
                 Object.keys(RD_HL_SW).forEach(function (c) { if (!colorCnt[c]) return; html += '<button class="rd-trace-dot' + (_rdTraceColor === c ? ' on' : '') + '" data-c="' + c + '"><i style="background:' + RD_HL_SW[c] + '"></i>' + colorCnt[c] + '</button>'; });
                 html += '</div>';
             }
@@ -29105,8 +29118,14 @@ body {
             html += '<div class="rd-trace-list" id="rdTraceList"></div>';
             html += '<div class="rd-trace-foot"><button class="rd-trace-export" onclick="rdTraceExport()">📤 导出摘抄</button></div>';
             body.innerHTML = html;
-            body.querySelectorAll('.rd-trace-chip').forEach(function (b) { b.onclick = function () { _rdTraceType = b.getAttribute('data-t'); if (_rdTraceType !== 'hl') _rdTraceColor = null; rdTraceRenderBody(); }; });
-            body.querySelectorAll('.rd-trace-dot').forEach(function (b) { b.onclick = function () { var c = b.getAttribute('data-c'); _rdTraceColor = (_rdTraceColor === c ? null : c); _rdTraceType = 'hl'; rdTraceRenderBody(); }; });
+            body.querySelectorAll('.rd-trace-chip').forEach(function (b) { b.onclick = function () { _rdTraceType = b.getAttribute('data-t'); if (_rdTraceType !== 'hl' && _rdTraceType !== 'note') _rdTraceColor = null; rdTraceRenderBody(); }; });
+            body.querySelectorAll('.rd-trace-dot').forEach(function (b) { b.onclick = function () { var c = b.getAttribute('data-c'); _rdTraceColor = (_rdTraceColor === c ? null : c);
+                /* ⚠️别再无条件切到 'hl'：分家之后那样会把同色的小注一起筛没。
+                   已经在划线/小注任一格就**待在原地**（她是在这一格里挑颜色）；
+                   在别的格（单问/追问…）才退回「全部」——颜色筛选本身只对记号生效，
+                   落在「全部」等于「所有这个颜色的划线和小注」。 */
+                if (_rdTraceType !== 'hl' && _rdTraceType !== 'note') _rdTraceType = 'all';
+                rdTraceRenderBody(); }; });
             var sb = document.getElementById('rdTraceSortBtn'); if (sb) sb.onclick = function () { _rdTraceDesc = !_rdTraceDesc; rdTraceRenderBody(); };
             var si = document.getElementById('rdTraceSearch');
             if (si) si.oninput = function () { _rdTraceQuery = si.value; rdTraceRenderList(); };
@@ -29123,7 +29142,7 @@ body {
             var del = '<button class="rd-trace-del" title="删除">✕</button>';
             var _chap = rdTraceChapterTitle(e);
             var meta = (_chap ? esc(_chap) + ' · ' : '') + '第 ' + e.p + ' 段' + (rdTraceTime(e.sortTs) ? ' · ' + rdTraceTime(e.sortTs) : '');
-            if (e.type === 'hl') {
+            if (rdTraceIsMark(e)) {
                 return '<div class="rd-trace-item" data-i="' + i + '">' + del
                     + '<div class="rd-trace-hl"><span class="rd-trace-cdot" style="background:' + (RD_HL_SW[e.color] || '#f5c842') + '"></span>「' + esc(e.preview) + '」</div>'
                     + (e.note ? '<div class="rd-trace-note">✎ ' + esc(e.note) + '</div>' : '')
@@ -29152,10 +29171,10 @@ body {
             if (!list) return;
             var entries = rdTraceBuildEntries();
             entries = entries.filter(function (e) { return _rdTraceType === 'all' ? true : e.type === _rdTraceType; });
-            if (_rdTraceColor) entries = entries.filter(function (e) { return e.type === 'hl' && e.color === _rdTraceColor; });
+            if (_rdTraceColor) entries = entries.filter(function (e) { return rdTraceIsMark(e) && e.color === _rdTraceColor; });
             var q = _rdTraceQuery.trim().toLowerCase();
             if (q) entries = entries.filter(function (e) {
-                var hay = (e.type === 'hl') ? ((e.preview || '') + ' ' + (e.note || '')) : e.qas.map(function (x) { return x.q + ' ' + x.a; }).join(' ');
+                var hay = rdTraceIsMark(e) ? ((e.preview || '') + ' ' + (e.note || '')) : e.qas.map(function (x) { return x.q + ' ' + x.a; }).join(' ');
                 return hay.toLowerCase().indexOf(q) >= 0;
             });
             // 按「阅读顺序」排：章节 → 段落 在书里的位置，时间戳仅作同位置时的兜底；倒序键整体翻转
@@ -29176,7 +29195,7 @@ body {
                     q.onclick = function (ev) {
                         ev.stopPropagation();
                         var mask = document.querySelector('.rd-trace-modal-mask'); if (mask) mask.remove();
-                        if (e.type === 'hl') readingJumpHighlight(e.id, e.msgIdx, e.p, e.chap); else readingJumpBookmark(e.msgIdx, e.p, e.chap);
+                        if (rdTraceIsMark(e)) readingJumpHighlight(e.id, e.msgIdx, e.p, e.chap); else readingJumpBookmark(e.msgIdx, e.p, e.chap);
                     };
                     var chev = q.querySelector('.rd-trace-qchev');
                     if (chev) chev.onclick = function (ev) {
@@ -29189,14 +29208,14 @@ body {
                 var del = el.querySelector('.rd-trace-del');
                 if (del) del.onclick = function (ev) {
                     ev.stopPropagation();
-                    if (e.type === 'hl') rdHlDelete(e.id);
+                    if (rdTraceIsMark(e)) rdHlDelete(e.id);
                     else { e.qas.forEach(function (x) { readingRemoveBookmarkObj(x.raw); }); if (typeof showToast === 'function') showToast('已删除'); }
                     rdTraceRenderBody();
                     if (typeof readingRefreshBookmarkUI === 'function') readingRefreshBookmarkUI();
                 };
                 el.onclick = function () {
                     var mask = document.querySelector('.rd-trace-modal-mask'); if (mask) mask.remove();
-                    if (e.type === 'hl') readingJumpHighlight(e.id, e.msgIdx, e.p, e.chap); else readingJumpBookmark(e.msgIdx, e.p, e.chap);
+                    if (rdTraceIsMark(e)) readingJumpHighlight(e.id, e.msgIdx, e.p, e.chap); else readingJumpBookmark(e.msgIdx, e.p, e.chap);
                 };
             });
         }
@@ -29205,9 +29224,11 @@ body {
             if (!entries.length) { if (typeof showToast === 'function') showToast('没有读痕可导出'); return; }
             var title = rdTraceBookTitle();
             var byRead = entries.slice().sort(function (a, b) { return a.msgIdx - b.msgIdx || a.p - b.p; });
-            var qLines = [], hLines = [];
+            var qLines = [], hLines = [], nLines = [];
             byRead.forEach(function (e) {
-                if (e.type === 'hl') { hLines.push('- [第 ' + e.p + ' 段] 「' + e.preview + '」' + (e.note ? '　✎ ' + e.note : '')); return; }
+                // 导出也跟着分家：小注单开一节，且**把批注单独一行**摆出来，不再挤在划线后面
+                if (e.type === 'note') { nLines.push('- [第 ' + e.p + ' 段] 「' + e.preview + '」\n  ✎ ' + e.note); return; }
+                if (e.type === 'hl') { hLines.push('- [第 ' + e.p + ' 段] 「' + e.preview + '」'); return; }
                 /* ⚠️判据是「这条有几问」，不能写 e.type === 'thread'：导读也是独立一类，
                    而一条导读后面完全可能追问过好几轮，按 type 判会**只导出第一条、
                    把追问全丢掉**（且是静默的，导出的文件看着正常）。 */
@@ -29222,6 +29243,7 @@ body {
             var md = '# 读痕 · ' + title + '\n\n';
             if (qLines.length) md += '## 提问\n' + qLines.join('\n') + '\n\n';
             if (hLines.length) md += '## 划线\n' + hLines.join('\n') + '\n\n';
+            if (nLines.length) md += '## 小注\n' + nLines.join('\n') + '\n\n';
             try {
                 var blob = new Blob([md], { type: 'text/markdown' });
                 var a = document.createElement('a');
