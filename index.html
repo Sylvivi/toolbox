@@ -29218,7 +29218,27 @@ body {
          * 从书签/读痕点进去怎么滚到那一段并闪一下，以及正文上的长按/多指判定。
          * --------------------------------------------------------------- */
         function _rpFlashScroll(pEl, scrollTarget) {
-            (scrollTarget || pEl).scrollIntoView({ behavior: 'smooth', block: 'center' });
+            var t = scrollTarget || pEl;
+            t.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            /* ⚠️滚完还得盯一会儿再校正一次（2026-08-20 加）。
+               她报「点小节标题定位不准，标题总在视线上方一些」。段号偏移本身是对的
+               （readerChapterPair 把章名拼在正文最前，标题占 P1、正文从 P2 起，
+               rbChapterHeads 的 off 跟它一致），偏的是**落点**：
+               smooth 滚动要几百毫秒，这期间阅读模式还在往正文里插问答/导读块、续渲染章节，
+               页面高度一变，滚到一半的位置就不对了，目标被顶出视野。
+               所以这里盯 1 秒，只要目标跑出可视区就即时（非 smooth）纠回来。
+               ⚠️只在「跑出去了」才动，别每次都强拉——否则她自己滑动会被拽回来。 */
+            var n = 0;
+            var fix = setInterval(function () {
+                n++;
+                if (!document.body.contains(t)) { clearInterval(fix); return; }
+                var r = t.getBoundingClientRect();
+                var TOP = 72;                       // 顶栏高度，别让标题贴在栏底下
+                if (r.top < TOP || r.bottom > window.innerHeight - 40) {
+                    t.scrollIntoView({ block: 'center' });
+                }
+                if (n >= 10) clearInterval(fix);
+            }, 100);
             pEl.classList.remove('rp-flash'); void pEl.offsetWidth; pEl.classList.add('rp-flash');
             setTimeout(function() { pEl.classList.remove('rp-flash'); }, 1200);
         }
