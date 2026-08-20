@@ -13671,16 +13671,29 @@ body {
            往左划、或竖向偏移超 60px，一律当成滚动/翻页立刻放弃——否则上下滚动时会误触发返回。
            ⚠️提示条是全局共用的一个节点（懒创建），别改成每个面板各建一个：两个面板不会同时在滑。 */
         var _swipeBackHint = null;
-        function _swipeBackGetHint() {
+        // dir='right' 时贴左边缘（返回），dir='left' 时贴右边缘（开目录）。
+        // ⚠️仍然是全局共用的**一个**节点：两个方向不可能同时在滑（起手区永不重叠，见 attachEdgeSwipe）。
+        function _swipeBackGetHint(dir) {
             if (!_swipeBackHint) {
                 _swipeBackHint = document.createElement('div');
-                _swipeBackHint.style.cssText = 'position:fixed;left:0;top:50%;transform:translateY(-50%);width:4px;height:60px;border-radius:0 4px 4px 0;background:var(--accent-mid);opacity:0;transition:opacity 0.15s,width 0.15s;z-index:9999;pointer-events:none';
+                _swipeBackHint.style.cssText = 'position:fixed;top:50%;transform:translateY(-50%);width:4px;height:60px;background:var(--accent-mid);opacity:0;transition:opacity 0.15s,width 0.15s;z-index:9999;pointer-events:none';
                 document.body.appendChild(_swipeBackHint);
+            }
+            if (dir === 'left') {
+                _swipeBackHint.style.left = 'auto'; _swipeBackHint.style.right = '0';
+                _swipeBackHint.style.borderRadius = '4px 0 0 4px';
+            } else {
+                _swipeBackHint.style.left = '0'; _swipeBackHint.style.right = 'auto';
+                _swipeBackHint.style.borderRadius = '0 4px 4px 0';
             }
             return _swipeBackHint;
         }
-        // el=在哪块区域上滑；canStart(e)=返回 false 就整趟不认（流式中、面板没开着等）；onBack()=划够了做什么（由它自己判断该退哪一层）
-        function attachSwipeBack(el, canStart, onBack) {
+        // el=在哪块区域上滑；dir='right'（从左边缘往右划＝返回）或 'left'（从右边缘往左划＝开目录）；
+        // canStart(e)=返回 false 就整趟不认（流式中、面板没开着等）；onFire()=划够了做什么。
+        // ⚠️两个方向的起手区**永不重叠**：右侧起点是 W-edge，左侧终点是 edge，而 edge=min(0.45W,160)
+        //   恒小于 W-edge（0.45W < 0.55W；W>355 时 160 < W-160）。所以同一个元素上挂两向是安全的，
+        //   一次触摸只会有一个方向起手。
+        function attachEdgeSwipe(el, dir, canStart, onFire) {
             if (!el) return;
             var startX = 0, startY = 0, swiping = false;
             el.addEventListener('touchstart', function(e) {
@@ -13697,39 +13710,58 @@ body {
                 //   但 iPad 横屏宽一千多，45% 就是五百多像素——屏幕左边一大半都成了触发区，
                 //   在那儿选字往右拖必然误触发（正是用户报的现象）。所以再压一个 160px 的上限：
                 //   手机上几乎没变化，平板横屏上从 500+ 收到 160。
-                if (t.clientX > Math.min(window.innerWidth * 0.45, 160)) return;
+                var _edge = Math.min(window.innerWidth * 0.45, 160);
+                if (dir === 'left') { if (t.clientX < window.innerWidth - _edge) return; }
+                else { if (t.clientX > _edge) return; }
                 startX = t.clientX; startY = t.clientY; swiping = true;
             }, { passive: true });
             el.addEventListener('touchmove', function(e) {
                 if (!swiping) return;
-                var dx = e.touches[0].clientX - startX;
+                // dx 一律取「朝着该方向划了多远」的正值，下面的判定两个方向就完全一样
+                var dx = (dir === 'left') ? (startX - e.touches[0].clientX) : (e.touches[0].clientX - startX);
                 var dy = Math.abs(e.touches[0].clientY - startY);
-                if (dy > 60 || dx < 0) { swiping = false; _swipeBackGetHint().style.opacity = '0'; return; }
+                if (dy > 60 || dx < 0) { swiping = false; _swipeBackGetHint(dir).style.opacity = '0'; return; }
                 // ⚠️划到一半才出现选区也要立刻收手：iPad 上长按选中后手指往往不抬就继续拖，
                 //   touchstart 那道闸是拦不到的（那时还没有选区）。
                 var _s = window.getSelection && window.getSelection();
                 if (_s && !_s.isCollapsed && String(_s).trim()) {
-                    swiping = false; _swipeBackGetHint().style.opacity = '0'; return;
+                    swiping = false; _swipeBackGetHint(dir).style.opacity = '0'; return;
                 }
                 var progress = Math.min(dx / 80, 1);
-                var h = _swipeBackGetHint();
+                var h = _swipeBackGetHint(dir);
                 h.style.opacity = String(progress * 0.7);
                 h.style.width = (4 + progress * 4) + 'px';
                 if (dx > 80) {
                     swiping = false;
                     h.style.opacity = '0';
-                    onBack();
+                    onFire();
                 }
             }, { passive: true });
             var cancel = function() { swiping = false; if (_swipeBackHint) _swipeBackHint.style.opacity = '0'; };
             el.addEventListener('touchend', cancel);
             el.addEventListener('touchcancel', cancel);
         }
+        // 右滑返回＝attachEdgeSwipe 的 right 方向。名字保留：两个老调用点和
+        // tests/swipeback、swipeselect 都按这个名字来。
+        function attachSwipeBack(el, canStart, onBack) { attachEdgeSwipe(el, 'right', canStart, onBack); }
 
         // 聊天面板：对话内→返回列表；列表→退回底层标签页（收藏/密钥/日历等）
         attachSwipeBack(document.querySelector('.chat-modal'),
             function() { return !chatStreaming && (chatView === 'conv' || chatView === 'list'); },
             function() { if (chatView === 'conv') chatBackToList(); else closeChatModal(); });
+
+        /* 阅读界面左滑开目录（2026-08-21 用户要的：「右滑是退出，我想弄一个左滑是把目录自动打开」）。
+           从右边缘往左划够 80px → rbOpenShelf()，它在阅读模式下认 readerBookId、直接进这本书的
+           章节列表（跟 clawd 菜单那颗「📚 书架」走同一条路，不是退回书架选书）。
+           ⚠️只认**阅读模式的正文页**：普通对话/共读左滑不该开目录，别把 canStart 放宽。
+           ⚠️**选字守卫一条都不能省**（用户 2026-08-21 特意叮嘱「不能影响我长按选中文章的文字」）：
+             左滑跟「选中一段后把右边那个小圆点往左拖」完全同向，比右滑更容易撞上。
+             attachEdgeSwipe 里那两道闸——起手时有选区不认、划到一半冒出选区立刻收手——
+             正是 2026-08-14 为 iPad 选字加的，这里原样复用。所以**这个手势必须走 attachEdgeSwipe，
+             不许另写一份轻量版**，否则守卫会漏。 */
+        attachEdgeSwipe(document.querySelector('.chat-modal'), 'left',
+            function() { return chatReaderMode && chatView === 'conv' && !chatStreaming; },
+            function() { rbOpenShelf(); });
 
         /* 书架/目录面板：一次退一层 —— 目录 → 书架(某文件夹里) → 文件夹列表 → 关掉面板。
            用户 2026-07-29 要的：「不然老是要用手去点」，且明确文件夹那层也要算一层。
