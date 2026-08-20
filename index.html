@@ -30016,7 +30016,10 @@ body {
                 for (var i = 0; i < chatPendingFiles.length; i++) fileChars += (chatPendingFiles[i].content || '').length;
             }
             var total = text.length + fileChars;
-            if (total < 100) {
+            // ⚠️原来是「不满 100 字不显示」，于是前 99 个字这儿一直空着、到第 100 字突然蹦出来。
+            //   她要的是「边写边看到字数变化」（2026-08-20 原话），所以门槛降到 1：
+            //   有字就跟着走，空了才收起来（空输入框上面挂个「0 字」反而碍眼）。
+            if (total < 1) {
                 hint.style.display = 'none';
                 return;
             }
