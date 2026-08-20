@@ -26031,7 +26031,11 @@ body {
            ⚠️标签写「将切换到的那种」＋一个形状符号。别改成光秃秃的「划线」二字——
              跟「🖍 划线」那个**动作**撞脸的老坑还在（同上）。 */
         function rdHlMkBtnHtml(hl, el) {
-            var to = rdHlMkKind(hl, el) === 'u' ? 'b' : 'u';
+            /* 跨行的划线只有下划线一种形式（见 rdHlMkKind 里那条 ⚠️⚠️），
+               没有第二种可切 → 这颗键整个不出现。留一颗按了没反应的键比没有更糟。 */
+            var _lines = rdHlLineCount(hl && hl.id);
+            if (_lines > 1) return '';
+            var to = rdHlMkKind(hl, el, _lines) === 'u' ? 'b' : 'u';
             return '<button class="rd-act rd-style" data-act="mk" data-to="' + to + '"'
                  + ' title="换这一条的长相：手绘下划线 ↔ 手绘方框（只改这一条，不影响别的划线）">'
                  + (to === 'b' ? '▭ 画框' : '﹍ 划线') + '</button>';
@@ -26384,7 +26388,56 @@ body {
            ⚠️**别把圈(c)/荧光(h) 加进来**：她只要这两种。圈是小注那边的，荧光 2026-08-10 就被否了。
            ⚠️随机同样**钉死**在 hlid 上：同一条划线刷新、换设备、重开一章永远是同一种记号。 */
         var RD_HL_MK_KINDS = ['u', 'b'];
-        function rdHlMkKind(hl, el) {
+        /* 把一串行片段矩形（getClientRects 的产物）按「行」并成几组。
+           ⚠️**不能拿 top 比**（2026-08-20 用户实拍报的：划过的句子里只要夹了一段引号，
+             同一行就被拆成两组 → 一行上画出**两个框**、或者两截高低错开的下划线，像划了两次）。
+           根因：`.reading-quote` 挂的是另一套花字体（见 --reading-font-quote），换字体＝换 ascent，
+           同一条基线上的片段 top 能差好几像素，老代码那条 `|top 差| <= 2` 直接判成两行；
+           字号不同（引号短句/上下标）同理。
+           改成看**两个片段的竖向范围重叠了多少**：同一行共基线、必然大面积互相罩住；
+           上下两行隔着行距，就算行距压到 1.0 也够不着对方一半的高度。
+           ⚠️别退回「比 top / 比 baseline 近似值」那类写法——只要还依赖字体度量，换套字体就复发。 */
+        function rdMkGroupLines(frags) {
+            var _mid = function (r) { return (r.top + r.bottom) / 2; };
+            frags.sort(function (a, b) { return (_mid(a) - _mid(b)) || (a.left - b.left); });
+            var groups = [], span = null;
+            for (var f = 0; f < frags.length; f++) {
+                var fr = frags[f];
+                var ov = span ? (Math.min(span.bottom, fr.bottom) - Math.max(span.top, fr.top)) : -1;
+                var hMin = span ? Math.min(span.bottom - span.top, fr.bottom - fr.top) : 0;
+                if (span && ov >= hMin * 0.5) {
+                    groups[groups.length - 1].push(fr);
+                    span.top = Math.min(span.top, fr.top);
+                    span.bottom = Math.max(span.bottom, fr.bottom);
+                } else { groups.push([fr]); span = { top: fr.top, bottom: fr.bottom }; }
+            }
+            return groups;
+        }
+        /* 这条划线占了几行。⚠️必须把**同一个 hlid 的所有 mark** 一起量：跨人名高亮/引号时
+           rdHlWrapRange 会逐文本节点拆成好几个 mark，只量其中一个会把跨行看成不跨行。
+           量不出来（段落还没排版/被折叠）时回 1——宁可当成单行（该有的按钮照常在），
+           也别凭空把画框从工具条上抹掉。 */
+        function rdHlLineCount(id) {
+            if (!id) return 1;
+            var sibs = document.querySelectorAll('mark.rd-hl[data-hlid="' + id + '"]');
+            var frags = [];
+            for (var i = 0; i < sibs.length; i++) {
+                var rl = sibs[i].getClientRects();
+                for (var j = 0; j < rl.length; j++) if (rl[j].width > 0) frags.push(rl[j]);
+            }
+            return frags.length ? rdMkGroupLines(frags).length : 1;
+        }
+        function rdHlMkKind(hl, el, lines) {
+            /* ⚠️⚠️**跨行的划线只给下划线，不画框**（2026-08-20 用户定的：「如果跨行了的话，
+                 就不要画框了，只剩下下划线这一个形式」）。
+               `rdMkDraw` 是逐行各画一次的，跨行时一条划线会变成两三个各自独立的方框，
+               中间还断开——她要的是一条连贯的痕迹。
+               ⚠️这条**压在所有规则前面**，连她手选的 `hl.mk = 'b'` 也让路：换字号/换字体/转屏
+                 都会让原本一行的划线变成跨行，那时手选的框同样会裂开。
+                 相应地工具条上那颗「▭ 画框」在跨行时直接不出现（见 rdHlMkBtnHtml），
+                 所以正常操作下压根选不到 'b'，这里挡的是**存量数据和重排**。
+               ⚠️`lines` 没传（老调用点/量不出来）时按单行走，别把画框误杀掉。 */
+            if (lines > 1) return 'u';
             /* 她自己在那条划线上选过 → 一切随机让路（存在 hl.mk，跟着划线走云同步，零新增存储）。
                ⚠️手选的下划线**即使底下已有线也照给**：那是她看着那一条当场点的，比避让规则更有发言权。 */
             if (hl && (hl.mk === 'u' || hl.mk === 'b')) return hl.mk;
@@ -26902,32 +26955,7 @@ body {
                     }
                     // 这个字量不出位置＝还没排好版，别悄悄跳过（老代码就是这么把小注弄丢的）
                     if (!frags.length) { rdGlRetryLater(); continue; }
-                    /* 按「行」把片段分组。⚠️**不能拿 top 比**（2026-08-20 用户实拍报的：
-                       划过的句子里只要夹了一段引号，同一行就被拆成两组 → 一行上画出**两个框**、
-                       或者两截高低错开的下划线，看着像划了两次）。
-                       根因：`.reading-quote` 挂的是另一套花字体（见 --reading-font-quote），
-                       换字体＝换 ascent，同一条基线上的行片段 top 能差好几像素，
-                       原来那条 `|top 差| <= 2` 直接判成两行。字号不同（引号短句/上下标）同理。
-                       改成看**两个片段的竖向范围重叠了多少**：同一行共基线、必然大面积互相罩住；
-                       上下两行隔着行距，就算行距压到 1.0 也够不着对方一半的高度。
-                       ⚠️别退回「比 top / 比 baseline 近似值」那类写法——只要还依赖字体度量，
-                         换一套字体就会重现这个 bug。 */
-                    var _mid = function (r) { return (r.top + r.bottom) / 2; };
-                    frags.sort(function (a, b) { return (_mid(a) - _mid(b)) || (a.left - b.left); });
-                    var lineGroups = [], _gSpan = null;
-                    for (var f = 0; f < frags.length; f++) {
-                        var fr = frags[f];
-                        var _ov = _gSpan ? (Math.min(_gSpan.bottom, fr.bottom) - Math.max(_gSpan.top, fr.top)) : -1;
-                        var _hMin = _gSpan ? Math.min(_gSpan.bottom - _gSpan.top, fr.bottom - fr.top) : 0;
-                        if (_gSpan && _ov >= _hMin * 0.5) {
-                            lineGroups[lineGroups.length - 1].push(fr);
-                            _gSpan.top = Math.min(_gSpan.top, fr.top);
-                            _gSpan.bottom = Math.max(_gSpan.bottom, fr.bottom);
-                        } else {
-                            lineGroups.push([fr]);
-                            _gSpan = { top: fr.top, bottom: fr.bottom };
-                        }
-                    }
+                    var lineGroups = rdMkGroupLines(frags);   // 按行并（见函数上那条 ⚠️）
                     var _uni = function (grp) {
                         var L = Infinity, R = -Infinity, T = Infinity, B = -Infinity;
                         for (var q = 0; q < grp.length; q++) {
@@ -26962,7 +26990,7 @@ body {
                            localStorage 被清）`hl` 会是 undefined，种子就成了空字符串 →
                            **整章划线抽到同一种记号**，看着像功能坏了。兜底至少保住「按 hlid 随机」。 */
                         var _mkJob = rdMkPlan(_sibs, _mkId, _mkRects,
-                            _isGl ? null : rdHlMkKind(_hlById[_mkId] || { id: _mkId }, _sibs[0]));
+                            _isGl ? null : rdHlMkKind(_hlById[_mkId] || { id: _mkId }, _sibs[0], _mkRects.length));
                         if (_mkJob) mkJobs.push(_mkJob);
                     }
                     /* 没写小注的划线到此为止：记号已经收下，下面全是**小注标签**的排版（量宽高、

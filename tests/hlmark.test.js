@@ -14,6 +14,10 @@
  *  F 组 ⚠️小注的词仍走**老池子**（u/b/c），两套规则别合并——小注那套是 2026-08-10 连调四轮定的
  *  G 组 ⚠️零新增图层：记号一律画在小注那张 .rd-mk-svg 上。为划线另开一层＝重蹈引号手绘线覆辙
  *  H 组 ⚠️不许推开正文：mark 是行内元素，横向 padding 会让整段位移（同 glossmark E 组）
+ *  J 组 ⚠️跨行的划线**只给下划线、不画框**（2026-08-20 她定的：「如果跨行了的话，
+ *       就不要画框了，只剩下下划线这一个形式」）。连她手选的 hl.mk='b' 也让路，
+ *       且工具条上那颗「▭ 画框」在跨行时整个不出现。
+ *       ⚠️这条跟 C 组「长短不论」**不冲突**：长句只要没折行，照样可能是方框。
  *
  * 跑法：node tests/hlmark.test.js   或   bash tests/p.sh hlmark
  */
@@ -204,6 +208,26 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             svg.remove();
         }
 
+        /* ── J：⚠️跨行 → 只剩下划线 ──
+           她 2026-08-20 定的。跨行时 rdMkDraw 是逐行各画一次的，方框会裂成两三个断开的框。 */
+        {
+            const longWord = '想下山又怕山下的人问起从前那桩事';   // 16 字，必然跨行
+            // ① 纯函数：给了 lines>1 就必须是 u，连手选的 b 也让路
+            out.J_跨行只给u = rdHlMkKind({ id: 'j-1' }, null, 3) === 'u';
+            out.J_跨行压过手选 = rdHlMkKind({ id: 'j-2', mk: 'b' }, null, 2) === 'u';
+            out.J_单行仍可画框 = (() => { for (let i = 0; i < 60; i++) if (rdHlMkKind({ id: 'j2-' + i }, null, 1) === 'b') return true; return false; })();
+            // ② 走完整条路：手选了 b 的跨行划线，画出来仍得是 u
+            const { box } = build([{ para: 2, word: longWord, id: 'j9', mk: 'b' }], [{ id: 'j9', mk: 'b' }]);
+            const m = markOf(box, 'j9');
+            out.J_真跨行 = m ? rdHlLineCount('j9') > 1 : false;
+            out.J_端到端 = kindOf(m) === 'u';
+            // ③ 工具条上不给「画框」那颗键
+            out.J_无画框键 = rdHlMkBtnHtml({ id: 'j9', mk: 'b' }, m) === '';
+            // ④ 单行的那条，键照常在
+            const { box: b2 } = build([{ para: 1, word: '青苔', id: 'j8' }], [{ id: 'j8' }]);
+            out.J_单行有键 = /data-act="mk"/.test(rdHlMkBtnHtml({ id: 'j8' }, markOf(b2, 'j8')));
+        }
+
         /* ── H：⚠️不许推开正文（同 glossmark E 组）。加了记号前后，段落宽高必须一模一样 ── */
         {
             const { box } = build([]);
@@ -254,6 +278,14 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('I4 ⚠️长线两笔真的分开（有"宽"）', R.I_长线有宽度, R.I_detail);
     ok('I5 ⚠️宽度沿线乱变，不是公式', R.I_宽度非公式, R.I_detail);
     ok('I6 两条长线的宽度分布不一样', R.I_两条线不同);
+
+    ok('J1 ⚠️跨行只给下划线', R.J_跨行只给u);
+    ok('J2 ⚠️跨行压过手选的方框', R.J_跨行压过手选);
+    ok('J3 单行照样能抽到方框（没把画框整个杀掉）', R.J_单行仍可画框);
+    ok('J4 测试样本确实跨了行', R.J_真跨行);
+    ok('J5 ⚠️端到端：手选 b 的跨行划线，画出来是 u', R.J_端到端);
+    ok('J6 ⚠️跨行时工具条不给「画框」键', R.J_无画框键);
+    ok('J7 单行时「画框/划线」键照常在', R.J_单行有键);
 
     ok('H1 ⚠️没有撑宽段落', R.H_sameW, R.H_detail);
     ok('H2 ⚠️没有撑高段落（翻页对齐靠它）', R.H_sameH, R.H_detail);
