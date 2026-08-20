@@ -23900,9 +23900,23 @@ body {
             for (var i = 0; i < s.length; i++) { var c = s.charCodeAt(i); if (c >= 0x4e00 && c <= 0x9fff) n++; }
             return n / s.length;
         }
+        /* 有些书自带小标题记号（麦基《故事的解剖》用 `▍`），这种**不用猜**——
+           2026-08-20 加。起因：那本 101 个 `▍` 只认出 75 个，漏的 26 个里
+           13 个卡在「后段不足 40 字」、13 个卡在「小节不足 4 段」，**一个误判都没有**，
+           全是货真价实的小标题被护栏误伤（麦基爱用短句开头、也爱写三两段就完的小节）。
+           那两条护栏是当年拿《社会性动物》调的——那本没有任何记号、只能靠"长得像不像"猜，
+           所以必须收紧。有明确记号时前提就不成立了。
+           ⚠️记号必须**顶格出现在行首**才算，正文中间出现的同样字符不作数。
+           ⚠️`▍` 之外别乱加字符：`●·•▲◆` 那几个是列表项，加进来会把列表全认成标题。 */
+        var HEAD_MARKS = /^[▍▎▏|｜]\s*/;
+        function rbHeadMark(s) { return HEAD_MARKS.test((s || '').trim()); }
+
         // 这一行像不像小标题？nxt = 下一行（标题后面应该跟着正文段，据此排掉短句/列表）
         function rbLineIsHead(s, nxt) {
             s = (s || '').trim();
+            // 快速通道：自带记号的直接认，跳过那些"猜"用的启发式判断。
+            // 长度上限仍然要守——记号后面跟一整段话那就不是标题了。
+            if (rbHeadMark(s)) return s.replace(HEAD_MARKS, '').length <= 24;
             if (s.length < 2 || s.length > 24) return false;
             if ('。！？；：，、）)”"'.indexOf(s.charAt(s.length - 1)) >= 0) return false;   // 收尾是标点 → 是句子不是标题
             if (/^[●·•▲◆\-–—\d]/.test(s)) return false;        // ● 列表项 / 数字编号
@@ -23921,8 +23935,11 @@ body {
             for (var i = 0; i < lines.length; i++) {
                 if (rbLineIsHead(lines[i], i + 1 < lines.length ? lines[i + 1] : null)) raw.push(i + 1);
             }
+            // ⚠️「一小节至少 N 段」这条也只对**猜出来的**标题生效。
+            //   带记号的是书自己标的，哪怕只有一段正文也是一节（`▍腦蟲`、`▍蒙太奇` 就是）。
             var out = [];
             for (var k = 0; k < raw.length; k++) {
+                if (rbHeadMark(lines[raw[k] - 1])) { out.push(raw[k]); continue; }
                 var end = (k + 1 < raw.length) ? (raw[k + 1] - 1) : lines.length;
                 if (end - raw[k] >= MIN_SECTION_PARAS) out.push(raw[k]);
             }
