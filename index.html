@@ -26902,12 +26902,31 @@ body {
                     }
                     // 这个字量不出位置＝还没排好版，别悄悄跳过（老代码就是这么把小注弄丢的）
                     if (!frags.length) { rdGlRetryLater(); continue; }
-                    frags.sort(function (a, b) { return (a.top - b.top) || (a.left - b.left); });
-                    var lineGroups = [];
+                    /* 按「行」把片段分组。⚠️**不能拿 top 比**（2026-08-20 用户实拍报的：
+                       划过的句子里只要夹了一段引号，同一行就被拆成两组 → 一行上画出**两个框**、
+                       或者两截高低错开的下划线，看着像划了两次）。
+                       根因：`.reading-quote` 挂的是另一套花字体（见 --reading-font-quote），
+                       换字体＝换 ascent，同一条基线上的行片段 top 能差好几像素，
+                       原来那条 `|top 差| <= 2` 直接判成两行。字号不同（引号短句/上下标）同理。
+                       改成看**两个片段的竖向范围重叠了多少**：同一行共基线、必然大面积互相罩住；
+                       上下两行隔着行距，就算行距压到 1.0 也够不着对方一半的高度。
+                       ⚠️别退回「比 top / 比 baseline 近似值」那类写法——只要还依赖字体度量，
+                         换一套字体就会重现这个 bug。 */
+                    var _mid = function (r) { return (r.top + r.bottom) / 2; };
+                    frags.sort(function (a, b) { return (_mid(a) - _mid(b)) || (a.left - b.left); });
+                    var lineGroups = [], _gSpan = null;
                     for (var f = 0; f < frags.length; f++) {
-                        var g = lineGroups[lineGroups.length - 1];
-                        if (g && Math.abs(g[0].top - frags[f].top) <= 2) g.push(frags[f]);
-                        else lineGroups.push([frags[f]]);
+                        var fr = frags[f];
+                        var _ov = _gSpan ? (Math.min(_gSpan.bottom, fr.bottom) - Math.max(_gSpan.top, fr.top)) : -1;
+                        var _hMin = _gSpan ? Math.min(_gSpan.bottom - _gSpan.top, fr.bottom - fr.top) : 0;
+                        if (_gSpan && _ov >= _hMin * 0.5) {
+                            lineGroups[lineGroups.length - 1].push(fr);
+                            _gSpan.top = Math.min(_gSpan.top, fr.top);
+                            _gSpan.bottom = Math.max(_gSpan.bottom, fr.bottom);
+                        } else {
+                            lineGroups.push([fr]);
+                            _gSpan = { top: fr.top, bottom: fr.bottom };
+                        }
                     }
                     var _uni = function (grp) {
                         var L = Infinity, R = -Infinity, T = Infinity, B = -Infinity;
