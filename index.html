@@ -29649,14 +29649,33 @@ body {
              双击＝接着聊这一段。标题行原本不承担任何手势，拿它来折叠零冲突。
            ⚠️`stopPropagation` 必须有：不然这一下会继续冒泡去走「左右点击翻页」的连击计数，
              点一下标题书就翻页了。
-           ⚠️挂在 document 上用事件委托：正文是反复重渲的，绑在元素上会随重渲丢失。 */
+           ⚠️挂在 document 上用事件委托：正文是反复重渲的，绑在元素上会随重渲丢失。
+           ⚠⚠【折叠态要整块都能点，别改回去只认标题行】（2026-08-22 晗修）
+             用户报「点背景块的展开，**经常**会触发下滑翻页」。上面那道 stopPropagation 是好的，
+             漏的是**几何**：块自己带着一圈 padding（行内样式 `padding:0.5em 12px 0.4em`，
+             折叠时上下被压成 0.35em、**左右仍是 12px**），而 `.reading-q` 只到内容区边缘。
+             点在那圈 padding 上时 e.target 是 blockquote 本体、不是 .reading-q，
+             closest 返回 null → 直接放行 → 冒泡到翻页那头的「点段落以外一律翻页」兜底分支。
+             ⚠️**尤其是右边**：小三角 ▸ 是唯一的视觉提示、用户就冲它去点，
+             而它贴在 .reading-q 右端，**紧挨着 12px 陷阱区**，点偏一点就翻页——「经常」就是这么来的。
+             修法：**折叠态（.bg-fold）把整块当热区**——此时正文 display:none、块里只剩标题行，
+             点块上任何地方的意图只能是「展开」，零歧义。
+             ⚠️**展开态仍只认标题行**，别一并放宽：展开后正文露出来了，
+             整块上还压着另外两套手势（长按＝删除/重新回答、双击＝接着聊这一段），放宽就撞上了。 */
         document.addEventListener('click', function (e) {
             if (!e.target || !e.target.closest) return;
             var q = e.target.closest('.reading-merged blockquote[data-fold="1"] > .reading-q');
-            if (!q) return;
+            var bq = q ? q.parentElement : null;
+            /* 没点中标题行时的兜底：只要落在**折叠着的**块里（含那圈 padding）就算展开。
+               排除可点组件，免得把它们自己的点击吞了。 */
+            if (!bq) {
+                var fb = e.target.closest('.reading-merged blockquote[data-fold="1"].bg-fold');
+                if (fb && !e.target.closest('button, input, textarea, a, svg, .reading-actbar')) bq = fb;
+            }
+            if (!bq) return;
             e.stopPropagation();
             e.preventDefault();
-            rdBgFoldToggle(q.parentElement);
+            rdBgFoldToggle(bq);
         }, true);
 
         // 划线：选区变化 → 选到同一原文段落内就冒「划线小条」；选空 / 点别处 → 收起小条

@@ -96,6 +96,36 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         qa4.querySelector('.reading-q').click();
         out.C_问答块再点收起 = qa4.classList.contains('bg-fold');
 
+        /* ── G：⚠️折叠态整块都是热区（2026-08-22 晗加）──
+           用户报「点背景块的展开，**经常**会触发下滑翻页」。上面 B/C 组全是直接 `.click()` 标题行，
+           所以一直没照到这个洞。病根是**几何**：块自带一圈 padding
+           （行内样式左右 12px，折叠时上下压成 0.35em），那圈上 e.target 是 blockquote 本体、
+           不是 .reading-q → 旧写法 closest 落空 → 放行 → 冒泡撞上「点段落以外一律翻页」。
+           ⚠️尤其**右边**：小三角 ▸ 是唯一的视觉提示、用户就冲它去点，
+           而它贴在 .reading-q 右端、紧挨着那 12px，点偏一点就翻页。
+           这里用「事件直接派在 blockquote 上」模拟点在 padding 上（e.target 正是块本体）。 */
+        {
+            const box5 = render();
+            const bg5 = box5.querySelector('blockquote[data-bg="1"]');
+            /* ⚠️前面 C 组把这个块展开过，而展开状态记在 _rdBgOpen 里、重渲会恢复——
+               先收回折叠态再测，否则测的根本不是折叠态。 */
+            if (!bg5.classList.contains('bg-fold')) bg5.querySelector('.reading-q').click();
+            out.G_前提是折叠的 = bg5.classList.contains('bg-fold');
+            /* 冒泡阶段挂个哨兵：折叠 handler 在**捕获**阶段就 stopPropagation 了，
+               事件不该走到这儿——走到了就说明它还会接着去撞翻页那套连击计数。 */
+            let leaked = 0;
+            const spy = () => { leaked++; };
+            document.addEventListener('click', spy);
+            bg5.click();                       // ← 模拟点在块的 padding 上
+            out.G_点padding也展开 = !bg5.classList.contains('bg-fold');
+            out.G_没漏去翻页 = leaked === 0;
+            /* ⚠️展开之后整块**不再**是热区：正文露出来了，
+               那块地归长按（删除/重新回答）和双击（接着聊这一段）管，放宽就撞上了。 */
+            bg5.click();
+            out.G_展开态点块本体不收起 = !bg5.classList.contains('bg-fold');
+            document.removeEventListener('click', spy);
+        }
+
         /* ── E：⚠️折叠的重排只碰**这一条消息**，别再走全量 ──
            2026-08-11 用户报「展开收起的过程中，感觉框框和圈圈的渲染有点跟不上，会有点卡顿」。
            两个原因：① 调的是全量重排（页面上所有章节全量重量一遍）；② 还压了 30ms 延迟才开始画，
@@ -171,6 +201,10 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('B4 收起后重渲仍是折叠', R.B_收起后重渲仍折叠);
     ok('C1 ⚠️点块里的正文不会收起（那是双击追问的地盘）', R.C_点正文不收起);
     ok('C2 问答块点标题也能展开/收起', R.C_问答块点了会展开 && R.C_问答块再点收起);
+    ok('G1 前提：新渲染的块是折叠的', R.G_前提是折叠的);
+    ok('G2 ⚠️点块的 padding 圈（不是标题行）也能展开——小三角右边那 12px 就是这儿', R.G_点padding也展开);
+    ok('G3 ⚠️⚠️这一下不许漏去翻页（2026-08-22 她报的正是「点展开经常翻页」）', R.G_没漏去翻页);
+    ok('G4 ⚠️展开态点块本体不收起（那儿归长按/双击，别一并放宽）', R.G_展开态点块本体不收起);
     ok('E1 ⚠️折叠不再触发全量重排（只重排当前这条消息）', R.E_不走全量重排 && R.E_只重排本条);
     ok('E2 ⚠️用 rAF 在下一帧画完，不留「记号停在旧位置」的中间态', R.E_用了rAF);
     ok('E3 重排前先把记号层藏起来（宁可短暂看不见，也别看见错位）', R.E_先藏后画);
