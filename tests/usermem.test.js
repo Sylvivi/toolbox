@@ -118,23 +118,23 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         umAdd('第三条');
         umRenderPanel();
         const box = document.getElementById('chatUserMemList');
-        const 渲染出几条 = box.querySelectorAll('input[data-um]').length;
+        const 渲染出几条 = box.querySelectorAll('textarea[data-um]').length;
         const 计数文字 = (document.getElementById('chatUserMemCount') || {}).textContent;
 
         // 点 ✕ 删掉第二条
-        const 第二个输入框 = box.querySelectorAll('input[data-um]')[1];
+        const 第二个输入框 = box.querySelectorAll('textarea[data-um]')[1];
         第二个输入框.parentNode.querySelector('span[title="忘掉这条"]').click();
         const 删后条数 = umLoad().length;
         const 删掉的是第二条 = !umLoad().some(x => x.content === '第二条');
 
         // 在输入框里改字 → 失焦保存
-        const 头一个 = box.querySelectorAll('input[data-um]')[0];
+        const 头一个 = box.querySelectorAll('textarea[data-um]')[0];
         头一个.value = '第一条改过了';
         umOnEdit(头一个);
         const 改后内容 = umLoad()[0].content;
 
         // 清空输入框 = 删掉这条
-        const 又一个 = box.querySelectorAll('input[data-um]')[0];
+        const 又一个 = box.querySelectorAll('textarea[data-um]')[0];
         又一个.value = '   ';
         umOnEdit(又一个);
         const 清空后条数 = umLoad().length;
@@ -162,7 +162,7 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         umRenderPanel();
         const box = document.getElementById('chatUserMemList');
         return {
-            没有输入框: box.querySelectorAll('input[data-um]').length,
+            没有输入框: box.querySelectorAll('textarea[data-um]').length,
             有提示: box.textContent.indexOf('还没有') >= 0,
             计数是空的: (document.getElementById('chatUserMemCount') || {}).textContent
         };
@@ -176,6 +176,7 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         const h = umPaneHtml();
         return {
             带列表容器: h.indexOf('id="chatUserMemList"') >= 0,
+            添加框能多行: h.indexOf('<textarea id="chatUserMemInput"') >= 0,
             带计数: h.indexOf('id="chatUserMemCount"') >= 0,
             带输入框: h.indexOf('id="chatUserMemInput"') >= 0,
             // 两个摘要弹窗都得把「我」推进 panes，否则某个模式下点不到
@@ -189,6 +190,7 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         };
     });
     ok('这块 HTML 自带列表容器', G.带列表容器, '');
+    ok('添加框是多行的（她可能整段粘档案）', G.添加框能多行, '');
     ok('自带条数', G.带计数, '');
     ok('自带输入框', G.带输入框, '');
     ok('阅读模式的「摘要」弹窗里有「我」这一页', G.阅读模式弹窗里有, '');
@@ -568,6 +570,73 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     // ⚠️整理是「整组替换」：模型这次只吐了一条，那「关于我」里蘑菇记的就全被这一条顶掉了
     //（包括「她熬夜看书」）。这不是 bug，正是为什么落地前一定要她看预览。
     eq('「关于我」里蘑菇记的整组被合并结果顶替', O.整理后.我, ['她喜欢甲乙丙']);
+
+    /* ===== P 组：档案型记忆（2026-08-23 晚，她原话「我想把人物档案加进去空间不够了」）=====
+       起因是她和蘑菇在《故事的解剖》里共创的「专属小白鼠档案」：摄政王萧濯 / 长公主李昭 /
+       核心张力 / 当前任务，**分行分字段、会持续增补、明显超过 200 字**。 */
+    const P = await page.evaluate(() => {
+        localStorage.removeItem('toolbox_user_memory');
+        window.rbCurBook = () => ({ fileName: '故事的解剖.epub', fileSize: 111 });
+        window.rbCurBookName = () => '故事的解剖';
+
+        const 档案 = [
+            '【专属小白鼠档案】',
+            '男主：摄政王萧濯（怀胎四月，死要面子强装冷酷，朝服暗褶放宽三寸）',
+            '女主：长公主李昭（政敌，敏锐腹黑，已经抓住了他的小辫子）',
+            '核心张力：大权在握的威严预期 vs 揣着崽处处受制的现实落差',
+            '当前任务：作为"陪练"，验证本书后续的"渐进式困境""危机""高潮"'
+        ].join('\n');
+
+        const 书id = umAdd(档案, '', 'mushroom', 'book');
+        const 存下的 = umLoad().filter(x => x.id === 书id)[0];
+
+        const 我id = umAdd('我'.repeat(300), '', 'me', 'me');
+        const 我的长度 = umLoad().filter(x => x.id === 我id)[0].content.length;
+        const 长档案id = umAdd('书'.repeat(1500), '', 'mushroom', 'book');
+        const 书的长度 = umLoad().filter(x => x.id === 长档案id)[0].content.length;
+
+        umUpdate(书id, 档案 + '\n腹中胎儿系女主亲生，目前是一笔极其危险的糊涂账。' + '后续设定'.repeat(60));
+        const 补全后 = umLoad().filter(x => x.id === 书id)[0].content;
+
+        const 注入 = umText();
+        document.getElementById('umTestHost').innerHTML = umPaneHtml();
+        umRenderPanel();
+        const ta = document.querySelector('#chatUserMemList textarea[data-um="' + 书id + '"]');
+
+        return {
+            换行没被吃掉: 存下的.content.indexOf('\n女主：长公主李昭') >= 0,
+            档案长度: 存下的.content.length,
+            我的长度, 书的长度,
+            补全后有胎儿: 补全后.indexOf('腹中胎儿系女主亲生') >= 0,
+            补全后长度: 补全后.length,
+            注入里是整块: 注入.indexOf('核心张力：大权在握') >= 0,
+            注入没被加列表符: 注入.indexOf('- 【专属小白鼠档案】') < 0,
+            面板里是多行框: !!ta && ta.tagName === 'TEXTAREA',
+            面板里内容完整: !!ta && ta.value.indexOf('腹中胎儿系女主亲生') >= 0
+        };
+    });
+    ok('⚠️档案里的换行一个都没被吃掉', P.换行没被吃掉, '');
+    ok('档案超过 200 字也存得下', P.档案长度 > 100, '实际 ' + P.档案长度 + ' 字');
+    eq('「关于我」那组还是 200 字上限', P.我的长度, 200);
+    eq('「这本书」那组放到 1000 字', P.书的长度, 1000);
+    ok('⚠️后续设定用「改」补进同一条（档案不该散成好几条）', P.补全后有胎儿, '');
+    ok('⚠️补全后没有被截到 200（改的时候也按这条自己的上限算）', P.补全后长度 > 300, '实际 ' + P.补全后长度);
+    ok('注入时档案是整块给的', P.注入里是整块, '');
+    ok('⚠️注入时没给档案套「- 」列表符（会把结构压塌）', P.注入没被加列表符, '');
+    ok('面板里用的是能装多行的框', P.面板里是多行框, '');
+    ok('面板里看得到完整档案', P.面板里内容完整, '');
+
+    const P2 = await page.evaluate(() => {
+        const sp = umReviewSystemPrompt();
+        return {
+            讲了档案: sp.indexOf('可以写长、可以分行分条') >= 0,
+            讲了别散开: sp.indexOf('别另起一条') >= 0,
+            讲了她说记就记全: sp.indexOf('原样记全') >= 0
+        };
+    });
+    ok('提示词讲了档案可以写长', P2.讲了档案, '');
+    ok('提示词讲了后续设定要补进同一条', P2.讲了别散开, '');
+    ok('⚠️提示词讲了「她说记就原样记全，别压缩」', P2.讲了她说记就记全, '');
 
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
 
