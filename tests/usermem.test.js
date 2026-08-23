@@ -383,6 +383,90 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     ok('⚠️看过之后标记清掉了（下次打开就干净）', K.清掉了, '');
     ok('⚠️但这次屏幕上的圆点没被抹掉（清标记时不重画）', K.圆点还在屏幕上, '');
 
+    /* ===== L 组：「整理一下」（2026-08-23，她撞上「记成五条近义的」之后加的）=====
+       ⚠️最要命的一条：**她亲手写的绝不能被合并掉**。她那两条男生子声明是原话粘进去的。 */
+    const L = await page.evaluate(async () => {
+        localStorage.removeItem('toolbox_user_memory');
+        window.umConn = () => ({ baseUrl: 'https://fake', apiKey: 'k', model: 'm' });  // 测试页没选中转站
+        const 真fetch = window.fetch;
+        let 送出去的 = null;
+        const 假回 = (text) => {
+            window.fetch = async (u, o) => {
+                送出去的 = JSON.parse(o.body);
+                return { ok: true, json: async () => ({ choices: [{ message: { content: text } }] }) };
+            };
+        };
+        // 造场景：她自己写 2 条，蘑菇记 5 条近义的
+        umAdd('【我读的题材】男生子设定，天经地义', '', 'me');
+        umAdd('直接自然代入，别强调它少见', '', 'me');
+        ['隐忍感', '孕期自卑', '女主不卑微', '别落在感动上', '偏爱酸涩'].forEach(t => umAdd('她喜欢' + t + '这一挂的', '', 'mushroom'));
+        const 整理前 = umLoad().length;
+
+        假回('- 她偏爱男生子文里的隐忍和酸涩：孕期自卑、女主不卑微、结局别落在感动上\n- 另一条不相干的');
+        await umTidy(null);
+
+        const 清单 = 送出去的.messages[0].content;
+        const 送了蘑菇那五条 = ['隐忍感', '孕期自卑', '女主不卑微'].every(t => 清单.indexOf('她喜欢' + t) >= 0);
+        const 说明了她的别动 = 清单.indexOf('不归你管、也不要动') >= 0;
+
+        // 预览阶段：还没落地
+        const 预览时没变 = umLoad().length === 整理前;
+        const 预览里有新内容 = document.getElementById('chatUserMemList').textContent.indexOf('隐忍和酸涩') >= 0;
+
+        umTidyApply();
+        const 后 = umLoad();
+        return {
+            整理前,
+            送了蘑菇那五条, 说明了她的别动, 预览时没变, 预览里有新内容,
+            整理后条数: 后.length,
+            她的还在: 后.filter(x => x.by !== 'mushroom').map(x => x.content),
+            蘑菇的: 后.filter(x => x.by === 'mushroom').map(x => x.content),
+            新的都带标: 后.filter(x => x.by === 'mushroom').every(x => x._chg === 'new'),
+            _真fetch: (window.fetch = 真fetch, true)
+        };
+    });
+    eq('场景造对了（她 2 条 + 蘑菇 5 条）', L.整理前, 7);
+    ok('把蘑菇记的那几条送去合并', L.送了蘑菇那五条, '');
+    ok('⚠️明确交代她亲手写的不许动', L.说明了她的别动, '');
+    ok('⚠️预览阶段一个字都还没改（她点头才落地）', L.预览时没变, '');
+    ok('预览里看得到合并后的内容', L.预览里有新内容, '');
+    eq('落地后：她的 2 条 + 合并出的 2 条', L.整理后条数, 4);
+    eq('⚠️她亲手写的原封不动', L.她的还在, ['【我读的题材】男生子设定，天经地义', '直接自然代入，别强调它少见']);
+    eq('蘑菇那 5 条合成了 2 条', L.蘑菇的.length, 2);
+    ok('合并后的内容对得上', L.蘑菇的[0].indexOf('隐忍和酸涩') >= 0, '实际 ' + L.蘑菇的[0]);
+    ok('新换上来的带「新增」标记，好认', L.新的都带标, '');
+
+    /* ===== M 组：整理的边界 ===== */
+    const M = await page.evaluate(async () => {
+        localStorage.removeItem('toolbox_user_memory');
+        window.umConn = () => ({ baseUrl: 'https://fake', apiKey: 'k', model: 'm' });
+        const 真fetch = window.fetch;
+        let 打了 = 0;
+        window.fetch = async () => { 打了++; return { ok: true, json: async () => ({ choices: [{ message: { content: '- 甲' } }] }) }; };
+        // 蘑菇记的不到 3 条：不值得整理，别白花钱
+        umAdd('就一条', '', 'mushroom');
+        await umTidy(null);
+        const 太少时打了 = 打了;
+
+        // 它回了一堆废话、一条都读不出来 → 不能把记忆清空
+        ['甲','乙','丙'].forEach(t => umAdd(t + '的事', '', 'mushroom'));
+        window.fetch = async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: '好的！' } }] }) });
+        await umTidy(null);
+        const 读不懂时条数 = umLoad().length;
+
+        // 接口挂了也不能动数据
+        window.fetch = async () => { throw new Error('断网'); };
+        let 抛了 = false;
+        try { await umTidy(null); } catch (e) { 抛了 = true; }
+        const 挂了之后条数 = umLoad().length;
+        window.fetch = 真fetch;
+        return { 太少时打了, 读不懂时条数, 挂了之后条数, 抛了 };
+    });
+    eq('蘑菇记的不到 3 条就不整理（别白花钱）', M.太少时打了, 0);
+    eq('⚠️它回了废话读不出条目时，记忆一条不动', M.读不懂时条数, 4);
+    eq('⚠️接口挂了记忆也一条不动', M.挂了之后条数, 4);
+    ok('整理失败不往外抛', M.抛了 === false, '');
+
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();

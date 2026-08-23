@@ -15597,11 +15597,31 @@ body {
                 '· 不用面面俱到，也不用分类周全。可记可不记的，就别记。\n\n' +
                 '值得记的：她的口味、习惯、在意的事、经历、性格、正在做的事。\n' +
                 '不用记的：书里的情节人物、你自己的评论、她随口的附和、已经记过的事。\n\n' +
+                /* ⚠️2026-08-23 当天补的，因为它把同一件事记成了五条：隐忍感、孕期自卑、
+                   女主不卑微、别落在感动上、喜欢酸涩——全在讲「她对男生子文的情感口味」。
+                   她原话「感觉一条一条的有点重复……在下一轮中可能会影响到模型的注意力」。
+                   病根是我只写了「已经记过的不用记」，**没告诉它「沾边的该去并，而不是另起一条」**，
+                   于是它每次都走最省事那条路。这几行别删。 */
+                '⚠️**新记之前先看一遍上面的清单**：\n' +
+                '· 这件事跟已有的某条**沾边**（同一个话题的另一个侧面）→ 用 update_memory 把那条**补全**，别另起一条。\n' +
+                '· 只有**真的是全新的话题**，才 remember 一条新的。\n' +
+                '· 宁可**一条写全**，也别拆成好几条近义的——她每轮都要看着这份清单，重复的话会稀释注意力。\n\n' +
                 '你现在记着这些（编号｜内容）：\n' + umListForModel() + '\n\n' +
                 '发现记错了或者过时了，就用 update_memory 改、用 forget 忘掉。\n' +
                 '⚠️**标着【她亲手写的】那几条一个字都别动**——那是她自己交代给你的，不是你记的。\n' +
                 '⚠️一轮最多记一两条。宁缺毋滥。\n' +
                 '**宁可什么都不记，也别记一堆废话。**这轮要是没什么特别的，就什么都别做，回一个句号。';
+        }
+        /* 当前用的那条线（给记忆相关的旁路请求用）。跟 chatDoRequest 里那几行同一个来源，
+           只是单独拎出来——「整理一下」这个按钮在摘要弹窗里，够不着那边的局部变量。 */
+        function umConn() {
+            try {
+                var item = getKeyItemById(document.getElementById('chatProviderSelect').value);
+                if (!item || !chatSelectedModel) return null;
+                return { baseUrl: getBaseUrl(item.url),
+                         apiKey: chatSelectedKeyStr || getActiveKey(item),
+                         model: chatSelectedModel };
+            } catch (e) { return null; }
         }
         var _umReviewing = false;
         /* 这轮聊完之后跑一次。失败一律吞掉——它只是个记笔记的，绝不能影响正在读书的人。 */
@@ -15700,6 +15720,97 @@ body {
             if (typeof chatIsNearBottom === 'function' && chatIsNearBottom()) chatScrollBottom();
         }
 
+        /* ===== 「整理一下」：把攒碎的记忆合并（2026-08-23）=====
+           起因：上线当天她就撞上了——蘑菇把「她对男生子文的情感口味」记成了五条近义的。
+           她原话「一是感觉一条一条的有点重复……二是我还挺想能把这些合并的」。
+           源头已经在 umReviewSystemPrompt 里堵了（沾边的去并、别另起一条），
+           但**存量得有人收拾**，所以给一个手动按钮。
+
+           ⚠️**只动蘑菇记的，她亲手写的一条都不碰。** 她那两条男生子声明是原话粘进来的，
+             被「优化」掉就麻烦了。所以送出去的清单里她那些只作参考、明说不许改。
+           ⚠️**先给她看，点头才落地。** 合并是有损的——万一把她在意的细节揉没了，
+             不回头看根本发现不了。这也是她选按钮、没选「自动整理」的原因。 */
+        var _umTidyResult = null;   // 整理结果暂存，等她点「用这份」
+        async function umTidy(btn) {
+            var mine = umLoad().filter(function (x) { return x.by !== 'mushroom'; });
+            var his = umLoad().filter(function (x) { return x.by === 'mushroom'; });
+            if (his.length < 3) { showToast('蘑菇记的还不到 3 条，不用整理'); return; }
+            var conn = umConn();
+            if (!conn) { showToast('先选一个模型'); return; }
+            if (btn) { btn.disabled = true; btn.textContent = '整理中…'; }
+            try {
+                var nm = chatUserName();
+                var sys = '你在整理你为' + nm + '记下的那些事。\n\n' +
+                    '现在这些是**你记的**，需要你合并：\n' +
+                    his.map(function (x, i) { return (i + 1) + '. ' + x.content; }).join('\n') + '\n\n' +
+                    (mine.length ? ('另外这些是**' + nm + '亲手写的，不归你管、也不要动**，列在这儿只是让你别跟它们重复：\n' +
+                        mine.map(function (x) { return '· ' + x.content; }).join('\n') + '\n\n') : '') +
+                    '怎么整理：\n' +
+                    '· 讲同一件事的几条**合成一条**，写全、写顺，别丢掉里面的细节。\n' +
+                    '· 各说各的、真不相干的就留着，别硬凑。\n' +
+                    '· 口吻还是朋友随手记的那种，别写成档案。\n' +
+                    '· 每条不超过 100 字。\n\n' +
+                    '直接输出整理后的清单，**一行一条，前面加「- 」**，别写任何别的话。';
+                var resp = await fetch(conn.baseUrl + '/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + conn.apiKey },
+                    body: JSON.stringify({ model: conn.model, messages: [{ role: 'system', content: sys },
+                        { role: 'user', content: '整理吧。' }], max_tokens: 1200 })
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                var data = await resp.json();
+                try {
+                    var u = apiUsageFromChunk(data);
+                    if (u) apiLogRecord('记忆整理', conn.model, u.inTok, u.outTok, false, conn.baseUrl || '', u.cacheTok);
+                } catch (e) {}
+                var txt = ((((data.choices || [])[0]) || {}).message || {}).content || '';
+                /* 解析：一行一条。⚠️别指望它一定听话加「- 」——有的模型会用「1.」「·」，
+                   有的会先客套一句。所以逐行剥前缀、扔掉太短的和明显是客套的那种。 */
+                var lines = txt.split('\n').map(function (l) {
+                    return l.replace(/^\s*[-*·•]\s*/, '').replace(/^\s*\d+[.、)]\s*/, '').trim();
+                }).filter(function (l) { return l.length >= 4 && l.length <= 200; });
+                if (!lines.length) throw new Error('没读懂它的回答');
+                if (lines.length > USER_MEM_MAX) lines = lines.slice(0, USER_MEM_MAX);
+                _umTidyResult = lines;
+                umRenderTidyPreview(his.length, lines);
+            } catch (e) {
+                showToast('整理没成：' + ((e && e.message) || '未知错误'));
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = '整理一下'; }
+            }
+        }
+        /* 预览：把列表那块换成「原来 N 条 → 现在 M 条」加新内容，底下两个按钮。 */
+        function umRenderTidyPreview(oldN, lines) {
+            var box = document.getElementById('chatUserMemList');
+            if (!box) return;
+            box.innerHTML = '<div style="font-size:11.5px;color:var(--text-muted);margin-bottom:.5em">'
+                + '蘑菇记的 ' + oldN + ' 条 → 合成 ' + lines.length + ' 条（你亲手写的没动）</div>'
+                + lines.map(function (l) {
+                    return '<div style="display:flex;gap:.4em;padding:.2em 0;font-size:13px;color:var(--text);line-height:1.7">'
+                        + '<span style="flex-shrink:0;opacity:.85">🍄</span><span>' + esc(l) + '</span></div>';
+                }).join('')
+                + '<div style="display:flex;gap:.5em;margin-top:.7em">'
+                + '<button onclick="umTidyApply()" style="flex:1;padding:7px 0;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:13px;cursor:pointer">用这份</button>'
+                + '<button onclick="umTidyCancel()" style="flex:1;padding:7px 0;background:transparent;border:1px solid var(--input-border);color:var(--text-muted);border-radius:10px;font-size:13px;cursor:pointer">算了</button>'
+                + '</div>';
+        }
+        function umTidyCancel() { _umTidyResult = null; umRenderPanel(); }
+        function umTidyApply() {
+            if (!_umTidyResult) return umRenderPanel();
+            /* ⚠️只换掉蘑菇记的那批，她亲手写的原封不动留在原位。
+               新条目一律标 _chg='new'，好让她一眼看出哪些是刚换上来的。 */
+            var keep = umLoad().filter(function (x) { return x.by !== 'mushroom'; });
+            var now = new Date().toISOString();
+            _umTidyResult.forEach(function (c, i) {
+                keep.push({ id: 'm' + Date.now().toString(36) + i.toString(36) + Math.random().toString(36).slice(2, 5),
+                            content: c.slice(0, 200), tag: '', by: 'mushroom', _chg: 'new', ts: now });
+            });
+            var n = _umTidyResult.length;
+            _umTidyResult = null;
+            umSaveList(keep);
+            showToast('🍄 整理好了，现在 ' + n + ' 条');
+        }
+
         /* 「我」这个 Tab 的整块 HTML。2026-08-23 从设置面板挪过来的——
            她原话「我不太喜欢这个入口哎」，指的是设置→预设页→拉到最底下那个位置。
            挪进「📋 摘要」是她选的：那个弹窗本来就是「记忆的家」（人物/地点/年表/主线都在那儿）。
@@ -15709,6 +15820,7 @@ body {
             return '<div class="seg" style="padding-bottom:6px">'
                 + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
                 + '<span class="seg-label" style="margin:0">🍄 蘑菇记得的我 <span id="chatUserMemCount" style="font-weight:400;color:var(--text-muted);font-size:10px"></span></span>'
+                + '<button onclick="umTidy(this)" title="把讲同一件事的几条合成一条；只动蘑菇记的，你自己写的不碰" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer;padding:0">整理一下</button>'
                 + '</div>'
                 + '<div style="font-size:11px;color:var(--text-muted);line-height:1.7;margin-bottom:.6em">跟着你走，不分书。每次聊天开头会悄悄告诉它，它就不用每次重新认识你。</div>'
                 + '<label style="display:flex;align-items:center;gap:.5em;font-size:12px;color:var(--text-sub);margin-bottom:.7em;cursor:pointer">'
