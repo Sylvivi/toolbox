@@ -15609,9 +15609,9 @@ body {
                     + '<span style="display:flex;align-items:center;height:1.9em;flex-shrink:0">' + dot + '</span>'
                     + (who ? '<span style="display:flex;align-items:center;height:1.9em;flex-shrink:0">' + who + '</span>' : '')
                     + '<textarea rows="1" maxlength="' + umLenCap(x.book) + '" data-um="' + esc(x.id) + '"'
-                    + ' onchange="umOnEdit(this)" onblur="umOnEdit(this)" oninput="umGrow(this)"'
+                    + ' onchange="umOnEdit(this)" onblur="umOnEdit(this);umGrow(this)" oninput="umGrow(this,1)"'
                     + ' style="flex:1;min-width:0;padding:.35em .5em;background:transparent;border:1px solid transparent;border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;line-height:1.6;outline:none;resize:none;overflow:hidden;white-space:pre-wrap;word-break:break-word"'
-                    + ' onfocus="this.style.background=\'var(--input-bg)\';this.style.borderColor=\'var(--card-border)\'"'
+                    + ' onfocus="this.style.background=\'var(--input-bg)\';this.style.borderColor=\'var(--card-border)\';umGrow(this,1)"'
                     + '>' + esc(x.content) + '</textarea></div>';
             };
             var _cap = function (t) {
@@ -15660,11 +15660,24 @@ body {
                 if (dirty) umSaveList(cur, true);
             }, 1200);
         }
-        // 多行框跟着内容长高（跟记忆表格里那些编辑框一个做法）
-        function umGrow(el) {
+        /* 多行框跟着内容长高，但**没点进去时最多露 3 行**（2026-08-23 深夜，她要求
+           「不要全部展示，可以显示少数行，然后点了才展开全部」）。
+           起因是那份小白鼠档案有七八行，一条就把整个面板占满了，别的条目全被挤到看不见。
+           ⚠️收起状态不是 CSS 截断而是直接压高度：textarea 的 `overflow:hidden` 已经在样式里，
+             所以压完就是干净的三行，不会露出滚动条。
+           ⚠️点进去（focus）自动展开全高，移开焦点又收回去——跟右边那两个记号同一个节奏。 */
+        var UM_FOLD_LINES = 3;
+        function umGrow(el, full) {
             if (!el) return;
             el.style.height = 'auto';
-            el.style.height = (el.scrollHeight || 24) + 'px';
+            var h = el.scrollHeight || 24;
+            if (!full && document.activeElement !== el) {
+                var cs = getComputedStyle(el);
+                var line = parseFloat(cs.lineHeight) || (parseFloat(cs.fontSize) * 1.6) || 21;
+                var pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+                h = Math.min(h, Math.round(line * UM_FOLD_LINES + pad));
+            }
+            el.style.height = h + 'px';
         }
         function umOnEdit(inp) {
             var id = inp.getAttribute('data-um');

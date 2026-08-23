@@ -699,6 +699,45 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     ok('⚠️按钮挡住了焦点转移（不挡就会「点了没反应」）', Q.挡了焦点转移, '');
     ok('没开书时挪不动（挪无处可去），也不报错', Q.挪失败 && Q.还在原地, '');
 
+    /* ===== R 组：长条目默认只露几行（2026-08-23 深夜）=====
+       她原话「不要全部展示，可以显示少数行，然后点了才展开全部」
+       ＋「毕竟这个是给 ai 看的，我只是偶尔查阅，不需要全部显示，也会降低查看效率」。
+       起因：那份小白鼠档案七八行，一条就把整个面板占满，别的条目全被挤没了。 */
+    const R = await page.evaluate(async () => {
+        localStorage.removeItem('toolbox_user_memory');
+        window.rbCurBook = () => null;
+        window.rbCurBookName = () => '';
+        const 长的 = Array.from({ length: 12 }, (_, i) => '第' + (i + 1) + '行内容').join('\n');
+        const 短的 = '就一行';
+        const 长id = umAdd(长的, '', 'me', 'me');
+        const 短id = umAdd(短的, '', 'me', 'me');
+        document.getElementById('umTestHost').innerHTML = umPaneHtml();
+        umRenderPanel();
+        await new Promise(r => setTimeout(r, 60));
+        const 长框 = document.querySelector('#chatUserMemList textarea[data-um="' + 长id + '"]');
+        const 短框 = document.querySelector('#chatUserMemList textarea[data-um="' + 短id + '"]');
+        const 收起高 = parseFloat(长框.style.height);
+        const 短框高 = parseFloat(短框.style.height);
+
+        长框.focus();
+        await new Promise(r => setTimeout(r, 60));
+        const 展开高 = parseFloat(长框.style.height);
+        长框.blur();
+        umGrow(长框);
+        await new Promise(r => setTimeout(r, 60));
+        const 收回去 = parseFloat(长框.style.height);
+
+        // 内容一个字都没丢，只是没露出来
+        const 内容完整 = umLoad().filter(x => x.id === 长id)[0].content.split('\n').length === 12;
+        return { 收起高, 短框高, 展开高, 收回去, 内容完整, 折几行: UM_FOLD_LINES };
+    });
+    eq('默认露 3 行', R.折几行, 3);
+    ok('⚠️十二行的条目收起时只占三行左右', R.收起高 < R.展开高 / 2, '收起 ' + R.收起高 + ' / 展开 ' + R.展开高);
+    ok('点进去展开全高', R.展开高 > R.收起高, '');
+    ok('移开焦点又收回去', Math.abs(R.收回去 - R.收起高) < 2, '收回 ' + R.收回去);
+    ok('本来就短的条目不受影响（不会被撑成三行）', R.短框高 < R.收起高, '短 ' + R.短框高 + ' / 长 ' + R.收起高);
+    ok('⚠️收起只是不显示，内容一个字没丢', R.内容完整, '');
+
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();
