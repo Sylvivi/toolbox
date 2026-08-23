@@ -5888,6 +5888,20 @@ body {
                            onchange="chatOnUserNameInput(this.value)" onblur="chatOnUserNameInput(this.value)"
                            style="width:130px;padding:7px 11px;background:var(--input-bg);border:1px solid var(--card-border);border-radius:10px;color:var(--text);font-size:14px;outline:none;text-align:right">
                 </div>
+                <!-- 蘑菇记得的我（2026-08-23 加）：放在昵称底下，因为它俩是同一件事——AI 该把我当成谁。 -->
+                <div id="chatUserMemRow" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--card-border)">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:.5em">
+                        <span style="font-size:13px;font-weight:600;color:var(--text)" title="每次对话开头会把这些悄悄告诉 AI，它就不用每次重新认识你">蘑菇记得的我</span>
+                        <span id="chatUserMemCount" style="font-size:12px;color:var(--text-muted)"></span>
+                    </div>
+                    <div id="chatUserMemList"></div>
+                    <div style="display:flex;gap:.4em;margin-top:.5em">
+                        <input id="chatUserMemInput" type="text" maxlength="200" placeholder="自己加一条，比如：不爱看大段心理独白" autocomplete="off"
+                               onkeydown="if(event.key==='Enter')umOnAdd()"
+                               style="flex:1;min-width:0;padding:7px 11px;background:var(--input-bg);border:1px solid var(--card-border);border-radius:10px;color:var(--text);font-size:13px;outline:none">
+                        <button onclick="umOnAdd()" style="flex-shrink:0;padding:7px 14px;background:transparent;border:1px solid var(--card-border);border-radius:10px;color:var(--accent);font-size:13px;cursor:pointer">加</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -10713,6 +10727,8 @@ body {
                 marksDeleted: rdMarksGetTombs(),
                 userName: (localStorage.getItem('toolbox_user_name') || ''),
                 userNameTs: (localStorage.getItem('toolbox_user_name_ts') || ''),
+                userMemory: umLoad(),
+                userMemoryTs: umTs(),
                 bookTitles: rbTitlesLoad(),
                 bookTitlesTs: rbTitlesTs(),
                 bookFolders: rbFoldersLoad(),
@@ -11015,6 +11031,18 @@ body {
                         localStorage.setItem('toolbox_user_name', manifest.userName || '');
                         localStorage.setItem('toolbox_user_name_ts', cloudUnTs);
                         if (typeof chatSyncUserNameInput === 'function') chatSyncUserNameInput();
+                    }
+                }
+
+                /* 蘑菇记得的我：跟昵称同款「时间戳后写覆盖」，整份数组一起覆盖。
+                   ⚠️不做逐条合并——两台设备同时改记忆的概率极低，而逐条合并要引入墓碑
+                     （不然删掉的会被另一台推回来，跟划线那边踩过的坑一模一样），不值当。 */
+                if (manifest.userMemory !== undefined) {
+                    var cloudUmTs = manifest.userMemoryTs || '';
+                    if (cloudUmTs > (localStorage.getItem(USER_MEM_TS_KEY) || '')) {
+                        localStorage.setItem(USER_MEM_KEY, JSON.stringify(manifest.userMemory || []));
+                        localStorage.setItem(USER_MEM_TS_KEY, cloudUmTs);
+                        try { umRenderPanel(); } catch (e) {}
                     }
                 }
 
@@ -11438,6 +11466,7 @@ body {
                     try { rdMarksSweepTombs(); } catch (eSw2) {}
                 }
                 if (manifest.userName !== undefined) { localStorage.setItem('toolbox_user_name', manifest.userName || ''); if (manifest.userNameTs) localStorage.setItem('toolbox_user_name_ts', manifest.userNameTs); }
+                if (manifest.userMemory !== undefined) { localStorage.setItem(USER_MEM_KEY, JSON.stringify(manifest.userMemory || [])); if (manifest.userMemoryTs) localStorage.setItem(USER_MEM_TS_KEY, manifest.userMemoryTs); }
                 if (manifest.bookTitles) { localStorage.setItem('reading_book_titles', JSON.stringify(manifest.bookTitles)); if (manifest.bookTitlesTs) localStorage.setItem('reading_book_titles_ts', manifest.bookTitlesTs); }
                 if (manifest.bookFolders) { localStorage.setItem('reading_book_folders', JSON.stringify(manifest.bookFolders)); if (manifest.bookFoldersTs) localStorage.setItem('reading_book_folders_ts', manifest.bookFoldersTs); }
                 if (manifest.bookKinds) { localStorage.setItem('reading_book_kind', JSON.stringify(manifest.bookKinds)); if (manifest.bookKindsTs) localStorage.setItem('reading_book_kind_ts', manifest.bookKindsTs); }
@@ -14728,7 +14757,7 @@ body {
             var pBtn = document.getElementById('sheetTabBtnPreset');
             if (pBody) pBody.classList.toggle('active', tab === 'preset');
             if (pBtn) pBtn.classList.toggle('active', tab === 'preset');
-            if (tab === 'preset') { chatSyncUserNameInput(); chatRenderSpPresets(); }   // 昵称栏每次打开都按当前值回填（可能被别的设备改过）
+            if (tab === 'preset') { chatSyncUserNameInput(); chatRenderSpPresets(); umRenderPanel(); }   // 昵称栏每次打开都按当前值回填（可能被别的设备改过）
         }
         // 底部面板（设置/模型/预设）左右滑切换，手感对齐摘要弹窗
         var _SHEET_TAB_ORDER = ['opts', 'model', 'preset'];
@@ -15362,6 +15391,137 @@ body {
             }
         }
 
+        /* ===== 蘑菇记得的我（2026-08-23 加）=====
+           起因：她原话「AI 做伴读我很喜欢，但我同时也想让它了解我，而不是每次都重新开始」。
+           一份**跨书、跨对话**的用户画像，每次请求跟昵称一起塞进系统提示词开头。
+
+           ⚠️设计上把「读」和「写」拆开了，这是关键：
+             · **读永远是自动注入**，不依赖模型有没有工具能力 → 换任何线路都认识她。
+             · **写才靠 function calling**（第二步做）。她共读会换模型，而 Gemini 的
+               「正[vertex]」那几条线实测**会把 tools 参数整个丢掉**（连 tool_choice:required
+               都无效，2026-08-23 实测），所以写那一半必然时有时无。
+             拆开之后，切到不支持的线只是「记忆暂时不再增长」，读照常，不会坏。
+
+           ⚠️跟昵称走同一条云同步（manifest.userMemory + userMemoryTs），三个入口共用一份。
+             朋友那边的同步钥匙是她自己在设置里填的，两份存在各自的云上，天然不串——
+             所以这里**不需要**再做什么用户隔离，也别把任何人的名字写死进来。 */
+        var USER_MEM_KEY = 'toolbox_user_memory';
+        var USER_MEM_TS_KEY = 'toolbox_user_memory_ts';
+        var USER_MEM_MAX = 60;      // 条数上限，满了丢最老的——不封顶的话系统提示词会无限膨胀
+        function umLoad() {
+            try {
+                var v = JSON.parse(localStorage.getItem(USER_MEM_KEY) || '[]');
+                return Array.isArray(v) ? v : [];
+            } catch (e) { return []; }
+        }
+        function umTs() { return localStorage.getItem(USER_MEM_TS_KEY) || ''; }
+        function umSaveList(list) {
+            localStorage.setItem(USER_MEM_KEY, JSON.stringify(list));
+            localStorage.setItem(USER_MEM_TS_KEY, new Date().toISOString());
+            if (typeof activeSyncProvider !== 'undefined' && activeSyncProvider === 'cf' && typeof syncPushData === 'function') {
+                clearTimeout(umSaveList._t); umSaveList._t = setTimeout(syncPushData, 1500);
+            }
+            try { umRenderPanel(); } catch (e) {}
+        }
+        function umAdd(content, tag) {
+            content = (content || '').trim().slice(0, 200);
+            if (!content) return null;
+            var list = umLoad();
+            for (var i = 0; i < list.length; i++) {      // 一模一样的不记两遍，只更新分类
+                if (list[i].content === content) {
+                    if (tag) list[i].tag = String(tag).trim().slice(0, 12);
+                    umSaveList(list);
+                    return list[i].id;
+                }
+            }
+            var id = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+            list.push({ id: id, content: content, tag: (tag || '').trim().slice(0, 12), ts: new Date().toISOString() });
+            while (list.length > USER_MEM_MAX) list.shift();
+            umSaveList(list);
+            return id;
+        }
+        function umUpdate(id, content, tag) {
+            var list = umLoad(), hit = false;
+            for (var i = 0; i < list.length; i++) {
+                if (list[i].id !== id) continue;
+                if (content !== undefined && content !== null) list[i].content = String(content).trim().slice(0, 200);
+                if (tag !== undefined && tag !== null) list[i].tag = String(tag).trim().slice(0, 12);
+                hit = true;
+                break;
+            }
+            if (hit) umSaveList(list);
+            return hit;
+        }
+        function umRemove(id) {
+            var list = umLoad();
+            var out = list.filter(function (x) { return x.id !== id; });
+            if (out.length === list.length) return false;
+            umSaveList(out);
+            return true;
+        }
+        /* 拼成塞进系统提示词的那一段。
+           ⚠️空的时候返回空串，**别塞一句「（暂无）」进去**——那等于告诉模型
+             "你本该知道点什么但是没有"，它会掉头去盘问用户，反而更烦。 */
+        function umText() {
+            var list = umLoad();
+            if (!list.length) return '';
+            var nm = chatUserName();
+            var lines = list.map(function (x) {
+                return '- ' + (x.tag ? '[' + x.tag + '] ' : '') + x.content;
+            });
+            return '【你记得的' + nm + '】\n' + lines.join('\n') +
+                '\n（这些是你跟' + nm + '相处下来记住的事。自然地用上就好，别刻意复述、也别一上来就报菜名。）';
+        }
+        /* 设置面板里那一块。每条就是一个没边框的输入框 + 一个 ✕：
+           点进去改字、失焦就存；✕ 直接删。不做二次确认弹窗——记忆是软数据，删错了再写一条就是。 */
+        function umRenderPanel() {
+            var box = document.getElementById('chatUserMemList');
+            if (!box) return;
+            var list = umLoad();
+            var cnt = document.getElementById('chatUserMemCount');
+            if (cnt) cnt.textContent = list.length ? (list.length + ' 条') : '';
+            if (!list.length) {
+                box.innerHTML = '<div style="font-size:12.5px;color:var(--text-muted);padding:.5em 0;line-height:1.7">还没有。它会在聊天里慢慢记，你也可以自己先写几条。</div>';
+                return;
+            }
+            box.innerHTML = list.map(function (x) {
+                return '<div style="display:flex;align-items:center;gap:.4em;padding:.15em 0">' +
+                    '<input type="text" maxlength="200" value="' + esc(x.content) + '" data-um="' + esc(x.id) + '"' +
+                    ' onchange="umOnEdit(this)" onblur="umOnEdit(this)"' +
+                    ' style="flex:1;min-width:0;padding:.35em .5em;background:transparent;border:1px solid transparent;border-radius:8px;color:var(--text);font-size:13px;outline:none"' +
+                    ' onfocus="this.style.background=\'var(--input-bg)\';this.style.borderColor=\'var(--card-border)\'"' +
+                    '></div>';
+            }).join('');
+            // ✕ 用 DOM 追加，不拼进上面那串模板——模板已经够长了，再塞个带 onclick 的转义更容易出错
+            Array.prototype.forEach.call(box.querySelectorAll('input[data-um]'), function (inp) {
+                var b = document.createElement('span');
+                b.textContent = '✕';
+                b.title = '忘掉这条';
+                b.style.cssText = 'flex-shrink:0;cursor:pointer;color:var(--text-muted);font-size:12px;padding:0 .35em;line-height:1';
+                b.onclick = function () { umRemove(inp.getAttribute('data-um')); };
+                inp.parentNode.appendChild(b);
+            });
+        }
+        function umOnEdit(inp) {
+            var id = inp.getAttribute('data-um');
+            var v = (inp.value || '').trim();
+            inp.style.background = 'transparent';
+            inp.style.borderColor = 'transparent';
+            if (!v) { umRemove(id); return; }          // 清空＝删掉，跟 ✕ 等价
+            var cur = umLoad().filter(function (x) { return x.id === id; })[0];
+            if (cur && cur.content === v) return;      // 没改就别打时间戳，免得白推一次云同步
+            umUpdate(id, v);
+        }
+        function umOnAdd() {
+            var inp = document.getElementById('chatUserMemInput');
+            if (!inp) return;
+            var v = (inp.value || '').trim();
+            if (!v) return;
+            umAdd(v);
+            inp.value = '';
+            showToast('🍄 记住了');
+        }
+
         /* ===== 你的昵称（2026-08-02 加）=====
            起因：原来把「汐」写死在代码里 31 处，朋友拿去用、AI 张口就叫她汐。
            ⚠️⚠️「汐」在代码里是**两种身份**，必须分开看：
@@ -15956,7 +16116,9 @@ body {
             // 共读模式且系统提示词框为空时，静默兜底用蘑菇默认人设（仅当为空，绝不与已填内容叠加）
             var _persona = sp;
             if (chatReadingMode && !_persona) _persona = READING_MODE_DEFAULT_PERSONA;
-            var _spContent = (_persona ? _persona + '\n\n' : '') + _userIdentity + '\n\n' + _timeStr;
+            // 「蘑菇记得的我」跟在称呼后面：先知道你叫什么，再知道你是谁（见 umText 上方那段）
+            var _userMem = umText();
+            var _spContent = (_persona ? _persona + '\n\n' : '') + _userIdentity + (_userMem ? '\n\n' + _userMem : '') + '\n\n' + _timeStr;
             if (chatReadingMode) _spContent += '\n\n' + READING_MODE_INSTRUCTION;
             if (chatReadingMode && _readingRetry) _spContent += '\n\n' + READING_MODE_RETRY_HINT;
             reqMsgs.push({ role: 'system', content: _spContent });
@@ -24871,6 +25033,10 @@ body {
                 commentBlock + priorQaBlock +
                 '\n\n我的问题是：' + question;
             }
+            // 追问这条路自己拼 sysPrompt、不走 chatDoRequest，所以记忆得在这儿再注一次。
+            // ⚠️三个分支（社科导读 / 背景追问 / 普通追问）共用这一句，别塞进某个分支里。
+            var _umAsk = umText();
+            if (_umAsk) sysPrompt += '\n\n' + _umAsk;
             // 同一段已经在生成 → 别重复发（pNum 这时才定下来：导读会把它改写成小标题段号）
             if (readingIsPending(msg, pNum)) { showToast('这一段正在生成'); readingClearActbar(); return; }
             /* 一条进行中记录。气泡（「思考中…」占位 → 流式答案 → 正式问答块）全部由
