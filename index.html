@@ -3688,15 +3688,19 @@ body {
            ⚠️折叠只用 display:none 藏正文，**不动 DOM 结构**——背景词的手绘记号是按段落里的字
              定位的，跟这块没关系；但块的高度会变，所以展开/收起之后要重排一次（见 rdBgFoldToggle）。 */
         .reading-merged blockquote[data-fold="1"] > .reading-q {
-            cursor: pointer; position: relative; padding-right: 1.2em;
+            cursor: pointer; position: relative;
             -webkit-tap-highlight-color: transparent;
         }
-        /* 小三角贴在标题行右端。⚠️用 ::after 而不是真按钮：块里塞按钮会被长按/双击那两套手势夹到 */
-        .reading-merged blockquote[data-fold="1"] > .reading-q::after {
-            content: '▾'; position: absolute; right: 0; top: 0;
-            font-size: 0.85em; opacity: 0.5; transition: transform 0.15s;
+        /* 小三角贴在标题行右端。⚠️用 ::after 而不是真按钮：块里塞按钮会被长按/双击那两套手势夹到。
+           ⚠️2026-08-23 改：**只在折叠时画**。展开之后那个 ▾ 没什么用（内容已经摊在眼前了），
+             而它连同右边 1.2em 的留白会把标题行的底色/药丸挤窄——她原话
+             「展开的时候那个符号就不要显示了，因为我发现它会挤压那个块上的底色或者说药丸的那个位置」。
+           ⚠️所以 `padding-right` 也跟着只在折叠时给，别留在通用规则里，不然白挤一块地方。 */
+        .reading-merged blockquote[data-fold="1"].bg-fold > .reading-q { padding-right: 1.2em; }
+        .reading-merged blockquote[data-fold="1"].bg-fold > .reading-q::after {
+            content: '▸'; position: absolute; right: 0; top: 0;
+            font-size: 0.85em; opacity: 0.5;
         }
-        .reading-merged blockquote[data-fold="1"].bg-fold > .reading-q::after { content: '▸'; }
         .reading-merged blockquote[data-fold="1"].bg-fold > *:not(.reading-q) { display: none; }
         /* 折叠时把块压薄一点：整块只剩一行字，原来的上下内边距会显得空 */
         .reading-merged blockquote[data-fold="1"].bg-fold { padding-top: 0.35em !important; padding-bottom: 0.35em !important; }
@@ -5502,8 +5506,8 @@ body {
                         <!-- 2026-08-23 她要求把「跳转」「目录」挪到「读痕」前面 -->
                         <button onclick="clawdMenuAct('nav')">🧭 跳转</button>
                         <button onclick="clawdMenuAct('shelf')">📚 目录</button>
-                        <button id="clawdBookmarkBtn" onclick="clawdMenuAct('bookmark')">🔖 读痕</button>
                         <button onclick="clawdMenuAct('summary')">📋 摘要</button>
+                        <button id="clawdBookmarkBtn" onclick="clawdMenuAct('bookmark')">🔖 读痕</button>
                         <button onclick="clawdMenuAct('usage')">💰 用量</button>
                         <button id="clawdGenImgBtn" onclick="clawdMenuAct('genimg')" style="display:none">🎨 生图</button>
                         <button id="clawdMsgToolsBtn" onclick="clawdMenuAct('msgtools')">👁 显示</button>
