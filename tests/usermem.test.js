@@ -104,9 +104,15 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     ok('带时间戳（同步靠它判谁新）', D.有时间戳, '');
     eq('内容对得上', D.内容对得上, '测试同步用的一条');
 
-    /* ===== E 组：设置面板上的增删改（③ 号风险）===== */
+    /* ===== E 组：面板上的增删改（③ 号风险）=====
+       ⚠️2026-08-23 这块 HTML 从设置页挪进了「📋 摘要」弹窗的「我」标签（她不喜欢原来那个入口）。
+       弹窗要有书才开得起来，所以测试里直接把 umPaneHtml() 挂进 body 再验——
+       验的是「这块 HTML + umRenderPanel」这一对，跟它挂在哪个弹窗里无关。 */
     const E = await page.evaluate(() => {
         localStorage.removeItem('toolbox_user_memory');
+        var host = document.getElementById('umTestHost');
+        if (!host) { host = document.createElement('div'); host.id = 'umTestHost'; document.body.appendChild(host); }
+        host.innerHTML = umPaneHtml();
         umAdd('第一条');
         umAdd('第二条');
         umAdd('第三条');
@@ -152,6 +158,7 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     /* ===== F 组：空面板的提示语 ===== */
     const F = await page.evaluate(() => {
         localStorage.removeItem('toolbox_user_memory');
+        document.getElementById('umTestHost').innerHTML = umPaneHtml();
         umRenderPanel();
         const box = document.getElementById('chatUserMemList');
         return {
@@ -163,6 +170,27 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     eq('一条都没有时不渲染空行', F.没有输入框, 0);
     ok('给一句提示而不是一片空白', F.有提示, '');
     eq('零条时不显示「0 条」', F.计数是空的, '');
+
+    /* ===== G 组：入口挂对了地方 ===== */
+    const G = await page.evaluate(() => {
+        const h = umPaneHtml();
+        return {
+            带列表容器: h.indexOf('id="chatUserMemList"') >= 0,
+            带计数: h.indexOf('id="chatUserMemCount"') >= 0,
+            带输入框: h.indexOf('id="chatUserMemInput"') >= 0,
+            // 两个摘要弹窗都得把「我」推进 panes，否则某个模式下点不到
+            阅读模式弹窗里有: readerShowSummaryModal.toString().indexOf("umPaneHtml()") >= 0,
+            对话模式弹窗里有: chatShowSummaryModal.toString().indexOf("umPaneHtml()") >= 0,
+            // ⚠️旧入口必须拆干净，否则同一组 id 在页面上出现两次、umRenderPanel 只认头一个
+            设置页那块已拆: !document.getElementById('chatUserMemRow')
+        };
+    });
+    ok('这块 HTML 自带列表容器', G.带列表容器, '');
+    ok('自带条数', G.带计数, '');
+    ok('自带输入框', G.带输入框, '');
+    ok('阅读模式的「摘要」弹窗里有「我」这一页', G.阅读模式弹窗里有, '');
+    ok('普通对话的「摘要」弹窗里也有', G.对话模式弹窗里有, '');
+    ok('⚠️设置页那个旧入口已拆干净（同组 id 不能有两份）', G.设置页那块已拆, '');
 
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
 

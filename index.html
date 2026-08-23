@@ -5888,20 +5888,6 @@ body {
                            onchange="chatOnUserNameInput(this.value)" onblur="chatOnUserNameInput(this.value)"
                            style="width:130px;padding:7px 11px;background:var(--input-bg);border:1px solid var(--card-border);border-radius:10px;color:var(--text);font-size:14px;outline:none;text-align:right">
                 </div>
-                <!-- 蘑菇记得的我（2026-08-23 加）：放在昵称底下，因为它俩是同一件事——AI 该把我当成谁。 -->
-                <div id="chatUserMemRow" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--card-border)">
-                    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:.5em">
-                        <span style="font-size:13px;font-weight:600;color:var(--text)" title="每次对话开头会把这些悄悄告诉 AI，它就不用每次重新认识你">蘑菇记得的我</span>
-                        <span id="chatUserMemCount" style="font-size:12px;color:var(--text-muted)"></span>
-                    </div>
-                    <div id="chatUserMemList"></div>
-                    <div style="display:flex;gap:.4em;margin-top:.5em">
-                        <input id="chatUserMemInput" type="text" maxlength="200" placeholder="自己加一条，比如：不爱看大段心理独白" autocomplete="off"
-                               onkeydown="if(event.key==='Enter')umOnAdd()"
-                               style="flex:1;min-width:0;padding:7px 11px;background:var(--input-bg);border:1px solid var(--card-border);border-radius:10px;color:var(--text);font-size:13px;outline:none">
-                        <button onclick="umOnAdd()" style="flex-shrink:0;padding:7px 14px;background:transparent;border:1px solid var(--card-border);border-radius:10px;color:var(--accent);font-size:13px;cursor:pointer">加</button>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -14757,7 +14743,7 @@ body {
             var pBtn = document.getElementById('sheetTabBtnPreset');
             if (pBody) pBody.classList.toggle('active', tab === 'preset');
             if (pBtn) pBtn.classList.toggle('active', tab === 'preset');
-            if (tab === 'preset') { chatSyncUserNameInput(); chatRenderSpPresets(); umRenderPanel(); }   // 昵称栏每次打开都按当前值回填（可能被别的设备改过）
+            if (tab === 'preset') { chatSyncUserNameInput(); chatRenderSpPresets(); }   // 昵称栏每次打开都按当前值回填（可能被别的设备改过）
         }
         // 底部面板（设置/模型/预设）左右滑切换，手感对齐摘要弹窗
         var _SHEET_TAB_ORDER = ['opts', 'model', 'preset'];
@@ -15511,6 +15497,25 @@ body {
             var cur = umLoad().filter(function (x) { return x.id === id; })[0];
             if (cur && cur.content === v) return;      // 没改就别打时间戳，免得白推一次云同步
             umUpdate(id, v);
+        }
+        /* 「我」这个 Tab 的整块 HTML。2026-08-23 从设置面板挪过来的——
+           她原话「我不太喜欢这个入口哎」，指的是设置→预设页→拉到最底下那个位置。
+           挪进「📋 摘要」是她选的：那个弹窗本来就是「记忆的家」（人物/地点/年表/主线都在那儿）。
+           ⚠️id 沿用原来那三个（chatUserMemList / Count / Input），所以 umRenderPanel 一个字没改。
+             代价是**同一时刻只能有一处**这块 HTML，别再往别的地方复制一份。 */
+        function umPaneHtml() {
+            return '<div class="seg" style="padding-bottom:6px">'
+                + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+                + '<span class="seg-label" style="margin:0">🍄 蘑菇记得的我 <span id="chatUserMemCount" style="font-weight:400;color:var(--text-muted);font-size:10px"></span></span>'
+                + '</div>'
+                + '<div style="font-size:11px;color:var(--text-muted);line-height:1.7;margin-bottom:.6em">跟着你走，不分书。每次聊天开头会悄悄告诉它，它就不用每次重新认识你。</div>'
+                + '<div id="chatUserMemList"></div>'
+                + '<div style="display:flex;gap:.4em;margin-top:.6em">'
+                + '<input id="chatUserMemInput" type="text" maxlength="200" placeholder="自己加一条，比如：不爱看大段心理独白" autocomplete="off"'
+                + ' onkeydown="if(event.key===\'Enter\')umOnAdd()"'
+                + ' style="flex:1;min-width:0;padding:7px 11px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px;color:var(--text);font-size:13px;outline:none">'
+                + '<button onclick="umOnAdd()" style="flex-shrink:0;padding:7px 14px;background:transparent;border:1px solid var(--input-border);border-radius:10px;color:var(--accent);font-size:13px;cursor:pointer">加</button>'
+                + '</div></div>';
         }
         function umOnAdd() {
             var inp = document.getElementById('chatUserMemInput');
@@ -18072,14 +18077,11 @@ body {
                 _sumHtml += '<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:8px">共 ' + chatCompressedCount + ' 条消息已压缩为 ' + chatCompressSummaries.length + ' 段（最新在上）</div>';
             }
             if (_sumHtml) panes.push({ key: 'summary', label: '摘要', html: _sumHtml });
-            // 空态：一块内容都没有（跟以前一样显示提示、不出 Tab 栏）
+            // 空态改成一块 Tab（理由同阅读模式那侧，见 readerShowSummaryModal 里那段注释）
             if (!panes.length) {
-                modal.innerHTML = header + '<div class="chat-summary-modal-body"><div class="empty">' + (chatCompressEnabled ? '压缩已开启，尚无摘要' : '压缩未开启') + '</div></div>';
-                mask.appendChild(modal);
-                mask.addEventListener('click', function(ev) { if (ev.target === mask) mask.remove(); });
-                document.body.appendChild(mask);
-                return;
+                panes.push({ key: 'summary', label: '摘要', html: '<div class="empty">' + (chatCompressEnabled ? '压缩已开启，尚无摘要' : '压缩未开启') + '</div>' });
             }
+            panes.push({ key: 'usermem', label: '我', html: umPaneHtml() });
             // 选定当前 Tab：新打开(restoreScroll 未传)默认第一个；内部重建(传了滚动位置)时保持上次所在 Tab
             if (restoreScroll === undefined) _chatSummaryActiveTab = null;
             var _activeKey = _chatSummaryActiveTab;
@@ -18096,6 +18098,7 @@ body {
             mask.appendChild(modal);
             mask.addEventListener('click', function(ev) { if (ev.target === mask) mask.remove(); });
             document.body.appendChild(mask);
+            try { umRenderPanel(); } catch (e) {}   // 「我」那一页的列表是进了 DOM 之后现填的
             // 打开默认在顶部（记忆表格在上面，先看表）；删除重建时恢复到删除前的位置
             var bodyEl = modal.querySelector('.chat-summary-modal-body');
             if (bodyEl && typeof restoreScroll === 'number') bodyEl.scrollTop = restoreScroll;
@@ -21486,17 +21489,18 @@ body {
                 _sumHtml += '<div style="font-size:10px;color:var(--text-muted);text-align:center;padding-top:8px">共 ' + chaps.length + ' 章已生成摘要' + (enabled ? ' · 删除后会重新生成' : ' · 已关闭自动总结，不再新增（已有的提问仍会带上）') + '</div>';
             }
             if (_sumHtml) panes.push({ key: 'summary', label: '摘要', html: _sumHtml });
-            // 空态：一块内容都没有——只出总开关和提示，不出 Tab 栏
+            /* 空态：以前是「一块内容都没有 → 出一句提示就 return」。
+               2026-08-23 加了「我」这个 Tab 之后 panes 永远不为空，所以那句提示改成
+               塞进「摘要」这一块，让 Tab 栏照常出来——不然**没生成过摘要的书里就点不到「我」**，
+               而「我」恰恰是跟书无关的东西，不该被某本书的摘要状态挡住。 */
             if (!panes.length) {
                 var _emptyMsg = enabled
                     ? '还没有摘要。<br>继续往下读，后台会悄悄把前面章节总结好存这里；提问时也会自动补上。'
                     : '自动总结已关闭。<br>打开上面的开关，读这本书时就会在后台把前面章节总结好，供提问时给 AI 当前情。';
-                modal.innerHTML = header + toggleBar + '<div class="chat-summary-modal-body"><div class="empty">' + _emptyMsg + '</div></div>';
-                mask.appendChild(modal);
-                mask.addEventListener('click', function (ev) { if (ev.target === mask) mask.remove(); });
-                document.body.appendChild(mask);
-                return;
+                panes.push({ key: 'summary', label: '摘要', html: '<div class="empty">' + _emptyMsg + '</div>' });
             }
+            // 「蘑菇记得的我」永远排最后一个 Tab。⚠️必须在上面 `if (_rmt)` 的外面——它跟这本书没关系
+            panes.push({ key: 'usermem', label: '我', html: umPaneHtml() });
             // 选定当前 Tab：新打开(restoreScroll 未传)默认第一个；内部重建(传了滚动位置)时保持上次所在 Tab
             if (restoreScroll === undefined) _chatSummaryActiveTab = null;
             var _activeKey = _chatSummaryActiveTab;
@@ -21513,6 +21517,7 @@ body {
             mask.appendChild(modal);
             mask.addEventListener('click', function (ev) { if (ev.target === mask) mask.remove(); });
             document.body.appendChild(mask);
+            try { umRenderPanel(); } catch (e) {}   // 「我」那一页的列表是进了 DOM 之后现填的
             // 只给「当前可见」的编辑框撑高（折叠/未激活的展开时再算高度）
             var tas = mask.querySelectorAll('textarea');
             for (var j = 0; j < tas.length; j++) { if (tas[j].style.display !== 'none') { tas[j].style.height = 'auto'; tas[j].style.height = tas[j].scrollHeight + 'px'; } }
