@@ -4669,6 +4669,12 @@ body {
   /* ⚠️2026-08-23 深夜第二版：从「文本框右边的两个小记号」改成「文本框**底下**一排小按钮」。
      她原话「能不能把叉号和移动放在文本框底下呀，弄成按键的感觉？我还是不习惯放在右边」。
      ⚠️「点进那一行才出现」这条保留（她说过右边那样占位置、容易按错）。 */
+  /* 条目之间画分隔线，跟人物表/地点表（`.mt-row`）同一根线、同一个色（2026-08-23 她要求：
+     「用一个分隔线隔开吧就像人物表和地点表那样，不然感觉像不同的段落堆在一起、中间只有空行」）。
+     ⚠️每组的**最后一条不画**——两组之间本来就有小标题隔着，再来一根线就重了。 */
+  .um-row { border-bottom: 1px solid var(--input-border); padding-bottom: .35em; }
+  .um-row.um-last { border-bottom: none; padding-bottom: 0; }
+
   .um-act { display: none; gap: .4em; margin: .3em 0 .1em; }
   .um-row:focus-within .um-act { display: flex; }
   .um-act span {
@@ -15639,9 +15645,15 @@ body {
                 + '<span style="font-size:11px;color:var(--text-muted)">关于我</span>'
                 + (_tidyable ? '<button onclick="umTidy(this)" title="把讲同一件事的几条合成一条；只动这组里蘑菇记的，你自己写的不碰" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer;padding:0">整理一下</button>' : '')
                 + '</div>';
+            /* 每组最后一条挂 `um-last` 去掉分隔线：组尾已经有小标题或面板边界收着了 */
+            var _group = function (arr) {
+                return arr.map(function (x, i) {
+                    return _row(x).replace('class="um-row"', 'class="um-row' + (i === arr.length - 1 ? ' um-last' : '') + '"');
+                }).join('');
+            };
             var html = '';
-            if (mine.length) html += _capMine + mine.map(_row).join('');
-            if (bookList.length) html += _cap('《' + (umCurBookName() || '这本书') + '》里说好的') + bookList.map(_row).join('');
+            if (mine.length) html += _capMine + _group(mine);
+            if (bookList.length) html += _cap('《' + (umCurBookName() || '这本书') + '》里说好的') + _group(bookList);
             box.innerHTML = html;
             // ✕ 用 DOM 追加，不拼进上面那串模板——模板已经够长了，再塞个带 onclick 的转义更容易出错
             var _curBk = umCurBookKey();

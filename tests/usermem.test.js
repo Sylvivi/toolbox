@@ -783,6 +783,31 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     }));
     ok('⚠️弹窗那段「撑高所有编辑框」的代码排除了记忆的框', T.排除了记忆那些框, '');
 
+    /* ===== U 组：条目之间的分隔线（2026-08-23，她要求「就像人物表和地点表那样」）===== */
+    const U = await page.evaluate(() => {
+        localStorage.removeItem('toolbox_user_memory');
+        window.rbCurBook = () => ({ fileName: '故事的解剖.epub', fileSize: 111 });
+        window.rbCurBookName = () => '故事的解剖';
+        umAdd('甲', '', 'me', 'me');
+        umAdd('乙', '', 'me', 'me');
+        umAdd('丙', '', 'me', 'me');
+        umAdd('书甲', '', 'mushroom', 'book');
+        umAdd('书乙', '', 'mushroom', 'book');
+        document.getElementById('umTestHost').innerHTML = umPaneHtml();
+        umRenderPanel();
+        const rows = Array.from(document.querySelectorAll('#chatUserMemList .um-row'));
+        const 末条 = rows.filter(r => r.classList.contains('um-last'));
+        return {
+            行数: rows.length,
+            末条数: 末条.length,
+            // 每组最后一条才是 um-last：关于我第 3 条、这本书第 2 条
+            末条内容: 末条.map(r => r.querySelector('textarea').value)
+        };
+    });
+    eq('五条都渲染出来', U.行数, 5);
+    eq('⚠️每组只有最后一条不画线（两组＝两条）', U.末条数, 2);
+    eq('不画线的正是各组末尾那条', U.末条内容, ['丙', '书乙']);
+
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();
