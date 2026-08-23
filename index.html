@@ -15407,15 +15407,18 @@ body {
             } catch (e) { return []; }
         }
         function umTs() { return localStorage.getItem(USER_MEM_TS_KEY) || ''; }
-        function umSaveList(list) {
+        /* quiet=true：存但**不重画**。清「新增/改过」那两个圆点时必须用它——
+           不然一存就重渲，她刚看到的圆点当场消失，等于没标。 */
+        function umSaveList(list, quiet) {
             localStorage.setItem(USER_MEM_KEY, JSON.stringify(list));
             localStorage.setItem(USER_MEM_TS_KEY, new Date().toISOString());
             if (typeof activeSyncProvider !== 'undefined' && activeSyncProvider === 'cf' && typeof syncPushData === 'function') {
                 clearTimeout(umSaveList._t); umSaveList._t = setTimeout(syncPushData, 1500);
             }
-            try { umRenderPanel(); } catch (e) {}
+            if (!quiet) { try { umRenderPanel(); } catch (e) {} }
         }
-        function umAdd(content, tag) {
+        /* by: 'me' = 她自己写的 / 'mushroom' = 蘑菇自己记的。面板上要分得出来（她要求的）。 */
+        function umAdd(content, tag, by) {
             content = (content || '').trim().slice(0, 200);
             if (!content) return null;
             var list = umLoad();
@@ -15427,7 +15430,8 @@ body {
                 }
             }
             var id = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-            list.push({ id: id, content: content, tag: (tag || '').trim().slice(0, 12), ts: new Date().toISOString() });
+            list.push({ id: id, content: content, tag: (tag || '').trim().slice(0, 12),
+                        by: by === 'mushroom' ? 'mushroom' : 'me', _chg: 'new', ts: new Date().toISOString() });
             while (list.length > USER_MEM_MAX) list.shift();
             umSaveList(list);
             return id;
@@ -15438,6 +15442,7 @@ body {
                 if (list[i].id !== id) continue;
                 if (content !== undefined && content !== null) list[i].content = String(content).trim().slice(0, 200);
                 if (tag !== undefined && tag !== null) list[i].tag = String(tag).trim().slice(0, 12);
+                if (list[i]._chg !== 'new') list[i]._chg = 'upd';   // 新增的就一直算新增，别降级成「改过」
                 hit = true;
                 break;
             }
@@ -15476,8 +15481,15 @@ body {
                 box.innerHTML = '<div style="font-size:12.5px;color:var(--text-muted);padding:.5em 0;line-height:1.7">还没有。它会在聊天里慢慢记，你也可以自己先写几条。</div>';
                 return;
             }
+            /* 行首两个记号，跟记忆表格那边一个路子（她要求「像大纲人物表那样」）：
+                 · 绿点＝上次看过之后新增的、黄点＝改过的
+                 · 🍄＝蘑菇自己记的；她自己写的不加图标（留白就是区分，别再挂零件） */
             box.innerHTML = list.map(function (x) {
-                return '<div style="display:flex;align-items:center;gap:.4em;padding:.15em 0">' +
+                var dot = x._chg === 'new' ? '<span title="新记的" style="flex-shrink:0;width:6px;height:6px;border-radius:50%;background:#3a9d5d"></span>'
+                        : x._chg === 'upd' ? '<span title="改过" style="flex-shrink:0;width:6px;height:6px;border-radius:50%;background:#e0a23a"></span>'
+                        : '<span style="flex-shrink:0;width:6px;height:6px"></span>';
+                var who = x.by === 'mushroom' ? '<span title="蘑菇自己记的" style="flex-shrink:0;font-size:11px;opacity:.85">🍄</span>' : '';
+                return '<div style="display:flex;align-items:center;gap:.4em;padding:.15em 0">' + dot + who +
                     '<input type="text" maxlength="200" value="' + esc(x.content) + '" data-um="' + esc(x.id) + '"' +
                     ' onchange="umOnEdit(this)" onblur="umOnEdit(this)"' +
                     ' style="flex:1;min-width:0;padding:.35em .5em;background:transparent;border:1px solid transparent;border-radius:8px;color:var(--text);font-size:13px;outline:none"' +
@@ -15493,6 +15505,14 @@ body {
                 b.onclick = function () { umRemove(inp.getAttribute('data-um')); };
                 inp.parentNode.appendChild(b);
             });
+            /* 打开面板＝看过了：稍等一下再把标记清掉（quiet，不重画）。
+               这次她看得见圆点，下次打开就干净——不清的话圆点会一直挂着，越攒越多、失去意义。 */
+            clearTimeout(umRenderPanel._seen);
+            umRenderPanel._seen = setTimeout(function () {
+                var cur = umLoad(), dirty = false;
+                cur.forEach(function (x) { if (x._chg) { delete x._chg; dirty = true; } });
+                if (dirty) umSaveList(cur, true);
+            }, 1200);
         }
         function umOnEdit(inp) {
             var id = inp.getAttribute('data-um');
@@ -15504,6 +15524,182 @@ body {
             if (cur && cur.content === v) return;      // 没改就别打时间戳，免得白推一次云同步
             umUpdate(id, v);
         }
+        /* ===== 让蘑菇自己动手记（2026-08-23，第二步）=====
+           她要的是 Cherry 里那种「看着它调用工具」的感觉，但**故意没有把工具塞进主对话**。
+
+           ⚠️为什么走「旁路」而不是正统的工具循环：
+             正统做法是在流式请求里带 tools、收到 tool_calls 后执行、把结果回传、再请求一次。
+             那要把 chatDoRequest 里那段两百行的流式解析拆开重写——**共读点评和追问全走它**，
+             是这个 App 最要命的一段代码。为了一个记笔记功能去动它，风险和收益不成比例。
+           改成：主对话照旧（一个字没改），回答生成完之后**另起一次很小的非流式请求**，
+             只把「最后一问一答」丢给模型，让它决定要不要记。好处是三重的：
+               · 主路径零风险
+               · 那次请求只有几百 token，一次约万分之一元
+               · **蘑菇点评时不用分心想「我该不该记笔记」**，点评质量不受影响
+
+           ⚠️「翻记忆」那个工具**故意没做**：记忆本来就每次全量注入了，它已经看着呢。
+             她当初选四件套时我们都没想到这点，做的时候发现是冗余的。
+
+           ⚠️只在**用户真的说了话**的轮次跑。发整章让它点评那种不跑——
+             那些字是书里的，不是关于她的，拿去让模型「找关于她的信息」纯属烧钱且容易记错。
+
+           ⚠️线路不支持工具时（比如 Gemini 的正[vertex] 线，2026-08-23 实测会把 tools 整个丢掉），
+             它只会回一句话、没有 tool_calls，这里什么都不做——**静默降级，不报错、不打扰**。 */
+        var USER_MEM_AUTO_KEY = 'toolbox_user_memory_auto';   // 让不让它自己记
+        function umAutoOn() { return localStorage.getItem(USER_MEM_AUTO_KEY) !== '0'; }
+        function umSetAuto(on) {
+            localStorage.setItem(USER_MEM_AUTO_KEY, on ? '1' : '0');
+            showToast(on ? '🍄 蘑菇会自己记了' : '🍄 蘑菇不再自己记（你还能手动加）');
+        }
+        /* 工具定义。⚠️函数名必须是纯英文——OpenAI 那套规范限定 [a-zA-Z0-9_-]，
+           中文名有的中转站直接报参数错。给模型看的说明用中文没问题。 */
+        function umTools() {
+            return [
+                { type: 'function', function: {
+                    name: 'remember', description: '记下一件关于她的、以后还用得上的事。只记新的。',
+                    parameters: { type: 'object', properties: {
+                        content: { type: 'string', description: '一句话，短而具体，用你自己的口吻' },
+                        tag: { type: 'string', description: '随手一个分类，比如 阅读口味 / 生活 / 性格。想不出就别填' }
+                    }, required: ['content'] } } },
+                { type: 'function', function: {
+                    name: 'update_memory', description: '你以前记的某条不准了，改掉它。',
+                    parameters: { type: 'object', properties: {
+                        id: { type: 'string', description: '要改的那条的编号' },
+                        content: { type: 'string', description: '改成什么' }
+                    }, required: ['id', 'content'] } } },
+                { type: 'function', function: {
+                    name: 'forget', description: '你以前记的某条已经不成立了，或者她说记错了，忘掉它。',
+                    parameters: { type: 'object', properties: {
+                        id: { type: 'string', description: '要忘掉的那条的编号' }
+                    }, required: ['id'] } } }
+            ];
+        }
+        /* 给它看的「现在都记了什么」，带编号——不带编号它就没法改、没法忘。 */
+        function umListForModel() {
+            var list = umLoad();
+            if (!list.length) return '（你还什么都没记过。）';
+            return list.map(function (x) {
+                return x.id + '｜' + (x.by === 'mushroom' ? '' : '【她亲手写的】') + (x.tag ? '[' + x.tag + '] ' : '') + x.content;
+            }).join('\n');
+        }
+        /* ⚠️这段口吻是她点名要的，原话：
+             「我希望蘑菇往里面写的时候，是以朋友的心态去写，而不是助手服务用户，
+               所以不需要写得那么详细周全，最好是记住朋友习惯的那种口吻」
+           所以下面这些「这样写 / 这样不行」的例子别删，模型很吃这一套。 */
+        function umReviewSystemPrompt() {
+            var nm = chatUserName();
+            return '你是' + nm + '的朋友，你俩在一起读书聊天。下面是刚才的一轮对话。\n' +
+                '你只做一件事：看看这轮里有没有**关于' + nm + '这个人**的、以后还用得上的事，值得你记一笔。\n\n' +
+                '⚠️用朋友随手记一笔的口吻，不是给用户建档：\n' +
+                '· 短，一句话，具体，像你自己在心里记下的那样。\n' +
+                '· 「她讨厌那种一上来就交代身世的开头」——这样写。\n' +
+                '· 「用户偏好：反感冗长背景铺陈（阅读体验类）」——这样不行。\n' +
+                '· 不用面面俱到，也不用分类周全。可记可不记的，就别记。\n\n' +
+                '值得记的：她的口味、习惯、在意的事、经历、性格、正在做的事。\n' +
+                '不用记的：书里的情节人物、你自己的评论、她随口的附和、已经记过的事。\n\n' +
+                '你现在记着这些（编号｜内容）：\n' + umListForModel() + '\n\n' +
+                '发现记错了或者过时了，就用 update_memory 改、用 forget 忘掉。\n' +
+                '⚠️**标着【她亲手写的】那几条一个字都别动**——那是她自己交代给你的，不是你记的。\n' +
+                '⚠️一轮最多记一两条。宁缺毋滥。\n' +
+                '**宁可什么都不记，也别记一堆废话。**这轮要是没什么特别的，就什么都别做，回一个句号。';
+        }
+        var _umReviewing = false;
+        /* 这轮聊完之后跑一次。失败一律吞掉——它只是个记笔记的，绝不能影响正在读书的人。 */
+        async function umMaybeReview(userText, aiText, conn) {
+            if (!umAutoOn() || _umReviewing) return;
+            userText = (userText || '').trim();
+            if (!userText || userText.length > 4000) return;   // 太长的多半是正文，不是她在说话
+            if (!conn || !conn.baseUrl || !conn.apiKey || !conn.model) return;
+            _umReviewing = true;
+            try {
+                var resp = await fetch(conn.baseUrl + '/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + conn.apiKey },
+                    body: JSON.stringify({
+                        model: conn.model,
+                        messages: [
+                            { role: 'system', content: umReviewSystemPrompt() },
+                            { role: 'user', content: '【她说】\n' + userText.slice(0, 2000) + '\n\n【你回】\n' + (aiText || '').slice(0, 2000) }
+                        ],
+                        tools: umTools(),
+                        max_tokens: 400
+                    })
+                });
+                if (!resp.ok) return;
+                var data = await resp.json();
+                var msg = (((data.choices || [])[0]) || {}).message || {};
+                var calls = msg.tool_calls || [];
+                if (!calls.length) return;      // 线路不支持工具、或它觉得没什么好记的——都走这儿，静默
+                try {
+                    var u = apiUsageFromChunk(data);
+                    if (u) apiLogRecord('记忆', conn.model, u.inTok, u.outTok, false, conn.baseUrl || '', u.cacheTok);
+                } catch (e) {}
+                /* ⚠️防冗长闸①：**一轮最多采纳 2 条新记的**（她担心「会不会记得很冗长」）。
+                   改和忘不限——那两个是在给记忆瘦身，多多益善。
+                   闸②在提示词里（「宁可什么都不记，也别记一堆废话」），闸③是 USER_MEM_MAX 总数封顶。 */
+                var done = [], _newCnt = 0;
+                for (var i = 0; i < calls.length; i++) {
+                    var _nm = ((calls[i] || {}).function || {}).name;
+                    if (_nm === 'remember') {
+                        if (_newCnt >= 2) continue;
+                        _newCnt++;
+                    }
+                    var r = umRunToolCall(calls[i]);
+                    if (r) done.push(r);
+                }
+                if (done.length) umShowToolLine(done);
+            } catch (e) {
+                console.warn('[记忆] 这轮没跑成，不影响聊天：', e && e.message);
+            } finally {
+                _umReviewing = false;
+            }
+        }
+        /* 执行一次工具调用，返回给人看的一行（{icon,text,undo}），执行不了就返回 null。 */
+        function umRunToolCall(call) {
+            var fn = (call && call.function) || {};
+            var args = {};
+            try { args = JSON.parse(fn.arguments || '{}'); } catch (e) { return null; }
+            if (fn.name === 'remember') {
+                var c = (args.content || '').trim();
+                if (!c) return null;
+                var id = umAdd(c, args.tag, 'mushroom');
+                return id ? { icon: '🍄', text: '记住了：' + c, undo: id } : null;
+            }
+            if (fn.name === 'update_memory') {
+                var before = umLoad().filter(function (x) { return x.id === args.id; })[0];
+                if (!before || !umUpdate(args.id, args.content)) return null;
+                return { icon: '🍄', text: '改了一条：' + (args.content || '').trim() };
+            }
+            if (fn.name === 'forget') {
+                var gone = umLoad().filter(function (x) { return x.id === args.id; })[0];
+                if (!gone || !umRemove(args.id)) return null;
+                return { icon: '🍄', text: '忘掉了：' + gone.content };
+            }
+            return null;
+        }
+        /* 聊天里那行小字。⚠️**故意不写进 chatMessages**——它只是给人看的一眼，
+           写进消息历史会跟着进上下文、进摘要，白白占地方还会让模型以为那是对话内容。
+           所以刷新/重渲染之后它就没了，这是设计如此；真要看记了什么，去「我」那一页。 */
+        function umShowToolLine(items) {
+            var container = document.getElementById('chatMessages');
+            if (!container) return;
+            var box = document.createElement('div');
+            box.style.cssText = 'padding:.2em 1em .8em;font-size:12px;color:var(--text-muted);line-height:1.8';
+            box.innerHTML = items.map(function (it) {
+                var undo = it.undo ? ' <span data-umundo="' + esc(it.undo) + '" style="cursor:pointer;text-decoration:underline;opacity:.75">撤销</span>' : '';
+                return '<div>' + it.icon + ' ' + esc(it.text) + undo + '</div>';
+            }).join('');
+            Array.prototype.forEach.call(box.querySelectorAll('[data-umundo]'), function (el) {
+                el.onclick = function () {
+                    umRemove(el.getAttribute('data-umundo'));
+                    el.parentNode.style.opacity = '.4';
+                    el.parentNode.innerHTML = '🍄 <s>' + el.parentNode.textContent.replace(/\s*撤销$/, '').replace(/^🍄\s*/, '') + '</s>';
+                };
+            });
+            container.appendChild(box);
+            if (typeof chatIsNearBottom === 'function' && chatIsNearBottom()) chatScrollBottom();
+        }
+
         /* 「我」这个 Tab 的整块 HTML。2026-08-23 从设置面板挪过来的——
            她原话「我不太喜欢这个入口哎」，指的是设置→预设页→拉到最底下那个位置。
            挪进「📋 摘要」是她选的：那个弹窗本来就是「记忆的家」（人物/地点/年表/主线都在那儿）。
@@ -15515,6 +15711,9 @@ body {
                 + '<span class="seg-label" style="margin:0">🍄 蘑菇记得的我 <span id="chatUserMemCount" style="font-weight:400;color:var(--text-muted);font-size:10px"></span></span>'
                 + '</div>'
                 + '<div style="font-size:11px;color:var(--text-muted);line-height:1.7;margin-bottom:.6em">跟着你走，不分书。每次聊天开头会悄悄告诉它，它就不用每次重新认识你。</div>'
+                + '<label style="display:flex;align-items:center;gap:.5em;font-size:12px;color:var(--text-sub);margin-bottom:.7em;cursor:pointer">'
+                + '<input type="checkbox" ' + (umAutoOn() ? 'checked' : '') + ' onchange="umSetAuto(this.checked)" style="accent-color:var(--accent)">'
+                + '聊天时让它自己记（线路不支持工具时自动作罢）</label>'
                 + '<div id="chatUserMemList"></div>'
                 + '<div style="display:flex;gap:.4em;margin-top:.6em">'
                 + '<input id="chatUserMemInput" type="text" maxlength="200" placeholder="自己加一条，比如：不爱看大段心理独白" autocomplete="off"'
@@ -15528,7 +15727,7 @@ body {
             if (!inp) return;
             var v = (inp.value || '').trim();
             if (!v) return;
-            umAdd(v);
+            umAdd(v, '', 'me');
             inp.value = '';
             showToast('🍄 记住了');
         }
@@ -16444,6 +16643,19 @@ body {
                 var oldReroll = document.getElementById('chatRerollBtn');
                 if (oldReroll) oldReroll.remove();
                 aiDiv.appendChild(chatBuildToolbar(newIdx, fullContent, true));
+                /* 「蘑菇记得的我」：同上。⚠️`_userSentChapter` 那种轮次**不跑**——
+                   那是把整章正文发给它点评，里头的字是书里的、不是关于她的，
+                   拿去让模型「找关于她的信息」既烧钱又容易记错东西。 */
+                if (!_userSentChapter) {
+                    var _umPrevUser = '';
+                    for (var _ui = chatMessages.length - 2; _ui >= 0; _ui--) {
+                        if (chatMessages[_ui].role === 'user') {
+                            _umPrevUser = typeof chatMessages[_ui].content === 'string' ? chatMessages[_ui].content : '';
+                            break;
+                        }
+                    }
+                    umMaybeReview(_umPrevUser, fullContent, { baseUrl: baseUrl, apiKey: apiKey, model: _reqModel });
+                }
             }
             // 共读：发完整章、评论生成完后，定位到「这一章的开头」而不是甩到最底下，省得每次手动往上翻
             var _readingJumpEl = null;
@@ -25159,6 +25371,10 @@ body {
                 // 问题与答案之间只用单换行，确保它们仍属于同一个 [Pn] 评论块。
                 msg.content += '\n[P' + pNum + '] 汐：' + question + '\n' + answer;
                 chatSaveCurrentConv(true);
+                /* 「蘑菇记得的我」：这轮聊完，另起一次小请求问「有没有值得记的」。
+                   ⚠️只在她**真的问了话**时跑：社科导读是点一下自动生成的，里头没有她的话。
+                   ⚠️不 await——它慢不慢都跟她无关，绝不能让记笔记挡住读书。 */
+                if (!_guide && question) umMaybeReview(question, answer, { baseUrl: baseUrl, apiKey: apiKey, model: _qaMdl });
                 /* ⚠️下标必须现查，别用进函数时那个 msgIdx：这一笔几十秒，期间只要往上滑补了
                    上一章，所有消息下标就整体挪过位（同 readerMarkBg 里那条注释的坑）。 */
                 var _mi = chatMessages.indexOf(msg);

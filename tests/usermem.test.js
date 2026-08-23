@@ -123,7 +123,7 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
 
         // 点 ✕ 删掉第二条
         const 第二个输入框 = box.querySelectorAll('input[data-um]')[1];
-        第二个输入框.parentNode.querySelector('span').click();
+        第二个输入框.parentNode.querySelector('span[title="忘掉这条"]').click();
         const 删后条数 = umLoad().length;
         const 删掉的是第二条 = !umLoad().some(x => x.content === '第二条');
 
@@ -191,6 +191,197 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     ok('阅读模式的「摘要」弹窗里有「我」这一页', G.阅读模式弹窗里有, '');
     ok('普通对话的「摘要」弹窗里也有', G.对话模式弹窗里有, '');
     ok('⚠️设置页那个旧入口已拆干净（同组 id 不能有两份）', G.设置页那块已拆, '');
+
+    /* ===== H 组：让蘑菇自己动手记（2026-08-23 第二步）=====
+       ⚠️这一半走的是「旁路」：主对话不带 tools，回答完之后另起一次小请求。
+       所以这里**把 fetch 换成假的**，验的是「拿到 tool_calls 之后做对了什么」，不打真接口。 */
+    const H = await page.evaluate(async () => {
+        localStorage.removeItem('toolbox_user_memory');
+        localStorage.setItem('toolbox_user_memory_auto', '1');
+        const conn = { baseUrl: 'https://fake', apiKey: 'k', model: 'm' };
+        const 真fetch = window.fetch;
+        let 打了几次 = 0, 送出去的 = null;
+        const 假回 = (calls) => {
+            window.fetch = async (u, o) => {
+                打了几次++;
+                送出去的 = JSON.parse(o.body);
+                return { ok: true, json: async () => ({ choices: [{ message: { tool_calls: calls } }] }) };
+            };
+        };
+        const 调用 = (name, args) => ({ function: { name, arguments: JSON.stringify(args) } });
+
+        // ① 正常记一条
+        假回([调用('remember', { content: '她讨厌一上来就交代身世的开头', tag: '阅读口味' })]);
+        await umMaybeReview('我最烦那种开头就报身世的', '哈哈我也是', conn);
+        const 记了 = umLoad().map(x => x.content);
+        const 带了工具 = !!(送出去的 && 送出去的.tools && 送出去的.tools.length === 3);
+        const 工具名 = (送出去的.tools || []).map(t => t.function.name);
+        const 没开流 = 送出去的.stream === undefined;
+        const 提示词里有她的话 = 送出去的.messages[1].content.indexOf('我最烦那种开头就报身世的') >= 0;
+        const 提示词带了现有记忆 = 送出去的.messages[0].content.indexOf('你现在记着这些') >= 0;
+
+        // ② 改一条
+        const id = umLoad()[0].id;
+        假回([调用('update_memory', { id, content: '她其实不介意身世，介意的是写得干巴' })]);
+        await umMaybeReview('想想也不全是，写得好我也看', '嗯', conn);
+        const 改后 = umLoad()[0].content;
+
+        // ③ 忘掉
+        假回([调用('forget', { id })]);
+        await umMaybeReview('刚那条不算数', '好', conn);
+        const 忘后条数 = umLoad().length;
+
+        // ④ 线路不支持工具：只回文字、没有 tool_calls → 什么都别做，也别报错
+        umAdd('底线：这条不能被动');
+        window.fetch = async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: '嗯嗯' } }] }) });
+        await umMaybeReview('随便说点什么', '嗯嗯', conn);
+        const 不支持时条数 = umLoad().length;
+
+        // ⑤ 坏 JSON 参数不炸
+        假回([{ function: { name: 'remember', arguments: '{坏掉的' } }]);
+        await umMaybeReview('再说一句', '嗯', conn);
+        const 坏参数后条数 = umLoad().length;
+
+        // ⑥ 开关关掉 → 一次都不打
+        const 关前 = 打了几次;
+        localStorage.setItem('toolbox_user_memory_auto', '0');
+        假回([调用('remember', { content: '不该被记进来' })]);
+        await umMaybeReview('说点什么', '嗯', conn);
+        const 关掉后打的次数 = 打了几次 - 关前;
+        localStorage.setItem('toolbox_user_memory_auto', '1');
+
+        // ⑦ 用户没说话（空）→ 不打；正文那么长也不打
+        const 关前2 = 打了几次;
+        await umMaybeReview('', '嗯', conn);
+        await umMaybeReview('正'.repeat(5000), '嗯', conn);
+        const 空和超长打的次数 = 打了几次 - 关前2;
+
+        // ⑧ 接口挂了不影响任何东西
+        window.fetch = async () => { throw new Error('断网'); };
+        let 抛了 = false;
+        try { await umMaybeReview('还在吗', '在', conn); } catch (e) { 抛了 = true; }
+
+        window.fetch = 真fetch;
+        return { 记了, 带了工具, 工具名, 没开流, 提示词里有她的话, 提示词带了现有记忆,
+                 改后, 忘后条数, 不支持时条数, 坏参数后条数, 关掉后打的次数, 空和超长打的次数, 抛了 };
+    });
+    eq('remember 真的记进去了', H.记了, ['她讨厌一上来就交代身世的开头']);
+    ok('请求里带了三个工具', H.带了工具, '实际 ' + JSON.stringify(H.工具名));
+    eq('⚠️工具名必须是纯英文（中文名有的中转站直接报参数错）', H.工具名, ['remember', 'update_memory', 'forget']);
+    ok('旁路这次不开流（非流式好解析）', H.没开流, '');
+    ok('把她刚说的话送过去了', H.提示词里有她的话, '');
+    ok('把现有记忆一起送过去（不然它没法改、没法忘）', H.提示词带了现有记忆, '');
+    eq('update_memory 改得动', H.改后, '她其实不介意身世，介意的是写得干巴');
+    eq('forget 忘得掉', H.忘后条数, 0);
+    eq('⚠️线路不支持工具时静默作罢，不动已有记忆', H.不支持时条数, 1);
+    eq('坏 JSON 参数不炸也不乱记', H.坏参数后条数, 1);
+    eq('⚠️开关关掉就一次都不打（她的钱）', H.关掉后打的次数, 0);
+    eq('⚠️她没说话 / 发的是整章正文，都不打', H.空和超长打的次数, 0);
+    ok('接口挂了不往外抛（绝不能影响正在读书的人）', H.抛了 === false, '');
+
+    /* ===== I 组：聊天里那行小字 ===== */
+    const I = await page.evaluate(() => {
+        localStorage.removeItem('toolbox_user_memory');
+        const id = umAdd('待会儿要撤销的');
+        const c = document.getElementById('chatMessages');
+        const 原有 = c ? c.children.length : -1;
+        umShowToolLine([{ icon: '🍄', text: '记住了：待会儿要撤销的', undo: id }]);
+        const 多了一行 = c.children.length - 原有;
+        const 文字 = c.lastChild.textContent;
+        c.lastChild.querySelector('[data-umundo]').click();
+        const 撤销后条数 = umLoad().length;
+        // ⚠️不能写进 chatMessages：写了会跟着进上下文和摘要
+        const 没混进消息历史 = !chatMessages.some(m => (m.content || '').indexOf('记住了：待会儿要撤销的') >= 0);
+        c.lastChild.remove();
+        return { 多了一行, 有内容: 文字.indexOf('待会儿要撤销的') >= 0, 有撤销: 文字.indexOf('撤销') >= 0, 撤销后条数, 没混进消息历史 };
+    });
+    eq('聊天里冒出一行', I.多了一行, 1);
+    ok('那行写着记了什么', I.有内容, '');
+    ok('带「撤销」', I.有撤销, '');
+    eq('点撤销真的删掉了', I.撤销后条数, 0);
+    ok('⚠️这行不写进消息历史（否则会跟着进上下文和摘要）', I.没混进消息历史, '');
+
+    /* ===== J 组：谁记的 + 新增/改动标记 + 防冗长（2026-08-23 她追加的三条）===== */
+    const J = await page.evaluate(async () => {
+        localStorage.removeItem('toolbox_user_memory');
+        localStorage.setItem('toolbox_user_memory_auto', '1');
+        const conn = { baseUrl: 'https://fake', apiKey: 'k', model: 'm' };
+        const 真fetch = window.fetch;
+        let 送出去的 = null;
+        const 假回 = (calls) => {
+            window.fetch = async (u, o) => {
+                送出去的 = JSON.parse(o.body);
+                return { ok: true, json: async () => ({ choices: [{ message: { tool_calls: calls } }] }) };
+            };
+        };
+        const 调用 = (name, args) => ({ function: { name, arguments: JSON.stringify(args) } });
+
+        // 手动加的 = 我；工具记的 = 蘑菇
+        const 我的id = umAdd('我自己写的一条', '', 'me');
+        假回([调用('remember', { content: '蘑菇记的一条' })]);
+        await umMaybeReview('说点什么', '嗯', conn);
+        const by = {};
+        umLoad().forEach(x => { by[x.content] = x.by; });
+
+        // 送给模型的清单里，她亲手写的要标出来（不然蘑菇会去改她的话）
+        const 清单 = 送出去的.messages[0].content;
+        const 标了她写的 = 清单.indexOf('【她亲手写的】我自己写的一条') >= 0;
+        const 蘑菇那条没标 = 清单.indexOf('【她亲手写的】蘑菇记的一条') < 0;
+        const 提示词交代了别动 = 清单.indexOf('一个字都别动') >= 0;
+
+        // 新增/改动标记
+        const 新的都带标 = umLoad().every(x => x._chg === 'new');
+        umUpdate(我的id, '改过之后的内容');
+        const 新的改了还是新的 = umLoad().filter(x => x.id === 我的id)[0]._chg;
+        // 标记清掉之后（＝她已经看过）再改，才该变成「改过」
+        const 清 = umLoad(); 清.forEach(x => delete x._chg); umSaveList(清, true);
+        umUpdate(我的id, '看过之后又改了一次');
+        const 改的标记 = umLoad().filter(x => x.id === 我的id)[0]._chg;
+
+        // ⚠️一轮最多采纳 2 条新记的
+        localStorage.removeItem('toolbox_user_memory');
+        假回([调用('remember', { content: 'A' }), 调用('remember', { content: 'B' }),
+              调用('remember', { content: 'C' }), 调用('remember', { content: 'D' })]);
+        await umMaybeReview('叭叭叭说了一大堆', '嗯', conn);
+        const 一轮记了几条 = umLoad().length;
+
+        // 改和忘不受这个闸限制（它俩是在瘦身）
+        const ids = umLoad().map(x => x.id);
+        假回([调用('forget', { id: ids[0] }), 调用('forget', { id: ids[1] })]);
+        await umMaybeReview('那两条都不算', '好', conn);
+        const 忘完剩几条 = umLoad().length;
+
+        window.fetch = 真fetch;
+        return { by, 标了她写的, 蘑菇那条没标, 提示词交代了别动, 新的都带标, 新的改了还是新的, 改的标记, 一轮记了几条, 忘完剩几条 };
+    });
+    eq('自己加的记成「我」', J.by['我自己写的一条'], 'me');
+    eq('蘑菇记的记成「蘑菇」', J.by['蘑菇记的一条'], 'mushroom');
+    ok('⚠️送给模型的清单里标出「她亲手写的」', J.标了她写的, '');
+    ok('蘑菇自己记的不加那个标', J.蘑菇那条没标, '');
+    ok('⚠️提示词交代了别动她亲手写的（不然它会去改她的话）', J.提示词交代了别动, '');
+    ok('新记的都带「新增」标记', J.新的都带标, '');
+    eq('刚记下的被改，仍算「新增」（她还没看过，不该降级成黄点）', J.新的改了还是新的, 'new');
+    eq('她看过之后再改，才变成「改过」', J.改的标记, 'upd');
+    eq('⚠️一轮最多采纳 2 条新记的（防冗长）', J.一轮记了几条, 2);
+    eq('但「忘掉」不受这个闸限制（那是在瘦身）', J.忘完剩几条, 0);
+
+    /* ===== K 组：圆点看过就清 ===== */
+    const K = await page.evaluate(async () => {
+        localStorage.removeItem('toolbox_user_memory');
+        umAdd('看一眼就该清标记的', '', 'me');
+        document.getElementById('umTestHost').innerHTML = umPaneHtml();
+        umRenderPanel();
+        const 画出来有点 = !!document.querySelector('#chatUserMemList span[title="新记的"]');
+        const 图标 = document.querySelector('#chatUserMemList span[title="蘑菇自己记的"]');
+        await new Promise(r => setTimeout(r, 1600));
+        const 清掉了 = umLoad().every(x => !x._chg);
+        const 圆点还在屏幕上 = !!document.querySelector('#chatUserMemList span[title="新记的"]');
+        return { 画出来有点, 我写的没蘑菇图标: !图标, 清掉了, 圆点还在屏幕上 };
+    });
+    ok('新记的那条前面画了绿点', K.画出来有点, '');
+    ok('自己写的不挂 🍄（留白就是区分）', K.我写的没蘑菇图标, '');
+    ok('⚠️看过之后标记清掉了（下次打开就干净）', K.清掉了, '');
+    ok('⚠️但这次屏幕上的圆点没被抹掉（清标记时不重画）', K.圆点还在屏幕上, '');
 
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
 
