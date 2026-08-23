@@ -769,6 +769,14 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     ok('够 3 条就出现', S.够了才出现, '');
     ok('紧挨着「关于我」那行小标题', S.挨着关于我, '');
 
+    /* ⚠️阅读模式那个弹窗末尾有段祖传代码，会把弹窗里**所有** textarea 撑到完整高度
+       （本来是给记忆表格的编辑框写的）。它跑在 umRenderPanel 之后，
+       不排除掉 [data-um] 的话，折行功能会被整个抵消——当时表现是「上线了也没效果」。 */
+    const T = await page.evaluate(() => ({
+        排除了记忆那些框: readerShowSummaryModal.toString().indexOf("querySelectorAll('textarea:not([data-um])')") >= 0
+    }));
+    ok('⚠️弹窗那段「撑高所有编辑框」的代码排除了记忆的框', T.排除了记忆那些框, '');
+
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();

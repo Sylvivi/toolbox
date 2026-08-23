@@ -22070,8 +22070,12 @@ body {
             mask.addEventListener('click', function (ev) { if (ev.target === mask) mask.remove(); });
             document.body.appendChild(mask);
             try { umRenderPanel(); } catch (e) {}   // 「我」那一页的列表是进了 DOM 之后现填的
-            // 只给「当前可见」的编辑框撑高（折叠/未激活的展开时再算高度）
-            var tas = mask.querySelectorAll('textarea');
+            /* 只给「当前可见」的编辑框撑高（折叠/未激活的展开时再算高度）。
+               ⚠️`:not([data-um])` 是 2026-08-23 深夜加的，别去掉：
+                 「蘑菇记得的我」那些框**故意只露 3 行**（umGrow 压过高度），
+                 这个循环会把它们一起撑开、把折行功能整个抵消掉。
+                 当时的表现是「代码明明上线了、刷新两次也没用」，查了半天才发现是这一行盖的。 */
+            var tas = mask.querySelectorAll('textarea:not([data-um])');
             for (var j = 0; j < tas.length; j++) { if (tas[j].style.display !== 'none') { tas[j].style.height = 'auto'; tas[j].style.height = tas[j].scrollHeight + 'px'; } }
             // 打开默认在顶部（先看记忆表格）；删除重建时恢复到删除前的位置
             var bodyEl = modal.querySelector('.chat-summary-modal-body');
