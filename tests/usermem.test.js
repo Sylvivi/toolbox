@@ -41,7 +41,7 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         umRemove(id1);
         const 删后 = umLoad().length;
         const 删掉的还在吗 = umLoad().some(x => x.id === id1);
-        umAdd('x'.repeat(300));
+        umAdd('x'.repeat(1500));
         const 截断后 = umLoad().filter(x => /^x+$/.test(x.content))[0].content.length;
         return { 起始, 去重后, 两条, 改后, 删后, 删掉的还在吗, 截断后 };
     });
@@ -51,7 +51,9 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     eq('改得动', A.改后, '不爱看大段心理独白，会直接跳过');
     eq('删得掉（条数少一条）', A.删后, 1);
     eq('删掉的确实没了', A.删掉的还在吗, false);
-    eq('单条超长截到 200 字（系统提示词不能被一条撑爆）', A.截断后, 200);
+    // ⚠️2026-08-23 晚从 200 提到 1000：硬上限只当保险丝，别再拿它去「逼条目写短」——
+    //   她粘档案时被静默截掉一半，那次教训见 Q 组注释。
+    eq('单条超长截到 1000 字（保险丝，防一条把提示词撑爆）', A.截断后, 1000);
 
     /* ===== B 组：条数上限 ===== */
     const B = await page.evaluate(() => {
@@ -590,7 +592,7 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         const 书id = umAdd(档案, '', 'mushroom', 'book');
         const 存下的 = umLoad().filter(x => x.id === 书id)[0];
 
-        const 我id = umAdd('我'.repeat(300), '', 'me', 'me');
+        const 我id = umAdd('我'.repeat(1500), '', 'me', 'me');
         const 我的长度 = umLoad().filter(x => x.id === 我id)[0].content.length;
         const 长档案id = umAdd('书'.repeat(1500), '', 'mushroom', 'book');
         const 书的长度 = umLoad().filter(x => x.id === 长档案id)[0].content.length;
@@ -617,8 +619,8 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     });
     ok('⚠️档案里的换行一个都没被吃掉', P.换行没被吃掉, '');
     ok('档案超过 200 字也存得下', P.档案长度 > 100, '实际 ' + P.档案长度 + ' 字');
-    eq('「关于我」那组还是 200 字上限', P.我的长度, 200);
-    eq('「这本书」那组放到 1000 字', P.书的长度, 1000);
+    eq('⚠️两组都是 1000 字（原来「关于我」是 200，静默截断害她丢过半份档案）', P.我的长度, 1000);
+    eq('「这本书」那组也是 1000 字', P.书的长度, 1000);
     ok('⚠️后续设定用「改」补进同一条（档案不该散成好几条）', P.补全后有胎儿, '');
     ok('⚠️补全后没有被截到 200（改的时候也按这条自己的上限算）', P.补全后长度 > 300, '实际 ' + P.补全后长度);
     ok('注入时档案是整块给的', P.注入里是整块, '');
@@ -637,6 +639,52 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     ok('提示词讲了档案可以写长', P2.讲了档案, '');
     ok('提示词讲了后续设定要补进同一条', P2.讲了别散开, '');
     ok('⚠️提示词讲了「她说记就原样记全，别压缩」', P2.讲了她说记就记全, '');
+
+    /* ===== Q 组：记错组能挪回来 + 截断要吭声（2026-08-23 晚补）=====
+       起因：那份小白鼠档案落进了「关于我」那组，被 200 字**静默**截在"揣着死"上，
+       她是看截图才发现的；而且当时**没有任何办法把它挪到书那边**，只能删了重粘——
+       可存下的那份已经缺了一半，原文都找不回来。 */
+    const Q = await page.evaluate(() => {
+        localStorage.removeItem('toolbox_user_memory');
+        window.rbCurBook = () => ({ fileName: '故事的解剖.epub', fileSize: 111 });
+        window.rbCurBookName = () => '故事的解剖';
+
+        const id = umAdd('【专属小白鼠档案】\n男主：摄政王萧濯', '', 'me', 'me');
+        const 一开始在我这组 = umLoadMine().some(x => x.id === id);
+
+        umMove(id);
+        const 挪完在书那组 = umLoadBook().some(x => x.id === id);
+        const 挪完不在我这组 = !umLoadMine().some(x => x.id === id);
+        const 挪完带改过标记 = umLoad().filter(x => x.id === id)[0]._chg === 'upd';
+        const 内容没变 = umLoad().filter(x => x.id === id)[0].content.indexOf('摄政王萧濯') >= 0;
+
+        umMove(id);   // 再点一次挪回来
+        const 挪得回来 = umLoadMine().some(x => x.id === id);
+
+        // 面板上那两个小按钮
+        document.getElementById('umTestHost').innerHTML = umPaneHtml();
+        umRenderPanel();
+        const row = document.querySelector('#chatUserMemList textarea[data-um="' + id + '"]').parentNode;
+        const 有挪按钮 = row.textContent.indexOf('→书') >= 0;
+        const 有删按钮 = !!row.querySelector('span[title="忘掉这条"]');
+
+        // 没开书时不给挪（挪无处可去），也别报错
+        window.rbCurBook = () => null;
+        window.rbCurBookName = () => '';
+        const 挪失败 = umMove(id) === false;
+        const 还在原地 = umLoadMine().some(x => x.id === id);
+        return { 一开始在我这组, 挪完在书那组, 挪完不在我这组, 挪完带改过标记, 内容没变,
+                 挪得回来, 有挪按钮, 有删按钮, 挪失败, 还在原地 };
+    });
+    ok('一开始记在「关于我」', Q.一开始在我这组, '');
+    ok('⚠️点一下能挪进这本书', Q.挪完在书那组, '');
+    ok('挪走之后就不在「关于我」了', Q.挪完不在我这组, '');
+    ok('挪完打「改过」标记（黄点，好认）', Q.挪完带改过标记, '');
+    ok('⚠️挪的时候内容一个字都没动', Q.内容没变, '');
+    ok('再点一次能挪回来', Q.挪得回来, '');
+    ok('面板每行有「→书」', Q.有挪按钮, '');
+    ok('面板每行有「✕」', Q.有删按钮, '');
+    ok('没开书时挪不动（挪无处可去），也不报错', Q.挪失败 && Q.还在原地, '');
 
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
 

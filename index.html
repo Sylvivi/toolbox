@@ -15428,7 +15428,12 @@ body {
              当前任务：作为"陪练"，验证本书后续的"渐进式困境""危机""高潮"
            **有内部结构、会持续增补、明显超过 200 字**。她原话「我想把人物档案加进去空间不够了」。
            ⚠️别再把这两个数合并成一个常量——它们服务的是两种完全不同的东西。 */
-        var UM_LEN_ME = 200;
+        /* ⚠️2026-08-23 晚**又改了一次**：原来「关于我」是 200、书上是 1000，
+           想用这个上限「逼着关于我的条目写短」。**错的**——她把那份小白鼠档案粘进「我」那组，
+           超出的部分**一声不吭被截掉**（截在"揣着死"三个字上），她是看截图才发现的。
+           塑造行为该靠提示词，不该靠砍数据。现在两组一样是 1000，**硬上限只当保险丝**；
+           「关于我要写短」那句话留在提示词里。 */
+        var UM_LEN_ME = 1000;
         var UM_LEN_BOOK = 1000;
         function umLenCap(book) { return book ? UM_LEN_BOOK : UM_LEN_ME; }
         function umCurBookKey() {
@@ -15464,8 +15469,13 @@ body {
         function umAdd(content, tag, by, scope) {
             var bk = (scope === 'book') ? umCurBookKey() : '';   // 没在读书时退回全局，不能凭空造一个空书
             // ⚠️只 trim 首尾，**中间的换行一个都不能动**——档案靠分行才读得清
-            content = (content || '').trim().slice(0, umLenCap(bk));
+            var _raw = (content || '').trim();
+            content = _raw.slice(0, umLenCap(bk));
             if (!content) return null;
+            // ⚠️真截断了必须吭声。静默丢一半正是她 2026-08-23 撞上的那个坑。
+            if (_raw.length > content.length) {
+                try { showToast('这条太长，截到 ' + umLenCap(bk) + ' 字了（超出 ' + (_raw.length - content.length) + ' 字）', true); } catch (e) {}
+            }
             var list = umLoad();
             for (var i = 0; i < list.length; i++) {      // 一模一样的不记两遍，只更新分类
                 if (list[i].content === content && (list[i].book || '') === bk) {
@@ -15501,6 +15511,27 @@ body {
                 break;
             }
             if (hit) umSaveList(list);
+            return hit;
+        }
+        /* 把一条在「关于我」和「这本书」之间挪过去。
+           起因同上：那份档案明明属于《故事的解剖》却落在了「我」那组，
+           原来只能删了重粘——而存下的那份已经被截断，等于原文都找不回来了。 */
+        function umMove(id) {
+            var bk = umCurBookKey();
+            if (!bk) { showToast('先打开一本书'); return false; }
+            var list = umLoad(), hit = false;
+            for (var i = 0; i < list.length; i++) {
+                if (list[i].id !== id) continue;
+                list[i].book = list[i].book ? '' : bk;   // 在两组之间来回切
+                list[i]._chg = 'upd';
+                hit = true;
+                break;
+            }
+            if (hit) {
+                umSaveList(list);
+                showToast(list.filter(function (x) { return x.id === id; })[0].book
+                    ? ('🍄 挪进《' + (umCurBookName() || '这本书') + '》') : '🍄 挪回「关于我」');
+            }
             return hit;
         }
         function umRemove(id) {
@@ -15579,12 +15610,24 @@ body {
             if (bookList.length) html += _cap('《' + (umCurBookName() || '这本书') + '》里说好的') + bookList.map(_row).join('');
             box.innerHTML = html;
             // ✕ 用 DOM 追加，不拼进上面那串模板——模板已经够长了，再塞个带 onclick 的转义更容易出错
+            var _curBk = umCurBookKey();
             Array.prototype.forEach.call(box.querySelectorAll('textarea[data-um]'), function (inp) {
+                var id = inp.getAttribute('data-um');
+                var row = umLoad().filter(function (x) { return x.id === id; })[0] || {};
+                // 开着书才给「挪」；没开书时两组只有一组，挪无处可去
+                if (_curBk) {
+                    var mv = document.createElement('span');
+                    mv.textContent = row.book ? '→我' : '→书';
+                    mv.title = row.book ? '挪回「关于我」（换书之后也带着）' : '挪进《' + (umCurBookName() || '这本书') + '》（只在这本书里出现）';
+                    mv.style.cssText = 'flex-shrink:0;cursor:pointer;color:var(--text-muted);font-size:11px;padding:0 .3em;height:1.9em;line-height:1.9em';
+                    mv.onclick = function () { umMove(id); };
+                    inp.parentNode.appendChild(mv);
+                }
                 var b = document.createElement('span');
                 b.textContent = '✕';
                 b.title = '忘掉这条';
                 b.style.cssText = 'flex-shrink:0;cursor:pointer;color:var(--text-muted);font-size:12px;padding:0 .35em;height:1.9em;line-height:1.9em';
-                b.onclick = function () { umRemove(inp.getAttribute('data-um')); };
+                b.onclick = function () { umRemove(id); };
                 inp.parentNode.appendChild(b);
                 umGrow(inp);      // 进 DOM 之后才量得准高度
             });
