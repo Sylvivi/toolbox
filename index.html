@@ -15407,6 +15407,34 @@ body {
             } catch (e) { return []; }
         }
         function umTs() { return localStorage.getItem(USER_MEM_TS_KEY) || ''; }
+        /* ===== 跟着书走的那一半（2026-08-23 晚加）=====
+           起因（她原话）：「不同的书我需要他记住不同的东西，我们聊的话题也不太一样，
+           如果每本书都这样应用的话功能就有点局限」。举的例子是读《故事的解剖》时
+           跟 AI 约好「拿摄政王当小白鼠去套理论」——**这不是书里的内容，是你俩之间的约定**，
+           换个段落提问就丢了，开大上下文又是拿钱砸。
+
+           所以条目多一个 `book` 字段：
+             · `''`          = 关于她这个人，**换哪本书都带着**
+             · `'<fileKey>'` = 只属于那本书，读别的书时**不注入**（但不删，回来还在）
+           ⚠️`rbCurBook()` 在阅读模式和普通对话里都能拿到当前书，两条注入路径共用它。 */
+        var BOOK_MEM_MAX = 30;      // 单本书的条数上限；全局那份仍是 USER_MEM_MAX
+        function umCurBookKey() {
+            try {
+                var b = rbCurBook();
+                return (b && b.fileName != null) ? (b.fileName + '|' + (b.fileSize || 0)) : '';
+            } catch (e) { return ''; }
+        }
+        function umCurBookName() {
+            try { return rbCurBookName() || ''; } catch (e) { return ''; }
+        }
+        // 跟着人走的那些
+        function umLoadMine() { return umLoad().filter(function (x) { return !x.book; }); }
+        // 当前这本书的那些（没在读书时是空的）
+        function umLoadBook() {
+            var k = umCurBookKey();
+            if (!k) return [];
+            return umLoad().filter(function (x) { return x.book === k; });
+        }
         /* quiet=true：存但**不重画**。清「新增/改过」那两个圆点时必须用它——
            不然一存就重渲，她刚看到的圆点当场消失，等于没标。 */
         function umSaveList(list, quiet) {
@@ -15418,12 +15446,15 @@ body {
             if (!quiet) { try { umRenderPanel(); } catch (e) {} }
         }
         /* by: 'me' = 她自己写的 / 'mushroom' = 蘑菇自己记的。面板上要分得出来（她要求的）。 */
-        function umAdd(content, tag, by) {
+        /* by: 'me' 她自己写的 / 'mushroom' 蘑菇记的。
+           book: 传 'book' = 挂到当前这本书上；其它（含不传）= 跟着人走。 */
+        function umAdd(content, tag, by, scope) {
             content = (content || '').trim().slice(0, 200);
             if (!content) return null;
+            var bk = (scope === 'book') ? umCurBookKey() : '';   // 没在读书时退回全局，不能凭空造一个空书
             var list = umLoad();
             for (var i = 0; i < list.length; i++) {      // 一模一样的不记两遍，只更新分类
-                if (list[i].content === content) {
+                if (list[i].content === content && (list[i].book || '') === bk) {
                     if (tag) list[i].tag = String(tag).trim().slice(0, 12);
                     umSaveList(list);
                     return list[i].id;
@@ -15431,8 +15462,16 @@ body {
             }
             var id = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
             list.push({ id: id, content: content, tag: (tag || '').trim().slice(0, 12),
-                        by: by === 'mushroom' ? 'mushroom' : 'me', _chg: 'new', ts: new Date().toISOString() });
-            while (list.length > USER_MEM_MAX) list.shift();
+                        by: by === 'mushroom' ? 'mushroom' : 'me', book: bk,
+                        _chg: 'new', ts: new Date().toISOString() });
+            /* ⚠️封顶要**分开算**：全局满了丢最老的全局条目，某本书满了丢那本书最老的。
+               混着算的话，一本书聊得凶就会把她「关于我」那些挤掉。 */
+            var same = list.filter(function (x) { return (x.book || '') === bk; });
+            var cap = bk ? BOOK_MEM_MAX : USER_MEM_MAX;
+            while (same.length > cap) {
+                var drop = same.shift();
+                list = list.filter(function (x) { return x.id !== drop.id; });
+            }
             umSaveList(list);
             return id;
         }
@@ -15460,21 +15499,32 @@ body {
            ⚠️空的时候返回空串，**别塞一句「（暂无）」进去**——那等于告诉模型
              "你本该知道点什么但是没有"，它会掉头去盘问用户，反而更烦。 */
         function umText() {
-            var list = umLoad();
-            if (!list.length) return '';
             var nm = chatUserName();
-            var lines = list.map(function (x) {
-                return '- ' + (x.tag ? '[' + x.tag + '] ' : '') + x.content;
-            });
-            return '【你记得的' + nm + '】\n' + lines.join('\n') +
-                '\n（这些是你跟' + nm + '相处下来记住的事。自然地用上就好，别刻意复述、也别一上来就报菜名。）';
+            var fmt = function (arr) {
+                return arr.map(function (x) { return '- ' + (x.tag ? '[' + x.tag + '] ' : '') + x.content; }).join('\n');
+            };
+            var mine = umLoadMine(), book = umLoadBook(), out = [];
+            if (mine.length) {
+                out.push('【你记得的' + nm + '】\n' + fmt(mine) +
+                    '\n（这些是你跟' + nm + '相处下来记住的事。自然地用上就好，别刻意复述、也别一上来就报菜名。）');
+            }
+            /* ⚠️只带**当前这本书**的（umLoadBook 已经筛过）。别的书那些一个字都不能漏进来——
+               她换书就是换话题，上一本的约定跟过去就是纯干扰。 */
+            if (book.length) {
+                var bn = umCurBookName();
+                out.push('【读《' + (bn || '这本书') + '》时你俩说好的】\n' + fmt(book) +
+                    '\n（这些是你和' + nm + '在这本书里形成的约定和共识——比如说好拿谁当例子、' +
+                    '某个说法指的是什么。**继续按这些来**，别当没发生过，也别要求她重新解释一遍。）');
+            }
+            return out.join('\n\n');
         }
         /* 设置面板里那一块。每条就是一个没边框的输入框 + 一个 ✕：
            点进去改字、失焦就存；✕ 直接删。不做二次确认弹窗——记忆是软数据，删错了再写一条就是。 */
         function umRenderPanel() {
             var box = document.getElementById('chatUserMemList');
             if (!box) return;
-            var list = umLoad();
+            var mine = umLoadMine(), bookList = umLoadBook();
+            var list = mine.concat(bookList);       // 只画「跟着人走的 + 当前这本书的」，别的书的不露面
             var cnt = document.getElementById('chatUserMemCount');
             if (cnt) cnt.textContent = list.length ? (list.length + ' 条') : '';
             if (!list.length) {
@@ -15484,7 +15534,9 @@ body {
             /* 行首两个记号，跟记忆表格那边一个路子（她要求「像大纲人物表那样」）：
                  · 绿点＝上次看过之后新增的、黄点＝改过的
                  · 🍄＝蘑菇自己记的；她自己写的不加图标（留白就是区分，别再挂零件） */
-            box.innerHTML = list.map(function (x) {
+            /* 两组之间插一条小标题。⚠️她的审美是「别加实心色块零件」，所以就是一行淡字。
+               没在读书 / 这本书还没记过东西时，第二组整个不出现。 */
+            var _row = function (x) {
                 var dot = x._chg === 'new' ? '<span title="新记的" style="flex-shrink:0;width:6px;height:6px;border-radius:50%;background:#3a9d5d"></span>'
                         : x._chg === 'upd' ? '<span title="改过" style="flex-shrink:0;width:6px;height:6px;border-radius:50%;background:#e0a23a"></span>'
                         : '<span style="flex-shrink:0;width:6px;height:6px"></span>';
@@ -15495,7 +15547,14 @@ body {
                     ' style="flex:1;min-width:0;padding:.35em .5em;background:transparent;border:1px solid transparent;border-radius:8px;color:var(--text);font-size:13px;outline:none"' +
                     ' onfocus="this.style.background=\'var(--input-bg)\';this.style.borderColor=\'var(--card-border)\'"' +
                     '></div>';
-            }).join('');
+            };
+            var _cap = function (t) {
+                return '<div style="font-size:11px;color:var(--text-muted);margin:.5em 0 .1em">' + esc(t) + '</div>';
+            };
+            var html = '';
+            if (mine.length) html += _cap('关于我') + mine.map(_row).join('');
+            if (bookList.length) html += _cap('《' + (umCurBookName() || '这本书') + '》里说好的') + bookList.map(_row).join('');
+            box.innerHTML = html;
             // ✕ 用 DOM 追加，不拼进上面那串模板——模板已经够长了，再塞个带 onclick 的转义更容易出错
             Array.prototype.forEach.call(box.querySelectorAll('input[data-um]'), function (inp) {
                 var b = document.createElement('span');
@@ -15556,10 +15615,14 @@ body {
         function umTools() {
             return [
                 { type: 'function', function: {
-                    name: 'remember', description: '记下一件关于她的、以后还用得上的事。只记新的。',
+                    name: 'remember', description: '记下一件以后还用得上的事。只记新的。',
                     parameters: { type: 'object', properties: {
                         content: { type: 'string', description: '一句话，短而具体，用你自己的口吻' },
-                        tag: { type: 'string', description: '随手一个分类，比如 阅读口味 / 生活 / 性格。想不出就别填' }
+                        tag: { type: 'string', description: '随手一个分类，比如 阅读口味 / 生活 / 性格。想不出就别填' },
+                        /* ⚠️这个参数是这次改动的核心。说明写得越具体，它判断得越准——
+                           「换本书还成立吗」是最好用的一把尺子，别改成抽象的定义。 */
+                        scope: { type: 'string', enum: ['me', 'book'],
+                            description: '这条属于谁：me = 关于她这个人（口味、习惯、经历、性格），换哪本书都成立；book = 只跟当前这本书有关（你俩说好拿谁当例子、某个代号指什么、这本书打算怎么读）。拿不准就问自己「换一本书之后这话还成立吗」——成立填 me，不成立填 book。' }
                     }, required: ['content'] } } },
                 { type: 'function', function: {
                     name: 'update_memory', description: '你以前记的某条不准了，改掉它。',
@@ -15576,11 +15639,14 @@ body {
         }
         /* 给它看的「现在都记了什么」，带编号——不带编号它就没法改、没法忘。 */
         function umListForModel() {
-            var list = umLoad();
-            if (!list.length) return '（你还什么都没记过。）';
-            return list.map(function (x) {
+            var one = function (x) {
                 return x.id + '｜' + (x.by === 'mushroom' ? '' : '【她亲手写的】') + (x.tag ? '[' + x.tag + '] ' : '') + x.content;
-            }).join('\n');
+            };
+            var mine = umLoadMine(), book = umLoadBook(), out = [];
+            out.push(mine.length ? ('〔关于她这个人〕\n' + mine.map(one).join('\n')) : '〔关于她这个人〕（还没记过）');
+            var bn = umCurBookName();
+            if (bn) out.push('〔读《' + bn + '》时说好的〕' + (book.length ? ('\n' + book.map(one).join('\n')) : '（还没记过）'));
+            return out.join('\n\n');
         }
         /* ⚠️这段口吻是她点名要的，原话：
              「我希望蘑菇往里面写的时候，是以朋友的心态去写，而不是助手服务用户，
@@ -15595,7 +15661,14 @@ body {
                 '· 「她讨厌那种一上来就交代身世的开头」——这样写。\n' +
                 '· 「用户偏好：反感冗长背景铺陈（阅读体验类）」——这样不行。\n' +
                 '· 不用面面俱到，也不用分类周全。可记可不记的，就别记。\n\n' +
-                '值得记的：她的口味、习惯、在意的事、经历、性格、正在做的事。\n' +
+                '记的东西分**两类**，记的时候用 scope 参数说清是哪一类：\n' +
+                '· **scope=me**：关于她这个人——口味、习惯、在意的事、经历、性格、正在做的事。换哪本书都成立。\n' +
+                '· **scope=book**：只跟当前这本书有关的——**你俩聊出来的约定和共识**。\n' +
+                '  比如说好拿某个角色当例子去套书里的理论、某个代号指的是什么、这本书打算按什么路子读。\n' +
+                '  ⚠️**这类最容易被漏掉，但恰恰最要紧**：她换一段提问时，之前那轮对话是不带过来的，\n' +
+                '  你不记下来就等于你俩白商量了，她还得从头再解释一遍。\n' +
+                '  ⚠️但**书里本来就有的内容**（情节、人物、理论本身）不算约定，那些不用记。\n' +
+                '  拿不准就问自己「换一本书之后这话还成立吗」——成立填 me，不成立填 book。\n\n' +
                 '不用记的：书里的情节人物、你自己的评论、她随口的附和、已经记过的事。\n\n' +
                 /* ⚠️2026-08-23 当天补的，因为它把同一件事记成了五条：隐忍感、孕期自卑、
                    女主不卑微、别落在感动上、喜欢酸涩——全在讲「她对男生子文的情感口味」。
@@ -15682,8 +15755,10 @@ body {
             if (fn.name === 'remember') {
                 var c = (args.content || '').trim();
                 if (!c) return null;
-                var id = umAdd(c, args.tag, 'mushroom');
-                return id ? { icon: '🍄', text: '记住了：' + c, undo: id } : null;
+                var toBook = (args.scope === 'book') && !!umCurBookKey();
+                var id = umAdd(c, args.tag, 'mushroom', toBook ? 'book' : 'me');
+                // 记到书上时点明是哪本，不然她分不清这条以后还会不会跟着走
+                return id ? { icon: '🍄', text: (toBook ? '记进《' + (umCurBookName() || '这本书') + '》：' : '记住了：') + c, undo: id } : null;
             }
             if (fn.name === 'update_memory') {
                 var before = umLoad().filter(function (x) { return x.id === args.id; })[0];
@@ -15732,9 +15807,12 @@ body {
              不回头看根本发现不了。这也是她选按钮、没选「自动整理」的原因。 */
         var _umTidyResult = null;   // 整理结果暂存，等她点「用这份」
         async function umTidy(btn) {
-            var mine = umLoad().filter(function (x) { return x.by !== 'mushroom'; });
-            var his = umLoad().filter(function (x) { return x.by === 'mushroom'; });
-            if (his.length < 3) { showToast('蘑菇记的还不到 3 条，不用整理'); return; }
+            /* ⚠️只收拾「关于我」那一组里蘑菇记的。
+               书里那些约定**故意不合并**：它们通常就三五条、而且高度具体（谁当例子、某个代号指什么），
+               揉在一起反而会把关键细节抹平，得不偿失。 */
+            var mine = umLoadMine().filter(function (x) { return x.by !== 'mushroom'; });
+            var his = umLoadMine().filter(function (x) { return x.by === 'mushroom'; });
+            if (his.length < 3) { showToast('「关于我」里蘑菇记的还不到 3 条，不用整理'); return; }
             var conn = umConn();
             if (!conn) { showToast('先选一个模型'); return; }
             if (btn) { btn.disabled = true; btn.textContent = '整理中…'; }
@@ -15799,11 +15877,12 @@ body {
             if (!_umTidyResult) return umRenderPanel();
             /* ⚠️只换掉蘑菇记的那批，她亲手写的原封不动留在原位。
                新条目一律标 _chg='new'，好让她一眼看出哪些是刚换上来的。 */
-            var keep = umLoad().filter(function (x) { return x.by !== 'mushroom'; });
+            // ⚠️只换掉「关于我」里蘑菇记的那批：她亲手写的、以及**所有挂在书上的**都原样留着
+            var keep = umLoad().filter(function (x) { return x.book || x.by !== 'mushroom'; });
             var now = new Date().toISOString();
             _umTidyResult.forEach(function (c, i) {
                 keep.push({ id: 'm' + Date.now().toString(36) + i.toString(36) + Math.random().toString(36).slice(2, 5),
-                            content: c.slice(0, 200), tag: '', by: 'mushroom', _chg: 'new', ts: now });
+                            content: c.slice(0, 200), tag: '', by: 'mushroom', book: '', _chg: 'new', ts: now });
             });
             var n = _umTidyResult.length;
             _umTidyResult = null;
@@ -15832,16 +15911,26 @@ body {
                 + ' onkeydown="if(event.key===\'Enter\')umOnAdd()"'
                 + ' style="flex:1;min-width:0;padding:7px 11px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px;color:var(--text);font-size:13px;outline:none">'
                 + '<button onclick="umOnAdd()" style="flex-shrink:0;padding:7px 14px;background:transparent;border:1px solid var(--input-border);border-radius:10px;color:var(--accent);font-size:13px;cursor:pointer">加</button>'
-                + '</div></div>';
+                + '</div>'
+                /* 手动加的时候选记给谁。没在读书就整个不显示——那时候只能记给「我」。
+                   ⚠️默认停在「我」：跟着人走是更安全的默认值，记错了顶多多带几个字；
+                     反过来错记成「这本书」，换本书就凭空消失，她会以为记忆丢了。 */
+                + (umCurBookKey() ? ('<div style="display:flex;gap:.6em;margin-top:.45em;font-size:11px;color:var(--text-muted)">'
+                    + '<span>加给：</span>'
+                    + '<label style="cursor:pointer"><input type="radio" name="umScope" value="me" checked style="accent-color:var(--accent);vertical-align:-1px"> 我</label>'
+                    + '<label style="cursor:pointer"><input type="radio" name="umScope" value="book" style="accent-color:var(--accent);vertical-align:-1px"> 《' + esc(umCurBookName() || '这本书') + '》</label>'
+                    + '</div>') : '')
+                + '</div>';
         }
         function umOnAdd() {
             var inp = document.getElementById('chatUserMemInput');
             if (!inp) return;
             var v = (inp.value || '').trim();
             if (!v) return;
-            umAdd(v, '', 'me');
+            var sc = document.querySelector('input[name="umScope"]:checked');
+            umAdd(v, '', 'me', (sc && sc.value === 'book') ? 'book' : 'me');
             inp.value = '';
-            showToast('🍄 记住了');
+            showToast(sc && sc.value === 'book' ? ('🍄 记进《' + (umCurBookName() || '这本书') + '》') : '🍄 记住了');
         }
 
         /* ===== 你的昵称（2026-08-02 加）=====

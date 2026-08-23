@@ -471,6 +471,104 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     eq('⚠️接口挂了记忆也一条不动', M.挂了之后条数, 4);
     ok('整理失败不往外抛', M.抛了 === false, '');
 
+    /* ===== N 组：跟着书走的那一半（2026-08-23 晚）=====
+       她的场景：读《故事的解剖》时跟 AI 约好「拿摄政王当小白鼠套理论」，
+       换个段落提问就丢了。⚠️最要命的一条：**换书之后别的书的约定绝不能漏进来**。 */
+    const N = await page.evaluate(async () => {
+        localStorage.removeItem('toolbox_user_memory');
+        // 桩掉「当前是哪本书」，测试页没真开书
+        let 当前书 = { fileName: '故事的解剖.epub', fileSize: 111 };
+        window.rbCurBook = () => 当前书;
+        window.rbCurBookName = () => (当前书 ? 当前书.fileName.replace(/\.epub$/, '') : '');
+
+        umAdd('她不爱看大段心理独白', '', 'me', 'me');
+        umAdd('说好拿摄政王当小白鼠来套书里的理论', '', 'mushroom', 'book');
+        const 甲书条数 = umLoadBook().length;
+        const 甲书注入 = umText();
+
+        // 换一本书
+        当前书 = { fileName: '呼啸山庄.epub', fileSize: 222 };
+        const 乙书条数 = umLoadBook().length;
+        const 乙书注入 = umText();
+        umAdd('这本按第三幕结构聊', '', 'mushroom', 'book');
+
+        // 回到第一本
+        当前书 = { fileName: '故事的解剖.epub', fileSize: 111 };
+        const 回来还在 = umLoadBook().map(x => x.content);
+        const 回来注入 = umText();
+
+        // 没在读书时，scope=book 要退回全局，不能凭空造一条挂在空书上
+        当前书 = null;
+        const id空 = umAdd('没开书时记的', '', 'mushroom', 'book');
+        const 空书那条 = umLoad().filter(x => x.id === id空)[0];
+
+        return {
+            甲书条数, 乙书条数,
+            甲书带了摄政王: 甲书注入.indexOf('摄政王') >= 0,
+            甲书带了关于我: 甲书注入.indexOf('大段心理独白') >= 0,
+            乙书没带摄政王: 乙书注入.indexOf('摄政王') < 0,
+            乙书仍带关于我: 乙书注入.indexOf('大段心理独白') >= 0,
+            乙书没带甲书标题: 乙书注入.indexOf('故事的解剖') < 0,
+            回来还在, 回来带书名: 回来注入.indexOf('故事的解剖') >= 0,
+            空书退回全局: (空书那条 || {}).book === ''
+        };
+    });
+    eq('这本书记了 1 条', N.甲书条数, 1);
+    ok('读这本书时带上了这本书的约定', N.甲书带了摄政王, '');
+    ok('同时也带着「关于我」那些', N.甲书带了关于我, '');
+    eq('换一本书，那本还没有约定', N.乙书条数, 0);
+    ok('⚠️换书之后上一本的约定一个字都没漏过来', N.乙书没带摄政王, '');
+    ok('⚠️连上一本的书名都没漏', N.乙书没带甲书标题, '');
+    ok('「关于我」那些换书照样带着', N.乙书仍带关于我, '');
+    eq('⚠️换回来，原来的约定还在（换书只是不注入，不是删掉）', N.回来还在, ['说好拿摄政王当小白鼠来套书里的理论']);
+    ok('注入时点明是哪本书', N.回来带书名, '');
+    ok('⚠️没在读书时 scope=book 退回全局，不挂到空书上', N.空书退回全局, '');
+
+    /* ===== O 组：工具带 scope + 整理不碰书里的约定 ===== */
+    const O = await page.evaluate(async () => {
+        localStorage.removeItem('toolbox_user_memory');
+        window.rbCurBook = () => ({ fileName: '故事的解剖.epub', fileSize: 111 });
+        window.rbCurBookName = () => '故事的解剖';
+        window.umConn = () => ({ baseUrl: 'https://fake', apiKey: 'k', model: 'm' });
+        const 真fetch = window.fetch;
+        const 调用 = (name, args) => ({ function: { name, arguments: JSON.stringify(args) } });
+        let 送出去的 = null;
+
+        // 工具说明里得有 scope，而且写清了判据
+        const t = umTools()[0].function;
+        const 有scope = !!(t.parameters.properties.scope);
+        const 判据在说明里 = (t.parameters.properties.scope.description || '').indexOf('换一本书之后这话还成立吗') >= 0;
+
+        window.fetch = async (u, o) => {
+            送出去的 = JSON.parse(o.body);
+            return { ok: true, json: async () => ({ choices: [{ message: { tool_calls: [
+                调用('remember', { content: '拿摄政王当例子', scope: 'book' }),
+                调用('remember', { content: '她熬夜看书', scope: 'me' })
+            ] } }] }) };
+        };
+        await umMaybeReview('我们就拿摄政王当小白鼠吧，我一般熬夜看', '好', conn0 = { baseUrl: 'https://fake', apiKey: 'k', model: 'm' });
+        const 分对了 = { 书: umLoadBook().map(x => x.content), 我: umLoadMine().map(x => x.content) };
+        const 清单分组了 = 送出去的.messages[0].content.indexOf('〔读《故事的解剖》时说好的〕') >= 0;
+
+        // 整理：只动「关于我」里蘑菇记的，书上的约定不许碰
+        ['甲','乙','丙'].forEach(t2 => umAdd('她喜欢' + t2, '', 'mushroom', 'me'));
+        window.fetch = async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: '- 她喜欢甲乙丙' } }] }) });
+        await umTidy(null);
+        umTidyApply();
+        const 整理后 = { 书: umLoadBook().map(x => x.content), 我: umLoadMine().map(x => x.content) };
+        window.fetch = 真fetch;
+        return { 有scope, 判据在说明里, 分对了, 清单分组了, 整理后 };
+    });
+    ok('工具带了 scope 参数', O.有scope, '');
+    ok('说明里写了那把尺子（换本书还成立吗）', O.判据在说明里, '');
+    eq('scope=book 的记到书上', O.分对了.书, ['拿摄政王当例子']);
+    eq('scope=me 的记到「关于我」', O.分对了.我, ['她熬夜看书']);
+    ok('送给模型的清单按两组分开列', O.清单分组了, '');
+    eq('⚠️整理不碰书里的约定', O.整理后.书, ['拿摄政王当例子']);
+    // ⚠️整理是「整组替换」：模型这次只吐了一条，那「关于我」里蘑菇记的就全被这一条顶掉了
+    //（包括「她熬夜看书」）。这不是 bug，正是为什么落地前一定要她看预览。
+    eq('「关于我」里蘑菇记的整组被合并结果顶替', O.整理后.我, ['她喜欢甲乙丙']);
+
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();
