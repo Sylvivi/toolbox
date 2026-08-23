@@ -18411,7 +18411,7 @@ body {
             if (!panes.length) {
                 panes.push({ key: 'summary', label: '摘要', html: '<div class="empty">' + (chatCompressEnabled ? '压缩已开启，尚无摘要' : '压缩未开启') + '</div>' });
             }
-            panes.push({ key: 'usermem', label: '我', html: umPaneHtml() });
+            panes.unshift({ key: 'usermem', label: '我', html: umPaneHtml() });   // 排第一，理由见阅读模式那侧
             // 选定当前 Tab：新打开(restoreScroll 未传)默认第一个；内部重建(传了滚动位置)时保持上次所在 Tab
             if (restoreScroll === undefined) _chatSummaryActiveTab = null;
             var _activeKey = _chatSummaryActiveTab;
@@ -21829,8 +21829,12 @@ body {
                     : '自动总结已关闭。<br>打开上面的开关，读这本书时就会在后台把前面章节总结好，供提问时给 AI 当前情。';
                 panes.push({ key: 'summary', label: '摘要', html: '<div class="empty">' + _emptyMsg + '</div>' });
             }
-            // 「蘑菇记得的我」永远排最后一个 Tab。⚠️必须在上面 `if (_rmt)` 的外面——它跟这本书没关系
-            panes.push({ key: 'usermem', label: '我', html: umPaneHtml() });
+            /* 「蘑菇记得的我」排**第一个** Tab（2026-08-23 她要求：「我希望关于我的事情是显示在第一」）。
+               ⚠️必须在上面 `if (_rmt)` 的外面——它跟这本书没关系。
+               ⚠️连带效果：panes[0] 同时也是**新打开弹窗时默认停的那一页**，所以现在点「摘要」
+                 先看到的是「我」。她知道这一点；想改回默认落在人物/摘要，只需要在下面选
+                 _activeKey 时跳过 usermem，别把这里改回 push。 */
+            panes.unshift({ key: 'usermem', label: '我', html: umPaneHtml() });
             // 选定当前 Tab：新打开(restoreScroll 未传)默认第一个；内部重建(传了滚动位置)时保持上次所在 Tab
             if (restoreScroll === undefined) _chatSummaryActiveTab = null;
             var _activeKey = _chatSummaryActiveTab;
