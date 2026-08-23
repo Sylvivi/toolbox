@@ -4666,10 +4666,19 @@ body {
      ⚠️按钮上必须挂 `onmousedown="event.preventDefault()"`：不挡住的话，
        按下去的瞬间 textarea 先失焦 → focus-within 没了 → 按钮当场 display:none →
        click 压根触发不了（点了没反应，这坑很隐蔽）。 */
-  .um-act { display: none; }
-  .um-row:focus-within .um-act { display: flex; align-items: center; }
-  .um-act span { cursor: pointer; color: var(--text-muted); padding: 0 .3em; line-height: 1.9em; }
-  .um-act span:hover { color: var(--text); }
+  /* ⚠️2026-08-23 深夜第二版：从「文本框右边的两个小记号」改成「文本框**底下**一排小按钮」。
+     她原话「能不能把叉号和移动放在文本框底下呀，弄成按键的感觉？我还是不习惯放在右边」。
+     ⚠️「点进那一行才出现」这条保留（她说过右边那样占位置、容易按错）。 */
+  .um-act { display: none; gap: .4em; margin: .3em 0 .1em; }
+  .um-row:focus-within .um-act { display: flex; }
+  .um-act span {
+    cursor: pointer; font-size: 11px; line-height: 1;
+    padding: .45em .9em; border-radius: 8px;
+    border: 1px solid var(--input-border); color: var(--text-muted);
+    background: transparent; white-space: nowrap;
+  }
+  .um-act span:hover { color: var(--text); border-color: var(--card-border); }
+  .um-act span.um-go { color: var(--accent); }
     </style>
 <link rel="stylesheet" id="readingFontLink" href="https://fontsapi.zeoseven.com/285/main/result.css"><style id="deco-custom-style">.chat-deco-on .chat-msg.ai::before{content:""!important;position:absolute!important;top:-12px!important;left:16px!important;width:1px!important;height:1px!important;font-size:0!important;image-rendering:pixelated!important;animation:none!important;pointer-events:none!important;z-index:5!important;box-shadow:0 2px #8fb5e8,1px 2px #8fb5e8,0 3px #8fb5e8,1px 3px #8fb5e8,3px 0 #8fb5e8,4px 0 #8fb5e8,3px 1px #8fb5e8,4px 1px #8fb5e8,6px 0 #8fb5e8,7px 0 #8fb5e8,6px 1px #8fb5e8,7px 1px #8fb5e8,9px 2px #8fb5e8,10px 2px #8fb5e8,9px 3px #8fb5e8,10px 3px #8fb5e8,4px 5px #8fb5e8,5px 5px #8fb5e8,6px 5px #8fb5e8,3px 6px #8fb5e8,4px 6px #8fb5e8,5px 6px #8fb5e8,6px 6px #8fb5e8,7px 6px #8fb5e8,2px 7px #8fb5e8,3px 7px #8fb5e8,4px 7px #8fb5e8,5px 7px #8fb5e8,6px 7px #8fb5e8,7px 7px #8fb5e8,8px 7px #8fb5e8,2px 8px #8fb5e8,3px 8px #8fb5e8,4px 8px #8fb5e8,5px 8px #8fb5e8,6px 8px #8fb5e8,7px 8px #8fb5e8,8px 8px #8fb5e8,3px 9px #8fb5e8,4px 9px #8fb5e8,5px 9px #8fb5e8,6px 9px #8fb5e8,7px 9px #8fb5e8!important;}</style><link rel="stylesheet" id="readingFontLink" href="https://fontsapi.zeoseven.com/285/main/result.css"></head>
 <body class="on-snippets chat-deco-on on-keys on-checkin reading-quote-on reading-wave-on reading-ls-on reading-ls-pd dark theme-rose-night modal-open" style="--deco-ai: &quot;✦&quot;; --deco-ai-size: 12px; --deco-ai-color: #daf; --deco-ai-anim: deco-twinkle 2s ease-in-out infinite; --deco-ai-top: -14px; --deco-ai-left: 16px;" data-chat-scroll-y="0">
@@ -15608,11 +15617,14 @@ body {
                 return '<div class="um-row" style="display:flex;align-items:flex-start;gap:.4em;padding:.15em 0">'
                     + '<span style="display:flex;align-items:center;height:1.9em;flex-shrink:0">' + dot + '</span>'
                     + (who ? '<span style="display:flex;align-items:center;height:1.9em;flex-shrink:0">' + who + '</span>' : '')
+                    // 文本框和按钮竖着排：按钮在框**底下**（她要「按键的感觉」，不习惯挂右边）
+                    + '<div style="flex:1;min-width:0">'
                     + '<textarea rows="1" maxlength="' + umLenCap(x.book) + '" data-um="' + esc(x.id) + '"'
                     + ' onchange="umOnEdit(this)" onblur="umOnEdit(this);umGrow(this)" oninput="umGrow(this,1)"'
-                    + ' style="flex:1;min-width:0;padding:.35em .5em;background:transparent;border:1px solid transparent;border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;line-height:1.6;outline:none;resize:none;overflow:hidden;white-space:pre-wrap;word-break:break-word"'
+                    + ' style="display:block;width:100%;box-sizing:border-box;padding:.35em .5em;background:transparent;border:1px solid transparent;border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;line-height:1.6;outline:none;resize:none;overflow:hidden;white-space:pre-wrap;word-break:break-word"'
                     + ' onfocus="this.style.background=\'var(--input-bg)\';this.style.borderColor=\'var(--card-border)\';umGrow(this,1)"'
-                    + '>' + esc(x.content) + '</textarea></div>';
+                    + '>' + esc(x.content) + '</textarea>'
+                    + '</div></div>';
             };
             var _cap = function (t) {
                 return '<div style="font-size:11px;color:var(--text-muted);margin:.5em 0 .1em">' + esc(t) + '</div>';
@@ -15636,14 +15648,13 @@ body {
             Array.prototype.forEach.call(box.querySelectorAll('textarea[data-um]'), function (inp) {
                 var id = inp.getAttribute('data-um');
                 var row = umLoad().filter(function (x) { return x.id === id; })[0] || {};
-                var act = document.createElement('span');
+                var act = document.createElement('div');
                 act.className = 'um-act';
-                act.style.cssText = 'flex-shrink:0;height:1.9em';
-                var mk = function (txt, title, size, fn) {
+                var mk = function (txt, title, cls, fn) {
                     var e = document.createElement('span');
                     e.textContent = txt;
                     e.title = title;
-                    e.style.fontSize = size;
+                    if (cls) e.className = cls;
                     // ⚠️挡住焦点转移，否则按下去 focus-within 立刻失效、按钮消失、click 触发不了
                     e.onmousedown = function (ev) { ev.preventDefault(); };
                     e.onclick = fn;
@@ -15651,12 +15662,13 @@ body {
                 };
                 // 开着书才给「挪」；没开书时两组只有一组，挪无处可去
                 if (_curBk) {
-                    mk(row.book ? '→我' : '→书',
-                       row.book ? '挪回「关于我」（换书之后也带着）' : '挪进《' + (umCurBookName() || '这本书') + '》（只在这本书里出现）',
-                       '11px', function () { umMove(id); });
+                    var bn = umCurBookName() || '这本书';
+                    mk(row.book ? '挪回「关于我」' : '挪进《' + bn + '》',
+                       row.book ? '换书之后也带着' : '只在这本书里出现',
+                       'um-go', function () { umMove(id); });
                 }
-                mk('✕', '忘掉这条', '12px', function () { umRemove(id); });
-                inp.parentNode.appendChild(act);
+                mk('删掉', '忘掉这条', '', function () { umRemove(id); });
+                inp.parentNode.appendChild(act);      // 塞进文本框那个竖排容器里，落在框底下
                 umGrow(inp);      // 进 DOM 之后才量得准高度
             });
             /* 打开面板＝看过了：稍等一下再把标记清掉（quiet，不重画）。

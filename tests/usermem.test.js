@@ -665,10 +665,15 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         document.getElementById('umTestHost').innerHTML = umPaneHtml();
         umRenderPanel();
         const row = document.querySelector('#chatUserMemList textarea[data-um="' + id + '"]').parentNode;
-        const 有挪按钮 = row.textContent.indexOf('→书') >= 0;
+        const 有挪按钮 = row.textContent.indexOf('挪进《') >= 0;
         const 有删按钮 = !!row.querySelector('span[title="忘掉这条"]');
         // ⚠️平时藏起来，点进那一行才浮出（她说「占位置、容易按错」）
         const 有操作容器 = !!row.querySelector('.um-act');
+        // 结构必须是「文本框 → 按钮」上下排：两者同一个父容器，且按钮排在框后面
+        const ta0 = row.querySelector('textarea');
+        const act0 = row.querySelector('.um-act');
+        const 按钮在框底下 = !!act0 && act0.parentNode === ta0.parentNode
+            && (ta0.compareDocumentPosition(act0) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
         const 平时是藏着的 = getComputedStyle(row.querySelector('.um-act')).display === 'none';
         row.querySelector('textarea').focus();
         const 点进去就出来 = getComputedStyle(row.querySelector('.um-act')).display !== 'none';
@@ -682,7 +687,7 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         const 挪失败 = umMove(id) === false;
         const 还在原地 = umLoadMine().some(x => x.id === id);
         return { 一开始在我这组, 挪完在书那组, 挪完不在我这组, 挪完带改过标记, 内容没变,
-                 挪得回来, 有挪按钮, 有删按钮, 有操作容器, 平时是藏着的, 点进去就出来, 挡了焦点转移,
+                 挪得回来, 有挪按钮, 有删按钮, 有操作容器, 按钮在框底下, 平时是藏着的, 点进去就出来, 挡了焦点转移,
                  挪失败, 还在原地 };
     });
     ok('一开始记在「关于我」', Q.一开始在我这组, '');
@@ -691,9 +696,10 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     ok('挪完打「改过」标记（黄点，好认）', Q.挪完带改过标记, '');
     ok('⚠️挪的时候内容一个字都没动', Q.内容没变, '');
     ok('再点一次能挪回来', Q.挪得回来, '');
-    ok('面板每行有「→书」', Q.有挪按钮, '');
-    ok('面板每行有「✕」', Q.有删按钮, '');
-    ok('两个记号收在一个容器里', Q.有操作容器, '');
+    ok('面板每行有「挪进《书名》」', Q.有挪按钮, '');
+    ok('面板每行有「删掉」', Q.有删按钮, '');
+    ok('两个按钮收在一个容器里', Q.有操作容器, '');
+    ok('⚠️按钮在文本框**底下**，不是挂在右边（她不习惯右边那样）', Q.按钮在框底下, '');
     ok('⚠️平时藏着（她说占位置、容易按错）', Q.平时是藏着的, '');
     ok('⚠️点进那一行才浮出来', Q.点进去就出来, '');
     ok('⚠️按钮挡住了焦点转移（不挡就会「点了没反应」）', Q.挡了焦点转移, '');
