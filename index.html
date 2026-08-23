@@ -4658,6 +4658,18 @@ body {
         .lock-msg { font-size: 12px; color: var(--red); min-height: 18px; }
         .lock-footer { position: absolute; bottom: 24px; display: flex; gap: 16px; }
         .lock-footer-btn { background: none; border: none; font-size: 12px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
+
+  /* 「蘑菇记得的我」每行右边那两个小记号（→书 / ✕）。2026-08-23 深夜改：
+     她原话「那个叉号和移动标在右边挺占位置，并且容易按错」。
+     ⚠️`:focus-within` 是关键——**点进那一行（textarea 拿到焦点）才显示**：
+       平时一行字占满宽度、干干净净；要操作先点进去，所以不可能误触。
+     ⚠️按钮上必须挂 `onmousedown="event.preventDefault()"`：不挡住的话，
+       按下去的瞬间 textarea 先失焦 → focus-within 没了 → 按钮当场 display:none →
+       click 压根触发不了（点了没反应，这坑很隐蔽）。 */
+  .um-act { display: none; }
+  .um-row:focus-within .um-act { display: flex; align-items: center; }
+  .um-act span { cursor: pointer; color: var(--text-muted); padding: 0 .3em; line-height: 1.9em; }
+  .um-act span:hover { color: var(--text); }
     </style>
 <link rel="stylesheet" id="readingFontLink" href="https://fontsapi.zeoseven.com/285/main/result.css"><style id="deco-custom-style">.chat-deco-on .chat-msg.ai::before{content:""!important;position:absolute!important;top:-12px!important;left:16px!important;width:1px!important;height:1px!important;font-size:0!important;image-rendering:pixelated!important;animation:none!important;pointer-events:none!important;z-index:5!important;box-shadow:0 2px #8fb5e8,1px 2px #8fb5e8,0 3px #8fb5e8,1px 3px #8fb5e8,3px 0 #8fb5e8,4px 0 #8fb5e8,3px 1px #8fb5e8,4px 1px #8fb5e8,6px 0 #8fb5e8,7px 0 #8fb5e8,6px 1px #8fb5e8,7px 1px #8fb5e8,9px 2px #8fb5e8,10px 2px #8fb5e8,9px 3px #8fb5e8,10px 3px #8fb5e8,4px 5px #8fb5e8,5px 5px #8fb5e8,6px 5px #8fb5e8,3px 6px #8fb5e8,4px 6px #8fb5e8,5px 6px #8fb5e8,6px 6px #8fb5e8,7px 6px #8fb5e8,2px 7px #8fb5e8,3px 7px #8fb5e8,4px 7px #8fb5e8,5px 7px #8fb5e8,6px 7px #8fb5e8,7px 7px #8fb5e8,8px 7px #8fb5e8,2px 8px #8fb5e8,3px 8px #8fb5e8,4px 8px #8fb5e8,5px 8px #8fb5e8,6px 8px #8fb5e8,7px 8px #8fb5e8,8px 8px #8fb5e8,3px 9px #8fb5e8,4px 9px #8fb5e8,5px 9px #8fb5e8,6px 9px #8fb5e8,7px 9px #8fb5e8!important;}</style><link rel="stylesheet" id="readingFontLink" href="https://fontsapi.zeoseven.com/285/main/result.css"></head>
 <body class="on-snippets chat-deco-on on-keys on-checkin reading-quote-on reading-wave-on reading-ls-on reading-ls-pd dark theme-rose-night modal-open" style="--deco-ai: &quot;✦&quot;; --deco-ai-size: 12px; --deco-ai-color: #daf; --deco-ai-anim: deco-twinkle 2s ease-in-out infinite; --deco-ai-top: -14px; --deco-ai-left: 16px;" data-chat-scroll-y="0">
@@ -15593,7 +15605,7 @@ body {
                 /* ⚠️2026-08-23 晚从 <input> 换成 <textarea>：书上那组要装带分行的档案，
                    单行输入框会把换行吃掉、也看不全。`align-items:flex-start` 让圆点和 🍄
                    贴着第一行，不然多行时它俩会浮在中间。 */
-                return '<div style="display:flex;align-items:flex-start;gap:.4em;padding:.15em 0">'
+                return '<div class="um-row" style="display:flex;align-items:flex-start;gap:.4em;padding:.15em 0">'
                     + '<span style="display:flex;align-items:center;height:1.9em;flex-shrink:0">' + dot + '</span>'
                     + (who ? '<span style="display:flex;align-items:center;height:1.9em;flex-shrink:0">' + who + '</span>' : '')
                     + '<textarea rows="1" maxlength="' + umLenCap(x.book) + '" data-um="' + esc(x.id) + '"'
@@ -15605,7 +15617,9 @@ body {
             var _cap = function (t) {
                 return '<div style="font-size:11px;color:var(--text-muted);margin:.5em 0 .1em">' + esc(t) + '</div>';
             };
-            var html = '';
+            // 按钮藏起来了，得有一句话告诉她怎么找出来（只说一次，放在最上面）
+            var _hint = '<div style="font-size:11px;color:var(--text-muted);opacity:.75;margin-bottom:.1em">点一条可以改字，右边才出现挪动和删除</div>';
+            var html = _hint;
             if (mine.length) html += _cap('关于我') + mine.map(_row).join('');
             if (bookList.length) html += _cap('《' + (umCurBookName() || '这本书') + '》里说好的') + bookList.map(_row).join('');
             box.innerHTML = html;
@@ -15614,21 +15628,27 @@ body {
             Array.prototype.forEach.call(box.querySelectorAll('textarea[data-um]'), function (inp) {
                 var id = inp.getAttribute('data-um');
                 var row = umLoad().filter(function (x) { return x.id === id; })[0] || {};
+                var act = document.createElement('span');
+                act.className = 'um-act';
+                act.style.cssText = 'flex-shrink:0;height:1.9em';
+                var mk = function (txt, title, size, fn) {
+                    var e = document.createElement('span');
+                    e.textContent = txt;
+                    e.title = title;
+                    e.style.fontSize = size;
+                    // ⚠️挡住焦点转移，否则按下去 focus-within 立刻失效、按钮消失、click 触发不了
+                    e.onmousedown = function (ev) { ev.preventDefault(); };
+                    e.onclick = fn;
+                    act.appendChild(e);
+                };
                 // 开着书才给「挪」；没开书时两组只有一组，挪无处可去
                 if (_curBk) {
-                    var mv = document.createElement('span');
-                    mv.textContent = row.book ? '→我' : '→书';
-                    mv.title = row.book ? '挪回「关于我」（换书之后也带着）' : '挪进《' + (umCurBookName() || '这本书') + '》（只在这本书里出现）';
-                    mv.style.cssText = 'flex-shrink:0;cursor:pointer;color:var(--text-muted);font-size:11px;padding:0 .3em;height:1.9em;line-height:1.9em';
-                    mv.onclick = function () { umMove(id); };
-                    inp.parentNode.appendChild(mv);
+                    mk(row.book ? '→我' : '→书',
+                       row.book ? '挪回「关于我」（换书之后也带着）' : '挪进《' + (umCurBookName() || '这本书') + '》（只在这本书里出现）',
+                       '11px', function () { umMove(id); });
                 }
-                var b = document.createElement('span');
-                b.textContent = '✕';
-                b.title = '忘掉这条';
-                b.style.cssText = 'flex-shrink:0;cursor:pointer;color:var(--text-muted);font-size:12px;padding:0 .35em;height:1.9em;line-height:1.9em';
-                b.onclick = function () { umRemove(id); };
-                inp.parentNode.appendChild(b);
+                mk('✕', '忘掉这条', '12px', function () { umRemove(id); });
+                inp.parentNode.appendChild(act);
                 umGrow(inp);      // 进 DOM 之后才量得准高度
             });
             /* 打开面板＝看过了：稍等一下再把标记清掉（quiet，不重画）。

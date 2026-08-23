@@ -667,6 +667,14 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         const row = document.querySelector('#chatUserMemList textarea[data-um="' + id + '"]').parentNode;
         const 有挪按钮 = row.textContent.indexOf('→书') >= 0;
         const 有删按钮 = !!row.querySelector('span[title="忘掉这条"]');
+        // ⚠️平时藏起来，点进那一行才浮出（她说「占位置、容易按错」）
+        const 有操作容器 = !!row.querySelector('.um-act');
+        const 平时是藏着的 = getComputedStyle(row.querySelector('.um-act')).display === 'none';
+        row.querySelector('textarea').focus();
+        const 点进去就出来 = getComputedStyle(row.querySelector('.um-act')).display !== 'none';
+        // ⚠️按钮必须挡住焦点转移，否则按下去 focus-within 失效、按钮消失、click 触发不了
+        const 挡了焦点转移 = typeof row.querySelector('span[title="忘掉这条"]').onmousedown === 'function';
+        row.querySelector('textarea').blur();
 
         // 没开书时不给挪（挪无处可去），也别报错
         window.rbCurBook = () => null;
@@ -674,7 +682,8 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         const 挪失败 = umMove(id) === false;
         const 还在原地 = umLoadMine().some(x => x.id === id);
         return { 一开始在我这组, 挪完在书那组, 挪完不在我这组, 挪完带改过标记, 内容没变,
-                 挪得回来, 有挪按钮, 有删按钮, 挪失败, 还在原地 };
+                 挪得回来, 有挪按钮, 有删按钮, 有操作容器, 平时是藏着的, 点进去就出来, 挡了焦点转移,
+                 挪失败, 还在原地 };
     });
     ok('一开始记在「关于我」', Q.一开始在我这组, '');
     ok('⚠️点一下能挪进这本书', Q.挪完在书那组, '');
@@ -684,6 +693,10 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     ok('再点一次能挪回来', Q.挪得回来, '');
     ok('面板每行有「→书」', Q.有挪按钮, '');
     ok('面板每行有「✕」', Q.有删按钮, '');
+    ok('两个记号收在一个容器里', Q.有操作容器, '');
+    ok('⚠️平时藏着（她说占位置、容易按错）', Q.平时是藏着的, '');
+    ok('⚠️点进那一行才浮出来', Q.点进去就出来, '');
+    ok('⚠️按钮挡住了焦点转移（不挡就会「点了没反应」）', Q.挡了焦点转移, '');
     ok('没开书时挪不动（挪无处可去），也不报错', Q.挪失败 && Q.还在原地, '');
 
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
