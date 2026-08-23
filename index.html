@@ -15619,8 +15619,16 @@ body {
             };
             // ⚠️这儿原来有一句「点一条可以改字，右边才出现挪动和删除」，2026-08-23 拆了——
             //   她说「你别加提示，我知道的」。别再加回来：这是她的工具，她不需要被教。
+            /* 「整理一下」挪到这儿（2026-08-23 深夜）：原来杵在面板最顶上，看着像管所有条目，
+               实际**只管「关于我」这一组**（书里的档案故意让它别碰，合并会把细节抹平）。
+               ⚠️只在这组里蘑菇记的够 3 条才出现——不到就没什么可合的，按钮白占地方。 */
+            var _tidyable = mine.filter(function (x) { return x.by === 'mushroom'; }).length >= 3;
+            var _capMine = '<div style="display:flex;align-items:center;justify-content:space-between;gap:.6em;margin:.5em 0 .1em">'
+                + '<span style="font-size:11px;color:var(--text-muted)">关于我</span>'
+                + (_tidyable ? '<button onclick="umTidy(this)" title="把讲同一件事的几条合成一条；只动这组里蘑菇记的，你自己写的不碰" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer;padding:0">整理一下</button>' : '')
+                + '</div>';
             var html = '';
-            if (mine.length) html += _cap('关于我') + mine.map(_row).join('');
+            if (mine.length) html += _capMine + mine.map(_row).join('');
             if (bookList.length) html += _cap('《' + (umCurBookName() || '这本书') + '》里说好的') + bookList.map(_row).join('');
             box.innerHTML = html;
             // ✕ 用 DOM 追加，不拼进上面那串模板——模板已经够长了，再塞个带 onclick 的转义更容易出错
@@ -16017,7 +16025,6 @@ body {
             return '<div class="seg" style="padding-bottom:6px">'
                 + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
                 + '<span class="seg-label" style="margin:0">🍄 蘑菇记得的我 <span id="chatUserMemCount" style="font-weight:400;color:var(--text-muted);font-size:10px"></span></span>'
-                + '<button onclick="umTidy(this)" title="把讲同一件事的几条合成一条；只动蘑菇记的，你自己写的不碰" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer;padding:0">整理一下</button>'
                 + '</div>'
                 + '<div style="font-size:11px;color:var(--text-muted);line-height:1.7;margin-bottom:.6em">跟着你走，不分书。每次聊天开头会悄悄告诉它，它就不用每次重新认识你。</div>'
                 + '<label style="display:flex;align-items:center;gap:.5em;font-size:12px;color:var(--text-sub);margin-bottom:.7em;cursor:pointer">'

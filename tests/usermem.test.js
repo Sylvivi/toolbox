@@ -738,6 +738,37 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     ok('本来就短的条目不受影响（不会被撑成三行）', R.短框高 < R.收起高, '短 ' + R.短框高 + ' / 长 ' + R.收起高);
     ok('⚠️收起只是不显示，内容一个字没丢', R.内容完整, '');
 
+    /* ===== S 组：「整理一下」按钮的位置和出现时机（2026-08-23 深夜）=====
+       她问「那个整理一下的功能要去掉还是优化以适应现状」。结论是保留但挪位置：
+       原来杵在面板最顶上、看着像管所有条目，实际只管「关于我」这一组。 */
+    const S = await page.evaluate(() => {
+        localStorage.removeItem('toolbox_user_memory');
+        window.rbCurBook = () => null;
+        window.rbCurBookName = () => '';
+        const host = document.getElementById('umTestHost');
+
+        // 这组里蘑菇记的不到 3 条 → 按钮不该出现
+        umAdd('她自己写的', '', 'me', 'me');
+        umAdd('蘑菇记的一条', '', 'mushroom', 'me');
+        host.innerHTML = umPaneHtml();
+        umRenderPanel();
+        const 少的时候不出现 = document.getElementById('chatUserMemList').textContent.indexOf('整理一下') < 0;
+        const 顶上没有了 = umPaneHtml().indexOf('整理一下') < 0;
+
+        // 够 3 条 → 出现，而且紧挨着「关于我」
+        umAdd('蘑菇记的二条', '', 'mushroom', 'me');
+        umAdd('蘑菇记的三条', '', 'mushroom', 'me');
+        umRenderPanel();
+        const box = document.getElementById('chatUserMemList');
+        const 够了才出现 = box.textContent.indexOf('整理一下') >= 0;
+        const 挨着关于我 = box.textContent.indexOf('关于我') < box.textContent.indexOf('整理一下');
+        return { 少的时候不出现, 顶上没有了, 够了才出现, 挨着关于我 };
+    });
+    ok('⚠️不到 3 条时按钮不出现（别白占地方）', S.少的时候不出现, '');
+    ok('⚠️面板顶上那个已经撤了（它只管一组，别摆得像管全部）', S.顶上没有了, '');
+    ok('够 3 条就出现', S.够了才出现, '');
+    ok('紧挨着「关于我」那行小标题', S.挨着关于我, '');
+
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();
