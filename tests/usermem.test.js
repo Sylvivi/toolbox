@@ -141,7 +141,8 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         umOnEdit(又一个);
         const 清空后条数 = umLoad().length;
 
-        // 底下那个「加」
+        // 底下那个「加」——2026-08-23 起输入框默认收着，得先点「＋」
+        umAddOpen(1);
         document.getElementById('chatUserMemInput').value = '手写加进去的';
         umOnAdd();
         const 加完条数 = umLoad().length;
@@ -872,6 +873,41 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     ok('停用的那行压暗了', V.行压暗了, '');
     ok('按钮变成「启用」', V.按钮写着启用, '');
     ok('计数只留数字（停用的压暗了，肉眼分得出）', V.计数标了没在用, '');
+
+    /* ===== W 组：输入框收进「＋」里（2026-08-23，她：「保留加的按键，然后底下就会冒出来一个输入框」）===== */
+    const W = await page.evaluate(() => {
+        localStorage.removeItem('toolbox_user_memory');
+        window.rbCurBook = () => null;
+        window.rbCurBookName = () => '';
+        document.getElementById('umTestHost').innerHTML = umPaneHtml();
+        umRenderPanel();
+        const btn = document.getElementById('chatUserMemAddBtn');
+        const box = document.getElementById('chatUserMemAddBox');
+        const 一开始收着 = box.style.display === 'none' && btn.style.display !== 'none';
+
+        umAddOpen(1);
+        const 点开了 = box.style.display !== 'none' && btn.style.display === 'none';
+        const 自动聚焦 = document.activeElement === document.getElementById('chatUserMemInput');
+
+        umAddOpen(0);
+        const 取消收回去 = box.style.display === 'none' && btn.style.display !== 'none';
+
+        // 加完自动收回去，且内容进得去
+        umAddOpen(1);
+        document.getElementById('chatUserMemInput').value = '点＋加进来的';
+        umOnAdd();
+        const 加完收回去 = box.style.display === 'none';
+        const 加进去了 = umLoad().some(x => x.content === '点＋加进来的');
+        const 框清空了 = document.getElementById('chatUserMemInput').value === '';
+        return { 一开始收着, 点开了, 自动聚焦, 取消收回去, 加完收回去, 加进去了, 框清空了 };
+    });
+    ok('⚠️平时只有一个「＋」，输入框收着', W.一开始收着, '');
+    ok('点「＋」展开输入框', W.点开了, '');
+    ok('展开后自动聚焦，不用再点一下', W.自动聚焦, '');
+    ok('点「取消」收回去', W.取消收回去, '');
+    ok('加完自动收回去', W.加完收回去, '');
+    ok('内容确实加进去了', W.加进去了, '');
+    ok('收回去时把没提交的字清掉', W.框清空了, '');
 
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
 

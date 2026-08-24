@@ -16098,6 +16098,11 @@ body {
                 + '<input type="checkbox" ' + (umAutoOn() ? 'checked' : '') + ' onchange="umSetAuto(this.checked)" style="accent-color:var(--accent);margin:0">自动记</label>'
                 + '</div>'
                 + '<div id="chatUserMemList"></div>'
+                /* ⚠️2026-08-23：输入框平时**收起来**，只留一个「＋」（她：「那个加的输入框我觉得也可以去掉，
+                     保留加的按键，然后底下就会冒出来一个输入框的那种」）。
+                   跟每行那两个按钮同一个节奏：不用的时候一点地方都不占。 */
+                + '<span id="chatUserMemAddBtn" onclick="umAddOpen(1)" title="加一条" style="display:inline-block;margin-top:.35em;padding:.15em .5em;font-size:12px;line-height:1.4;color:var(--text-muted);cursor:pointer;border:1px solid var(--input-border);border-radius:6px">＋</span>'
+                + '<div id="chatUserMemAddBox" style="display:none">'
                 + '<div style="display:flex;gap:.4em;margin-top:.4em">'
                 /* ⚠️用 textarea：她可能整段粘贴一份带分行的档案进来，单行 input 会把换行吃掉。
                    ⚠️2026-08-23 拆掉了「回车提交」（她：「提交就由那个加号来就行了，别用回车这种」）——
@@ -16106,7 +16111,8 @@ body {
                 + '<textarea id="chatUserMemInput" rows="1" maxlength="' + UM_LEN_BOOK + '" placeholder="加一条"'
                 + ' oninput="umGrow(this,1)"'
                 + ' style="flex:1;min-width:0;padding:7px 11px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px;color:var(--text);font-size:13px;font-family:inherit;line-height:1.6;outline:none;resize:none;overflow:hidden"></textarea>'
-                + '<button onclick="umOnAdd()" style="flex-shrink:0;padding:7px 14px;background:transparent;border:1px solid var(--input-border);border-radius:10px;color:var(--accent);font-size:13px;cursor:pointer">加</button>'
+                + '<button onclick="umOnAdd()" style="flex-shrink:0;padding:6px 12px;background:transparent;border:1px solid var(--input-border);border-radius:8px;color:var(--accent);font-size:12px;cursor:pointer">加</button>'
+                + '<button onclick="umAddOpen(0)" style="flex-shrink:0;padding:6px 10px;background:transparent;border:1px solid var(--input-border);border-radius:8px;color:var(--text-muted);font-size:12px;cursor:pointer">取消</button>'
                 + '</div>'
                 /* 手动加的时候选记给谁。没在读书就整个不显示——那时候只能记给「我」。
                    ⚠️默认停在「我」：跟着人走是更安全的默认值，记错了顶多多带几个字；
@@ -16115,7 +16121,21 @@ body {
                     + '<label style="cursor:pointer"><input type="radio" name="umScope" value="me" checked style="accent-color:var(--accent);vertical-align:-1px;margin:0 .2em 0 0">我</label>'
                     + '<label style="cursor:pointer"><input type="radio" name="umScope" value="book" style="accent-color:var(--accent);vertical-align:-1px;margin:0 .2em 0 0">《' + esc(umCurBookName() || '这本书') + '》</label>'
                     + '</div>') : '')
+                + '</div>'
                 + '</div>';
+        }
+        /* 「＋」和输入框互相顶替。open=1 展开并自动聚焦、0 收起并清空。 */
+        function umAddOpen(open) {
+            var btn = document.getElementById('chatUserMemAddBtn');
+            var box = document.getElementById('chatUserMemAddBox');
+            var inp = document.getElementById('chatUserMemInput');
+            if (!btn || !box) return;
+            btn.style.display = open ? 'none' : 'inline-block';
+            box.style.display = open ? 'block' : 'none';
+            if (inp) {
+                if (open) { try { inp.focus(); } catch (e) {} }
+                else { inp.value = ''; umGrow(inp); }
+            }
         }
         function umOnAdd() {
             var inp = document.getElementById('chatUserMemInput');
@@ -16124,8 +16144,7 @@ body {
             if (!v) return;
             var sc = document.querySelector('input[name="umScope"]:checked');
             umAdd(v, '', 'me', (sc && sc.value === 'book') ? 'book' : 'me');
-            inp.value = '';
-            umGrow(inp);          // 加完缩回一行高，不然框子一直撑着
+            umAddOpen(0);         // 加完收回去，只剩那个「＋」
             showToast(sc && sc.value === 'book' ? ('🍄 记进《' + (umCurBookName() || '这本书') + '》') : '🍄 记住了');
         }
 
