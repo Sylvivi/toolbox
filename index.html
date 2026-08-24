@@ -4677,13 +4677,25 @@ body {
      ⚠️每组的**最后一条不画**——两组之间本来就有小标题隔着，再来一根线就重了。 */
   /* 行距对齐人物表/地点表（`.mt-row`：12px 字、padding 4px 0），她说那种「看起来紧凑」 */
   .um-row { border-bottom: 1px solid var(--input-border); padding: 2px 0; }
+  /* ⚠️2026-08-23：平时那一行是**纯文字**，不是输入框。她原话「第一次点条目的时候不要弹出输入框，
+     因为我其实只是想让它展开看看，而不是真的要去编辑」。三段式：
+       收起（只露一行）→ 点一下展开看全文（仍是纯文字，手机上不弹键盘）→ 再点一下才变成输入框。
+     ⚠️用 -webkit-line-clamp 截行，不是压高度——纯文字块没有 scrollHeight 那套好使的量法。 */
+  .um-txt {
+    flex: 1; min-width: 0; cursor: pointer;
+    padding: .15em .35em; border: 1px solid transparent; border-radius: 6px;
+    color: var(--text); font-size: 12px; line-height: 1.55;
+    white-space: pre-wrap; word-break: break-word;
+    display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .um-txt.um-open { display: block; -webkit-line-clamp: none; }
   .um-row.um-last { border-bottom: none; padding-bottom: 0; }
   /* 停用的条目：整行压暗。⚠️只压透明度，别加删除线或色块——她要的是「先不用」不是「作废」。
      按钮那排不跟着压，不然想启用都点不清。 */
-  .um-row.um-off textarea { opacity: .4; }
+  .um-row.um-off textarea, .um-row.um-off .um-txt { opacity: .4; }
 
   .um-act { display: none; gap: .35em; margin: .25em 0 .05em; }
-  .um-row:focus-within .um-act { display: flex; }
+  .um-row:focus-within .um-act, .um-row.um-open .um-act { display: flex; }
   .um-act span {
     cursor: pointer; font-size: 11px; line-height: 1;
     padding: .35em .75em; border-radius: 7px;
@@ -15632,10 +15644,7 @@ body {
             var _offN = list.filter(function (x) { return x.off; }).length;
             // 只留数字：停用的那几条本来就压暗了，肉眼分得出，不用再写一遍
             if (cnt) cnt.textContent = list.length ? String(list.length) : '';
-            if (!list.length) {
-                box.innerHTML = '<div style="font-size:12.5px;color:var(--text-muted);padding:.5em 0;line-height:1.7">还没有。它会在聊天里慢慢记，你也可以自己先写几条。</div>';
-                return;
-            }
+            // 空态不再单独出一句话（她嫌文字多）：标题和「＋」永远在，一眼就知道该往哪儿按
             /* 行首两个记号，跟记忆表格那边一个路子（她要求「像大纲人物表那样」）：
                  · 绿点＝上次看过之后新增的、黄点＝改过的
                  · 🍄＝蘑菇自己记的；她自己写的不加图标（留白就是区分，别再挂零件） */
@@ -15654,15 +15663,35 @@ body {
                     + (who ? '<span style="display:flex;align-items:center;height:1.55em;flex-shrink:0">' + who + '</span>' : '')
                     // 文本框和按钮竖着排：按钮在框**底下**（她要「按键的感觉」，不习惯挂右边）
                     + '<div style="flex:1;min-width:0">'
-                    + '<textarea rows="1" maxlength="' + umLenCap(x.book) + '" data-um="' + esc(x.id) + '"'
-                    + ' onchange="umOnEdit(this)" onblur="umOnEdit(this);umGrow(this)" oninput="umGrow(this,1)"'
-                    + ' style="display:block;width:100%;box-sizing:border-box;padding:.15em .35em;background:transparent;border:1px solid transparent;border-radius:6px;color:var(--text);font-size:12px;font-family:inherit;line-height:1.55;outline:none;resize:none;overflow:hidden;white-space:pre-wrap;word-break:break-word"'
-                    + ' onfocus="this.style.background=\'var(--input-bg)\';this.style.borderColor=\'var(--card-border)\';umGrow(this,1)"'
-                    + '>' + esc(x.content) + '</textarea>'
+                    + (_umEditing === x.id
+                        /* ⚠️只有编辑态才用 textarea。别把它当默认——默认是输入框的话，
+                           她想「点开看看」都会弹出手机键盘（她原话就是这个）。 */
+                        ? ('<textarea rows="1" maxlength="' + umLenCap(x.book) + '" data-um="' + esc(x.id) + '"'
+                            + ' onchange="umOnEdit(this)" onblur="umEditDone(this)" oninput="umGrow(this,1)"'
+                            + ' style="display:block;width:100%;box-sizing:border-box;padding:.15em .35em;background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;color:var(--text);font-size:12px;font-family:inherit;line-height:1.55;outline:none;resize:none;overflow:hidden;white-space:pre-wrap;word-break:break-word"'
+                            + '>' + esc(x.content) + '</textarea>')
+                        : ('<div class="um-txt' + (_umOpen[x.id] ? ' um-open' : '') + '" data-um="' + esc(x.id) + '"'
+                            + ' onclick="umTap(\'' + esc(x.id) + '\')">' + esc(x.content) + '</div>'))
                     + '</div></div>';
             };
-            var _cap = function (t) {
-                return '<div style="font-size:10px;color:var(--text-muted);margin:.45em 0 .05em">' + esc(t) + '</div>';
+            /* 组标题：左边名字、右边一个「＋」。位置跟人物表/地点表的「+ 添加」一致。
+               ⚠️`scope` 决定按下去加进哪一组，所以不再需要「加给：我/《书名》」那排单选。 */
+            var _cap = function (t, scope) {
+                return '<div style="display:flex;align-items:center;justify-content:space-between;gap:.6em;margin:.45em 0 .05em">'
+                    + '<span style="font-size:10px;color:var(--text-muted)">' + esc(t) + '</span>'
+                    + (scope ? ('<span onclick="umAddOpen(\'' + scope + '\')" title="加一条" style="cursor:pointer;font-size:12px;line-height:1;color:var(--accent);padding:0 .2em">＋</span>') : '')
+                    + '</div>';
+            };
+            /* 展开后的输入框，画在那一组标题正底下。⚠️只在 `_umAdding` 命中这组时才出现。 */
+            var _addBox = function (scope) {
+                if (_umAdding !== scope) return '';
+                return '<div style="display:flex;gap:.35em;margin:.2em 0 .3em">'
+                    + '<textarea id="chatUserMemInput" rows="1" maxlength="' + UM_LEN_BOOK + '" placeholder="加一条"'
+                    + ' oninput="umGrow(this,1)"'
+                    + ' style="flex:1;min-width:0;padding:.25em .45em;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;color:var(--text);font-size:12px;font-family:inherit;line-height:1.55;outline:none;resize:none;overflow:hidden"></textarea>'
+                    + '<button onclick="umOnAdd()" style="flex-shrink:0;padding:.3em .7em;background:transparent;border:1px solid var(--input-border);border-radius:6px;color:var(--accent);font-size:11px;cursor:pointer">加</button>'
+                    + '<button onclick="umAddOpen(null)" style="flex-shrink:0;padding:.3em .6em;background:transparent;border:1px solid var(--input-border);border-radius:6px;color:var(--text-muted);font-size:11px;cursor:pointer">取消</button>'
+                    + '</div>';
             };
             // ⚠️这儿原来有一句「点一条可以改字，右边才出现挪动和删除」，2026-08-23 拆了——
             //   她说「你别加提示，我知道的」。别再加回来：这是她的工具，她不需要被教。
@@ -15672,23 +15701,29 @@ body {
             var _tidyable = mine.filter(function (x) { return x.by === 'mushroom'; }).length >= 3;
             var _capMine = '<div style="display:flex;align-items:center;justify-content:space-between;gap:.6em;margin:.45em 0 .05em">'
                 + '<span style="font-size:10px;color:var(--text-muted)">关于我</span>'
-                + (_tidyable ? '<button onclick="umTidy(this)" title="把讲同一件事的几条合成一条；只动这组里蘑菇记的，你自己写的不碰" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer;padding:0">整理一下</button>' : '')
-                + '</div>';
+                + '<span style="display:flex;align-items:center;gap:.7em">'
+                + (_tidyable ? '<span onclick="umTidy(this)" title="把讲同一件事的几条合成一条；只动这组里蘑菇记的，你自己写的不碰" style="cursor:pointer;font-size:11px;color:var(--accent)">整理</span>' : '')
+                + '<span onclick="umAddOpen(\'me\')" title="加一条" style="cursor:pointer;font-size:12px;line-height:1;color:var(--accent);padding:0 .2em">＋</span>'
+                + '</span></div>';
             /* 每组最后一条挂 `um-last` 去掉分隔线：组尾已经有小标题或面板边界收着了 */
             var _group = function (arr) {
                 return arr.map(function (x, i) {
                     return _row(x).replace('class="um-row"', 'class="um-row'
                         + (x.off ? ' um-off' : '')
+                        + ((_umOpen[x.id] || _umEditing === x.id) ? ' um-open' : '')
                         + (i === arr.length - 1 ? ' um-last' : '') + '"');
                 }).join('');
             };
-            var html = '';
-            if (mine.length) html += _capMine + _group(mine);
-            if (bookList.length) html += _cap('《' + (umCurBookName() || '这本书') + '》') + _group(bookList);
+            /* ⚠️两组的标题**永远画**（哪怕这组还是空的），不然没条目时就没地方按「＋」。
+               书那组只在开着书时才有意义，没开书就整个不出现。 */
+            var html = _capMine + _addBox('me') + _group(mine);
+            if (umCurBookKey()) {
+                html += _cap('《' + (umCurBookName() || '这本书') + '》', 'book') + _addBox('book') + _group(bookList);
+            }
             box.innerHTML = html;
             // ✕ 用 DOM 追加，不拼进上面那串模板——模板已经够长了，再塞个带 onclick 的转义更容易出错
             var _curBk = umCurBookKey();
-            Array.prototype.forEach.call(box.querySelectorAll('textarea[data-um]'), function (inp) {
+            Array.prototype.forEach.call(box.querySelectorAll('[data-um]'), function (inp) {
                 var id = inp.getAttribute('data-um');
                 var row = umLoad().filter(function (x) { return x.id === id; })[0] || {};
                 var act = document.createElement('div');
@@ -15716,7 +15751,7 @@ body {
                 }
                 mk('删除', '忘掉这条', '', function () { umRemove(id); });
                 inp.parentNode.appendChild(act);      // 塞进文本框那个竖排容器里，落在框底下
-                umGrow(inp);      // 进 DOM 之后才量得准高度
+                if (inp.tagName === 'TEXTAREA') umGrow(inp, 1);   // 编辑态永远给全高
             });
             /* 打开面板＝看过了：稍等一下再把标记清掉（quiet，不重画）。
                这次她看得见圆点，下次打开就干净——不清的话圆点会一直挂着，越攒越多、失去意义。 */
@@ -15735,7 +15770,34 @@ body {
            ⚠️点进去（focus）自动展开全高，移开焦点又收回去——跟右边那两个记号同一个节奏。 */
         // 2026-08-23 从 3 行收到 1 行（她：「折叠时别显示三行，就显示一行吧」）——
         // 这块是给 AI 看的、她只偶尔查阅，一行足够认出是哪条，点进去才看全。
+        // ⚠️收起态现在由 CSS 的 -webkit-line-clamp 管（.um-txt），这个常量只剩编辑态用。
         var UM_FOLD_LINES = 1;
+
+        /* 每行三段式的状态。⚠️只活在内存里：面板每次重开都清空，
+           保证她一进来看到的永远是最紧凑的样子。 */
+        var _umOpen = {};        // id → 已展开（纯文字看全文）
+        var _umEditing = null;   // 正在编辑的那条（同一时刻只有一条）
+        /* 点一下：收起 → 展开看全文；已展开 → 才进编辑。 */
+        function umTap(id) {
+            if (_umOpen[id]) _umEditing = id; else _umOpen[id] = 1;
+            umRenderPanel();
+            if (_umEditing === id) {
+                var el = document.querySelector('#chatUserMemList textarea[data-um="' + id + '"]');
+                if (el) {
+                    try { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } catch (e) {}
+                    umGrow(el, 1);
+                }
+            }
+        }
+        /* 编辑完（失焦）：存一下，退回「展开的纯文字」而不是直接收起——
+           她可能只是点到别处，收起的话还得再点两下才回得来。 */
+        function umEditDone(inp) {
+            var id = inp.getAttribute('data-um');
+            _umEditing = null;
+            _umOpen[id] = 1;
+            umOnEdit(inp);       // 有改动的话里面会 umSaveList → umRenderPanel
+            umRenderPanel();     // 没改动时也得重渲一次，把输入框换回纯文字
+        }
         function umGrow(el, full) {
             if (!el) return;
             el.style.height = 'auto';
@@ -16091,6 +16153,7 @@ body {
                    · 复选框标签缩成「自动记」、挪到标题行右端，完整说明进 title
                    · 「加给：」拿掉、计数只留数字、行距按 `.mt-row` 那套（12px / padding 2px 0）
                  **别再往这块加解释性文字。** */
+            _umOpen = {}; _umEditing = null; _umAdding = null;   // 每次重开面板都回到最紧凑的样子
             return '<div class="seg" style="padding-bottom:4px">'
                 + '<div style="display:flex;align-items:center;justify-content:space-between;gap:.6em;margin-bottom:.2em">'
                 + '<span class="seg-label" style="margin:0">🍄 蘑菇记得的我 <span id="chatUserMemCount" style="font-weight:400;color:var(--text-muted);font-size:10px"></span></span>'
@@ -16098,43 +16161,21 @@ body {
                 + '<input type="checkbox" ' + (umAutoOn() ? 'checked' : '') + ' onchange="umSetAuto(this.checked)" style="accent-color:var(--accent);margin:0">自动记</label>'
                 + '</div>'
                 + '<div id="chatUserMemList"></div>'
-                /* ⚠️2026-08-23：输入框平时**收起来**，只留一个「＋」（她：「那个加的输入框我觉得也可以去掉，
-                     保留加的按键，然后底下就会冒出来一个输入框的那种」）。
-                   跟每行那两个按钮同一个节奏：不用的时候一点地方都不占。 */
-                + '<span id="chatUserMemAddBtn" onclick="umAddOpen(1)" title="加一条" style="display:inline-block;margin-top:.35em;padding:.15em .5em;font-size:12px;line-height:1.4;color:var(--text-muted);cursor:pointer;border:1px solid var(--input-border);border-radius:6px">＋</span>'
-                + '<div id="chatUserMemAddBox" style="display:none">'
-                + '<div style="display:flex;gap:.4em;margin-top:.4em">'
-                /* ⚠️用 textarea：她可能整段粘贴一份带分行的档案进来，单行 input 会把换行吃掉。
-                   ⚠️2026-08-23 拆掉了「回车提交」（她：「提交就由那个加号来就行了，别用回车这种」）——
-                     这个框里装的多半是多行档案，回车本来就该老老实实换行；提交交给右边那个按钮，
-                     省掉「一不小心回车、只提交了半截」这个坑。**别再加回来。** */
-                + '<textarea id="chatUserMemInput" rows="1" maxlength="' + UM_LEN_BOOK + '" placeholder="加一条"'
-                + ' oninput="umGrow(this,1)"'
-                + ' style="flex:1;min-width:0;padding:7px 11px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px;color:var(--text);font-size:13px;font-family:inherit;line-height:1.6;outline:none;resize:none;overflow:hidden"></textarea>'
-                + '<button onclick="umOnAdd()" style="flex-shrink:0;padding:6px 12px;background:transparent;border:1px solid var(--input-border);border-radius:8px;color:var(--accent);font-size:12px;cursor:pointer">加</button>'
-                + '<button onclick="umAddOpen(0)" style="flex-shrink:0;padding:6px 10px;background:transparent;border:1px solid var(--input-border);border-radius:8px;color:var(--text-muted);font-size:12px;cursor:pointer">取消</button>'
-                + '</div>'
-                /* 手动加的时候选记给谁。没在读书就整个不显示——那时候只能记给「我」。
-                   ⚠️默认停在「我」：跟着人走是更安全的默认值，记错了顶多多带几个字；
-                     反过来错记成「这本书」，换本书就凭空消失，她会以为记忆丢了。 */
-                + (umCurBookKey() ? ('<div style="display:flex;gap:.7em;margin-top:.3em;font-size:11px;color:var(--text-muted)">'
-                    + '<label style="cursor:pointer"><input type="radio" name="umScope" value="me" checked style="accent-color:var(--accent);vertical-align:-1px;margin:0 .2em 0 0">我</label>'
-                    + '<label style="cursor:pointer"><input type="radio" name="umScope" value="book" style="accent-color:var(--accent);vertical-align:-1px;margin:0 .2em 0 0">《' + esc(umCurBookName() || '这本书') + '》</label>'
-                    + '</div>') : '')
-                + '</div>'
+                /* ⚠️2026-08-23 晚：加一条的入口**挪到每组小标题右边**（跟人物表/地点表的「+ 添加」同一个位置，
+                     她原话「那个加号有更好的摆放位置吗」＋「我比较喜欢人物表地点表那样的」）。
+                   顺手干掉了原来那排「加给：我 / 《书名》」单选——**在哪一组按的加号就加进哪一组**，
+                   少一个控件、也少一次选择。输入框由 umRenderPanel 画在那一组标题底下。 */
                 + '</div>';
         }
-        /* 「＋」和输入框互相顶替。open=1 展开并自动聚焦、0 收起并清空。 */
-        function umAddOpen(open) {
-            var btn = document.getElementById('chatUserMemAddBtn');
-            var box = document.getElementById('chatUserMemAddBox');
-            var inp = document.getElementById('chatUserMemInput');
-            if (!btn || !box) return;
-            btn.style.display = open ? 'none' : 'inline-block';
-            box.style.display = open ? 'block' : 'none';
-            if (inp) {
-                if (open) { try { inp.focus(); } catch (e) {} }
-                else { inp.value = ''; umGrow(inp); }
+        /* 现在正在往哪一组加：'me' | 'book' | null（没在加）。
+           ⚠️只活在内存里，跟 _umOpen 一样，面板重开就清掉。 */
+        var _umAdding = null;
+        function umAddOpen(scope) {
+            _umAdding = scope || null;
+            umRenderPanel();
+            if (_umAdding) {
+                var inp = document.getElementById('chatUserMemInput');
+                if (inp) { try { inp.focus(); } catch (e) {} }
             }
         }
         function umOnAdd() {
@@ -16142,10 +16183,10 @@ body {
             if (!inp) return;
             var v = (inp.value || '').trim();
             if (!v) return;
-            var sc = document.querySelector('input[name="umScope"]:checked');
-            umAdd(v, '', 'me', (sc && sc.value === 'book') ? 'book' : 'me');
-            umAddOpen(0);         // 加完收回去，只剩那个「＋」
-            showToast(sc && sc.value === 'book' ? ('🍄 记进《' + (umCurBookName() || '这本书') + '》') : '🍄 记住了');
+            var sc = _umAdding === 'book' ? 'book' : 'me';
+            umAdd(v, '', 'me', sc);
+            umAddOpen(null);      // 加完收回去，只剩那个「＋」
+            showToast(sc === 'book' ? ('🍄 记进《' + (umCurBookName() || '这本书') + '》') : '🍄 记住了');
         }
 
         /* ===== 你的昵称（2026-08-02 加）=====

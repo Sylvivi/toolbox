@@ -120,44 +120,53 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         umAdd('第三条');
         umRenderPanel();
         const box = document.getElementById('chatUserMemList');
-        const 渲染出几条 = box.querySelectorAll('textarea[data-um]').length;
+        const 渲染出几条 = box.querySelectorAll('[data-um]').length;
         const 计数文字 = (document.getElementById('chatUserMemCount') || {}).textContent;
 
-        // 点 ✕ 删掉第二条
-        const 第二个输入框 = box.querySelectorAll('textarea[data-um]')[1];
-        第二个输入框.parentNode.querySelector('span[title="忘掉这条"]').click();
+        // 删掉第二条
+        const 第二行 = box.querySelectorAll('[data-um]')[1];
+        第二行.parentNode.querySelector('span[title="忘掉这条"]').click();
         const 删后条数 = umLoad().length;
         const 删掉的是第二条 = !umLoad().some(x => x.content === '第二条');
 
-        // 在输入框里改字 → 失焦保存
-        const 头一个 = box.querySelectorAll('textarea[data-um]')[0];
-        头一个.value = '第一条改过了';
-        umOnEdit(头一个);
+        /* 改字：2026-08-23 起是三段式——平时是纯文字，点一下展开、再点一下才变输入框。
+           ⚠️这正是她要的「我只是想展开看看，别一碰就弹键盘」。 */
+        const 头一个id = box.querySelectorAll('[data-um]')[0].getAttribute('data-um');
+        const 一点之后 = (umTap(头一个id), box.querySelector('[data-um="' + 头一个id + '"]').tagName);
+        const 两点之后 = (umTap(头一个id), box.querySelector('[data-um="' + 头一个id + '"]').tagName);
+        const ta = box.querySelector('textarea[data-um="' + 头一个id + '"]');
+        ta.value = '第一条改过了';
+        umEditDone(ta);
         const 改后内容 = umLoad()[0].content;
 
-        // 清空输入框 = 删掉这条
-        const 又一个 = box.querySelectorAll('textarea[data-um]')[0];
-        又一个.value = '   ';
-        umOnEdit(又一个);
+        // 清空 = 删掉这条
+        const 又一个id = box.querySelectorAll('[data-um]')[0].getAttribute('data-um');
+        umTap(又一个id); umTap(又一个id);
+        const ta2 = box.querySelector('textarea[data-um="' + 又一个id + '"]');
+        ta2.value = '   ';
+        umEditDone(ta2);
         const 清空后条数 = umLoad().length;
 
-        // 底下那个「加」——2026-08-23 起输入框默认收着，得先点「＋」
-        umAddOpen(1);
+        // 加一条：2026-08-23 起入口在组标题右边的「＋」，按哪组加进哪组
+        umAddOpen('me');
         document.getElementById('chatUserMemInput').value = '手写加进去的';
         umOnAdd();
         const 加完条数 = umLoad().length;
-        const 输入框清空了 = document.getElementById('chatUserMemInput').value === '';
-        return { 渲染出几条, 计数文字, 删后条数, 删掉的是第二条, 改后内容, 清空后条数, 加完条数, 输入框清空了 };
+        const 加完输入框没了 = !document.getElementById('chatUserMemInput');
+        return { 渲染出几条, 计数文字, 删后条数, 删掉的是第二条, 一点之后, 两点之后,
+                 改后内容, 清空后条数, 加完条数, 加完输入框没了 };
     });
     eq('三条都渲染出来', E.渲染出几条, 3);
     // 2026-08-23 极简化：计数只留数字，「条」字也去掉了
     eq('右上角显示条数', E.计数文字, '3');
-    eq('点 ✕ 删掉一条', E.删后条数, 2);
+    eq('点「删除」删掉一条', E.删后条数, 2);
     ok('删掉的正是点的那条（不是删错行）', E.删掉的是第二条, '');
-    eq('在格子里改字能存下', E.改后内容, '第一条改过了');
-    eq('⚠️清空格子＝删掉这条', E.清空后条数, 1);
-    eq('底下「加」能加进去', E.加完条数, 2);
-    ok('加完输入框自己清空', E.输入框清空了, '');
+    eq('⚠️点一下只是展开，还是纯文字（不弹键盘）', E.一点之后, 'DIV');
+    eq('⚠️再点一下才变成输入框', E.两点之后, 'TEXTAREA');
+    eq('在输入框里改字能存下', E.改后内容, '第一条改过了');
+    eq('⚠️清空内容＝删掉这条', E.清空后条数, 1);
+    eq('「＋」能加进去', E.加完条数, 2);
+    ok('加完输入框收回去了', E.加完输入框没了, '');
 
     /* ===== F 组：空面板的提示语 ===== */
     const F = await page.evaluate(() => {
@@ -166,13 +175,14 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         umRenderPanel();
         const box = document.getElementById('chatUserMemList');
         return {
-            没有输入框: box.querySelectorAll('textarea[data-um]').length,
-            有提示: box.textContent.indexOf('还没有') >= 0,
+            没有输入框: box.querySelectorAll('[data-um]').length,
+            // 2026-08-23 空态那句提示拆了（她「你别加提示，我知道的」），改钉「入口还在」
+            空着也有加号: !!box.querySelector('span[title="加一条"]'),
             计数是空的: (document.getElementById('chatUserMemCount') || {}).textContent
         };
     });
     eq('一条都没有时不渲染空行', F.没有输入框, 0);
-    ok('给一句提示而不是一片空白', F.有提示, '');
+    ok('⚠️空着的时候也有「＋」可按（不靠文字提示）', F.空着也有加号, '');
     eq('零条时不显示「0 条」', F.计数是空的, '');
 
     /* ===== G 组：入口挂对了地方 ===== */
@@ -180,9 +190,10 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         const h = umPaneHtml();
         return {
             带列表容器: h.indexOf('id="chatUserMemList"') >= 0,
-            添加框能多行: h.indexOf('<textarea id="chatUserMemInput"') >= 0,
+            // 2026-08-23：输入框改成点「＋」时由 umRenderPanel 现画，不再长在这块 HTML 里
+            平时没有输入框: h.indexOf('chatUserMemInput') < 0,
             带计数: h.indexOf('id="chatUserMemCount"') >= 0,
-            带输入框: h.indexOf('id="chatUserMemInput"') >= 0,
+
             // 两个摘要弹窗都得把「我」推进 panes，否则某个模式下点不到
             阅读模式弹窗里有: readerShowSummaryModal.toString().indexOf("umPaneHtml()") >= 0,
             对话模式弹窗里有: chatShowSummaryModal.toString().indexOf("umPaneHtml()") >= 0,
@@ -194,9 +205,9 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         };
     });
     ok('这块 HTML 自带列表容器', G.带列表容器, '');
-    ok('添加框是多行的（她可能整段粘档案）', G.添加框能多行, '');
+    ok('⚠️这块 HTML 里没有输入框（点「＋」才现画）', G.平时没有输入框, '');
     ok('自带条数', G.带计数, '');
-    ok('自带输入框', G.带输入框, '');
+
     ok('阅读模式的「摘要」弹窗里有「我」这一页', G.阅读模式弹窗里有, '');
     ok('普通对话的「摘要」弹窗里也有', G.对话模式弹窗里有, '');
     ok('⚠️「我」排在第一个 Tab（她要求的）', G.两边都排第一, '');
@@ -605,7 +616,7 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         const 注入 = umText();
         document.getElementById('umTestHost').innerHTML = umPaneHtml();
         umRenderPanel();
-        const ta = document.querySelector('#chatUserMemList textarea[data-um="' + 书id + '"]');
+        const ta = document.querySelector('#chatUserMemList [data-um="' + 书id + '"]');
 
         return {
             换行没被吃掉: 存下的.content.indexOf('\n女主：长公主李昭') >= 0,
@@ -615,8 +626,8 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
             补全后长度: 补全后.length,
             注入里是整块: 注入.indexOf('核心张力：大权在握') >= 0,
             注入没被加列表符: 注入.indexOf('- 【专属小白鼠档案】') < 0,
-            面板里是多行框: !!ta && ta.tagName === 'TEXTAREA',
-            面板里内容完整: !!ta && ta.value.indexOf('腹中胎儿系女主亲生') >= 0
+            面板里是纯文字: !!ta && ta.tagName === 'DIV',
+            面板里内容完整: !!ta && ta.textContent.indexOf('腹中胎儿系女主亲生') >= 0
         };
     });
     ok('⚠️档案里的换行一个都没被吃掉', P.换行没被吃掉, '');
@@ -627,7 +638,7 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     ok('⚠️补全后没有被截到 200（改的时候也按这条自己的上限算）', P.补全后长度 > 300, '实际 ' + P.补全后长度);
     ok('注入时档案是整块给的', P.注入里是整块, '');
     ok('⚠️注入时没给档案套「- 」列表符（会把结构压塌）', P.注入没被加列表符, '');
-    ok('面板里用的是能装多行的框', P.面板里是多行框, '');
+    ok('⚠️面板里那行是纯文字（点开才变输入框）', P.面板里是纯文字, '');
     ok('面板里看得到完整档案', P.面板里内容完整, '');
 
     const P2 = await page.evaluate(() => {
@@ -663,25 +674,25 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         umMove(id);   // 再点一次挪回来
         const 挪得回来 = umLoadMine().some(x => x.id === id);
 
-        // 面板上那两个小按钮
+        // 面板上那几个小按钮（2026-08-23 起：平时是纯文字，点一下展开才浮出按钮）
         document.getElementById('umTestHost').innerHTML = umPaneHtml();
         umRenderPanel();
-        const row = document.querySelector('#chatUserMemList textarea[data-um="' + id + '"]').parentNode;
+        const box = document.getElementById('chatUserMemList');
+        const cell = () => box.querySelector('[data-um="' + id + '"]');
+        const row = cell().parentNode;
         const 有挪按钮 = row.textContent.indexOf('移入') >= 0;
         const 有删按钮 = !!row.querySelector('span[title="忘掉这条"]');
-        // ⚠️平时藏起来，点进那一行才浮出（她说「占位置、容易按错」）
         const 有操作容器 = !!row.querySelector('.um-act');
-        // 结构必须是「文本框 → 按钮」上下排：两者同一个父容器，且按钮排在框后面
-        const ta0 = row.querySelector('textarea');
-        const act0 = row.querySelector('.um-act');
-        const 按钮在框底下 = !!act0 && act0.parentNode === ta0.parentNode
-            && (ta0.compareDocumentPosition(act0) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+        // 结构必须是「内容 → 按钮」上下排：同一个父容器，按钮排在后面
+        const 按钮在框底下 = row.querySelector('.um-act').parentNode === cell().parentNode
+            && (cell().compareDocumentPosition(row.querySelector('.um-act')) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
         const 平时是藏着的 = getComputedStyle(row.querySelector('.um-act')).display === 'none';
-        row.querySelector('textarea').focus();
-        const 点进去就出来 = getComputedStyle(row.querySelector('.um-act')).display !== 'none';
-        // ⚠️按钮必须挡住焦点转移，否则按下去 focus-within 失效、按钮消失、click 触发不了
-        const 挡了焦点转移 = typeof row.querySelector('span[title="忘掉这条"]').onmousedown === 'function';
-        row.querySelector('textarea').blur();
+        umTap(id);   // 点一下：展开
+        const 点进去就出来 = getComputedStyle(
+            box.querySelector('[data-um="' + id + '"]').parentNode.querySelector('.um-act')).display !== 'none';
+        // ⚠️按钮必须挡住焦点转移，否则编辑态里按下去 focus-within 失效、按钮消失、click 触发不了
+        const 挡了焦点转移 = typeof box.querySelector('[data-um="' + id + '"]').parentNode
+            .querySelector('span[title="忘掉这条"]').onmousedown === 'function';
 
         // 没开书时不给挪（挪无处可去），也别报错
         window.rbCurBook = () => null;
@@ -707,45 +718,42 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     ok('⚠️按钮挡住了焦点转移（不挡就会「点了没反应」）', Q.挡了焦点转移, '');
     ok('没开书时挪不动（挪无处可去），也不报错', Q.挪失败 && Q.还在原地, '');
 
-    /* ===== R 组：长条目默认只露几行（2026-08-23 深夜）=====
+    /* ===== R 组：长条目默认只露一行，点开才看全（2026-08-23）=====
        她原话「不要全部展示，可以显示少数行，然后点了才展开全部」
-       ＋「毕竟这个是给 ai 看的，我只是偶尔查阅，不需要全部显示，也会降低查看效率」。
-       起因：那份小白鼠档案七八行，一条就把整个面板占满，别的条目全被挤没了。 */
+       ＋「毕竟这个是给 ai 看的，我只是偶尔查阅」＋后来的「就显示一行吧」。
+       ⚠️2026-08-23 晚改成三段式之后，收起态是**纯文字 div + CSS line-clamp**，
+         不再是压 textarea 高度——所以这里量的是 clientHeight vs scrollHeight。 */
     const R = await page.evaluate(async () => {
         localStorage.removeItem('toolbox_user_memory');
         window.rbCurBook = () => null;
         window.rbCurBookName = () => '';
         const 长的 = Array.from({ length: 12 }, (_, i) => '第' + (i + 1) + '行内容').join('\n');
-        const 短的 = '就一行';
         const 长id = umAdd(长的, '', 'me', 'me');
-        const 短id = umAdd(短的, '', 'me', 'me');
+        const 短id = umAdd('就一行', '', 'me', 'me');
         document.getElementById('umTestHost').innerHTML = umPaneHtml();
         umRenderPanel();
         await new Promise(r => setTimeout(r, 60));
-        const 长框 = document.querySelector('#chatUserMemList textarea[data-um="' + 长id + '"]');
-        const 短框 = document.querySelector('#chatUserMemList textarea[data-um="' + 短id + '"]');
-        const 收起高 = parseFloat(长框.style.height);
-        const 短框高 = parseFloat(短框.style.height);
+        const box = document.getElementById('chatUserMemList');
+        const cell = id => box.querySelector('[data-um="' + id + '"]');
 
-        长框.focus();
-        await new Promise(r => setTimeout(r, 60));
-        const 展开高 = parseFloat(长框.style.height);
-        长框.blur();
-        umGrow(长框);
-        await new Promise(r => setTimeout(r, 60));
-        const 收回去 = parseFloat(长框.style.height);
+        const 长收起 = cell(长id).clientHeight;
+        const 长全高 = cell(长id).scrollHeight;
+        const 短高 = cell(短id).clientHeight;
+        const 收起时是纯文字 = cell(长id).tagName === 'DIV';
 
-        // 内容一个字都没丢，只是没露出来
+        umTap(长id);   // 点一下：展开看全文，仍是纯文字
+        await new Promise(r => setTimeout(r, 60));
+        const 展开后 = cell(长id).clientHeight;
+        const 展开后还是纯文字 = cell(长id).tagName === 'DIV';
         const 内容完整 = umLoad().filter(x => x.id === 长id)[0].content.split('\n').length === 12;
-        return { 收起高, 短框高, 展开高, 收回去, 内容完整, 折几行: UM_FOLD_LINES };
+        return { 长收起, 长全高, 短高, 收起时是纯文字, 展开后, 展开后还是纯文字, 内容完整, 折几行: UM_FOLD_LINES };
     });
     eq('默认露 1 行', R.折几行, 1);
-    ok('⚠️十二行的条目收起时只占三行左右', R.收起高 < R.展开高 / 2, '收起 ' + R.收起高 + ' / 展开 ' + R.展开高);
-    ok('点进去展开全高', R.展开高 > R.收起高, '');
-    ok('移开焦点又收回去', Math.abs(R.收回去 - R.收起高) < 2, '收回 ' + R.收回去);
-    // 折成 1 行之后，短条目和「折叠起来的长条目」高度自然就一样了（都是一行），
-    // 原来那条「短的应该更矮」是为 3 行写的，现在不成立也不该成立。
-    ok('短条目跟折叠后的长条目一样高（都是一行）', Math.abs(R.短框高 - R.收起高) < 2, '短 ' + R.短框高 + ' / 长 ' + R.收起高);
+    ok('⚠️收起时是纯文字，不是输入框（点开不弹键盘）', R.收起时是纯文字, '');
+    ok('⚠️十二行的条目收起时只露一行', R.长收起 < R.长全高 / 3, '露 ' + R.长收起 + ' / 全 ' + R.长全高);
+    ok('短条目跟折叠后的长条目一样高（都是一行）', Math.abs(R.短高 - R.长收起) < 3, '短 ' + R.短高 + ' / 长 ' + R.长收起);
+    ok('点一下展开看全文', R.展开后 > R.长收起 * 3, '展开 ' + R.展开后);
+    ok('⚠️展开之后仍然是纯文字（第二下才进编辑）', R.展开后还是纯文字, '');
     ok('⚠️收起只是不显示，内容一个字没丢', R.内容完整, '');
 
     /* ===== S 组：「整理一下」按钮的位置和出现时机（2026-08-23 深夜）=====
@@ -762,16 +770,16 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         umAdd('蘑菇记的一条', '', 'mushroom', 'me');
         host.innerHTML = umPaneHtml();
         umRenderPanel();
-        const 少的时候不出现 = document.getElementById('chatUserMemList').textContent.indexOf('整理一下') < 0;
-        const 顶上没有了 = umPaneHtml().indexOf('整理一下') < 0;
+        const 少的时候不出现 = document.getElementById('chatUserMemList').textContent.indexOf('整理') < 0;
+        const 顶上没有了 = umPaneHtml().indexOf('整理') < 0;
 
         // 够 3 条 → 出现，而且紧挨着「关于我」
         umAdd('蘑菇记的二条', '', 'mushroom', 'me');
         umAdd('蘑菇记的三条', '', 'mushroom', 'me');
         umRenderPanel();
         const box = document.getElementById('chatUserMemList');
-        const 够了才出现 = box.textContent.indexOf('整理一下') >= 0;
-        const 挨着关于我 = box.textContent.indexOf('关于我') < box.textContent.indexOf('整理一下');
+        const 够了才出现 = box.textContent.indexOf('整理') >= 0;
+        const 挨着关于我 = box.textContent.indexOf('关于我') < box.textContent.indexOf('整理');
         return { 少的时候不出现, 顶上没有了, 够了才出现, 挨着关于我 };
     });
     ok('⚠️不到 3 条时按钮不出现（别白占地方）', S.少的时候不出现, '');
@@ -805,7 +813,7 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
             行数: rows.length,
             末条数: 末条.length,
             // 每组最后一条才是 um-last：关于我第 3 条、这本书第 2 条
-            末条内容: 末条.map(r => r.querySelector('textarea').value)
+            末条内容: 末条.map(r => r.querySelector('[data-um]').textContent)
         };
     });
     eq('五条都渲染出来', U.行数, 5);
@@ -850,7 +858,7 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         umToggleOff(我甲);
         document.getElementById('umTestHost').innerHTML = umPaneHtml();
         umRenderPanel();
-        const row = document.querySelector('#chatUserMemList textarea[data-um="' + 我甲 + '"]').closest('.um-row');
+        const row = document.querySelector('#chatUserMemList [data-um="' + 我甲 + '"]').closest('.um-row');
         return {
             我那条没进注入: 注入.indexOf('大段心理独白') < 0,
             书那条也没进注入: 注入.indexOf('摄政王') < 0,
@@ -874,40 +882,55 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     ok('按钮变成「启用」', V.按钮写着启用, '');
     ok('计数只留数字（停用的压暗了，肉眼分得出）', V.计数标了没在用, '');
 
-    /* ===== W 组：输入框收进「＋」里（2026-08-23，她：「保留加的按键，然后底下就会冒出来一个输入框」）===== */
+    /* ===== W 组：「＋」挪到组标题右边（2026-08-23，她「那个加号有更好的摆放位置吗」）=====
+       位置跟人物表/地点表的「+ 添加」一致；顺手干掉了「加给：我/《书名》」那排单选——
+       **在哪一组按的加号就加进哪一组**。 */
     const W = await page.evaluate(() => {
         localStorage.removeItem('toolbox_user_memory');
-        window.rbCurBook = () => null;
-        window.rbCurBookName = () => '';
+        window.rbCurBook = () => ({ fileName: '故事的解剖.epub', fileSize: 111 });
+        window.rbCurBookName = () => '故事的解剖';
         document.getElementById('umTestHost').innerHTML = umPaneHtml();
         umRenderPanel();
-        const btn = document.getElementById('chatUserMemAddBtn');
-        const box = document.getElementById('chatUserMemAddBox');
-        const 一开始收着 = box.style.display === 'none' && btn.style.display !== 'none';
+        const box = document.getElementById('chatUserMemList');
+        const 一开始没有输入框 = !document.getElementById('chatUserMemInput');
+        const 两组标题都在 = box.textContent.indexOf('关于我') >= 0 && box.textContent.indexOf('故事的解剖') >= 0;
+        const 加号个数 = box.querySelectorAll('span[title="加一条"]').length;
+        const 没有单选了 = !document.querySelector('input[name="umScope"]');
 
-        umAddOpen(1);
-        const 点开了 = box.style.display !== 'none' && btn.style.display === 'none';
-        const 自动聚焦 = document.activeElement === document.getElementById('chatUserMemInput');
-
-        umAddOpen(0);
-        const 取消收回去 = box.style.display === 'none' && btn.style.display !== 'none';
-
-        // 加完自动收回去，且内容进得去
-        umAddOpen(1);
-        document.getElementById('chatUserMemInput').value = '点＋加进来的';
+        // 在「关于我」按＋ → 加进关于我
+        umAddOpen('me');
+        const 冒出输入框 = !!document.getElementById('chatUserMemInput');
+        document.getElementById('chatUserMemInput').value = '这条归我';
         umOnAdd();
-        const 加完收回去 = box.style.display === 'none';
-        const 加进去了 = umLoad().some(x => x.content === '点＋加进来的');
-        const 框清空了 = document.getElementById('chatUserMemInput').value === '';
-        return { 一开始收着, 点开了, 自动聚焦, 取消收回去, 加完收回去, 加进去了, 框清空了 };
+        const 加完收回去 = !document.getElementById('chatUserMemInput');
+
+        // 在书那组按＋ → 加进书
+        umAddOpen('book');
+        document.getElementById('chatUserMemInput').value = '这条归书';
+        umOnAdd();
+
+        // 取消
+        umAddOpen('me');
+        const 取消前有 = !!document.getElementById('chatUserMemInput');
+        umAddOpen(null);
+        const 取消后没了 = !document.getElementById('chatUserMemInput');
+
+        return {
+            一开始没有输入框, 两组标题都在, 加号个数, 没有单选了,
+            冒出输入框, 加完收回去, 取消前有, 取消后没了,
+            我这组: umLoadMine().map(x => x.content),
+            书那组: umLoadBook().map(x => x.content)
+        };
     });
-    ok('⚠️平时只有一个「＋」，输入框收着', W.一开始收着, '');
-    ok('点「＋」展开输入框', W.点开了, '');
-    ok('展开后自动聚焦，不用再点一下', W.自动聚焦, '');
-    ok('点「取消」收回去', W.取消收回去, '');
+    ok('⚠️平时没有输入框，只有「＋」', W.一开始没有输入框, '');
+    ok('两组标题都在（空组也画，不然没地方按＋）', W.两组标题都在, '');
+    eq('两组各一个「＋」', W.加号个数, 2);
+    ok('⚠️「加给：我/《书名》」那排单选拆掉了', W.没有单选了, '');
+    ok('点「＋」冒出输入框', W.冒出输入框, '');
     ok('加完自动收回去', W.加完收回去, '');
-    ok('内容确实加进去了', W.加进去了, '');
-    ok('收回去时把没提交的字清掉', W.框清空了, '');
+    ok('点「取消」也收回去', W.取消前有 && W.取消后没了, '');
+    eq('⚠️在「关于我」按的＋，加进了关于我', W.我这组, ['这条归我']);
+    eq('⚠️在书那组按的＋，加进了这本书', W.书那组, ['这条归书']);
 
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
 
