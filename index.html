@@ -4675,17 +4675,18 @@ body {
   /* 条目之间画分隔线，跟人物表/地点表（`.mt-row`）同一根线、同一个色（2026-08-23 她要求：
      「用一个分隔线隔开吧就像人物表和地点表那样，不然感觉像不同的段落堆在一起、中间只有空行」）。
      ⚠️每组的**最后一条不画**——两组之间本来就有小标题隔着，再来一根线就重了。 */
-  .um-row { border-bottom: 1px solid var(--input-border); padding-bottom: .35em; }
+  /* 行距对齐人物表/地点表（`.mt-row`：12px 字、padding 4px 0），她说那种「看起来紧凑」 */
+  .um-row { border-bottom: 1px solid var(--input-border); padding: 2px 0; }
   .um-row.um-last { border-bottom: none; padding-bottom: 0; }
   /* 停用的条目：整行压暗。⚠️只压透明度，别加删除线或色块——她要的是「先不用」不是「作废」。
      按钮那排不跟着压，不然想启用都点不清。 */
   .um-row.um-off textarea { opacity: .4; }
 
-  .um-act { display: none; gap: .4em; margin: .3em 0 .1em; }
+  .um-act { display: none; gap: .35em; margin: .25em 0 .05em; }
   .um-row:focus-within .um-act { display: flex; }
   .um-act span {
     cursor: pointer; font-size: 11px; line-height: 1;
-    padding: .45em .9em; border-radius: 8px;
+    padding: .35em .75em; border-radius: 7px;
     border: 1px solid var(--input-border); color: var(--text-muted);
     background: transparent; white-space: nowrap;
   }
@@ -15629,7 +15630,8 @@ body {
             var list = mine.concat(bookList);       // 只画「跟着人走的 + 当前这本书的」，别的书的不露面
             var cnt = document.getElementById('chatUserMemCount');
             var _offN = list.filter(function (x) { return x.off; }).length;
-            if (cnt) cnt.textContent = list.length ? (list.length + ' 条' + (_offN ? '（' + _offN + ' 条没在用）' : '')) : '';
+            // 只留数字：停用的那几条本来就压暗了，肉眼分得出，不用再写一遍
+            if (cnt) cnt.textContent = list.length ? String(list.length) : '';
             if (!list.length) {
                 box.innerHTML = '<div style="font-size:12.5px;color:var(--text-muted);padding:.5em 0;line-height:1.7">还没有。它会在聊天里慢慢记，你也可以自己先写几条。</div>';
                 return;
@@ -15647,20 +15649,20 @@ body {
                 /* ⚠️2026-08-23 晚从 <input> 换成 <textarea>：书上那组要装带分行的档案，
                    单行输入框会把换行吃掉、也看不全。`align-items:flex-start` 让圆点和 🍄
                    贴着第一行，不然多行时它俩会浮在中间。 */
-                return '<div class="um-row" style="display:flex;align-items:flex-start;gap:.4em;padding:.15em 0">'
-                    + '<span style="display:flex;align-items:center;height:1.9em;flex-shrink:0">' + dot + '</span>'
-                    + (who ? '<span style="display:flex;align-items:center;height:1.9em;flex-shrink:0">' + who + '</span>' : '')
+                return '<div class="um-row" style="display:flex;align-items:flex-start;gap:.35em">'
+                    + '<span style="display:flex;align-items:center;height:1.55em;flex-shrink:0">' + dot + '</span>'
+                    + (who ? '<span style="display:flex;align-items:center;height:1.55em;flex-shrink:0">' + who + '</span>' : '')
                     // 文本框和按钮竖着排：按钮在框**底下**（她要「按键的感觉」，不习惯挂右边）
                     + '<div style="flex:1;min-width:0">'
                     + '<textarea rows="1" maxlength="' + umLenCap(x.book) + '" data-um="' + esc(x.id) + '"'
                     + ' onchange="umOnEdit(this)" onblur="umOnEdit(this);umGrow(this)" oninput="umGrow(this,1)"'
-                    + ' style="display:block;width:100%;box-sizing:border-box;padding:.35em .5em;background:transparent;border:1px solid transparent;border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;line-height:1.6;outline:none;resize:none;overflow:hidden;white-space:pre-wrap;word-break:break-word"'
+                    + ' style="display:block;width:100%;box-sizing:border-box;padding:.15em .35em;background:transparent;border:1px solid transparent;border-radius:6px;color:var(--text);font-size:12px;font-family:inherit;line-height:1.55;outline:none;resize:none;overflow:hidden;white-space:pre-wrap;word-break:break-word"'
                     + ' onfocus="this.style.background=\'var(--input-bg)\';this.style.borderColor=\'var(--card-border)\';umGrow(this,1)"'
                     + '>' + esc(x.content) + '</textarea>'
                     + '</div></div>';
             };
             var _cap = function (t) {
-                return '<div style="font-size:11px;color:var(--text-muted);margin:.5em 0 .1em">' + esc(t) + '</div>';
+                return '<div style="font-size:10px;color:var(--text-muted);margin:.45em 0 .05em">' + esc(t) + '</div>';
             };
             // ⚠️这儿原来有一句「点一条可以改字，右边才出现挪动和删除」，2026-08-23 拆了——
             //   她说「你别加提示，我知道的」。别再加回来：这是她的工具，她不需要被教。
@@ -15668,8 +15670,8 @@ body {
                实际**只管「关于我」这一组**（书里的档案故意让它别碰，合并会把细节抹平）。
                ⚠️只在这组里蘑菇记的够 3 条才出现——不到就没什么可合的，按钮白占地方。 */
             var _tidyable = mine.filter(function (x) { return x.by === 'mushroom'; }).length >= 3;
-            var _capMine = '<div style="display:flex;align-items:center;justify-content:space-between;gap:.6em;margin:.5em 0 .1em">'
-                + '<span style="font-size:11px;color:var(--text-muted)">关于我</span>'
+            var _capMine = '<div style="display:flex;align-items:center;justify-content:space-between;gap:.6em;margin:.45em 0 .05em">'
+                + '<span style="font-size:10px;color:var(--text-muted)">关于我</span>'
                 + (_tidyable ? '<button onclick="umTidy(this)" title="把讲同一件事的几条合成一条；只动这组里蘑菇记的，你自己写的不碰" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer;padding:0">整理一下</button>' : '')
                 + '</div>';
             /* 每组最后一条挂 `um-last` 去掉分隔线：组尾已经有小标题或面板边界收着了 */
@@ -15682,7 +15684,7 @@ body {
             };
             var html = '';
             if (mine.length) html += _capMine + _group(mine);
-            if (bookList.length) html += _cap('《' + (umCurBookName() || '这本书') + '》里说好的') + _group(bookList);
+            if (bookList.length) html += _cap('《' + (umCurBookName() || '这本书') + '》') + _group(bookList);
             box.innerHTML = html;
             // ✕ 用 DOM 追加，不拼进上面那串模板——模板已经够长了，再塞个带 onclick 的转义更容易出错
             var _curBk = umCurBookKey();
@@ -15702,17 +15704,17 @@ body {
                     act.appendChild(e);
                 };
                 // 「先不用」排在最前面：比「删掉」常用，也比它安全
-                mk(row.off ? '启用' : '先不用',
+                mk(row.off ? '启用' : '停用',
                    row.off ? '重新喂给蘑菇' : '内容留着，但不再喂给蘑菇',
                    row.off ? 'um-go' : '', function () { umToggleOff(id); });
                 // 开着书才给「挪」；没开书时两组只有一组，挪无处可去
                 if (_curBk) {
-                    var bn = umCurBookName() || '这本书';
-                    mk(row.book ? '挪回「关于我」' : '挪进《' + bn + '》',
-                       row.book ? '换书之后也带着' : '只在这本书里出现',
+                    // 文案压到两个字：归属看它在哪一组就知道了，不用在按钮上重复书名
+                    mk(row.book ? '移出' : '移入',
+                       row.book ? '挪回「关于我」，换书之后也带着' : '挪进《' + (umCurBookName() || '这本书') + '》，只在这本书里出现',
                        'um-go', function () { umMove(id); });
                 }
-                mk('删掉', '忘掉这条', '', function () { umRemove(id); });
+                mk('删除', '忘掉这条', '', function () { umRemove(id); });
                 inp.parentNode.appendChild(act);      // 塞进文本框那个竖排容器里，落在框底下
                 umGrow(inp);      // 进 DOM 之后才量得准高度
             });
@@ -16083,21 +16085,25 @@ body {
            ⚠️id 沿用原来那三个（chatUserMemList / Count / Input），所以 umRenderPanel 一个字没改。
              代价是**同一时刻只能有一处**这块 HTML，别再往别的地方复制一份。 */
         function umPaneHtml() {
-            return '<div class="seg" style="padding-bottom:6px">'
-                + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+            /* ⚠️2026-08-23 整块瘦身。她原话「文字提示太多，不符合我要的极简风」
+                 「我比较喜欢人物表地点表那样的，看起来紧凑」。所以：
+                   · 拆掉「跟着你走，不分书。每次聊天开头会悄悄告诉它…」那段说明
+                   · 复选框标签缩成「自动记」、挪到标题行右端，完整说明进 title
+                   · 「加给：」拿掉、计数只留数字、行距按 `.mt-row` 那套（12px / padding 2px 0）
+                 **别再往这块加解释性文字。** */
+            return '<div class="seg" style="padding-bottom:4px">'
+                + '<div style="display:flex;align-items:center;justify-content:space-between;gap:.6em;margin-bottom:.2em">'
                 + '<span class="seg-label" style="margin:0">🍄 蘑菇记得的我 <span id="chatUserMemCount" style="font-weight:400;color:var(--text-muted);font-size:10px"></span></span>'
+                + '<label style="display:flex;align-items:center;gap:.3em;font-size:11px;color:var(--text-muted);cursor:pointer;white-space:nowrap" title="聊天时让它自己记；线路不支持工具时自动作罢">'
+                + '<input type="checkbox" ' + (umAutoOn() ? 'checked' : '') + ' onchange="umSetAuto(this.checked)" style="accent-color:var(--accent);margin:0">自动记</label>'
                 + '</div>'
-                + '<div style="font-size:11px;color:var(--text-muted);line-height:1.7;margin-bottom:.6em">跟着你走，不分书。每次聊天开头会悄悄告诉它，它就不用每次重新认识你。</div>'
-                + '<label style="display:flex;align-items:center;gap:.5em;font-size:12px;color:var(--text-sub);margin-bottom:.7em;cursor:pointer">'
-                + '<input type="checkbox" ' + (umAutoOn() ? 'checked' : '') + ' onchange="umSetAuto(this.checked)" style="accent-color:var(--accent)">'
-                + '聊天时让它自己记（线路不支持工具时自动作罢）</label>'
                 + '<div id="chatUserMemList"></div>'
-                + '<div style="display:flex;gap:.4em;margin-top:.6em">'
+                + '<div style="display:flex;gap:.4em;margin-top:.4em">'
                 /* ⚠️用 textarea：她可能整段粘贴一份带分行的档案进来，单行 input 会把换行吃掉。
                    ⚠️2026-08-23 拆掉了「回车提交」（她：「提交就由那个加号来就行了，别用回车这种」）——
                      这个框里装的多半是多行档案，回车本来就该老老实实换行；提交交给右边那个按钮，
                      省掉「一不小心回车、只提交了半截」这个坑。**别再加回来。** */
-                + '<textarea id="chatUserMemInput" rows="1" maxlength="' + UM_LEN_BOOK + '" placeholder="自己加一条，写完点右边的「加」"'
+                + '<textarea id="chatUserMemInput" rows="1" maxlength="' + UM_LEN_BOOK + '" placeholder="加一条"'
                 + ' oninput="umGrow(this,1)"'
                 + ' style="flex:1;min-width:0;padding:7px 11px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px;color:var(--text);font-size:13px;font-family:inherit;line-height:1.6;outline:none;resize:none;overflow:hidden"></textarea>'
                 + '<button onclick="umOnAdd()" style="flex-shrink:0;padding:7px 14px;background:transparent;border:1px solid var(--input-border);border-radius:10px;color:var(--accent);font-size:13px;cursor:pointer">加</button>'
@@ -16105,10 +16111,9 @@ body {
                 /* 手动加的时候选记给谁。没在读书就整个不显示——那时候只能记给「我」。
                    ⚠️默认停在「我」：跟着人走是更安全的默认值，记错了顶多多带几个字；
                      反过来错记成「这本书」，换本书就凭空消失，她会以为记忆丢了。 */
-                + (umCurBookKey() ? ('<div style="display:flex;gap:.6em;margin-top:.45em;font-size:11px;color:var(--text-muted)">'
-                    + '<span>加给：</span>'
-                    + '<label style="cursor:pointer"><input type="radio" name="umScope" value="me" checked style="accent-color:var(--accent);vertical-align:-1px"> 我</label>'
-                    + '<label style="cursor:pointer"><input type="radio" name="umScope" value="book" style="accent-color:var(--accent);vertical-align:-1px"> 《' + esc(umCurBookName() || '这本书') + '》</label>'
+                + (umCurBookKey() ? ('<div style="display:flex;gap:.7em;margin-top:.3em;font-size:11px;color:var(--text-muted)">'
+                    + '<label style="cursor:pointer"><input type="radio" name="umScope" value="me" checked style="accent-color:var(--accent);vertical-align:-1px;margin:0 .2em 0 0">我</label>'
+                    + '<label style="cursor:pointer"><input type="radio" name="umScope" value="book" style="accent-color:var(--accent);vertical-align:-1px;margin:0 .2em 0 0">《' + esc(umCurBookName() || '这本书') + '》</label>'
                     + '</div>') : '')
                 + '</div>';
         }

@@ -149,7 +149,8 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         return { 渲染出几条, 计数文字, 删后条数, 删掉的是第二条, 改后内容, 清空后条数, 加完条数, 输入框清空了 };
     });
     eq('三条都渲染出来', E.渲染出几条, 3);
-    eq('右上角显示条数', E.计数文字, '3 条');
+    // 2026-08-23 极简化：计数只留数字，「条」字也去掉了
+    eq('右上角显示条数', E.计数文字, '3');
     eq('点 ✕ 删掉一条', E.删后条数, 2);
     ok('删掉的正是点的那条（不是删错行）', E.删掉的是第二条, '');
     eq('在格子里改字能存下', E.改后内容, '第一条改过了');
@@ -665,7 +666,7 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         document.getElementById('umTestHost').innerHTML = umPaneHtml();
         umRenderPanel();
         const row = document.querySelector('#chatUserMemList textarea[data-um="' + id + '"]').parentNode;
-        const 有挪按钮 = row.textContent.indexOf('挪进《') >= 0;
+        const 有挪按钮 = row.textContent.indexOf('移入') >= 0;
         const 有删按钮 = !!row.querySelector('span[title="忘掉这条"]');
         // ⚠️平时藏起来，点进那一行才浮出（她说「占位置、容易按错」）
         const 有操作容器 = !!row.querySelector('.um-act');
@@ -696,8 +697,8 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     ok('挪完打「改过」标记（黄点，好认）', Q.挪完带改过标记, '');
     ok('⚠️挪的时候内容一个字都没动', Q.内容没变, '');
     ok('再点一次能挪回来', Q.挪得回来, '');
-    ok('面板每行有「挪进《书名》」', Q.有挪按钮, '');
-    ok('面板每行有「删掉」', Q.有删按钮, '');
+    ok('面板每行有「移入」', Q.有挪按钮, '');
+    ok('面板每行有「删除」', Q.有删按钮, '');
     ok('两个按钮收在一个容器里', Q.有操作容器, '');
     ok('⚠️按钮在文本框**底下**，不是挂在右边（她不习惯右边那样）', Q.按钮在框底下, '');
     ok('⚠️平时藏着（她说占位置、容易按错）', Q.平时是藏着的, '');
@@ -857,7 +858,7 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
             内容还在, 标了停用, 整理后还在, 启用后进注入,
             行压暗了: row.classList.contains('um-off'),
             按钮写着启用: row.textContent.indexOf('启用') >= 0,
-            计数标了没在用: document.getElementById('chatUserMemCount').textContent.indexOf('没在用') >= 0
+            计数标了没在用: document.getElementById('chatUserMemCount').textContent === '4'
         };
     });
     ok('⚠️停用的不再喂给蘑菇（关于我那组）', V.我那条没进注入, '');
@@ -870,7 +871,7 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     ok('再点一次就重新启用', V.启用后进注入, '');
     ok('停用的那行压暗了', V.行压暗了, '');
     ok('按钮变成「启用」', V.按钮写着启用, '');
-    ok('条数旁边标出「N 条没在用」', V.计数标了没在用, '');
+    ok('计数只留数字（停用的压暗了，肉眼分得出）', V.计数标了没在用, '');
 
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
 
