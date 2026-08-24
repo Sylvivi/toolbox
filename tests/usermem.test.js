@@ -932,6 +932,58 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     eq('⚠️在「关于我」按的＋，加进了关于我', W.我这组, ['这条归我']);
     eq('⚠️在书那组按的＋，加进了这本书', W.书那组, ['这条归书']);
 
+    /* ===== X 组：同组内上下挪（2026-08-23「条目能移动位置吗」）=====
+       ⚠️顺序有实际作用：umText 按数组顺序拼给蘑菇。 */
+    const X = await page.evaluate(() => {
+        localStorage.removeItem('toolbox_user_memory');
+        window.rbCurBook = () => ({ fileName: '故事的解剖.epub', fileSize: 111 });
+        window.rbCurBookName = () => '故事的解剖';
+        const a = umAdd('甲', '', 'me', 'me');
+        const b = umAdd('乙', '', 'me', 'me');
+        umAdd('丙', '', 'me', 'me');
+        const s1 = umAdd('书甲', '', 'mushroom', 'book');
+        umAdd('书乙', '', 'mushroom', 'book');
+
+        umReorder(b, -1);                       // 乙 往上 → 乙甲丙
+        const 上挪后 = umLoadMine().map(x => x.content);
+        const 书组没被打乱 = umLoadBook().map(x => x.content);
+
+        umReorder(b, 1);                        // 乙 往下 → 甲乙丙
+        const 下挪后 = umLoadMine().map(x => x.content);
+
+        const 到顶挪不动 = umReorder(a, -1) === false && umLoadMine()[0].content === '甲';
+
+        umReorder(s1, 1);                       // 书组内部也能挪
+        const 书组挪完 = umLoadBook().map(x => x.content);
+        const 我这组没被打乱 = umLoadMine().map(x => x.content);
+
+        // 顺序真的会影响喂给蘑菇的那份
+        const 注入 = umText();
+        const 喂过去的顺序 = 注入.indexOf('乙') < 注入.indexOf('丙');
+
+        // 面板上：中间那条两个箭头都有；头一条没有「↑」
+        document.getElementById('umTestHost').innerHTML = umPaneHtml();
+        umRenderPanel();
+        const box = document.getElementById('chatUserMemList');
+        const rowOf = id => box.querySelector('[data-um="' + id + '"]').parentNode;
+        const 中间那条 = rowOf(b).textContent;
+        const 头一条 = rowOf(a).textContent;
+        return {
+            上挪后, 下挪后, 书组没被打乱, 到顶挪不动, 书组挪完, 我这组没被打乱, 喂过去的顺序,
+            中间有上有下: 中间那条.indexOf('↑') >= 0 && 中间那条.indexOf('↓') >= 0,
+            头一条没有上: 头一条.indexOf('↑') < 0 && 头一条.indexOf('↓') >= 0
+        };
+    });
+    eq('往上挪一格', X.上挪后, ['乙', '甲', '丙']);
+    eq('再往下挪回来', X.下挪后, ['甲', '乙', '丙']);
+    eq('⚠️挪「关于我」不会打乱书那组', X.书组没被打乱, ['书甲', '书乙']);
+    ok('已经在最上面就挪不动（也不报错）', X.到顶挪不动, '');
+    eq('书那组内部也能挪', X.书组挪完, ['书乙', '书甲']);
+    eq('⚠️挪书那组也不会打乱「关于我」', X.我这组没被打乱, ['甲', '乙', '丙']);
+    ok('⚠️顺序真的会影响喂给蘑菇的那份', X.喂过去的顺序, '');
+    ok('中间的条目上下箭头都有', X.中间有上有下, '');
+    ok('⚠️最上面那条不画「↑」（点不动就别占格）', X.头一条没有上, '');
+
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();

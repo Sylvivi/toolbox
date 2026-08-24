@@ -15599,6 +15599,28 @@ body {
             }
             return hit;
         }
+        /* 同组内上下挪一格（2026-08-23 她问「条目能移动位置吗」）。
+           ⚠️顺序是**有实际作用的**：umText 按数组顺序拼给蘑菇，靠前的它读到得早。
+           ⚠️只在同一组里挪（book 值相同的算一组）；跨组是「移入/移出」那两个按钮的事。
+           做法是拿到本组成员在**整份数组**里的下标，跟相邻那个整体对调，
+           这样别的组的位置一点不受影响。 */
+        function umReorder(id, dir) {
+            var list = umLoad();
+            var self = list.filter(function (x) { return x.id === id; })[0];
+            if (!self) return false;
+            var bk = self.book || '';
+            var idx = [];      // 本组成员在整份数组里的下标，按现有顺序
+            for (var i = 0; i < list.length; i++) {
+                if ((list[i].book || '') === bk) idx.push(i);
+            }
+            var at = idx.indexOf(list.indexOf(self));
+            var to = at + (dir < 0 ? -1 : 1);
+            if (at < 0 || to < 0 || to >= idx.length) return false;   // 已经在头/尾
+            var a = idx[at], b = idx[to];
+            var t = list[a]; list[a] = list[b]; list[b] = t;
+            umSaveList(list);
+            return true;
+        }
         function umRemove(id) {
             var list = umLoad();
             var out = list.filter(function (x) { return x.id !== id; });
@@ -15738,7 +15760,12 @@ body {
                     e.onclick = fn;
                     act.appendChild(e);
                 };
-                // 「先不用」排在最前面：比「删掉」常用，也比它安全
+                /* 上下挪。⚠️到头/到尾时那个箭头就不画了——画了也点不动，白占一格。 */
+                var _sameGroup = umLoad().filter(function (x) { return (x.book || '') === (row.book || ''); });
+                var _at = _sameGroup.map(function (x) { return x.id; }).indexOf(id);
+                if (_at > 0) mk('↑', '往上挪一格', '', function () { umReorder(id, -1); });
+                if (_at >= 0 && _at < _sameGroup.length - 1) mk('↓', '往下挪一格', '', function () { umReorder(id, 1); });
+                // 「停用」排在删除前面：比「删除」常用，也比它安全
                 mk(row.off ? '启用' : '停用',
                    row.off ? '重新喂给蘑菇' : '内容留着，但不再喂给蘑菇',
                    row.off ? 'um-go' : '', function () { umToggleOff(id); });
