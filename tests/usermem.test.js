@@ -808,6 +808,68 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     eq('⚠️每组只有最后一条不画线（两组＝两条）', U.末条数, 2);
     eq('不画线的正是各组末尾那条', U.末条内容, ['丙', '书乙']);
 
+    /* ===== V 组：单条停用（2026-08-23，她原话「有时候我就不想让他用了，但我又不想把那段内容删掉」）=====
+       ⚠️两组通用——她特意补了一句「我说的关于我也包括下面跟故事有关的那个」。 */
+    const V = await page.evaluate(async () => {
+        localStorage.removeItem('toolbox_user_memory');
+        window.rbCurBook = () => ({ fileName: '故事的解剖.epub', fileSize: 111 });
+        window.rbCurBookName = () => '故事的解剖';
+        window.umConn = () => ({ baseUrl: 'https://fake', apiKey: 'k', model: 'm' });
+
+        const 我甲 = umAdd('她不爱看大段心理独白', '', 'mushroom', 'me');
+        umAdd('她熬夜看书', '', 'mushroom', 'me');
+        umAdd('她养猫', '', 'mushroom', 'me');
+        const 书甲 = umAdd('说好拿摄政王当小白鼠', '', 'mushroom', 'book');
+
+        umToggleOff(我甲);
+        umToggleOff(书甲);
+        const 注入 = umText();
+        const 清单 = umListForModel();
+
+        // 内容还在，只是标了 off
+        const 内容还在 = umLoad().filter(x => x.id === 我甲)[0].content;
+        const 标了停用 = !!umLoad().filter(x => x.id === 我甲)[0].off;
+
+        // 整理时不碰停用的
+        const 真fetch = window.fetch;
+        window.fetch = async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: '- 合并出来的一条' } }] }) });
+        await umTidy(null);
+        umTidyApply();
+        const 整理后还在 = umLoad().some(x => x.id === 我甲);
+        window.fetch = 真fetch;
+
+        // 再点一次能启用
+        umToggleOff(我甲);
+        const 启用后进注入 = umText().indexOf('大段心理独白') >= 0;
+
+        // 面板：压暗 + 按钮文案
+        umToggleOff(我甲);
+        document.getElementById('umTestHost').innerHTML = umPaneHtml();
+        umRenderPanel();
+        const row = document.querySelector('#chatUserMemList textarea[data-um="' + 我甲 + '"]').closest('.um-row');
+        return {
+            我那条没进注入: 注入.indexOf('大段心理独白') < 0,
+            书那条也没进注入: 注入.indexOf('摄政王') < 0,
+            没停用的还在注入里: 注入.indexOf('她熬夜看书') >= 0,
+            清单里也看不到: 清单.indexOf('大段心理独白') < 0 && 清单.indexOf('摄政王') < 0,
+            内容还在, 标了停用, 整理后还在, 启用后进注入,
+            行压暗了: row.classList.contains('um-off'),
+            按钮写着启用: row.textContent.indexOf('启用') >= 0,
+            计数标了没在用: document.getElementById('chatUserMemCount').textContent.indexOf('没在用') >= 0
+        };
+    });
+    ok('⚠️停用的不再喂给蘑菇（关于我那组）', V.我那条没进注入, '');
+    ok('⚠️书里那组同样能停用', V.书那条也没进注入, '');
+    ok('没停用的照常喂', V.没停用的还在注入里, '');
+    ok('⚠️给它看的清单里也不列（不然它会去改一条已经不用的）', V.清单里也看不到, '');
+    eq('⚠️内容原样留着，一个字没删', V.内容还在, '她不爱看大段心理独白');
+    ok('只是标了「停用」', V.标了停用, '');
+    ok('⚠️「整理一下」不把停用的合并没了', V.整理后还在, '');
+    ok('再点一次就重新启用', V.启用后进注入, '');
+    ok('停用的那行压暗了', V.行压暗了, '');
+    ok('按钮变成「启用」', V.按钮写着启用, '');
+    ok('条数旁边标出「N 条没在用」', V.计数标了没在用, '');
+
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();

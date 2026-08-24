@@ -4673,6 +4673,9 @@ body {
      ⚠️每组的**最后一条不画**——两组之间本来就有小标题隔着，再来一根线就重了。 */
   .um-row { border-bottom: 1px solid var(--input-border); padding-bottom: .35em; }
   .um-row.um-last { border-bottom: none; padding-bottom: 0; }
+  /* 停用的条目：整行压暗。⚠️只压透明度，别加删除线或色块——她要的是「先不用」不是「作废」。
+     按钮那排不跟着压，不然想启用都点不清。 */
+  .um-row.um-off textarea { opacity: .4; }
 
   .um-act { display: none; gap: .4em; margin: .3em 0 .1em; }
   .um-row:focus-within .um-act { display: flex; }
@@ -15561,6 +15564,24 @@ body {
             }
             return hit;
         }
+        /* 停用／启用一条。2026-08-23 她提的：「有时候我就不想让他用了，但我又不想把那段内容删掉」。
+           ⚠️停用＝**内容原样留着、只是不再喂给蘑菇**。所以下面这几处都要跟着筛掉停用的：
+             umText（喂给它的正文）、umListForModel（给它看的清单）、umTidy（别把她特意停掉的合并没了）。
+           ⚠️尤其是清单那处：停用的要是还列在那儿，它会拿 update_memory 去改一条「已经不用了」的记忆。 */
+        function umToggleOff(id) {
+            var list = umLoad(), hit = false;
+            for (var i = 0; i < list.length; i++) {
+                if (list[i].id !== id) continue;
+                if (list[i].off) delete list[i].off; else list[i].off = 1;
+                hit = true;
+                break;
+            }
+            if (hit) {
+                umSaveList(list);
+                showToast(umLoad().filter(function (x) { return x.id === id; })[0].off ? '🍄 这条先不用了' : '🍄 这条又启用了');
+            }
+            return hit;
+        }
         function umRemove(id) {
             var list = umLoad();
             var out = list.filter(function (x) { return x.id !== id; });
@@ -15576,7 +15597,8 @@ body {
             var fmt = function (arr) {
                 return arr.map(function (x) { return '- ' + (x.tag ? '[' + x.tag + '] ' : '') + x.content; }).join('\n');
             };
-            var mine = umLoadMine(), book = umLoadBook(), out = [];
+            var _on = function (a) { return a.filter(function (x) { return !x.off; }); };
+            var mine = _on(umLoadMine()), book = _on(umLoadBook()), out = [];
             if (mine.length) {
                 out.push('【你记得的' + nm + '】\n' + fmt(mine) +
                     '\n（这些是你跟' + nm + '相处下来记住的事。自然地用上就好，别刻意复述、也别一上来就报菜名。）');
@@ -15602,7 +15624,8 @@ body {
             var mine = umLoadMine(), bookList = umLoadBook();
             var list = mine.concat(bookList);       // 只画「跟着人走的 + 当前这本书的」，别的书的不露面
             var cnt = document.getElementById('chatUserMemCount');
-            if (cnt) cnt.textContent = list.length ? (list.length + ' 条') : '';
+            var _offN = list.filter(function (x) { return x.off; }).length;
+            if (cnt) cnt.textContent = list.length ? (list.length + ' 条' + (_offN ? '（' + _offN + ' 条没在用）' : '')) : '';
             if (!list.length) {
                 box.innerHTML = '<div style="font-size:12.5px;color:var(--text-muted);padding:.5em 0;line-height:1.7">还没有。它会在聊天里慢慢记，你也可以自己先写几条。</div>';
                 return;
@@ -15648,7 +15671,9 @@ body {
             /* 每组最后一条挂 `um-last` 去掉分隔线：组尾已经有小标题或面板边界收着了 */
             var _group = function (arr) {
                 return arr.map(function (x, i) {
-                    return _row(x).replace('class="um-row"', 'class="um-row' + (i === arr.length - 1 ? ' um-last' : '') + '"');
+                    return _row(x).replace('class="um-row"', 'class="um-row'
+                        + (x.off ? ' um-off' : '')
+                        + (i === arr.length - 1 ? ' um-last' : '') + '"');
                 }).join('');
             };
             var html = '';
@@ -15672,6 +15697,10 @@ body {
                     e.onclick = fn;
                     act.appendChild(e);
                 };
+                // 「先不用」排在最前面：比「删掉」常用，也比它安全
+                mk(row.off ? '启用' : '先不用',
+                   row.off ? '重新喂给蘑菇' : '内容留着，但不再喂给蘑菇',
+                   row.off ? 'um-go' : '', function () { umToggleOff(id); });
                 // 开着书才给「挪」；没开书时两组只有一组，挪无处可去
                 if (_curBk) {
                     var bn = umCurBookName() || '这本书';
@@ -15780,7 +15809,8 @@ body {
             var one = function (x) {
                 return x.id + '｜' + (x.by === 'mushroom' ? '' : '【她亲手写的】') + (x.tag ? '[' + x.tag + '] ' : '') + x.content;
             };
-            var mine = umLoadMine(), book = umLoadBook(), out = [];
+            var _on = function (a) { return a.filter(function (x) { return !x.off; }); };
+            var mine = _on(umLoadMine()), book = _on(umLoadBook()), out = [];
             out.push(mine.length ? ('〔关于她这个人〕\n' + mine.map(one).join('\n')) : '〔关于她这个人〕（还没记过）');
             var bn = umCurBookName();
             if (bn) out.push('〔读《' + bn + '》时说好的〕' + (book.length ? ('\n' + book.map(one).join('\n')) : '（还没记过）'));
@@ -15961,7 +15991,8 @@ body {
                书里那些约定**故意不合并**：它们通常就三五条、而且高度具体（谁当例子、某个代号指什么），
                揉在一起反而会把关键细节抹平，得不偿失。 */
             var mine = umLoadMine().filter(function (x) { return x.by !== 'mushroom'; });
-            var his = umLoadMine().filter(function (x) { return x.by === 'mushroom'; });
+            // ⚠️停用的不参与合并——那是她特意停下来的，揉进别的条目里就找不回来了
+            var his = umLoadMine().filter(function (x) { return x.by === 'mushroom' && !x.off; });
             if (his.length < 3) { showToast('「关于我」里蘑菇记的还不到 3 条，不用整理'); return; }
             var conn = umConn();
             if (!conn) { showToast('先选一个模型'); return; }
@@ -16028,7 +16059,7 @@ body {
             /* ⚠️只换掉蘑菇记的那批，她亲手写的原封不动留在原位。
                新条目一律标 _chg='new'，好让她一眼看出哪些是刚换上来的。 */
             // ⚠️只换掉「关于我」里蘑菇记的那批：她亲手写的、以及**所有挂在书上的**都原样留着
-            var keep = umLoad().filter(function (x) { return x.book || x.by !== 'mushroom'; });
+            var keep = umLoad().filter(function (x) { return x.book || x.by !== 'mushroom' || x.off; });
             var now = new Date().toISOString();
             _umTidyResult.forEach(function (c, i) {
                 keep.push({ id: 'm' + Date.now().toString(36) + i.toString(36) + Math.random().toString(36).slice(2, 5),
