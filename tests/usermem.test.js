@@ -737,7 +737,7 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
         const 内容完整 = umLoad().filter(x => x.id === 长id)[0].content.split('\n').length === 12;
         return { 收起高, 短框高, 展开高, 收回去, 内容完整, 折几行: UM_FOLD_LINES };
     });
-    eq('默认露 3 行', R.折几行, 3);
+    eq('默认露 1 行', R.折几行, 1);
     ok('⚠️十二行的条目收起时只占三行左右', R.收起高 < R.展开高 / 2, '收起 ' + R.收起高 + ' / 展开 ' + R.展开高);
     ok('点进去展开全高', R.展开高 > R.收起高, '');
     ok('移开焦点又收回去', Math.abs(R.收回去 - R.收起高) < 2, '收回 ' + R.收回去);
