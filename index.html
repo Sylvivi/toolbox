@@ -26579,9 +26579,23 @@ body {
                 if (translatePending[i].id === id) { try { translatePending[i].ctl.abort(); } catch (e) {} break; }
             }
         }
-        // 流式渲染：把正在生成的译文增量写进该段的占位块（首帧从「翻译中…」切成流式布局，带「停止」按钮）
-        function translateRenderStream(pp) {
+        /* 流式渲染：把正在生成的译文增量写进该段的占位块（首帧从「翻译中…」切成流式布局，带「停止」按钮）
+         *
+         * ⚠️2026-08-25 她报：「翻译模式下我让AI翻译的时候，我的鼠标会变得不听使唤」（电脑上）。
+         *   鼠标没坏，是页面一直在她手底下动 + 主线程被占满。两个原因叠加：
+         *   ① 调用处那个 60ms 节流是**每个翻译任务各自一份**（`var _tlast` 是局部变量），
+         *      而翻译是**可并发的**——同时翻 N 段就是 N 倍渲染频率。
+         *   ② 每渲一次就 `scrollIntoView` 一次，N 段并发时页面每秒被拽几十下。
+         *   → 节流挪进函数内部做成**全局共用**，滚动再单独压一层（间隔长得多）。
+         *   ⚠️漏掉的帧不用担心：流结束后有整体重渲收尾（见调用处下方）。
+         */
+        var translateStreamLastRender = 0;   // 所有并发翻译共用一个渲染节流器
+        var translateStreamLastScroll = 0;   // 滚动单独节流，间隔比渲染长得多
+        function translateRenderStream(pp, force) {
             if (!pp) return;
+            var _now = Date.now();
+            if (!force && _now - translateStreamLastRender < 60) return;
+            translateStreamLastRender = _now;
             var node = document.querySelector('.translate-block[data-pid="' + pp.id + '"]');
             if (!node) return;
             var txt = (pp.partial || '').replace(/\[\[\/?TR[^\]]*\]\]/g, '');
@@ -26593,7 +26607,14 @@ body {
             }
             var body = node.querySelector('.tb-body');
             if (body) body.innerHTML = renderText(txt) + '<span class="rd-stream-cursor">▍</span>';
-            if (typeof chatIsNearBottom === 'function' && chatIsNearBottom()) { try { node.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
+            // ⚠️滚动压到最多每 500ms 一次——这是「鼠标不听使唤」的直接原因：
+            //   原来每帧都滚，并发时页面每秒被拽几十下，滚轮和拖选全被抢走。
+            if (_now - translateStreamLastScroll > 500) {
+                translateStreamLastScroll = _now;
+                if (typeof chatIsNearBottom === 'function' && chatIsNearBottom()) {
+                    try { node.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+                }
+            }
         }
 
         function translateClearSel() {
