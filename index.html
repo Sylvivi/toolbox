@@ -3604,6 +3604,13 @@ body {
         /* 流式出字中的译文块：定位「停止」按钮，正文右侧留点空避免压到按钮 */
         .translate-block.tb-streaming { position: relative; }
         .translate-block.tb-streaming .tb-body { padding-right: 56px; }
+        /* ⚠️流式出字期间正文是 textContent（不解析 markdown，为了不卡），
+           所以换行要靠 pre-wrap 保住，光标也改成 CSS 画——
+           这样每帧只改一个文本节点，不重建 DOM。 */
+        .translate-block.tb-streaming .tb-body { white-space: pre-wrap; }
+        .translate-block.tb-streaming .tb-body::after {
+            content: '▍'; opacity: 0.55; margin-left: 1px;
+        }
         @keyframes tbPendingPulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
         .translate-block .tb-qa {
             margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--card-border);
@@ -26594,7 +26601,7 @@ body {
         function translateRenderStream(pp, force) {
             if (!pp) return;
             var _now = Date.now();
-            if (!force && _now - translateStreamLastRender < 60) return;
+            if (!force && _now - translateStreamLastRender < 120) return;   // 60→120ms：肉眼仍是连续出字
             translateStreamLastRender = _now;
             var node = document.querySelector('.translate-block[data-pid="' + pp.id + '"]');
             if (!node) return;
@@ -26606,7 +26613,14 @@ body {
                     '<div class="tb-body"></div>';
             }
             var body = node.querySelector('.tb-body');
-            if (body) body.innerHTML = renderText(txt) + '<span class="rd-stream-cursor">▍</span>';
+            // ⚠️**流式期间不跑 markdown**（2026-08-25 第二轮修：只压滚动还是卡）。
+            //   原来每帧 `innerHTML = renderText(txt)`——renderText→parseMd 是
+            //   **76 行、26 个正则**，对整段全量重跑，段落越长越慢；
+            //   `innerHTML=` 还要销毁重建整棵子树。并发几段就把主线程占满，
+            //   她的原话是「鼠标变得相当不灵敏」。
+            //   → 出字阶段用 textContent（浏览器原生、不解析、不建 DOM），
+            //     markdown 交给流结束后那次整体重渲。光标改用 CSS ::after 画。
+            if (body) body.textContent = txt;
             // ⚠️滚动压到最多每 500ms 一次——这是「鼠标不听使唤」的直接原因：
             //   原来每帧都滚，并发时页面每秒被拽几十下，滚轮和拖选全被抢走。
             if (_now - translateStreamLastScroll > 500) {
