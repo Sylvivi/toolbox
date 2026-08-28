@@ -3636,6 +3636,10 @@ body {
         }
         .translate-askbar button:disabled { opacity: 0.6; cursor: default; }
         .translate-askbar button.ta-remember { background: var(--card-bg); color: var(--accent); border: 1px solid var(--accent-mid); }
+        /* 「删除译文」放在「提问」左边（2026-08-28 她指定的位置）。
+           不给实心色块——她的口味是「要显眼靠提亮字色＋淡底」，见记忆 user-taste-minimal-no-badges。 */
+        .translate-askbar button.ta-ask-del { background: var(--card-bg); color: var(--text-muted); border: 1px solid var(--card-border); }
+        .translate-askbar button.ta-ask-del:hover { color: var(--accent); border-color: var(--accent-mid); }
         #translateActBar {
             position: fixed; left: 0; top: 0;
             display: flex; align-items: center; gap: 10px;
@@ -26822,6 +26826,7 @@ body {
             var bar = document.createElement('div');
             bar.className = 'translate-askbar';
             bar.innerHTML = '<textarea class="ta-ask" rows="1" placeholder="这段没看懂？问问看…（如：这里的双关是什么意思？）"></textarea>' +
+                '<button class="ta-ask-del">删除译文</button>' +
                 '<button class="ta-ask-send">提问</button>';
             block.appendChild(bar);
             var input = bar.querySelector('.ta-ask');
@@ -26831,9 +26836,45 @@ body {
             input.addEventListener('input', autoGrow);
             function go() { translateAskRun(msgIdx, s, e, input.value, bar); }
             send.onclick = go;
+            var del = bar.querySelector('.ta-ask-del');
+            if (del) del.onclick = function () { translateDeleteBlock(msgIdx, s, e, bar); };
             // 回车发送，Shift+回车换行
             input.addEventListener('keydown', function(ev) { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); go(); } });
             // 不自动聚焦弹键盘，等用户点输入框再唤起
+        }
+
+        /* 把某个 [[TR s e]]…[[/TR]] 整段从正文里剪掉（2026-08-28 她要的「删干净」）。
+           ⚠️跟 translateAppendQA 是同一条正则的反面：那边往块里塞 QA，这边把整块连 QA 一起拿走。
+           删完这几段就回到「没译过」的样子，可以重新选中再译。原文一个字不动。 */
+        function translateStripBlock(content, s, e) {
+            var re = new RegExp('\\n*\\[\\[TR\\s+s=' + s + '\\s+e=' + e + '\\]\\][\\s\\S]*?\\[\\[\\/TR\\]\\]', '');
+            return content.replace(re, '').replace(/\n{3,}/g, '\n\n');
+        }
+
+        function translateDeleteBlock(msgIdx, s, e, bar) {
+            if (translateBusy) return;                       // 正在出字/追问时别动正文
+            var msg = chatMessages[msgIdx];
+            if (!msg || typeof msg.content !== 'string') { if (bar) bar.remove(); return; }
+            if (!confirm('删掉这段译文？\n原文不动，删完这几段可以重新选中再译。')) return;
+            var before = msg.content;
+            msg.content = translateStripBlock(before, s, e);
+            if (msg.content === before) { alert('没找到这段译文，可能已经删过了'); if (bar) bar.remove(); return; }
+            // ⚠️「删干净」＝连挂在这块上的追问读痕一起清掉，否则读痕点进来会跳到一个已经没有的块
+            try {
+                var lo = Math.min(s, e), hi = Math.max(s, e);
+                var cid = readingMarksConvId();
+                var list = (readingGetAllBookmarks()[cid] || []).slice();
+                var chap = _readerChapOf(msgIdx);
+                for (var i = 0; i < list.length; i++) {
+                    var b = list[i];
+                    if (b.type === 'ask' && b.trS === lo && b.trE === hi && _markMatchesMsg(b, msgIdx, chap)) {
+                        readingRemoveBookmarkObj(b);
+                    }
+                }
+            } catch (err) { /* 读痕清不掉不影响删译文本身 */ }
+            if (bar) bar.remove();
+            chatSaveCurrentConv(true);
+            readingRerenderMsg(msgIdx, Math.max(s, e));
         }
 
         // 把一条问答追加进对应 [[TR s e]] 块（插在该块 [[/TR]] 之前）
