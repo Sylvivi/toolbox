@@ -30,10 +30,21 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     // 复刻发送时拼「前文摘要」的那段取值逻辑（index.html 里 _restSegs 那几行）。
     // 直接调真函数要连网发请求，这里只验取值规则本身。
     const probe = await page.evaluate(() => {
-        function pick(total, covers, usedTables) {
+        // usedTables 那条路 2026-08-29 起取「最近 5 段 ∪ 还没折进表格的段」的并集，
+        // 第四个参数 wm = 表格水位（chatMemTableCount）。
+        function pick(total, covers, usedTables, wm) {
             var segs = [];
             for (var i = 0; i < total; i++) segs.push('S' + i);
-            var rest = usedTables ? segs.slice(-CHAT_SUMMARY_MAX_SEGS) : segs.slice(covers || 0);
+            var rest;
+            if (usedTables) {
+                var from = total - CHAT_SUMMARY_MAX_SEGS;
+                var w = wm || 0;
+                if (w < from) from = w;
+                if (from < 0) from = 0;
+                rest = segs.slice(from);
+            } else {
+                rest = segs.slice(covers || 0);
+            }
             if (rest.length > CHAT_SUMMARY_MAX_SEGS + 3) rest = rest.slice(-(CHAT_SUMMARY_MAX_SEGS + 3));
             return rest;
         }
@@ -51,8 +62,11 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             cov9: covered(4),
             // 还没超窗（5 段 / 没大纲）
             case5: pick(5, 0, false),
-            // 记忆表那条路：照旧只带最近 5 段
-            caseTables: pick(9, 4, true),
+            // 记忆表那条路·正常节奏（水位 5、共 9 段 → 积压 4 段，仍在 5 段窗口内）：并集＝最近 5 段
+            caseTables: pick(9, 4, true, 5),
+            // 记忆表那条路·折表失败积压到 6 段（水位 4、共 10 段）：窗口只到 S5，S4 得靠并集捞回来
+            caseTablesLag: pick(10, 0, true, 4),
+            covTablesLag: covered(4),
             // 异常：大纲一直没生成成功，积压很多
             caseRunaway: pick(40, 0, false),
         };
@@ -80,7 +94,12 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
 
     ok('D1 还没超窗时（5 段）原样全带', probe.case5.length === 5 && probe.case5[0] === 'S0', probe.case5.join(','));
 
-    ok('E1 走记忆表那条路仍只带最近 5 段', probe.caseTables.length === 5 && probe.caseTables[0] === 'S4', probe.caseTables.join(','));
+    ok('E1 记忆表那条路·正常节奏就是最近 5 段（并集没多发）', probe.caseTables.length === 5 && probe.caseTables[0] === 'S4', probe.caseTables.join(','));
+    // ⚠️这条钉的是「攒 5 段折一次」配套的并集：折表失败让积压涨到 6 段时，
+    //   最老那段既不在表里（水位 4）也不在 5 段窗口里（窗口从 S5 起），只有取并集才不丢。
+    const mTL = union(probe.covTablesLag, probe.caseTablesLag, 10);
+    ok('E2 ⚠️折表失败积压 6 段：表内 ∪ 发出去 == 全部', mTL.length === 0, '漏了 ' + mTL.join(','));
+    ok('E3 具体就是 S4 必须在发送里', probe.caseTablesLag.indexOf('S4') >= 0, probe.caseTablesLag.join(','));
 
     ok('F1 大纲一直失败时有兜底闸、不无限膨胀', probe.caseRunaway.length === 8, String(probe.caseRunaway.length));
     ok('F2 兜底时保留的是最近的那几段', probe.caseRunaway[probe.caseRunaway.length - 1] === 'S39', probe.caseRunaway.join(','));
@@ -91,7 +110,13 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
      * 上面 A-F 验的是「取值规则该长什么样」，用的是复刻版。
      * 万一哪天有人把 index.html 改回旧写法，复刻版照样全绿——所以这里直接钉源码。 */
     const src = require('fs').readFileSync(require('path').resolve(__dirname, '..', 'index.html'), 'utf8');
-    ok('H1 发送路径用的是 _restSegs 这套', src.indexOf('var _restSegs = _usedMemTables') >= 0);
+    ok('H1 发送路径用的是 _restSegs 这套', src.indexOf('var _restSegs;') >= 0 && src.indexOf('_restSegs = chatCompressSummaries.slice(_from);') >= 0);
+    ok('H1b 记忆表那条路取的是并集（有「有积压就从水位开始」那一步）',
+        src.indexOf('if (_wm < _from) _from = _wm;') >= 0);
+    // 阅读模式（书库看书）那侧同样「攒 5 章折一次」，配套的窗口延伸别被人删了
+    ok('H4 阅读模式记忆表也有攒批闸', src.indexOf('newSums.length < READER_MT_BATCH') >= 0);
+    ok('H5 阅读模式提问窗口会往前延到表格水位',
+        src.indexOf('READER_MT_BATCH + 2') >= 0 && src.indexOf('_mtW.upTo + 1 < start') >= 0);
     ok('H2 ⚠️没有残留「跳过已折的之后又截最近 N 段」的旧写法',
         src.indexOf('.slice(chatOutlineCovers || 0)).slice(-CHAT_SUMMARY_MAX_SEGS)') < 0
         && src.indexOf('(chatOutlineCovers || 0)).slice(-CHAT_SUMMARY_MAX_SEGS)') < 0);

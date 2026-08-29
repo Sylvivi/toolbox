@@ -21799,6 +21799,12 @@ body {
          * 问答用「单点同步」：每次变动后用 readerPersistQA 把该章消息里的问答整体抽出覆盖那一格
          *（含删空时写空列表当墓碑，避免云端旧数据回灌）。 */
         var READER_SUMMARY_LOOKBACK = 5; // 提问时往前最多带几章摘要
+        /* 记忆表格攒够几章才折一次。⚠️2026-08-29 汐加的（她：「人物表那些要不要攒一攒再更新呀，
+           好像不需要每章来一次」）。每折一次都要把四张表整个发上去再要一份增量，表越长越贵，
+           原来一章跟一发＝反复搬同一堆表。首次建表和手动「补齐/重建」不受这道闸约束。
+           ⚠️改这个值要顺带看 readerEnsureSummaries 里那道「把窗口往前延到表格边界」——
+             没折进表的章必须还在提问窗口里，否则两头都漏掉、那几章凭空消失。 */
+        var READER_MT_BATCH = 5;
 
         /* =========================================================================
          * [3.10.5.8] 阅读器数据层：问答·摘要·导读·记忆表·读痕
@@ -22536,6 +22542,9 @@ body {
                 if (s) newSums.push('第 ' + readerChapterNo(_bMt, i) + ' 章：' + s);
             }
             if (!newSums.length) return false;
+            // 攒够 READER_MT_BATCH 章才折一次（首次建表 emptyTables / 手动重建 rebuild 不受限：表空着得先立起来）。
+            // 没折进去的这几章不会丢——提问时它们仍以章节摘要原文进上下文（见 readerEnsureSummaries 的窗口延伸）。
+            if (!rebuild && !emptyTables && newSums.length < READER_MT_BATCH) return false;
             _readerMemTablesRunning = true;
             try {
                 var charMd = _readerRenderTableMd(_mtCharCols, tables.characters);
@@ -22964,6 +22973,14 @@ body {
             var start = Math.max(0, curChap - lookback);
             // 大纲折叠有节奏（攒3章折一次），它和 5 章窗口之间可能差一两章——把窗口往前延到大纲边界，不留记忆缝
             if (_useOutline && _o.upTo + 1 < start && _o.upTo + 1 >= curChap - lookback - 4) start = _o.upTo + 1;
+            // 记忆表格同理：它攒够 READER_MT_BATCH 章才折一次，正常就会有 0~4 章「有摘要、还没进表」。
+            // 这些章必须仍留在窗口里，否则既不在表里、也不在窗口里＝那几章凭空消失。
+            // （共读那侧是取并集，这里等效做法是把窗口往前延到表格水位；同样设了地板，别无限往回带。）
+            var _mtW = readerMemTablesGet(fileKey);
+            if (_mtW && typeof _mtW.upTo === 'number' && _mtW.upTo + 1 < start) {
+                var _mtFloor = curChap - lookback - (READER_MT_BATCH + 2);
+                start = Math.max(_mtW.upTo + 1, _mtFloor, 0);
+            }
             var missing = [];
             for (var i = start; i < curChap; i++) {
                 if (!readerSummaryGet(fileKey, i) && b.chapters[i] && (b.chapters[i].body || '').trim()) missing.push(i);
