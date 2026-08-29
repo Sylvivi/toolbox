@@ -14091,6 +14091,8 @@ body {
                 if (_hasReadingPos) chatSkipNextAutoBottom = true;
             }
             // 渲染消息（进入会话时窗口化：共读/翻译只渲染「存档位置→末尾」，更早的上滑再补）
+            // ⚠️繁→简是**按书**存的，换书之后必须重新读一次，否则 chip 还显示上一本的状态
+            if (typeof readingApplyT2S === 'function') readingApplyT2S();
             chatRenderAllMessages(true);
             // 共读/翻译：渲染后回到上次阅读位置（覆盖默认的「滚到底」）
             // 逐帧收敛校正到 <1px；并在短延时、网络字体加载完后各补一轮——
@@ -19969,7 +19971,7 @@ body {
             c = document.getElementById('chipQuoteLs'); if (c) c.classList.toggle('active', split);
             if (typeof rdHlInitStyle === 'function') rdHlInitStyle();   // 顺带恢复「划线」底色/下划线样式
             readingApplyKeySentStyles();   // 精句样式独立一套，跟着一起初始化
-            readingApplyT2S();             // 繁→简 chip 的高亮也在这儿恢复
+            readingApplyT2S();             // 繁→简 chip 的高亮也在这儿恢复（⚠️按书存，换书要重新读）
             updateStatusBarColor();
         }
         // ===== 精句样式（独立于引号，作用在每段最短完整句 .reading-keysent 上）=====
@@ -31069,19 +31071,30 @@ body {
         }
         /* 只转标签之间的文字。split 出来偶数位是文字、奇数位是标签，
            ⚠️属性里的中文**故意不转**——data-* 上挂着按原文算的键，转了就对不上。 */
+        /* ⚠️2026-08-29 她提的：「能不能不要完全应用啊，默认不开可以吗，因为繁体只有一本呀，
+           不能因为繁体开了其他就也开呢」。→ **改成按书各记一份**（键里带 readingMarksConvId()），
+           **默认一律关**。为那一本台版书打开，不会波及其余任何一本。
+           ⚠️别改回全局开关：她的书库四百多个文件里只有一本是繁体的。 */
+        function _t2sKey() {
+            var cid = (typeof readingMarksConvId === 'function') ? readingMarksConvId() : '';
+            return 'reading_t2s:' + (cid || '_');
+        }
+        function _t2sOn() { return localStorage.getItem(_t2sKey()) === '1'; }
+
         function t2sHtml(html) {
-            if (!html || localStorage.getItem('reading_t2s') !== '1') return html;
+            if (!html || !_t2sOn()) return html;
             var parts = html.split(/(<[^>]*>)/);
             for (var i = 0; i < parts.length; i += 2) parts[i] = t2sText(parts[i]);
             return parts.join('');
         }
         function readingApplyT2S() {
             var c = document.getElementById('chipT2S');
-            if (c) c.classList.toggle('active', localStorage.getItem('reading_t2s') === '1');
+            if (c) c.classList.toggle('active', _t2sOn());
         }
         function readingToggleT2S() {
-            var on = localStorage.getItem('reading_t2s') === '1';
-            localStorage.setItem('reading_t2s', on ? '0' : '1');
+            var k = _t2sKey(), on = localStorage.getItem(k) === '1';
+            if (on) localStorage.removeItem(k);      // 关掉就把键删干净，别在 localStorage 里攒垃圾
+            else localStorage.setItem(k, '1');
             readingApplyT2S();
             if (typeof chatRenderAllMessages === 'function') chatRenderAllMessages(true);
         }
