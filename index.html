@@ -16859,10 +16859,21 @@ body {
                 //   把这些中间段两头都漏掉了——大纲没覆盖到，发送时又被截掉，那几段记忆凭空消失。
                 //   （用户 2026-08-20 从「7 段摘要、大纲只折入 1 段」看出来的：第 2 段就是这么丢的。）
                 //   背景追问那条路（chatAskBg 里 `slice(chatOutlineCovers)`）本来就是对的，这里补齐一致。
-                // ⚠️走记忆表那条路照旧只带最近 5 段：远期记忆由四张表兜底，不靠大纲。
-                var _restSegs = _usedMemTables
-                    ? chatCompressSummaries.slice(-CHAT_SUMMARY_MAX_SEGS)
-                    : chatCompressSummaries.slice(chatOutlineCovers || 0);
+                /* 走记忆表那条路：带「最近 5 段」和「还没折进表格的段」的**并集**。
+                   ⚠️2026-08-29 改的（配合上面「攒 5 段再折表」）：原来只切最近 5 段，
+                     万一某次折表失败、积压涨到 6 段，最老那段就会**既不在表里、也不在窗口里**，
+                     凭空消失。取并集之后这个空档不存在了。
+                   ⚠️正常情况下 pending ≤ 5，并集就等于最近 5 段，什么都没多发。 */
+                var _restSegs;
+                if (_usedMemTables) {
+                    var _from = chatCompressSummaries.length - CHAT_SUMMARY_MAX_SEGS;
+                    var _wm = chatMemTableCount || 0;
+                    if (_wm < _from) _from = _wm;                 // 有积压就从水位开始
+                    if (_from < 0) _from = 0;
+                    _restSegs = chatCompressSummaries.slice(_from);
+                } else {
+                    _restSegs = chatCompressSummaries.slice(chatOutlineCovers || 0);
+                }
                 // 兜底闸：正常情况下积压最多 2 段（阈值 3），超过说明大纲一直没生成成功
                 //（网络/回空），这时宁可丢最老的也不能让上下文无限膨胀、烧她的钱。
                 if (_restSegs.length > CHAT_SUMMARY_MAX_SEGS + 3) _restSegs = _restSegs.slice(-(CHAT_SUMMARY_MAX_SEGS + 3));
@@ -19564,7 +19575,21 @@ body {
                         var _memTarget = chatCompressSummaries.length;
                         // 有表格时不再折大纲（表格已替代大纲的功能，省一次 API 调用）
                         var _hasTable = _tbl.characters.length || _tbl.plotlines.length;
-                        await Promise.all([_hasTable ? Promise.resolve() : _foldOutline(), _updateMemoryTables(_tableInput, _memTarget)]);
+                        /* ⚠️2026-08-29 她提的：「人物表那些要不要攒一攒再更新呀，好像不需要每章来一次」。
+                           共读是**按章**触发压缩的，原来每章都跟一次「记忆表格」调用；而每次调用都要
+                           把现有四张表整个发上去再要一份增量，表越长越贵，等于反复搬同一堆表。
+                           → 攒够 MEM_TABLE_BATCH 段再折一次（她 08-29 选的 5）。
+                           ⚠️**为什么不丢东西**：走记忆表那条路，请求里带的是「四张表 ＋ 还没折进表格的段」
+                             （见 chatDoRequest 里 _restSegs 那段，08-29 一并改成取并集）。
+                             没折进去的段照样以原文进上下文，表格只负责兜更早的。
+                           ⚠️首次建表（_memFrom 归零那种）不受这道闸约束——那时候表是空的，得立刻建起来。 */
+                        var _MEM_TABLE_BATCH = 5;
+                        var _memPending = _memTarget - _memFrom;
+                        var _memDue = (_memFrom === 0) || (_memPending >= _MEM_TABLE_BATCH);
+                        await Promise.all([
+                            _hasTable ? Promise.resolve() : _foldOutline(),
+                            _memDue ? _updateMemoryTables(_tableInput, _memTarget) : Promise.resolve()
+                        ]);
                     }
                 } else {
                     var summary = await _doSummarize(toCompress, 600, false);
