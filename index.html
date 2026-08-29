@@ -5788,9 +5788,9 @@ body {
                 <div id="readingFontRow" style="display:flex;align-items:center;justify-content:space-between">
                     <span style="font-size:12px;font-weight:600;color:var(--text-muted)">正文字号</span>
                     <div style="display:flex;gap:6px;align-items:center">
-                        <button class="chip-btn" onclick="readingStepFontScale(-0.1)" title="缩小" style="min-width:30px">A−</button>
+                        <button class="chip-btn" onclick="readingStepFontScale(-0.05)" title="缩小" style="min-width:30px">A−</button>
                         <span id="readingFontVal" style="font-size:12px;color:var(--text-muted);min-width:40px;text-align:center">110%</span>
-                        <button class="chip-btn" onclick="readingStepFontScale(0.1)" title="放大" style="min-width:30px">A+</button>
+                        <button class="chip-btn" onclick="readingStepFontScale(0.05)" title="放大" style="min-width:30px">A+</button>
                     </div>
                 </div>
                 <div id="readingParaRow" style="display:flex;align-items:center;justify-content:space-between">
@@ -19961,9 +19961,13 @@ body {
             // 字号一变，每行的位置全变 → 手写小注的引线长度要重量（漏了就会满屏歪线）
             if (typeof rdGlRelayoutSoon === 'function') rdGlRelayoutSoon();
         }
+        /* ⚠️2026-08-30 她提的：「从100%就到了110%，可否加一个105%的档」。
+           步长 0.1 → 0.05，取整也得跟着从一位小数改成**两位**——
+           只改步长的话 1.05 会被 Math.round(x*10)/10 立刻抹回 1.0 或 1.1，
+           表现是「点了没反应 / 直接跳过 105%」。 */
         function readingStepFontScale(delta) {
             var s = parseFloat(localStorage.getItem('reading_font_scale') || '1') || 1;
-            s = Math.round((s + delta) * 10) / 10;
+            s = Math.round((s + delta) * 100) / 100;
             if (s < 0.8) s = 0.8; if (s > 1.6) s = 1.6;
             localStorage.setItem('reading_font_scale', String(s));
             readingApplyFontScale();
