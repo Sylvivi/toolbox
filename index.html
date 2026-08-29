@@ -3214,6 +3214,28 @@ body {
             background: var(--accent);
         }
         .reading-actbar .rp-lv[data-lv="2"] { background: var(--accent); border-color: var(--accent); }
+        /* 提问上下文面板（2026-08-29）：点那个小圆点展开，**按书各记一份**。
+           起因：她的书在谷歌线路上会被安全策略拒答，而原来的三档里**原文那一块一档都关不掉**，
+           偏偏它是最大、也最容易踩雷的一块。她要的是「提问前自己挑」，不是「被拒了再自动降级」。
+           ⚠️`.reading-actbar button` 的特异性(0,1,1)高于 `.chip-btn`(0,1,0)，
+             不写下面这两条，面板里的 chip 会被染成实心强调色按钮、选没选中完全看不出来。 */
+        .reading-actbar .rp-ctxpanel {
+            flex: 1 1 100%; flex-direction: column; gap: 0.4em;
+            margin-top: 0.15em; padding-top: 0.45em; border-top: 1px solid var(--accent-mid);
+        }
+        .reading-actbar .rp-ctxrow { display: flex; align-items: center; gap: 0.6em; }
+        .reading-actbar .rp-ctxlab { flex: 0 0 3.6em; font-size: 11px; color: var(--text-muted); }
+        .reading-actbar .rp-ctxchips {
+            display: flex; flex-wrap: wrap; gap: 0.3em; flex: 1 1 auto; justify-content: flex-end;
+        }
+        .reading-actbar .rp-ctxpanel .chip-btn {
+            padding: 0.15em 0.6em; font-size: 11px; border-radius: 7px;
+            border: 1px solid var(--card-border); background: var(--card-bg);
+            color: var(--text-muted); font-weight: 400;
+        }
+        .reading-actbar .rp-ctxpanel .chip-btn.active {
+            background: var(--accent-light); border-color: var(--accent-mid); color: var(--text);
+        }
         /* 书签：已标记段落 */
         .reading-merged p[data-p].rp-marked {
             border-left: 3px solid var(--accent); padding-left: 8px; margin-left: -11px;
@@ -22963,7 +22985,11 @@ body {
 
         // 提问时按需补摘要：把 curChap 往前 lookback 章里「还没摘要的」并行补齐（已存的跳过、与后台预生成共用
         // in-flight 请求绝不重复），返回这段区间内有序的摘要行。多数情况下后台已备好，这里基本零等待。
-        async function readerEnsureSummaries(bookId, curChap, lookback, signal, genAllowed) {
+        // opts（2026-08-29 加）：{mt, sum} —— 提问上下文面板里「记忆表」「摘要」两个开关。
+        // 不传＝两样都带（旧调用点行为不变）。sum 关掉时连补生成都不做，别白烧。
+        async function readerEnsureSummaries(bookId, curChap, lookback, signal, genAllowed, opts) {
+            var _wantMt = !opts || opts.mt !== false;
+            var _wantSum = !opts || opts.sum !== false;
             var b = rbGetBook(bookId);
             if (!b || !b.chapters || curChap == null || curChap < 1) return [];
             var fileKey = readerBookKey(bookId);
@@ -22986,7 +23012,7 @@ body {
                 if (!readerSummaryGet(fileKey, i) && b.chapters[i] && (b.chapters[i].body || '').trim()) missing.push(i);
             }
             // genAllowed=false 时：不新生成（不烧 API），只把已经备好的摘要发过去
-            if (missing.length && genAllowed) {
+            if (missing.length && genAllowed && _wantSum) {
                 var mc = chatResolveCompressModel();
                 if (mc) {
                     // 并行（最多 4 个同时）补齐缺的——比原来一章接一章串行快得多
@@ -22998,19 +23024,22 @@ body {
             var out = [];
             // 优先用记忆表格（结构化），无表格时 fallback 到旧大纲
             var _mt = readerMemTablesGet(fileKey);
-            if (_mt && (_mt.characters.length || (_mt.places && _mt.places.length) || (_mt.timeline && _mt.timeline.length) || _mt.plotlines.length) && (!_mt.upTo || _mt.upTo < curChap)) {
+            if (_wantMt && _mt && (_mt.characters.length || (_mt.places && _mt.places.length) || (_mt.timeline && _mt.timeline.length) || _mt.plotlines.length) && (!_mt.upTo || _mt.upTo < curChap)) {
                 var _memText = '';
                 if (_mt.characters.length) _memText += '【人物表】\n' + _readerRenderTableMd(_mtCharCols, _mt.characters);
                 if (_mt.places && _mt.places.length) _memText += (_memText ? '\n\n' : '') + '【地点表】\n' + _readerRenderTableMd(_mtPlaceCols, _mt.places);
                 if (_mt.timeline && _mt.timeline.length) _memText += (_memText ? '\n\n' : '') + '【大事年表】\n' + _readerRenderTableMd(_mtTimeCols, _mt.timeline);
                 if (_mt.plotlines.length) _memText += (_memText ? '\n\n' : '') + '【主线/伏笔表】\n' + _readerRenderTableMd(_mtPlotCols, _mt.plotlines);
                 out.push(_memText);
-            } else if (_useOutline) {
+            } else if (_useOutline && _wantSum) {
+                // 大纲是「摘要」那一类（它就是各章摘要折出来的），跟着摘要开关走
                 out.push('【全书前情大纲（至第 ' + readerChapterNo(b, _o.upTo) + ' 章）】\n' + _o.sum);
             }
-            for (var m = start; m < curChap; m++) {
-                var s = readerSummaryGet(fileKey, m);
-                if (s) out.push('第 ' + readerChapterNo(b, m) + ' 章：' + s);
+            if (_wantSum) {
+                for (var m = start; m < curChap; m++) {
+                    var s = readerSummaryGet(fileKey, m);
+                    if (s) out.push('第 ' + readerChapterNo(b, m) + ' 章：' + s);
+                }
             }
             return out;
         }
@@ -25295,7 +25324,9 @@ body {
             var askHtml = '<button class="rp-ask-send">' + _emptyLabel + '</button>';
             // 极简：输入框 + 讨论按钮，「带前文问答」勾选框紧贴讨论按钮左边（粘性，状态存 localStorage，替代原设置里的全局开关）
             var ctxHtml = readingAskCtxBoxHtml(_bgCi != null);   // 背景追问和普通提问各记各的档
-            bar.innerHTML = inputHtml + ctxHtml + askHtml;
+            // 上下文面板跟在最后：.reading-actbar 是 flex-wrap，面板 flex-basis:100% 会自己换到第二行，
+            // 不会把「讨论」按钮挤下去（放在圆点和按钮中间就会）
+            bar.innerHTML = inputHtml + ctxHtml + askHtml + readingCtxPanelHtml(_bgCi != null);
             anchorEl.insertAdjacentElement('afterend', bar);
             // 一步式：直接出输入框；不自动聚焦弹键盘，等用户点输入框再唤起；点「讨论」发送；再点该段收起
             var input = bar.querySelector('.rp-ask');
@@ -25560,24 +25591,108 @@ body {
             lv = Math.max(0, Math.min(READ_ASK_LV_MAX, lv | 0));
             try { localStorage.setItem(_readAskLvKey(isBg), String(lv)); } catch (e) {}
         }
-        var _RD_LV_TIP = ['只带这一段的原文（最省）', '＋记忆表和前文摘要', '＋本章前面聊过的问答（最全）'];
+        /* ===== 提问上下文面板（2026-08-29 汐做的，她拍板的形态）=====
+         * 起因：她报「特殊情况下选中提问会因为前文的内容被谷歌排斥」，要一个界面自己控制发出去多少。
+         * 她当场定死的四件事（别自作主张改回去）：
+         *   ① **只做面板、不做「被拒了一键降级」**——她要提问前自己挑，不要事后补救；
+         *   ② 原文写成「前 N 段 / 后 M 段」**两个数分开调**，后文默认 0
+         *      （偷看后文是她主动按的，不是我默默给的；防剧透那条铁律靠这个默认守住）；
+         *   ③ **记忆表和前文摘要拆成两个开关**——摘要是把整章剧情压缩过的，浓度可能比原文还高，
+         *      ⚠️项目笔记里那条「别再提拆档」是 07-28 讨论**省钱**时定的，这次理由不同，她重新拍过板；
+         *   ④ 设置**按书各记一份**（跟简繁转换一个道理：踩雷的是某几本，不能因为这本砍了别的书跟着失忆）。
+         * ⚠️小圆点不再循环换档了，点一下＝展开面板——一套真相，免得「面板里关了、碰一下圆点又开回来」。
+         * ⚠️老的三档 readingAskLv **没删**：它现在是**默认值来源**，某本书还没调过面板时，
+         *   行为跟以前一模一样（普通提问＝1 档、背景追问＝0 档）。 */
+        var RD_CTX_PRE_STEPS = [0, 2, 5, 10, 20, -1];   // 前文带几段；-1 = 全章（＝一直以来的「往前铺到章首、8000 字封顶」）
+        var RD_CTX_POST_STEPS = [0, 2, 5, 10];          // 后文带几段；0 = 不给（默认）
+        function _rdCtxKey() {
+            // 按书一份。readingNamesKey() 在阅读模式和共读模式下都能给出同一本书的稳定 key
+            var bk = (typeof readingNamesKey === 'function') ? readingNamesKey() : '';
+            return 'reading_ask_ctx2:' + (bk || '_');
+        }
+        function _rdCtxFallback(isBg) {
+            var lv = readingAskLv(isBg);   // 老三档当默认：没调过面板的书，行为一字不变
+            return { pre: isBg ? 3 : -1, post: isBg ? 3 : 0,
+                     mt: lv >= 1 ? 1 : 0, sum: lv >= 1 ? 1 : 0, qa: lv >= 2 ? 1 : 0 };
+        }
+        function readingAskCtx(isBg) {
+            var d = _rdCtxFallback(!!isBg);
+            try {
+                var all = JSON.parse(localStorage.getItem(_rdCtxKey()) || '{}');
+                var o = all[isBg ? 'bg' : 'n'];
+                if (o && typeof o === 'object') { for (var k in d) if (o[k] != null) d[k] = o[k]; }
+            } catch (e) {}
+            return d;
+        }
+        function readingSetAskCtx(isBg, patch) {
+            var cur = readingAskCtx(isBg);
+            for (var k in patch) cur[k] = patch[k];
+            try {
+                var all = {};
+                try { all = JSON.parse(localStorage.getItem(_rdCtxKey()) || '{}'); } catch (e2) {}
+                all[isBg ? 'bg' : 'n'] = cur;
+                localStorage.setItem(_rdCtxKey(), JSON.stringify(all));
+            } catch (e) {}
+            return cur;
+        }
+        // 小圆点保留原来那三档长相，但现在是**从面板反推出来的**（原文范围不进这个圆点，它只表意「带不带记忆」）
+        function readingAskCtxLv(isBg) {
+            var c = readingAskCtx(isBg);
+            if (c.qa) return 2;
+            return (c.mt || c.sum) ? 1 : 0;
+        }
+        function _rdCtxChip(label, on, act) {
+            return '<button type="button" class="chip-btn' + (on ? ' active' : '') + '" data-rdctx="' + act + '">' + label + '</button>';
+        }
+        function readingCtxPanelInner(isBg) {
+            var c = readingAskCtx(isBg);
+            function row(label, tip, inner) {
+                return '<div class="rp-ctxrow"><span class="rp-ctxlab" title="' + tip + '">' + label + '</span>'
+                     + '<span class="rp-ctxchips">' + inner + '</span></div>';
+            }
+            var pre = RD_CTX_PRE_STEPS.map(function (v) {
+                return _rdCtxChip(v < 0 ? '全章' : (v === 0 ? '无' : v + '段'), c.pre === v, 'pre:' + v);
+            }).join('');
+            var post = RD_CTX_POST_STEPS.map(function (v) {
+                return _rdCtxChip(v === 0 ? '无' : v + '段', c.post === v, 'post:' + v);
+            }).join('');
+            return row('前文', '这一段往前带几段原文', pre)
+                 + row('后文', '这一段往后带几段原文。会让 AI 看到你还没读的内容，默认不给', post)
+                 + row('记忆表', '人物 / 地点 / 大事年表 / 主线伏笔', _rdCtxChip(c.mt ? '带' : '不带', !!c.mt, 'mt'))
+                 + row('摘要', '前面章节的剧情摘要', _rdCtxChip(c.sum ? '带' : '不带', !!c.sum, 'sum'))
+                 + row('前文问答', '本章前面别的段落聊过的问答', _rdCtxChip(c.qa ? '带' : '不带', !!c.qa, 'qa'));
+        }
+        function readingCtxPanelHtml(isBg) {
+            return '<div class="rp-ctxpanel" data-bg="' + (isBg ? 1 : 0) + '" style="display:none">'
+                 + readingCtxPanelInner(!!isBg) + '</div>';
+        }
         function readingAskLvHtml(isBg) {
-            var lv = readingAskLv(isBg);
+            var lv = readingAskCtxLv(isBg);
             return '<span class="rp-lv" role="button" tabindex="0" data-lv="' + lv + '" data-bg="' + (isBg ? 1 : 0) +
-                '" title="点一下换一档：' + _RD_LV_TIP[lv] + '"></span>';
+                '" title="点一下：挑这次要带哪些上下文（这本书单独记）"></span>';
         }
         function readingBindAskLv(bar) {
             var el = bar && bar.querySelector('.rp-lv');
-            if (!el) return;
+            var panel = bar && bar.querySelector('.rp-ctxpanel');
+            if (!el || !panel) return;
+            var isBg = el.getAttribute('data-bg') === '1';
             el.addEventListener('click', function (e) {
                 e.stopPropagation();
-                var isBg = el.getAttribute('data-bg') === '1';
-                var lv = (parseInt(el.getAttribute('data-lv'), 10) + 1) % (READ_ASK_LV_MAX + 1);
-                el.setAttribute('data-lv', String(lv));
-                el.title = '点一下换一档：' + _RD_LV_TIP[lv];
-                readingSetAskLv(isBg, lv);
-                // 换档没有别的可见反馈（就一个小方块），给一下触感，免得以为没点着
+                panel.style.display = (panel.style.display === 'none') ? 'flex' : 'none';
                 try { navigator.vibrate && navigator.vibrate(8); } catch (x) {}
+            });
+            panel.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var b = (e.target && e.target.closest) ? e.target.closest('[data-rdctx]') : null;
+                if (!b) return;
+                var act = b.getAttribute('data-rdctx');
+                if (act.indexOf('pre:') === 0) readingSetAskCtx(isBg, { pre: parseInt(act.slice(4), 10) });
+                else if (act.indexOf('post:') === 0) readingSetAskCtx(isBg, { post: parseInt(act.slice(5), 10) });
+                else { var cur = readingAskCtx(isBg), o = {}; o[act] = cur[act] ? 0 : 1; readingSetAskCtx(isBg, o); }
+                // 只换内容、不换元素——换元素会把这个委托监听器一起换掉，面板就只能点一次
+                panel.innerHTML = readingCtxPanelInner(isBg);
+                el.setAttribute('data-lv', String(readingAskCtxLv(isBg)));
+                try { navigator.vibrate && navigator.vibrate(6); } catch (x) {}
             });
         }
         // 共读提问：是否把「本章前面已聊过的问答」一并发给 AI（＝三档里的第 2 档）
@@ -25735,26 +25850,36 @@ body {
                 } catch (eBg) {}
                 if (!_bgText) _bgCi = null;   // 捞不着就退回普通提问，别发一份空背景过去
             }
-            // 这一轮带多少材料，由条子上那个三档小方块说了算（背景追问和普通提问各记各的档）
-            var _lv = readingAskLv(_bgCi != null);
+            /* 这一轮带多少材料，由条子上那个小圆点弹出的**上下文面板**说了算（见 readingAskCtx）。
+               背景追问和普通提问各记各的一份，而且是**按书**记的。
+               ⚠️背景追问原来那句写死的「前后各三段」现在成了它的**默认值**（_rdCtxFallback），
+                 行为一模一样，但她能改了。 */
+            var _ctxCfg = readingAskCtx(_bgCi != null);
             var CTX_CHAR_BUDGET = 8000;
             var ctxLines = [];
             var ctxUsed = 0;
-            if (_bgCi != null) {
-                // 用户定的：前后各三段（跟背景讲解自己用的上下文一个量级，够认场合、又不至于把剧情全铺开）
-                for (var bi = Math.max(1, pNum - 3); bi <= Math.min(lines.length, pNum + 3); bi++) {
-                    ctxLines.push('[P' + bi + '] ' + lines[bi - 1]);
-                }
-            } else if (!_guide) {
-                for (var i = pNum - 1; i >= 0; i--) {
-                    var lineStr = '[P' + (i + 1) + '] ' + lines[i];
-                    if (i < pNum - 1 && ctxUsed + lineStr.length > CTX_CHAR_BUDGET) break;
-                    ctxLines.unshift(lineStr);
-                    ctxUsed += lineStr.length + 1;
-                }
+            function _pushPara(n) {   // n 是 1 起的段号
+                if (n >= 1 && n <= lines.length && lines[n - 1] != null) ctxLines.push('[P' + n + '] ' + lines[n - 1]);
             }
-            var ctxTruncated = ctxLines.length < pNum;
-            var ctxPreface = '以下是小说原文节选' + (ctxTruncated ? '（因前文较长，仅提供距离目标段最近的部分）' : '');
+            if (!_guide) {
+                if (_ctxCfg.pre < 0) {
+                    // 「全章」＝一直以来的默认：从这一段往前铺到章首，8000 字封顶
+                    for (var i = pNum - 1; i >= 0; i--) {
+                        var lineStr = '[P' + (i + 1) + '] ' + lines[i];
+                        if (i < pNum - 1 && ctxUsed + lineStr.length > CTX_CHAR_BUDGET) break;
+                        ctxLines.unshift(lineStr);
+                        ctxUsed += lineStr.length + 1;
+                    }
+                } else {
+                    for (var i2 = Math.max(1, pNum - _ctxCfg.pre); i2 <= pNum; i2++) _pushPara(i2);
+                }
+                // 后文：默认 0，她自己拨开才有（见面板那段注释里的 ②）
+                for (var i3 = pNum + 1; i3 <= pNum + (_ctxCfg.post || 0); i3++) _pushPara(i3);
+            }
+            // 「是不是掐过头」看第一段是不是第 1 段——按段数截和按字数截都算，别再只判长度
+            var _ctxFirstP = ctxLines.length ? parseInt((ctxLines[0].match(/^\[P(\d+)\]/) || [0, pNum])[1], 10) : pNum;
+            var ctxTruncated = _ctxFirstP > 1;
+            var ctxPreface = '以下是小说原文节选' + (ctxTruncated ? '（只给了这一段附近的部分）' : '');
             // 收集该段已有的评论 / 历史问答，支持「对评论追问」「对上一轮问答再追问」
             var existingComments = [];
             try {
@@ -25772,7 +25897,7 @@ body {
             // 可选（「带前文问答」勾选时）：把本章里这一段「之前」聊过的问答一并带上，
             // 让 AI 接得上前面别的段落的讨论（只取问答块，以「汐：」开头；不含 AI 自动点评）
             var priorQaBlock = '';
-            if (_lv >= 2 && Array.isArray(parsedAll)) {
+            if (_ctxCfg.qa && Array.isArray(parsedAll)) {
                 var _qaPrior = [];
                 for (var qi = 0; qi < parsedAll.length; qi++) {
                     var _c = parsedAll[qi];
@@ -25809,7 +25934,8 @@ body {
             sysPrompt = (_spAsk || READING_MODE_DEFAULT_PERSONA) + '\n\n' +
                 '你正在和用户一起共读小说。用户指定了某一段，可能就这段向你提问，也可能只是想跟你聊天、吐槽、开脑洞、发散讨论。' +
                 '先分清是哪一种：如果是查证原文或细节的认真提问，就结合该段原文、你之前的相关评论 / 问答以及前文认真回答；如果只是闲聊、吐槽或假设性的发散讨论，就放松地顺着聊，像朋友拌嘴那样接话，不用正经分析、不用声明"超出原文 / 节选范围"、也不用反问对方是不是在考你。' +
-                '无论哪种，都保持你的人设语气，绝不剧透当前阅读位置之后的情节，回答自然、简洁，不要加 [P] 段落标记，也不要复述原文。';
+                '无论哪种，都保持你的人设语气，绝不剧透当前阅读位置之后的情节，回答自然、简洁，不要加 [P] 段落标记，也不要复述原文。'
+                + (_ctxCfg.post > 0 ? '（这次我把这一段后面的几段原文也给你了，那几段可以放心用；但我给的节选之外的后续情节仍然不许说。）' : '');
             userMsg = ctxPreface + '，[P' + pNum + '] 是我想问你的这一段：\n\n' + ctxLines.join('\n') +
                 commentBlock + priorQaBlock +
                 '\n\n我的问题是：' + question;
@@ -25848,27 +25974,31 @@ body {
                    ② 她实测这两块合计 6700 字、占一整条提问的一多半，砍掉后背景追问从一万多字降到一两千。
                    代价说清楚：她顺口拐到剧情时，模型对前几十章的记忆会糙一点——想认真聊剧情就双击正文段落，
                    那条路一字未改、材料照旧全带。 */
-                if (_lv >= 1 && chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length)) {
+                if ((_ctxCfg.mt || _ctxCfg.sum) && chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length)) {
                     var _mtText = '';
                     if (chatMemoryTables.characters.length) _mtText += '【人物表】\n| 人物 | 身份 | 关系 | 当前状态 | 备注 |\n| --- | --- | --- | --- | --- |\n' + chatMemoryTables.characters.map(function(r) { return '| ' + (r['人物']||'') + ' | ' + (r['身份']||'') + ' | ' + (r['关系']||'') + ' | ' + (r['当前状态']||'') + ' | ' + (r['备注']||'') + ' |'; }).join('\n');
                     if (chatMemoryTables.places && chatMemoryTables.places.length) _mtText += (_mtText ? '\n\n' : '') + '【地点表】\n| 地点 | 规模/特征 | 关联 | 简介 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.places.map(function(r) { return '| ' + (r['地点']||'') + ' | ' + (r['规模/特征']||'') + ' | ' + (r['关联']||'') + ' | ' + (r['简介']||'') + ' |'; }).join('\n');
                     if (chatMemoryTables.timeline && chatMemoryTables.timeline.length) _mtText += (_mtText ? '\n\n' : '') + '【大事年表】\n| 时间 | 事件 |\n| --- | --- |\n' + chatMemoryTables.timeline.map(function(r) { return '| ' + (r['时间']||'') + ' | ' + (r['事件']||'') + ' |'; }).join('\n');
                     if (chatMemoryTables.plotlines.length) _mtText += (_mtText ? '\n\n' : '') + '【主线/伏笔表】\n| 章节 | 事件 | 细节 | 已解决 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.plotlines.map(function(r) { return '| ' + (r['章节']||'') + ' | ' + (r['事件']||'') + ' | ' + (r['细节']||'') + ' | ' + (r['已解决']||'') + ' |'; }).join('\n');
-                    _summaryLines.push(_mtText);
-                    _mtLen = _mtText.length;
-                    var _segs = chatCompressSummaries.slice(-CHAT_SUMMARY_MAX_SEGS);
-                    _sumLen = _segs.join('').length;
-                    _summaryLines = _summaryLines.concat(_segs);
-                } else if (_lv >= 1 && (chatCompressOutline || (chatCompressSummaries && chatCompressSummaries.length))) {
+                    // 记忆表和摘要各听各的开关（面板 08-29 拆开的）：可以「留着人物表、只扔掉摘要」
+                    if (_ctxCfg.mt) { _summaryLines.push(_mtText); _mtLen = _mtText.length; }
+                    if (_ctxCfg.sum) {
+                        var _segs = chatCompressSummaries.slice(-CHAT_SUMMARY_MAX_SEGS);
+                        _sumLen = _segs.join('').length;
+                        _summaryLines = _summaryLines.concat(_segs);
+                    }
+                } else if (_ctxCfg.sum && (chatCompressOutline || (chatCompressSummaries && chatCompressSummaries.length))) {
                     _summaryLines = chatCompressSummaries.slice(chatOutlineCovers || 0);
                     if (chatCompressOutline) _summaryLines.unshift('【更早前情的大纲】\n' + chatCompressOutline);
                     // ⚠️这一条也得挡：readerEnsureSummaries 会**现场调 API 生成摘要**，
                     // 背景追问走到这里等于白烧一笔，而且烧的还是它根本不需要的东西。
-                } else if (_lv >= 1 && chatReaderMode && readerBookId != null && msg.readerChapter != null) {
+                } else if ((_ctxCfg.mt || _ctxCfg.sum) && chatReaderMode && readerBookId != null && msg.readerChapter != null) {
                     // 阅读模式没有自动压缩摘要：开了「自动总结前情」才按需补摘要（已存的跳过）；没开就只发已备好的，不新烧 API
                     try {
-                        var _genOK = readerSummaryEnabled();
-                        _summaryLines = await readerEnsureSummaries(readerBookId, msg.readerChapter, READER_SUMMARY_LOOKBACK, _pd.ctl.signal, _genOK);
+                        // ⚠️摘要那个开关关掉时 genOK 也要跟着关：readerEnsureSummaries 会**现场调 API 生成摘要**，
+                        //   不挡就是白烧一笔它根本不会发出去的钱（跟背景追问那条路踩过的是同一个坑）。
+                        var _genOK = readerSummaryEnabled() && !!_ctxCfg.sum;
+                        _summaryLines = await readerEnsureSummaries(readerBookId, msg.readerChapter, READER_SUMMARY_LOOKBACK, _pd.ctl.signal, _genOK, { mt: !!_ctxCfg.mt, sum: !!_ctxCfg.sum });
                     } catch (eSum) { if (eSum && eSum.name === 'AbortError') throw eSum; _summaryLines = []; }
                 }
                 // 走的是另外两条分支（没有记忆表）时，整份都算「前文摘要」
@@ -25888,7 +26018,7 @@ body {
                     // 背景追问的材料完全是另一套（没有记忆表/摘要/本段其它问答），分块也得照实记
                     _parts = {
                         '背景讲解': _bgText.length,
-                        '前后三段原文': ctxLines.join('\n').length,
+                        '原文节选': ctxLines.join('\n').length,   // 08-29 前叫「前后三段原文」；范围现在可调，名字跟着改成中性的
                         '记忆表': _mtLen,        // 档位调到 ◐ 以上时才有；照实记，才看得出这一档贵多少
                         '前文摘要': _sumLen,
                         '人设+指令': sysPrompt.length,

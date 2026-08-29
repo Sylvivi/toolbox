@@ -214,18 +214,21 @@ function bootBook() {
     /* 背景追问现在也能自己调档（见 E 组），所以分块里会有「记忆表/前文摘要」两栏；
      * 默认的 ○ 档下它们必须是 0——照实记，才看得出调高一档到底贵多少。 */
     eq('背景追问的分块栏目齐全', Object.keys(D.背景.分块).sort(),
-        ['人设+指令', '前后三段原文', '前文摘要', '我的问题', '背景讲解', '记忆表'].sort());
+        ['人设+指令', '原文节选', '前文摘要', '我的问题', '背景讲解', '记忆表'].sort());
     eq('默认 ○ 档下，记忆表和摘要记的是 0（确实没发）',
         [D.背景.分块['记忆表'], D.背景.分块['前文摘要']], [0, 0]);
     eq('双击普通问答块：老路一字不变，仍记「共读提问」', D.普通.环节, '共读提问');
     ok('双击普通问答块：记忆表和摘要照样带（没误伤）', D.普通.带了记忆表或摘要);
 
-    /* ── E 组：「带多少材料」三档小方块 ─────────────────────────────
-     * 用户 2026-07-28：「让我自己来决定要不要带表格和摘要…这个切换走极简风」，
-     * 选的形态是**一个小圆点、点一下换一档**。
-     * ⚠️档位梯子必须是这个顺序，别改成「轻装／带问答／全带」：
-     *   0 只带原文 → 1 ＋记忆表和摘要（普通提问一直以来的默认）→ 2 ＋本章前文问答
-     * 这样现状恰好落在 1 和 2 上，谁的行为都不会被悄悄改掉。 */
+    /* ── E 组：提问上下文面板（2026-08-29 起，取代了原来的三档小圆点）───────────
+     * 起因：她报「特殊情况下选中提问会因为前文的内容被谷歌排斥」，要一个界面自己控制发多少。
+     * 她拍板的四件事，本组逐条钉住：
+     *   ① 圆点**不再循环换档**，点一下＝展开面板（一套真相，免得面板和圆点互相覆盖）；
+     *   ② 原文是「前 N 段 / 后 M 段」两个数，**后文默认 0**（防剧透靠这个默认守）；
+     *   ③ 记忆表和摘要**是两个独立开关**（摘要浓度可能比原文还高，要能单独扔）；
+     *   ④ 设置**按书各记一份**。
+     * ⚠️老的三档 readingAskLv 仍然活着，当「这本书还没调过面板」时的默认值来源——
+     *   下面「老数据行为不变」那几条就是钉它的，别因为面板做好了就把它删了。 */
     const E = await page.evaluate(async () => {
         const body = []; for (let i = 1; i <= 30; i++) body.push('第' + i + '段：' + '正'.repeat(120));
         const book = { id: 'bk_l', fileName: '书.txt', fileSize: 9, chapters: [{ title: '第一章', body: body.join('\n') }] };
@@ -242,7 +245,11 @@ function bootBook() {
         chatMessages[mi].content += '\n[P17] 汐：背景：绿衣官员\n唐代六七品官员穿绿色官服。🍄';
         window.chatMemoryTables = { characters: [{ '人物': '甲', '身份': '书生', '关系': '', '当前状态': '', '备注': '' }], places: [], timeline: [], plotlines: [] };
         window.chatCompressSummaries = ['前情摘要'.repeat(50)];
-        ['reading_ask_lv', 'reading_ask_lv_bg', 'reading_ask_ctx'].forEach(k => localStorage.removeItem(k));
+        const clearCtx = () => {
+            ['reading_ask_lv', 'reading_ask_lv_bg', 'reading_ask_ctx'].forEach(k => localStorage.removeItem(k));
+            Object.keys(localStorage).filter(k => k.indexOf('reading_ask_ctx2:') === 0).forEach(k => localStorage.removeItem(k));
+        };
+        clearCtx();
         chatRenderAllMessages(false);
 
         const out = {};
@@ -265,41 +272,112 @@ function bootBook() {
             bar.querySelector('.rp-ask').value = '问题？';
             bar.querySelector('.rp-ask-send').click();
             await new Promise(r => setTimeout(r, 300));
+            const last = sent.messages[sent.messages.length - 1].content;
             return {
                 表格摘要: sent.messages.some(m => /人物表|前情摘要/.test(m.content)),
-                前文问答: /早先答过的/.test(sent.messages[sent.messages.length - 1].content),
+                人物表: sent.messages.some(m => /人物表/.test(m.content)),
+                前情摘要: sent.messages.some(m => /前情摘要/.test(m.content)),
+                前文问答: /早先答过的/.test(last),
+                段号: [...new Set((last.match(/\[P(\d+)\]/g) || []).map(x => parseInt(x.slice(2), 10)))].sort((a, b) => a - b),
+                人设: sent.messages[0].content,
                 字数: sent.messages.map(m => m.content).join('').length
             };
         };
-        const el0 = openBar(null).querySelector('.rp-lv');
-        out.控件存在 = !!el0;
-        out.点四下循环 = [el0.getAttribute('data-lv')];
-        for (let i = 0; i < 4; i++) { el0.click(); out.点四下循环.push(el0.getAttribute('data-lv')); }
+        // ① 老数据行为不变：这本书还没调过面板 → 一切照老三档来
+        out.老档0 = (readingSetAskLv(false, 0), await askAt(null));
+        out.老档1 = (readingSetAskLv(false, 1), await askAt(null));
+        out.老档2 = (readingSetAskLv(false, 2), await askAt(null));
+        out.背景老档0 = (readingSetAskLv(true, 0), await askAt(0));
+        out.背景老档1 = (readingSetAskLv(true, 1), await askAt(0));
+        clearCtx();
 
-        readingSetAskLv(false, 0); out.普通_轻装 = await askAt(null);
-        readingSetAskLv(false, 1); out.普通_中档 = await askAt(null);
-        readingSetAskLv(false, 2); out.普通_全带 = await askAt(null);
-        readingSetAskLv(true, 0); out.背景_轻装 = await askAt(0);
-        readingSetAskLv(true, 1); out.背景_中档 = await askAt(0);
-        out.互不干扰 = { 普通: readingAskLv(false), 背景: readingAskLv(true) };
+        // ② 面板本身：默认收起、点圆点展开、再点收起
+        const bar0 = openBar(null);
+        const el0 = bar0.querySelector('.rp-lv');
+        const panel0 = bar0.querySelector('.rp-ctxpanel');
+        out.控件存在 = !!el0 && !!panel0;
+        out.默认收起 = panel0.style.display === 'none';
+        el0.click(); out.点开 = panel0.style.display;
+        el0.click(); out.再点收起 = panel0.style.display;
+        el0.click();
+
+        // ③ 勾一下就存进「这本书」那份，圆点跟着变脸
+        const chip = (act) => panel0.querySelector('[data-rdctx="' + act + '"]');
+        out.圆点起始 = el0.getAttribute('data-lv');
+        chip('pre:5').click();
+        out.存了前文5 = readingAskCtx(false).pre;
+        out.选中会高亮 = chip('pre:5').classList.contains('active') && !chip('pre:-1').classList.contains('active');
+        chip('sum').click();
+        out.拆得开 = { 摘要: readingAskCtx(false).sum, 记忆表: readingAskCtx(false).mt };
+        out.圆点跟着变 = el0.getAttribute('data-lv');
+        chip('qa').click();
+        out.圆点满档 = el0.getAttribute('data-lv');
+        out.存储键带书 = _rdCtxKey();
+        clearCtx();
+
+        // ④ 各项真的生效
+        readingSetAskCtx(false, { pre: 2, post: 0, mt: 1, sum: 1, qa: 0 });
+        out.前2段 = await askAt(null);
+        readingSetAskCtx(false, { post: 3 });
+        out.前2后3 = await askAt(null);
+        readingSetAskCtx(false, { pre: -1, post: 0, mt: 1, sum: 0 });
+        out.只带表 = await askAt(null);
+        readingSetAskCtx(false, { mt: 0, sum: 1 });
+        out.只带摘要 = await askAt(null);
+        readingSetAskCtx(false, { mt: 0, sum: 0 });
+        out.都不带 = await askAt(null);
+        readingSetAskCtx(false, { qa: 1 });
+        out.带前文问答 = await askAt(null);
+
+        // 普通提问和背景追问仍是两套，各记各的
+        readingSetAskCtx(true, { pre: 1 });
+        out.两套互不干扰 = { 普通: readingAskCtx(false).pre, 背景: readingAskCtx(true).pre };
+
+        // ⑤ 按书各记一份：换本书就回到默认（用一个跟默认不同的值才验得出来）
+        readingSetAskCtx(false, { pre: 10 });
+        out.这本书 = readingAskCtx(false).pre;
+        window.readerBookId = 'bk_other';
+        window.chatCurrentConvId = 'reader_bk_other';
+        out.另一本书 = readingAskCtx(false).pre;
+        window.readerBookId = 'bk_l';
+        window.chatCurrentConvId = 'reader_bk_l';
+        out.换回来还在 = readingAskCtx(false).pre;
+        clearCtx();
         return out;
     });
-    ok('提问条上有那个三档小圆点', E.控件存在);
-    eq('点一下换一档，转一圈回到原处', E.点四下循环, ['1', '2', '0', '1', '2']);
-    /* ⚠️默认值这两条是「不改现状」的保险：普通提问默认 1（一直以来就带表格摘要、不带前文问答），
-     * 背景追问默认 0（刚定的轻装）。改默认＝在用户没要求的情况下动她的行为和花费。 */
-    eq('普通提问默认停在「＋记忆表和摘要」（＝一直以来的样子）', E.默认档.普通, 1);
-    eq('背景追问默认停在「只带原文」（＝刚定的轻装）', E.默认档.背景, 0);
-    eq('老开关勾过的人，迁移成「全带」，行为不变', E.老开关勾上过, 2);
-    ok('第 0 档：表格摘要和前文问答都不带', !E.普通_轻装.表格摘要 && !E.普通_轻装.前文问答, JSON.stringify(E.普通_轻装));
-    ok('第 1 档：带表格摘要，不带前文问答', E.普通_中档.表格摘要 && !E.普通_中档.前文问答, JSON.stringify(E.普通_中档));
-    ok('第 2 档：两样都带', E.普通_全带.表格摘要 && E.普通_全带.前文问答, JSON.stringify(E.普通_全带));
-    ok('档位越高发得越多（梯子是单调的）',
-        E.普通_轻装.字数 < E.普通_中档.字数 && E.普通_中档.字数 < E.普通_全带.字数,
-        [E.普通_轻装.字数, E.普通_中档.字数, E.普通_全带.字数].join(' < '));
-    ok('背景追问也能自己调档：调到 ◐ 就带上表格摘要', E.背景_中档.表格摘要, JSON.stringify(E.背景_中档));
-    ok('背景追问在 ○ 档仍旧不带', !E.背景_轻装.表格摘要, JSON.stringify(E.背景_轻装));
-    eq('两套档各记各的，互不干扰', E.互不干扰, { 普通: 2, 背景: 1 });
+    /* ⚠️「老数据行为不变」这一组是整个改动的安全绳：她的书都还没调过面板，
+     * 读出来的必须跟 08-29 之前一模一样，否则等于在她没要求的情况下动了行为和花费。 */
+    eq('普通提问的默认仍是「＋记忆表和摘要」', E.默认档.普通, 1);
+    eq('背景追问的默认仍是「只带原文」', E.默认档.背景, 0);
+    eq('老开关勾过的人，仍迁移成「全带」', E.老开关勾上过, 2);
+    ok('老 0 档：表格摘要和前文问答都不带', !E.老档0.表格摘要 && !E.老档0.前文问答, JSON.stringify(E.老档0));
+    ok('老 1 档：带表格摘要，不带前文问答', E.老档1.表格摘要 && !E.老档1.前文问答, JSON.stringify(E.老档1));
+    ok('老 2 档：两样都带', E.老档2.表格摘要 && E.老档2.前文问答, JSON.stringify(E.老档2));
+    ok('老档位越高发得越多（梯子还是单调的）',
+        E.老档0.字数 < E.老档1.字数 && E.老档1.字数 < E.老档2.字数,
+        [E.老档0.字数, E.老档1.字数, E.老档2.字数].join(' < '));
+    ok('背景追问的老档也还在（调到 ◐ 就带上表格摘要）', E.背景老档1.表格摘要 && !E.背景老档0.表格摘要);
+
+    ok('提问条上有圆点，也有那张面板', E.控件存在);
+    ok('面板默认收着，不占地方', E.默认收起);
+    eq('⚠️点圆点是展开面板，不再是换档', [E.点开, E.再点收起], ['flex', 'none']);
+    eq('勾「前文 5 段」立刻存进这本书那份', E.存了前文5, 5);
+    ok('选中的那颗高亮、别的取消（不然不知道自己选了啥）', E.选中会高亮);
+    eq('⚠️记忆表和摘要是两个独立开关：关掉摘要，人物表还在', E.拆得开, { 摘要: 0, 记忆表: 1 });
+    eq('圆点跟着面板变脸（表还在→◐，再加前文问答→●）', [E.圆点起始, E.圆点跟着变, E.圆点满档], ['1', '1', '2']);
+    ok('设置存在「按书」的键上，不是全局一份', /^reading_ask_ctx2:.+/.test(E.存储键带书) && !/:_$/.test(E.存储键带书), E.存储键带书);
+
+    eq('前 2 段：只发 P18-P20', E.前2段.段号, [18, 19, 20]);
+    eq('⚠️后文默认 0；拨到 3 才多出 P21-P23', E.前2后3.段号, [18, 19, 20, 21, 22, 23]);
+    ok('给了后文就跟 AI 说一声（否则跟「绝不剧透」自相矛盾）', /后面的几段原文也给你了/.test(E.前2后3.人设), E.前2后3.人设.slice(-120));
+    ok('没给后文时不说那句话', !/后面的几段原文也给你了/.test(E.前2段.人设));
+    ok('只带记忆表：有人物表、没有前情摘要', E.只带表.人物表 && !E.只带表.前情摘要, JSON.stringify(E.只带表));
+    ok('只带摘要：有前情摘要、没有人物表', E.只带摘要.前情摘要 && !E.只带摘要.人物表, JSON.stringify(E.只带摘要));
+    ok('两个都关：一样都不发', !E.都不带.表格摘要, JSON.stringify(E.都不带));
+    ok('前文问答那一栏搬进面板后照样管用', E.带前文问答.前文问答);
+    eq('⚠️按书各记一份：换本书回到默认（全章），换回来自己那份还在',
+        [E.这本书, E.另一本书, E.换回来还在], [10, -1, 10]);
+    eq('普通提问和背景追问仍是两套，各记各的', E.两套互不干扰, { 普通: -1, 背景: 1 });
 
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' ｜ '));
 
