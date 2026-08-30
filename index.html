@@ -6982,20 +6982,253 @@ body {
         // 初始化装饰
         applyChatDeco(getDecoId());
 
-        /* ============= 自定义座右铭 ============= */
+        /* ============= 自定义座右铭 ＋ 电影 tagline ============= */
+        /* ⚠️2026-08-30 她提的：「trakt 对很多电影都有个 tagline……我想在某个地方填入
+           我喜欢或者看过的电影，然后那一句格言可以在这些电影的 tagline 里随机切换」，
+           紧接着又说「**我主要是不想自己填电影什么的了**」。
+           → 所以不做片单、不做搜索框、不在网页里存 key：
+             **汐用她的 TMDB key 在服务器上一次性抓好，把结果内置进来**，
+             她那边零设置、零维护、零网络请求，打开就随机一句。
+           ⚠️⚠️**她那把 TMDB key 绝不能写进这个文件**——这个仓库是 public 的
+             （见 CLAUDE.md 里「密钥被冻进源码」那条，已经出过一次事）。
+             下面这张表只有公开的 tagline 和片名，没有任何凭据。
+           ⚠️片源＝TMDB top_rated 前 20 页 ＋ popular 前 5 页，筛掉：
+             长度不在 12~62 之间的、2026 年以后还没上映的（标语多是占位）、
+             全大写的、含 coming soon 这类宣发词的、去重后剩 280 条。
+           想扩充/换一批：脚本在 scratchpad 里没留，重跑就是
+             `/movie/top_rated?page=N` 拿 id → `/movie/{id}` 取 tagline。 */
         var MOTTO_KEY = 'toolbox_motto';
+        var MOTTO_MOVIE_KEY = 'toolbox_motto_movie';   // '1'=用电影 tagline（默认），'0'=用她自己那句
+        var MOTTO_DEFAULT = 'Tomorrow is another day.';
+        var MOTTO_TAGLINES = [
+        ["It explodes like 12 sticks of dynamite!","12 Angry Men"],["Time is the enemy.","1917"],
+        ["An epic drama of adventure and exploration.","2001: A Space Odyssey"],["A first love pov story.","20th Century Girl"],
+        ["Aal Izz Well!","3 Idiots"],["Some friendships transcend lifetimes.","A Dog's Journey"],
+        ["Lying with faith is not always a sin.","A Dog's Will"],["Robert Bresson's Prize Winning Film","A Man Escaped"],
+        ["Sometimes the answer is as simple as learning to listen.","A Silent Voice: The Movie"],
+        ["A special film about two special people.","A Special Day"],["Based on true events, an untold story of a taxi driver.","A Taxi Driver"],
+        ["Neo-Tokyo is about to E.X.P.L.O.D.E.","Akira"],["In space no one can hear you scream.","Alien"],["This time it's war.","Aliens"],
+        ["It's all about women... and their men!","All About Eve"],["Unveiling millennium-old secrets.","Along with the Gods: The Last 49 Days"],
+        ["Fate continues even after death.","Along with the Gods: The Two Worlds"],["... look closer","American Beauty"],
+        ["Some legacies must end.","American History X"],["In much wisdom there is much grief.","Andrei Rublev"],
+        ["This is the end...","Apocalypse Now"],["The world of Pandora will change forever.","Avatar: Fire and Ash"],
+        ["A new age has come.","Avengers: Age of Ultron"],["Avenge the fallen.","Avengers: Endgame"],
+        ["An entire universe. Once and for all.","Avengers: Infinity War"],
+        ["Can the greatest romance of your life last only one night?","Before Sunrise"],["You protect the world. I'll protect you.","Better Days"],
+        ["The Prize Picture They Want to Censor!","Bicycle Thieves"],
+        ["The Story of a Perfect Crime ... Perfectly Hilarious!","Big Deal on Madonna Street"],
+        ["Clowning around can cost your soul","Bingo: The King of the Mornings"],["Find your way home.","Black Beauty"],
+        ["When the legend revives... The kingdom will fall.","Black Clover: Sword of the Wizard King"],
+        ["Man has made his match ...now it's his problem.","Blade Runner"],["Look Who’s Inside Again","Bo Burnham: Inside"],
+        ["Are you happy?","Bo Burnham: Make Happy"],["Fearless lives forever.","Bohemian Rhapsody"],
+        ["Every man dies, not every man really lives.","Braveheart"],["Is it better to speak or die?","Call Me by Your Name"],
+        ["It takes courage to hope.","Capernaum"],["The future favors the brave.","Captain America: Brave New World"],
+        ["They had a date with fate in Casablanca!","Casablanca"],["No one stays at the top forever.","Casino"],
+        ["One day, a girl came down from the sky…","Castle in the Sky"],["The true story of a real fake.","Catch Me If You Can"],
+        ["Lost Love, Flower, Chainsaw.","Chainsaw Man - The Movie: Reze Arc"],["AT LAST! The Celebrated French Film.","Children of Paradise"],
+        ["Some called him a hero...others called him a heel.","Citizen Kane"],["True Blind Love","City Lights"],
+        ["Don't wait for tomorrow to live for today.","Clouds"],["The celebration of a lifetime.","Coco"],
+        ["The cruelest side of war.","Come and See"],["Be careful what you wish for.","Coraline"],["Hello cruel world.","Cruella"],
+        ["He was their inspiration. He made their lives extraordinary.","Dead Poets Society"],["Come together.","Deadpool & Wolverine"],
+        ["With your blade, bring an end to the nightmare.","Demon Slayer -Kimetsu no Yaiba- The Movie: Mugen Train"],
+        ["It's time to have some fun.","Demon Slayer: Kimetsu no Yaiba Infinity Castle"],
+        ["Come… fall In love, all over again…","Dilwale Dulhania Le Jayenge"],["Life, liberty, and the pursuit of vengeance.","Django Unchained"],
+        ["A change is going to come...","Doctor Who: The Time of the Doctor"],["Sincerely, Slowly, Falling in Love.","Dou kyu sei – Classmates"],
+        ["It's love and murder at first sight!","Double Indemnity"],
+        ["The hot-line suspense comedy.","Dr. Strangelove or: How I Learned to Stop Worrying and Love the Bomb"],
+        ["A new adventure to become the strongest begins.","Dragon Ball Super: Broly"],["Long live the fighters.","Dune: Part Two"],
+        ["Mexico 2010, Hell... nothing to celebrate","El Infierno"],["On the streets of Rio only the elite survive","Elite Squad"],
+        ["Bye-bye, all of EVANGELION.","Evangelion: 3.0+1.0 Thrice Upon a Time"],["Mischief. Mayhem. Soap.","Fight Club"],
+        ["When life keeps you apart, fight for every inch.","Five Feet Apart"],["The flavor you know. The story you don't.","Flamin' Hot"],
+        ["You never forget your first love.","Flipped"],["They took the American dream for a ride.","Ford v Ferrari"],
+        ["Inspired by a true story","From Straight A's to XXX"],["In Vietnam, the wind doesn't blow. It sucks.","Full Metal Jacket"],
+        ["How do you create an ordinary life for an extraordinary girl?","Gifted"],["A story of a certain summer.","Given"],
+        ["What we do in life echoes in eternity.","Gladiator"],["Three decades of life in the mafia.","GoodFellas"],
+        ["Get off my lawn.","Gran Torino"],["Why do fireflies have to die so soon?","Grave of the Fireflies"],
+        ["Inspired by a True Friendship.","Green Book"],["Dependence arises from the previous life.","Green Snake"],
+        ["Once more with feeling.","Guardians of the Galaxy Vol. 3"],["Love will give you life.","Guillermo del Toro's Pinocchio"],
+        ["A true story of faith, devotion and undying love.","Hachi: A Dog's Tale"],
+        ["What befalls others today, may be your own fate tomorrow.","Harakiri"],["It all ends.","Harry Potter and the Deathly Hallows: Part 2"],
+        ["Let the magic begin.","Harry Potter and the Philosopher's Stone"],
+        ["Something wicked this way comes.","Harry Potter and the Prisoner of Azkaban"],["A Los Angeles crime saga.","Heat"],
+        ["Meet the women you don't know, behind the mission you do.","Hidden Figures"],["Stark, intense drama almost beyond belief!","High and Low"],
+        ["We won't let her shed tears again.","Hope"],
+        ["Never underestimate a grandma's love for her family.","How to Make Millions Before Grandma Dies"],
+        ["Family never leaves you.","How to Train Your Dragon: Homecoming"],["Love Comes First.","Howl's Moving Castle"],
+        ["I blink. I twitch. I jump. I click. I whistle. I shout.","I Swear"],
+        ["This is a story about an unforgettable spring...","I Want to Eat Your Pancreas"],
+        ["A big story of a little man which will grip your soul...","Ikiru"],["There are encounters that change your life","Impossible Things"],
+        ["The heart wants what the heart wants.","In a Heartbeat"],["2 letters. One for the brother. One for the father.","Incendies"],
+        ["Your mind is the scene of the crime.","Inception"],["Once upon a time in Nazi occupied France...","Inglourious Basterds"],
+        ["It's not the house that's haunted.","Insidious"],["Mankind was born on Earth. It was never meant to die here.","Interstellar"],
+        ["It's a wonderful laugh! It's a wonderful love!","It's a Wonderful Life"],["An anti-hate satire.","Jojo Rabbit"],
+        ["Put on a happy face.","Joker"],["Together they can fly.","Josee, the Tiger and the Fish"],
+        ["The event the world will never forget.","Judgment at Nuremberg"],["Love is a twisted curse.","Jujutsu Kaisen 0"],
+        ["An adventure 65 million years in the making.","Jurassic Park"],["The war to end all wars.","Justice League Dark: Apokolips War"],
+        ["We will definitely return alive. Go back to that place.","KONOSUBA – God's blessing on this wonderful world! Legend of Crimson"],
+        ["They sing. They dance. They battle demons.","KPop Demon Hunters"],["Here comes the bride.","Kill Bill: Vol. 1"],
+        ["A true selfless act always sparks another.","Klaus"],["The world’s most talked about movie today!","La Dolce Vita"],
+        ["How far you fall doesn't matter, it's how you land…","La Haine"],["Nothing is written.","Lawrence of Arabia"],["Poor Gaspard...","Le Trou"],
+        ["She'll save her ex. Or die crying.","Lesbian Space Princess"],["Every child is special.","Like Stars on Earth"],
+        ["The search begins","Lion"],["A Disgrace to Criminals Everywhere.","Lock, Stock and Two Smoking Barrels"],
+        ["Manga drew them together. Life made them best friends.","Look Back"],["Who says money isn't important?","Love Hurts"],
+        ["Everyone deserves a great love story.","Love, Simon"],["The truth is, we cannot speak other than by our paintings.","Loving Vincent"],
+        ["If you want the job done right, hire a professional.","Léon: The Professional"],["Who is the murderer?","M"],
+        ["The future belongs to the mad.","Mad Max: Fury Road"],["I weave my life with yours.","Maquia: When the Promised Flower Blooms"],
+        ["Some memories are best forgotten.","Memento"],["The worst of them will stay with you... forever.","Memories of Murder"],
+        ["New city. Same duty.","Miraculous World: New York, United HeroeZ"],["Loving people doesn't save them.","Mommy"],
+        ["Extreme violence. Bad language. And a bloody good time.","Mortal Kombat Legends: Scorpion's Revenge"],
+        ["An ordinary man, an extraordinary journey... FOR LOVE.","My Name Is Khan"],
+        ["He's your friendly neighbourhood forest spirit!","My Neighbor Totoro"],["Witness a hero reborn.","Ne Zha 2"],
+        ["The fate of destruction is also the joy of rebirth.","Neon Genesis Evangelion: The End of Evangelion"],
+        ["Rebirth of a hero","New Gods: Nezha Reborn"],["There are no clean getaways.","No Country for Old Men"],
+        ["Did mom really abandon us?","Nobody Knows"],["It's a deadly game of \"tag\" and Cary Grant is \"it\"!","North by Northwest"],
+        ["15 years of imprisonment, five days of vengeance.","Oldboy"],["The last seven days of Stefano Cucchi","On My Skin"],
+        ["100 years of Disney magic comes together.","Once Upon a Studio"],["Crime, passion and lust for power.","Once Upon a Time in America"],
+        ["The world forever changes.","Oppenheimer"],["A Legend for Today","Ordet"],["Family is who you make it.","Palmer"],
+        ["Destiny is the bridge you build, to the one you love.","Paperman"],["Act like you own the place.","Parasite"],
+        ["\"excuse me... who are you?\"","Perfect Blue"],["Ingmar Bergman's most personal and original film.","Persona"],
+        ["The memories. The madness. The music... The movie.","Pink Floyd: The Wall"],["Don't regret. Remember.","Portrait of a Lady on Fire"],
+        ["She loves everything about her son...except who he is.","Prayers for Bobby"],
+        ["The fate of the world rests on the courage of one warrior.","Princess Mononoke"],
+        ["How far would you go to protect your child?","Prisoners"],["A new and altogether different screen excitement!","Psycho"],
+        ["You won’t know the facts until you’ve seen the fiction.","Pulp Fiction"],["Say hola to his little friends.","Puss in Boots: The Last Wish"],
+        ["Think for yourself.","Radical"],["In a mad world, only the mad are sane.","Ran"],["The husband, the wife… or the bandit?","Rashomon"],
+        ["It only takes one witness to spoil the perfect crime.","Rear Window"],["What is the key to life - power, prestige or peace?","Red Beard"],
+        ["Love who you want. It's good foreign policy.","Red, White & Royal Blue"],
+        ["Save the universe from yourselves or you're fired.","Regular Show: The Movie"],["Every dog has his day.","Reservoir Dogs"],
+        ["Our battle has barely begun.","Rome, Open City"],["Love knows no boundaries.","Room"],
+        ["You cut well, but the best sword stays in its sheath!","Sanjuro"],["Without mercy, man is like a beast.","Sansho the Bailiff"],
+        ["The mission is a man.","Saving Private Ryan"],["He loved the American Dream. With a vengeance.","Scarface"],
+        ["Whoever saves one life, saves the world entire.","Schindler's List"],["Gluttony. Greed. Sloth. Envy. Wrath. Pride. Lust.","Se7en"],
+        ["Unmatched for suspense and spectacle!","Seven Samurai"],["Every inch of footage holds such a laugh!","Sherlock Jr."],
+        ["Someone is missing.","Shutter Island"],["The hideous truth, concealed far too long.","Silenced"],
+        ["What a Glorious Feeling!","Singin' in the Rain"],["Based on a remarkable true story.","Society of the Snow"],
+        ["The movie too HOT for words!","Some Like It Hot"],["Let the song of the sea sway your heart...","Song of the Sea"],
+        ["Everybody has a soul. Joe Gardner is about to find his.","Soul"],["Fight for the light. Silence the darkness.","Sound of Freedom"],
+        ["Go for the ultimate spin.","Spider-Man"],["It's how you wear the mask that matters.","Spider-Man: Across the Spider-Verse"],
+        ["It's time to step up.","Spider-Man: Far From Home"],["Homework can wait. The city can't.","Spider-Man: Homecoming"],
+        ["Enter a universe where more than one wears the mask.","Spider-Man: Into the Spider-Verse"],
+        ["Enter the Multiverse.","Spider-Man: No Way Home"],["Beyond the tunnel was a mysterious town.","Spirited Away"],
+        ["A long time ago in a galaxy far, far away...","Star Wars"],["The true kinda love.","Steven Universe: The Movie"],
+        ["It's been a long time coming.","TAYLOR SWIFT | THE ERAS TOUR"],
+        ["One country, one family… divided by war.","Tae Guk Gi: The Brotherhood of War"],
+        ["And in the death of her reputation, she felt truly alive.","Taylor Swift: Reputation Stadium Tour"],
+        ["It's nothing personal.","Terminator 2: Judgment Day"],["Angel faces hell-bent for violence.","The 400 Blows"],
+        ["The untold story begins.","The Amazing Spider-Man"],
+        ["Meet the dog who will show the world how to be human.","The Art of Racing in the Rain"],["Some assembly required.","The Avengers"],
+        ["The Possibilities Were Endless...","The Best of Youth"],["A journey, in search of home.","The Boy, the Mole, the Fox and the Horse"],
+        ["You must become Caligari!","The Cabinet of Dr. Caligari"],["The best cure for a disease is friendship.","The Cure"],
+        ["Some men just want to watch the world burn.","The Dark Knight"],
+        ["One of the most important and powerful films of all time!","The Deer Hunter"],
+        ["A true story of courage and human dignity.","The Elephant Man"],["The Star Wars saga continues.","The Empire Strikes Back"],
+        ["Whoever wants the next generation the most will get them.","The Forge"],["An offer you can't refuse.","The Godfather"],
+        ["The rise and fall of the Corleone empire.","The Godfather Part II"],["The World's Greatest Laughing Picture!","The Gold Rush"],
+        ["For three men the Civil War wasn't hell. It was practice.","The Good, the Bad and the Ugly"],
+        ["Once again - the whole world laughs!","The Great Dictator"],["The great battle spectacle of our time!","The Great War"],
+        ["You're the one being tricked.","The Handmaiden"],["Two worlds. One voice. No going back.","The Hate U Give"],
+        ["Change begins with a whisper.","The Help"],["What you make of another's kindness is up to you.","The Hidden Fortress"],
+        ["The lie is spreading.","The Hunt"],["The true enigma was the man who cracked the code.","The Imitation Game"],
+        ["Every story has two sides. The truth, only one.","The Invisible Guest"],["It came from outer space!","The Iron Giant"],
+        ["6 reels of Joy.","The Kid"],["One Small Spirit Will Determine the Fate of the World.","The Legend of Hei"],
+        ["One ring to rule them all.","The Lord of the Rings: The Fellowship of the Ring"],
+        ["The journey continues.","The Lord of the Rings: The Two Towers"],["Believe the unbelievable.","The Matrix"],
+        ["An Immortal Screen Classic that will live Forever!","The Passion of Joan of Arc"],
+        ["Music was his passion. Survival was his masterpiece.","The Pianist"],["Are you watching closely?","The Prestige"],
+        ["Dance she did, and dance she must…Between her two loves!","The Red Shoes"],
+        ["An unsolved crime. A love story. An unwritten ending.","The Secret in Their Eyes"],
+        ["The story of a challenge to death.","The Seventh Seal"],["Fear can hold you prisoner. Hope can set you free.","The Shawshank Redemption"],
+        ["A masterpiece of modern horror.","The Shining"],["Not every gift is a blessing.","The Sixth Sense"],
+        ["...all it takes is a little confidence.","The Sting"],["Anytime. Anywhere. Anyone.","The Thing"],["On the air. Unaware.","The Truman Show"],
+        ["Five criminals. One line up. No coincidence.","The Usual Suspects"],["The voices on the phone are real.","The Voice of Hind Rajab"],
+        ["‘Dynamic’ ‘Tremendous’ ‘Shattering’","The Wages of Fear"],["Discover your true nature.","The Wild Robot"],
+        ["Earn. Spend. Party.","The Wolf of Wall Street"],["There will be greed. There will be vengeance.","There Will Be Blood"],
+        ["The Italian phenomenon.","There's Still Tomorrow"],["WANTED: A Leg, Dead or Alive","Three Men and a Leg"],["The untold true story.","Togo"],
+        ["Feel the need... The need for speed.","Top Gun: Maverick"],["Hang on for the comedy that goes to infinity and beyond!","Toy Story"],
+        ["Choose life.","Trainspotting"],["Witness the origin.","Transformers One"],["Big hero. Bigger responsibility.","Ultraman: Rising"],
+        ["The love between a mother and a son knows no Boundraries.","Under the Same Moon"],["Change is in the air.","Up"],
+        ["Your data is deadly.","War of the Worlds"],["Flee, fly, foe, fun! Here's an adventure for everyone.","Warriors of the Wind"],
+        ["A many splendored thing.","We All Loved Each Other So Much"],["The road to greatness can take you to the edge.","Whiplash"],
+        ["I found someone I like.","Whisper of the Heart"],["The most electrifying entertainment of our time!","Witness for the Prosecution"],
+        ["One mother, two worlds, endless sacrifice...","Wolf Children"],["Be fierce. Be wild. Be free.","Wolfwalkers"],
+        ["Haunting. Erotic. Unforgettable.","Woman in the Dunes"],["Who gives you the courage to face the world?","Wonder"],
+        ["We never live the same day twice.","Yi Yi"],["Kill one or a hundred... you only hang once","Yojimbo"],
+        ["Separated by distance, connected by fate.","Your Name."],["They're back with a twissst.","Zootopia 2"]
+        ];
+        function mottoMovieOn() { return localStorage.getItem(MOTTO_MOVIE_KEY) !== '0'; }
+        var _mottoLast = -1;
+        function _mottoNext() {
+            if (!MOTTO_TAGLINES.length) return null;
+            var i = Math.floor(Math.random() * MOTTO_TAGLINES.length);
+            if (MOTTO_TAGLINES.length > 1 && i === _mottoLast) i = (i + 1) % MOTTO_TAGLINES.length;
+            _mottoLast = i;
+            return MOTTO_TAGLINES[i];
+        }
+        /* 三个 .motto（首页头部有三份）＋ 阅读窄条那一行，一起换 */
+        function _mottoPaint(text, from) {
+            document.querySelectorAll('.motto').forEach(function(m) {
+                m.textContent = text;
+                if (from) m.title = '——《' + from + '》'; else m.removeAttribute('title');
+            });
+            var h = document.getElementById('readingHintMotto');
+            if (h) h.textContent = text;
+        }
+        function mottoShuffle() {
+            if (!mottoMovieOn()) return;
+            var x = _mottoNext();
+            if (x) _mottoPaint(x[0], x[1]);
+        }
+        /* 电影模式下不让它可编辑——否则点一下就变成光标闪烁，换不了句 */
+        function _mottoSyncEditable() {
+            var on = mottoMovieOn();
+            document.querySelectorAll('.motto').forEach(function(m) {
+                m.contentEditable = on ? 'false' : 'true';
+                m.style.cursor = on ? 'pointer' : 'text';
+            });
+        }
         function saveMotto(el) {
             var text = el.textContent.trim();
-            if (!text) { text = 'Tomorrow is another day.'; el.textContent = text; }
+            if (!text) { text = MOTTO_DEFAULT; el.textContent = text; }
             localStorage.setItem(MOTTO_KEY, text);
             document.querySelectorAll('.motto').forEach(function(m) {
                 if (m !== el) m.textContent = text;
             });
+            var h = document.getElementById('readingHintMotto');
+            if (h) h.textContent = text;
+        }
+        /* 长按＝在「电影 tagline」和「我自己那句」之间来回切；短按＝换下一句 */
+        function mottoToggleMode() {
+            var to = mottoMovieOn() ? '0' : '1';
+            localStorage.setItem(MOTTO_MOVIE_KEY, to);
+            _mottoSyncEditable();
+            if (to === '1') {
+                mottoShuffle();
+                if (typeof showToast === 'function') showToast('🎬 换成电影台词了，点一下换下一句');
+            } else {
+                _mottoPaint(localStorage.getItem(MOTTO_KEY) || MOTTO_DEFAULT, '');
+                if (typeof showToast === 'function') showToast('✍️ 换回你自己那句了，点一下就能改');
+            }
         }
         (function() {
-            var saved = localStorage.getItem(MOTTO_KEY);
-            if (saved) {
-                document.querySelectorAll('.motto').forEach(function(m) { m.textContent = saved; });
+            var 计时 = null, 长按了 = false;
+            document.querySelectorAll('.motto').forEach(function(m) {
+                m.addEventListener('pointerdown', function() {
+                    长按了 = false;
+                    计时 = setTimeout(function() { 长按了 = true; mottoToggleMode(); }, 550);
+                });
+                ['pointerup', 'pointerleave', 'pointercancel'].forEach(function(e) {
+                    m.addEventListener(e, function() { clearTimeout(计时); });
+                });
+                m.addEventListener('click', function(ev) {
+                    if (长按了) { 长按了 = false; ev.preventDefault(); return; }
+                    if (mottoMovieOn()) { ev.preventDefault(); mottoShuffle(); }
+                });
+            });
+            _mottoSyncEditable();
+            if (mottoMovieOn()) mottoShuffle();
+            else {
+                var saved = localStorage.getItem(MOTTO_KEY);
+                if (saved) _mottoPaint(saved, '');
             }
         })();
 
