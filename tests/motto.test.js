@@ -33,6 +33,13 @@ const R=[]; const ok=(n,p,d)=>R.push({n,p:!!p,d});
     out.切回后没有出处 = !m.getAttribute('title');
     mottoToggleMode();
     out.再切回电影 = MOTTO_TAGLINES.some(x=>x[0]===m.textContent.trim());
+    /* ⚠️2026-08-30 她报的：阅读折叠条上没同步。病根是 readingCollapseInput() 里
+       自己去读 localStorage.toolbox_motto——那是**旧的自定义句**，不是屏幕上这一句。
+       这一条专钉它，别再让哪处自己去读那个键。 */
+    const 现在 = m.textContent.trim();
+    readingCollapseInput();
+    out.折叠条_收起后 = document.getElementById('readingHintMotto').textContent.trim();
+    out.折叠条同步 = out.折叠条_收起后 === 现在;
     return out;
   });
   ok('池子有 200 条以上', r.池子>=200, r.池子);
@@ -50,6 +57,7 @@ const R=[]; const ok=(n,p,d)=>R.push({n,p:!!p,d});
   ok('切回后点它不再乱换', r.切回后点了不变);
   ok('切回后不再显示出处', r.切回后没有出处);
   ok('再长按能切回电影模式', r.再切回电影);
+  ok('⚠️收起输入框后，折叠条上仍是当前这句（不是旧的自定义句）', r.折叠条同步, r.折叠条_收起后);
   ok('全程无 JS 报错', errs.length===0, errs.join(' | '));
   await b.close();
   const bad=R.filter(x=>!x.p);

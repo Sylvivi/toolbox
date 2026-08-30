@@ -7173,6 +7173,15 @@ body {
             var h = document.getElementById('readingHintMotto');
             if (h) h.textContent = text;
         }
+        /* ⚠️别再各处自己 `localStorage.getItem('toolbox_motto')`——电影模式下那是**旧的自定义句**，
+           不是屏幕上正显示的这一句。谁要用当前这句，一律走这个函数。
+           （2026-08-30 她报「阅读折叠条上怎么没同步」，病根就是那儿自己读了 localStorage。） */
+        function mottoCurrentText() {
+            var m = document.querySelector('.motto');
+            var t = m && m.textContent.trim();
+            if (t) return t;
+            return localStorage.getItem(MOTTO_KEY) || MOTTO_DEFAULT;
+        }
         function mottoShuffle() {
             if (!mottoMovieOn()) return;
             var x = _mottoNext();
@@ -19877,9 +19886,10 @@ body {
         function readingCollapseInput() {
             var a = document.getElementById('chatInputArea');
             if (a) a.classList.add('reading-collapsed');
-            // 窄条提示文字同步首页座右铭
+            // 窄条提示文字同步首页座右铭（⚠️取**当前显示的那句**，电影模式下才不会被旧的自定义句盖掉）
             var m = document.getElementById('readingHintMotto');
-            if (m) m.textContent = localStorage.getItem('toolbox_motto') || 'Tomorrow is another day.';
+            if (m) m.textContent = (typeof mottoCurrentText === 'function')
+                ? mottoCurrentText() : (localStorage.getItem('toolbox_motto') || MOTTO_DEFAULT);
             /* 阅读模式点它不是展开输入框、而是开模型面板（见 readingHintTap），所以电脑上
                光标要摆成「这是个按钮」的手型，不能是「这儿能打字」的 I 形。
                ⚠️两个分支都要写：同一个页面元素在两种模式间来回用，只写一边会把上一次的留下来。 */
