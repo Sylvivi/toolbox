@@ -10,8 +10,6 @@
     python3 tools/tmdb.py taglines --pages 30 # 多抓几页
     python3 tools/tmdb.py 筛                   # 从 tmdb_raw.json 筛出可用的，打印成 JS 数组
     python3 tools/tmdb.py get /movie/238      # 随便打一个接口看看返回什么（探路用）
-    python3 tools/tmdb.py 搜 让子弹飞           # 按片名去 TMDB 现搜，打印它的 tagline
-    python3 tools/tmdb.py 找 love               # 在**已经抓下来那批**里翻（不联网，快）
 
 ⚠️**以后要抓别的东西（海报、评分、类型、剧集台词…）就在这儿加个子命令**，
    `get()` 已经把 key、重试、超时都包好了，别再另起一份。
@@ -91,62 +89,11 @@ def 筛(最短=12, 最长=62):
     print(line.rstrip(','))
 
 
-def 搜(词):
-    """按片名去 TMDB 搜，把找到的片子和它的 tagline 打出来。
-
-    ⚠️2026-09-01 她问「我自己能在里面搜吗」时加的。
-    ⚠️中英文都行——TMDB 认中文片名。搜出来 tagline 是空的很常见
-      （很多片子压根没写 tagline），空的会标出来，不是坏了。
-    """
-    d = get('/search/movie', query=词, language='zh-CN', include_adult='false')
-    rs = (d.get('results') or [])[:8]
-    if not rs:
-        print('没搜到「%s」' % 词)
-        return
-    for r in rs:
-        mid = r.get('id')
-        det = get('/movie/%s' % mid, language='en-US')      # tagline 英文版最全
-        zh = get('/movie/%s' % mid, language='zh-CN')
-        t = (det.get('tagline') or '').strip()
-        tz = (zh.get('tagline') or '').strip()
-        年 = (r.get('release_date') or '????')[:4]
-        print('── %s（%s）%s' % (r.get('title') or r.get('original_title'), 年,
-                                 '' if t or tz else '   ⚠️这片子没有 tagline'))
-        if t:  print('   英文：%s' % t)
-        if tz: print('   中文：%s' % tz)
-
-
-def 找(词):
-    """在**已经抓下来的那批**里翻，不联网。
-
-    ⚠️跟 `搜` 的区别：这个只翻本地 tmdb_raw.json（首页格言就是从这儿筛出来的），
-      快、不耗接口；`搜` 才是去 TMDB 现问。
-    """
-    try:
-        raw = json.load(open(RAW, encoding='utf-8'))
-    except Exception:
-        print('本地还没抓过，先跑一次 `python3 tools/tmdb.py taglines`')
-        return
-    词 = 词.lower()
-    n = 0
-    for r in raw:
-        名 = (r.get('title') or '') + (r.get('original_title') or '')
-        t = (r.get('tagline') or '')
-        if 词 in 名.lower() or 词 in t.lower():
-            n += 1
-            print('%-46s %s' % ((r.get('title') or '')[:44], t))
-    print('\n本地 %d 条里，命中 %d 条' % (len(raw), n))
-
-
 if __name__ == '__main__':
     a = sys.argv[1:] or ['筛']
     if a[0] == 'taglines':
         n = int(a[a.index('--pages') + 1]) if '--pages' in a else 20
         抓tagline(pages=n)
-    elif a[0] in ('搜', 'search'):
-        搜(' '.join(a[1:]))
-    elif a[0] in ('找', 'find'):
-        找(' '.join(a[1:]))
     elif a[0] == 'get':
         print(json.dumps(get(a[1]), ensure_ascii=False, indent=1)[:3000])
     else:
