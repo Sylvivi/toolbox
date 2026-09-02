@@ -5974,16 +5974,10 @@ body {
                                     <div class="chat-model-dropdown preset-dd" id="presetDd_qa"></div>
                                 </div>
                             </div>
-                            <div style="margin-top:0.75em">
-                                <span style="font-size:11px;color:var(--text-muted)">社科导读模型</span>
-                                <div class="chat-model-wrap" style="position:relative;margin-top:0.35em">
-                                    <input type="text" class="preset-pick" id="presetPick_guide" readonly onclick="presetTogglePicker('guide')">
-                                    <span class="preset-caret">▾</span>
-                                    <div class="chat-model-dropdown preset-dd" id="presetDd_guide"></div>
-                                </div>
+                            
                             </div>
                             <div style="margin-top:0.75em">
-                                <span style="font-size:11px;color:var(--text-muted)">标背景讲解模型</span>
+                                <span style="font-size:11px;color:var(--text-muted)">导读 / 讲解模型</span>
                                 <div class="chat-model-wrap" style="position:relative;margin-top:0.35em">
                                     <input type="text" class="preset-pick" id="presetPick_explain" readonly onclick="presetTogglePicker('explain')">
                                     <span class="preset-caret">▾</span>
@@ -31868,7 +31862,7 @@ body {
             compress: { key: 'chat_compress_model',        empty: '跟随当前模型' },
             qa:       { key: 'chat_reading_qa_model',      empty: '跟随当前模型' },
             // ⚠️这两档的空档是「跟随提问模型」不是「跟随当前模型」，理由见 chatResolveReadingModel
-            guide:    { key: 'chat_reading_guide_model',   empty: '跟随提问模型' },
+            // ⚠️导读和讲解已合并成一档（她 09-02 定的），别再拆回去
             explain:  { key: 'chat_reading_explain_model', empty: '跟随提问模型' }
         };
         function presetSlotText(slot) {
@@ -31964,7 +31958,11 @@ body {
            点评从此一律跟随当前模型；'comment' 这个 kind 保留只为不动两处调用点。 */
         var _READING_MODEL_KEYS = {
             qa:      'chat_reading_qa_model',
-            guide:   'chat_reading_guide_model',
+            // ⚠️2026-09-02 她拍板合并：「把科社导读模型和背景标模型并合，不需要分开的」。
+            //   两件事本来就是同一种活（把东西讲成人话），分开是汐上午想多了。
+            //   两个 kind 都留着、都指向同一个键——这样 chatResolveReadingModel('guide')
+            //   和 ('explain') 两处调用点一个字都不用动。
+            guide:   'chat_reading_explain_model',
             explain: 'chat_reading_explain_model'
         };
         function chatResolveReadingModel(kind) {
@@ -31981,6 +31979,16 @@ body {
             ['chat_reading_comment_model', 'chat_image_model'].forEach(function (k) {
                 try { localStorage.removeItem(k); } catch (e) {}
             });
+            /* ⚠️导读那档 09-02 并进了讲解。**先搬值再删键**——她可能已经在
+               「社科导读模型」里选过东西了，直接删等于把她的选择悄悄清掉。
+               只在讲解那档还空着的时候搬，不覆盖她后设的。 */
+            try {
+                var _oldGuide = localStorage.getItem('chat_reading_guide_model');
+                if (_oldGuide && !localStorage.getItem('chat_reading_explain_model')) {
+                    localStorage.setItem('chat_reading_explain_model', _oldGuide);
+                }
+                localStorage.removeItem('chat_reading_guide_model');
+            } catch (e) {}
             presetRenderPickers();
         }
         function chatUpdateCompressLabel() {
