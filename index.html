@@ -2427,15 +2427,22 @@ body {
         }
         /* 往右淡出的引线：把组名和下面的模型行分开，又不像分割线那么硬 */
         .fav-quick .fq-grp::after {
-            /* ⚠️2026-09-02 修：原来写的是 `flex: 1`（把剩下的空间占满），
-               于是**线的长度取决于站名有多长**——名字短线就长、名字长线就短。
-               而渐变是按元素自身宽度铺的，短线等于「一上来就开始褪色」，看着明显更淡。
-               她当场看出来了：「为什么第2个分组会比第1个要浅淡一些呢，就是那根线」。
-               → 改成**固定 4.5em**，跟名字长短无关，每组看起来一模一样。
-                 `flex: 0 1 4.5em` 的 1 是留给极端长名字的：宽度不够时它能缩，不会撑破弹层。 */
-            content: ''; flex: 0 1 4.5em; height: 1px;
-            background: linear-gradient(to right, currentColor, transparent);
-            opacity: 0.28;
+            /* ⚠️2026-09-02 这根线改过两版，**别改回前两版**：
+               ① 最初 `flex:1` + `linear-gradient(to right, currentColor, transparent)`
+                  ——渐变是按元素自身宽度铺的，于是**线越短褪色越快、看着越淡**。
+                  站名长短不一 → 每组深浅不一样。她一眼看出来了：
+                  「为什么第2个分组会比第1个要浅淡一些呢，就是那根线」。
+               ② 汐改成固定 `flex: 0 1 4.5em`，深浅是齐了，但线全变成短短一截，
+                  「横贯一行」那个好看的地方没了。她说「怎么变短了好多，我觉得你可能修错了」。
+               ③ 现在这版：**线照样铺满（flex:1），但渐变改成从右端起算的固定距离**
+                  ——`to left, transparent, currentColor 4.5em` 意思是「右边 4.5em 内淡出，
+                  再往左都是实的」。淡出那一段的长度跟整根线多长无关，
+                  所以**长短可以不同，浓淡却一致**。两个诉求同时满足。
+               ⚠️因为现在大部分是实线（不再整根褪色），透明度从 0.28 降到 0.2，
+                 免得比原来显重。 */
+            content: ''; flex: 1; height: 1px; min-width: 1em;
+            background: linear-gradient(to left, transparent, currentColor 4.5em);
+            opacity: 0.2;
         }
         /* 设置面板收藏区的组标题：跟上面 .fq-grp 同一套，只是字号大一点、不缩进 */
         .fav-grp-title {
@@ -2449,15 +2456,22 @@ body {
             background: currentColor; opacity: 0.6;
         }
         .fav-grp-title::after {
-            /* ⚠️2026-09-02 修：原来写的是 `flex: 1`（把剩下的空间占满），
-               于是**线的长度取决于站名有多长**——名字短线就长、名字长线就短。
-               而渐变是按元素自身宽度铺的，短线等于「一上来就开始褪色」，看着明显更淡。
-               她当场看出来了：「为什么第2个分组会比第1个要浅淡一些呢，就是那根线」。
-               → 改成**固定 4.5em**，跟名字长短无关，每组看起来一模一样。
-                 `flex: 0 1 4.5em` 的 1 是留给极端长名字的：宽度不够时它能缩，不会撑破弹层。 */
-            content: ''; flex: 0 1 4.5em; height: 1px;
-            background: linear-gradient(to right, currentColor, transparent);
-            opacity: 0.28;
+            /* ⚠️2026-09-02 这根线改过两版，**别改回前两版**：
+               ① 最初 `flex:1` + `linear-gradient(to right, currentColor, transparent)`
+                  ——渐变是按元素自身宽度铺的，于是**线越短褪色越快、看着越淡**。
+                  站名长短不一 → 每组深浅不一样。她一眼看出来了：
+                  「为什么第2个分组会比第1个要浅淡一些呢，就是那根线」。
+               ② 汐改成固定 `flex: 0 1 4.5em`，深浅是齐了，但线全变成短短一截，
+                  「横贯一行」那个好看的地方没了。她说「怎么变短了好多，我觉得你可能修错了」。
+               ③ 现在这版：**线照样铺满（flex:1），但渐变改成从右端起算的固定距离**
+                  ——`to left, transparent, currentColor 4.5em` 意思是「右边 4.5em 内淡出，
+                  再往左都是实的」。淡出那一段的长度跟整根线多长无关，
+                  所以**长短可以不同，浓淡却一致**。两个诉求同时满足。
+               ⚠️因为现在大部分是实线（不再整根褪色），透明度从 0.28 降到 0.2，
+                 免得比原来显重。 */
+            content: ''; flex: 1; height: 1px; min-width: 1em;
+            background: linear-gradient(to left, transparent, currentColor 4.5em);
+            opacity: 0.2;
         }
         .fav-quick .fq-item {
             display: flex; align-items: center; gap: 8px;
