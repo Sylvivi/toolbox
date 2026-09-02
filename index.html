@@ -2418,11 +2418,13 @@ body {
         .fav-quick .fq-grp {
             display: flex; align-items: center; gap: 0.45em;
             font-size: 10px; color: var(--accent); opacity: 0.85;
-            padding: 0.7em 0.8em 0.3em; letter-spacing: 0.08em;
+            /* ⚠️行高钉整数，理由同 .fq-item（不写就是浏览器的 normal，约 11.5px 带小数） */
+            line-height: 14px;
+            padding: 7px 8px 3px; letter-spacing: 0.08em;
         }
         .fav-quick .fq-grp::before {
             content: ''; flex-shrink: 0;
-            width: 0.32em; height: 0.32em; border-radius: 50%;
+            width: 3px; height: 3px; border-radius: 50%;   /* px 不用 em：理由同上，要对齐像素 */
             background: currentColor; opacity: 0.6;
         }
         /* 往右淡出的引线：把组名和下面的模型行分开，又不像分割线那么硬 */
@@ -2448,11 +2450,15 @@ body {
         .fav-grp-title {
             display: flex; align-items: center; gap: 0.45em;
             font-size: 11px; color: var(--accent); opacity: 0.85;
-            padding: 0.7em 0 0.35em; letter-spacing: 0.08em;
+            /* ⚠️这几个值**故意用 px 不用 em**（她的规矩本来是间距一律 em）：
+               这里的目的是让 1px 细线落在整数像素上，em 换算出来是
+               0.7em×11px = 7.7px、0.35em×11px = 3.85px，全是小数，正是问题本身。
+               只有「为了像素对齐」这一种情况可以破例，别推广到别处。 */
+            line-height: 14px; padding: 8px 0 4px; letter-spacing: 0.08em;
         }
         .fav-grp-title::before {
             content: ''; flex-shrink: 0;
-            width: 0.32em; height: 0.32em; border-radius: 50%;
+            width: 3px; height: 3px; border-radius: 50%;   /* px 不用 em：理由同上，要对齐像素 */
             background: currentColor; opacity: 0.6;
         }
         .fav-grp-title::after {
@@ -2476,7 +2482,13 @@ body {
         .fav-quick .fq-item {
             display: flex; align-items: center; gap: 8px;
             padding: 9px 10px; border-radius: 8px; cursor: pointer;
-            font-size: 13px; color: var(--text); line-height: 1.35;
+            /* ⚠️行高必须是**整数像素**，别写 1.35 那种倍数（2026-09-02 汐修）。
+               1.35 × 13px = 17.55px，每行都带 0.55 的小数，往下累加就把后面每一组的
+               标题推到 x.5 这种位置上。1px 的细线落在小数位上会被浏览器平摊到相邻两行
+               像素、各占一半亮度 → **看起来就变淡了**。
+               她的原话：「排在上面的那组，后面的线像是2B铅笔写的，下面那组，像是HB」。
+               钉成 18px 之后每行正好 36px，所有分组都落在整数位，深浅才会一致。 */
+            font-size: 13px; color: var(--text); line-height: 18px;
         }
         .fav-quick .fq-item:active { background: var(--card-border); }
         .fav-quick .fq-item.on { color: var(--accent); }
