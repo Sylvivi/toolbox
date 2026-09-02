@@ -2407,9 +2407,45 @@ body {
             max-height: 46vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
         }
         .fav-quick.show { display: block; }
+        /* 中转站分组的标题。⚠️2026-09-02 汐做的，她说「中转站的名字可不可以弄点样式，
+           做得漂亮可爱一点呀」。
+           ⚠️**没做成药丸标签/色块**——她的口味是「要显眼靠提亮字色＋淡底，别加实心色块零件」
+             （见记忆 user-taste-minimal-no-badges）。所以用的是：
+             一个小圆点 + 提亮到本命色的字 + 一根往右淡出的细引线。
+           ⚠️颜色一律走 `--accent`，**跟着主题各自的本命色走，别写死颜色**
+             （记忆 toolbox-theme-gradient-taste：别统一撒紫）。
+           ⚠️间距用 em（记忆 user-taste-minimal-no-badges）。 */
         .fav-quick .fq-grp {
-            font-size: 10px; color: var(--text-muted); padding: 7px 10px 3px;
-            letter-spacing: 0.06em;
+            display: flex; align-items: center; gap: 0.45em;
+            font-size: 10px; color: var(--accent); opacity: 0.85;
+            padding: 0.7em 0.8em 0.3em; letter-spacing: 0.08em;
+        }
+        .fav-quick .fq-grp::before {
+            content: ''; flex-shrink: 0;
+            width: 0.32em; height: 0.32em; border-radius: 50%;
+            background: currentColor; opacity: 0.6;
+        }
+        /* 往右淡出的引线：把组名和下面的模型行分开，又不像分割线那么硬 */
+        .fav-quick .fq-grp::after {
+            content: ''; flex: 1; height: 1px; min-width: 1em;
+            background: linear-gradient(to right, currentColor, transparent);
+            opacity: 0.28;
+        }
+        /* 设置面板收藏区的组标题：跟上面 .fq-grp 同一套，只是字号大一点、不缩进 */
+        .fav-grp-title {
+            display: flex; align-items: center; gap: 0.45em;
+            font-size: 11px; color: var(--accent); opacity: 0.85;
+            padding: 0.7em 0 0.35em; letter-spacing: 0.08em;
+        }
+        .fav-grp-title::before {
+            content: ''; flex-shrink: 0;
+            width: 0.32em; height: 0.32em; border-radius: 50%;
+            background: currentColor; opacity: 0.6;
+        }
+        .fav-grp-title::after {
+            content: ''; flex: 1; height: 1px; min-width: 1em;
+            background: linear-gradient(to right, currentColor, transparent);
+            opacity: 0.28;
         }
         .fav-quick .fq-item {
             display: flex; align-items: center; gap: 8px;
@@ -15558,7 +15594,9 @@ body {
             for (var gi = 0; gi < groupOrder.length; gi++) {
                 var gn = groupOrder[gi];
                 var gLabel = document.createElement('div');
-                gLabel.style.cssText = 'font-size:11px;color:var(--accent-mid);padding:8px 0 4px;font-weight:600;opacity:0.7;';
+                // ⚠️跟弹层里的 .fq-grp 用同一套观感（09-02 统一）。改一边记得改另一边。
+                //   ⚠️去掉了原来的 font-weight:600——她的规矩是能换字体的槽位别叠加粗。
+                gLabel.className = 'fav-grp-title';
                 gLabel.textContent = groupLabel[gn] || gn;   // 分组的键是网址，标题显示中转站名字
                 container.appendChild(gLabel);
                 var _gExpanded = !!_favGroupExpanded[gn];
