@@ -20017,6 +20017,28 @@ body {
                     f._qi = i;
                     groups[k].push(f);
                 });
+                /* ⚠️2026-09-02 汐补：**组间也要按最近用过排**。
+                   她说「为什么固定了中转站的分组排列顺序呢，我觉得应该把刚刚用过的那个
+                   中转站放到上面，这样好找呢」。
+                   ⚠️这儿原来只排了组内，组的先后是「收藏时谁先被加进来」——
+                   而上面那句注释还写着跟 chatRenderFavSection「同一套口径」，
+                   其实**对不上**：那边早就做了组间上移（见它那段「组间：刚用过模型的
+                   站点整体上移」）。两边现在才真的一致了，以后改动记得一起改。
+                   都没用过的站维持原出现顺序（_go 当次级键，不靠 sort 的稳定性）。 */
+                var _gUsed = {}, _gIdx = {};
+                order.forEach(function (k, gi) {
+                    _gIdx[k] = gi;
+                    var mx = 0;
+                    groups[k].forEach(function (f) {
+                        var u = chatModelUsedAt(f.url, f.model);
+                        if (u > mx) mx = u;
+                    });
+                    _gUsed[k] = mx;
+                });
+                order.sort(function (a, b) {
+                    if (_gUsed[b] !== _gUsed[a]) return _gUsed[b] - _gUsed[a];
+                    return _gIdx[a] - _gIdx[b];
+                });
                 order.forEach(function (k) {
                     var arr = groups[k].slice();
                     arr.sort(function (a, b) {
