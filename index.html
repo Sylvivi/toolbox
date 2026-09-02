@@ -20137,13 +20137,20 @@ body {
 
             // 先显示再量尺寸，否则 offsetHeight 是 0，弹层会贴到屏幕底下
             pop.classList.add('show');
+            /* ⚠️2026-09-02：这几个值**必须 Math.round**，别直接拿 rect 的小数用。
+               `getBoundingClientRect()` 回的是小数（比如 top=412.34），
+               直接写进 style 会让**整个弹层坐在小数像素上**，于是里面所有 1px 的细线
+               都被浏览器摊到相邻两行像素、各占一半亮度——看起来就发灰、发虚。
+               她的描述是「上面那组的线像 2B 铅笔，下面那组像 HB」。
+               ⚠️光把里面每一行的行高钉成整数**不够**（那是同一天早先修的另一半）：
+                 行内偏移齐了，容器本身还是歪的，最后照样落在小数上。**两半都要有。** */
             var r = meta.getBoundingClientRect();
-            var w = Math.min(Math.max(r.width, 220), window.innerWidth - 20);
+            var w = Math.round(Math.min(Math.max(r.width, 220), window.innerWidth - 20));
             pop.style.width = w + 'px';
-            var left = Math.min(Math.max(r.left, 10), window.innerWidth - w - 10);
+            var left = Math.round(Math.min(Math.max(r.left, 10), window.innerWidth - w - 10));
             pop.style.left = left + 'px';
             pop.style.top = 'auto';
-            pop.style.bottom = (window.innerHeight - r.top + 8) + 'px';
+            pop.style.bottom = Math.round(window.innerHeight - r.top + 8) + 'px';
             _favQuickOpen = true;
         }
         (function () {
