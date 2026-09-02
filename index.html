@@ -1616,6 +1616,20 @@ body {
             display: none;
         }
         .chat-model-dropdown.show { display: block; }
+        /* ⚠️2026-09-02 汐加。她说预设里那几个选模型的框「太老式了，跟整个工具画风格格不入，
+           而不是就是全屏跳出来一个那个东西让我去选」——原生 <select> 在手机上就是弹全屏选择器。
+           改成复用对话模式输入框下面那个下拉的样式（她指定的：「那个是符合我的审美的」）。
+           ⚠️但**不能照抄 position:absolute**：预设面板本身是 overflow-y:auto 的滚动容器，
+             绝对定位的下拉会被容器裁掉。所以这里改成 static、就地展开，观感一致但不会被切。 */
+        .chat-model-dropdown.preset-dd {
+            position: static; min-width: 0; max-width: none;
+            margin-top: 0.4em; max-height: 14em;
+        }
+        .preset-pick { cursor: pointer; }
+        .preset-caret {
+            position: absolute; right: 0.7em; top: 0.75em;
+            font-size: 10px; color: var(--text-muted); pointer-events: none;
+        }
         .chat-model-item {
             padding: 10px 14px; font-size: 13px; color: var(--text);
             cursor: pointer; display: flex; align-items: center; gap: 8px;
@@ -5944,21 +5958,37 @@ body {
                             <span id="presetModelArrow" style="font-size:10px;color:var(--text-muted);transition:transform 0.2s;display:inline-block">▶</span>
                         </div>
                         <div id="presetModelSection" style="display:none;margin-top:8px">
-                            <div style="margin-top:8px">
+                            <div style="margin-top:0.75em">
                                 <span style="font-size:11px;color:var(--text-muted)">摘要 / 记忆模型</span>
-                                <select id="compressModelSelect" onchange="chatSaveCompressModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">跟随当前模型</option></select>
+                                <div class="chat-model-wrap" style="position:relative;margin-top:0.35em">
+                                    <input type="text" class="preset-pick" id="presetPick_compress" readonly onclick="presetTogglePicker('compress')">
+                                    <span class="preset-caret">▾</span>
+                                    <div class="chat-model-dropdown preset-dd" id="presetDd_compress"></div>
+                                </div>
                             </div>
-                            <div style="margin-top:8px">
+                            <div style="margin-top:0.75em">
                                 <span style="font-size:11px;color:var(--text-muted)">提问模型</span>
-                                <select id="readingQaModelSelect" onchange="chatSaveReadingQaModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">跟随当前模型</option></select>
+                                <div class="chat-model-wrap" style="position:relative;margin-top:0.35em">
+                                    <input type="text" class="preset-pick" id="presetPick_qa" readonly onclick="presetTogglePicker('qa')">
+                                    <span class="preset-caret">▾</span>
+                                    <div class="chat-model-dropdown preset-dd" id="presetDd_qa"></div>
+                                </div>
                             </div>
-                            <div style="margin-top:8px">
+                            <div style="margin-top:0.75em">
                                 <span style="font-size:11px;color:var(--text-muted)">社科导读模型</span>
-                                <select id="readingGuideModelSelect" onchange="chatSaveReadingGuideModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">跟随共读提问</option></select>
+                                <div class="chat-model-wrap" style="position:relative;margin-top:0.35em">
+                                    <input type="text" class="preset-pick" id="presetPick_guide" readonly onclick="presetTogglePicker('guide')">
+                                    <span class="preset-caret">▾</span>
+                                    <div class="chat-model-dropdown preset-dd" id="presetDd_guide"></div>
+                                </div>
                             </div>
-                            <div style="margin-top:8px">
+                            <div style="margin-top:0.75em">
                                 <span style="font-size:11px;color:var(--text-muted)">标背景讲解模型</span>
-                                <select id="readingExplainModelSelect" onchange="chatSaveReadingExplainModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">跟随共读提问</option></select>
+                                <div class="chat-model-wrap" style="position:relative;margin-top:0.35em">
+                                    <input type="text" class="preset-pick" id="presetPick_explain" readonly onclick="presetTogglePicker('explain')">
+                                    <span class="preset-caret">▾</span>
+                                    <div class="chat-model-dropdown preset-dd" id="presetDd_explain"></div>
+                                </div>
                             </div>
                                                     </div>
                     </div>
@@ -31826,31 +31856,70 @@ body {
         function chatGetCompressModel() {
             try { return JSON.parse(localStorage.getItem('chat_compress_model') || 'null'); } catch(e) { return null; }
         }
-        function chatSaveCompressModel(val) {
-            if (!val) { localStorage.removeItem('chat_compress_model'); return; }
-            for (var i = 0; i < chatFavModels.length; i++) {
-                var f = chatFavModels[i];
-                if (f.model + '||' + (f.url || '') === val) {
-                    localStorage.setItem('chat_compress_model', JSON.stringify({ model: f.model, url: f.url, providerId: f.providerId, providerName: f.providerName }));
-                    return;
-                }
-            }
-            localStorage.removeItem('chat_compress_model');
-        }
         // 记忆表格已与摘要共用「摘要模型」(chatResolveCompressModel)，不再有独立的记忆模型
-        function chatRenderCompressModelSelect() {
-            var sel = document.getElementById('compressModelSelect');
-            if (!sel) return;
-            var saved = chatGetCompressModel();
-            var html = '<option value="">跟随当前模型</option>';
+        /* ⚠️2026-09-02 汐重写。原来这四档是四个原生 <select>，她说
+           「太老式了，跟整个工具画风格格不入……而不是就是全屏跳出来一个那个东西让我去选」
+           （手机上原生 select 会弹全屏选择器）。改成复用对话模式输入框下面那个下拉的样式，
+           这是她自己指定的：「我觉得可以复用对话模式下输入下方那个选模型的框」。
+
+           四档共用一套渲染，别再各写各的——原来 compress 一套、reading 一套，
+           加一档就要改两处，这次一并收拢。 */
+        var _PRESET_SLOTS = {
+            compress: { key: 'chat_compress_model',        empty: '跟随当前模型' },
+            qa:       { key: 'chat_reading_qa_model',      empty: '跟随当前模型' },
+            // ⚠️这两档的空档是「跟随提问模型」不是「跟随当前模型」，理由见 chatResolveReadingModel
+            guide:    { key: 'chat_reading_guide_model',   empty: '跟随提问模型' },
+            explain:  { key: 'chat_reading_explain_model', empty: '跟随提问模型' }
+        };
+        function presetSlotText(slot) {
+            var c = _PRESET_SLOTS[slot];
+            var cfg = _chatGetModelCfg(c.key);
+            return cfg ? ((cfg.providerName || '未知') + ' / ' + cfg.model) : c.empty;
+        }
+        function presetCloseAllPickers() {
+            for (var slot in _PRESET_SLOTS) {
+                var d = document.getElementById('presetDd_' + slot);
+                if (d) d.classList.remove('show');
+            }
+        }
+        function presetRenderPickers() {
+            for (var slot in _PRESET_SLOTS) {
+                var inp = document.getElementById('presetPick_' + slot);
+                if (inp) inp.value = presetSlotText(slot);
+            }
+            presetCloseAllPickers();
+        }
+        function presetTogglePicker(slot) {
+            var dd = document.getElementById('presetDd_' + slot);
+            if (!dd) return;
+            var wasOpen = dd.classList.contains('show');
+            presetCloseAllPickers();          // 一次只开一个，免得几个列表叠在一起
+            if (wasOpen) return;
+            var c = _PRESET_SLOTS[slot];
+            var cur = _chatGetModelCfg(c.key);
+            var rows = ['<div class="chat-model-item' + (cur ? '' : ' active') + '" data-val="">' +
+                        '<span class="model-name" style="color:var(--text-muted)">' + esc(c.empty) + '</span></div>'];
             for (var i = 0; i < chatFavModels.length; i++) {
                 var f = chatFavModels[i];
                 var val = f.model + '||' + (f.url || '');
-                var selected = saved && saved.model === f.model && saved.url === f.url ? ' selected' : '';
-                html += '<option value="' + val.replace(/"/g, '&quot;') + '"' + selected + '>' + (f.providerName || '未知') + ' / ' + f.model + '</option>';
+                var on = !!(cur && cur.model === f.model && cur.url === f.url);
+                rows.push('<div class="chat-model-item' + (on ? ' active' : '') + '" data-val="' + esc(val) + '">' +
+                          '<span class="model-name">' + esc((f.providerName || '未知') + ' / ' + f.model) + '</span>' +
+                          (on ? '<span style="color:var(--accent);flex-shrink:0">✓</span>' : '') + '</div>');
             }
-            sel.innerHTML = html;
+            dd.innerHTML = rows.join('');
+            /* ⚠️用事件委托 + data-val，别把值拼进 onclick 字符串里——
+               模型名里带引号/中文括号时，内联 onclick 的转义一错整行就点不动了。 */
+            dd.onclick = function (e) {
+                var row = e.target.closest('.chat-model-item');
+                if (!row) return;
+                _chatSaveModelCfg(c.key, row.getAttribute('data-val') || '');
+                presetRenderPickers();
+            };
+            dd.classList.add('show');
         }
+        // 名字留着不改：调用点（15690 那处）和别处可能还引用着
+        function chatRenderCompressModelSelect() { presetRenderPickers(); }
         // 共读点评 / 共读提问 专用模型（通用核心，存收藏里的某个模型，留空=跟随当前选中模型）
         function _chatGetModelCfg(storeKey) { try { return JSON.parse(localStorage.getItem(storeKey) || 'null'); } catch (e) { return null; } }
         function _chatSaveModelCfg(storeKey, val) {
@@ -31876,19 +31945,6 @@ body {
             if (!item) { var ps = document.getElementById('chatProviderSelect'); if (ps) item = getKeyItemById(ps.value); }
             if (!item) return null;
             return { model: cfg.model, baseUrl: getBaseUrl(item.url), apiKey: getActiveKey(item) };
-        }
-        function _chatRenderModelSelect(selId, storeKey) {
-            var sel = document.getElementById(selId);
-            if (!sel) return;
-            var saved = _chatGetModelCfg(storeKey);
-            var html = '<option value="">跟随当前模型</option>';
-            for (var i = 0; i < chatFavModels.length; i++) {
-                var f = chatFavModels[i];
-                var val = f.model + '||' + (f.url || '');
-                var selected = saved && saved.model === f.model && saved.url === f.url ? ' selected' : '';
-                html += '<option value="' + val.replace(/"/g, '&quot;') + '"' + selected + '>' + (f.providerName || '未知') + ' / ' + f.model + '</option>';
-            }
-            sel.innerHTML = html;
         }
         /* kind: 'comment'=共读点评, 'qa'=共读提问, 'guide'=社科导读, 'explain'=标背景讲解。
            返回 {model,baseUrl,apiKey} 或 null（由调用方退回当前模型）。
@@ -31919,24 +31975,13 @@ body {
             if (!cfg && (kind === 'guide' || kind === 'explain')) cfg = _chatGetModelCfg(_READING_MODEL_KEYS.qa);
             return _chatResolveModelCfg(cfg);
         }
-        function chatSaveReadingQaModel(v) { _chatSaveModelCfg('chat_reading_qa_model', v); }
-        function chatSaveReadingGuideModel(v) { _chatSaveModelCfg('chat_reading_guide_model', v); }
-        function chatSaveReadingExplainModel(v) { _chatSaveModelCfg('chat_reading_explain_model', v); }
         function chatRenderReadingModelSelects() {
             // ⚠️「共读点评模型」和「生图模型/尺寸」2026-09-02 已按她的要求撤掉。
             //   顺手把存量键清掉——否则旧值还躺在 localStorage 里，界面上却没有开关能看见它。
             ['chat_reading_comment_model', 'chat_image_model'].forEach(function (k) {
                 try { localStorage.removeItem(k); } catch (e) {}
             });
-            _chatRenderModelSelect('readingQaModelSelect', 'chat_reading_qa_model');
-            _chatRenderModelSelect('readingGuideModelSelect', 'chat_reading_guide_model');
-            _chatRenderModelSelect('readingExplainModelSelect', 'chat_reading_explain_model');
-            // ⚠️这两档的空选项不是「跟随当前模型」而是「跟随共读提问」——理由见 chatResolveReadingModel
-            ['readingGuideModelSelect', 'readingExplainModelSelect'].forEach(function (id) {
-                var el = document.getElementById(id);
-                if (el && el.options.length && el.options[0].value === '') el.options[0].textContent = '跟随提问模型';
-            });
-
+            presetRenderPickers();
         }
         function chatUpdateCompressLabel() {
             var t = parseInt(document.getElementById('compressThresholdInput').value) || 40;
