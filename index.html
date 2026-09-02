@@ -5957,6 +5957,14 @@ body {
                                 <select id="readingQaModelSelect" onchange="chatSaveReadingQaModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">跟随当前模型</option></select>
                             </div>
                             <div style="margin-top:8px">
+                                <span style="font-size:11px;color:var(--text-muted)">社科导读模型</span>
+                                <select id="readingGuideModelSelect" onchange="chatSaveReadingGuideModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">跟随共读提问</option></select>
+                            </div>
+                            <div style="margin-top:8px">
+                                <span style="font-size:11px;color:var(--text-muted)">标背景讲解模型</span>
+                                <select id="readingExplainModelSelect" onchange="chatSaveReadingExplainModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">跟随共读提问</option></select>
+                            </div>
+                            <div style="margin-top:8px">
                                 <span style="font-size:11px;color:var(--text-muted)">生图模型</span>
                                 <select id="imageModelSelect" onchange="chatSaveImageModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">跟随当前模型</option></select>
                             </div>
@@ -26211,7 +26219,9 @@ body {
                 var baseUrl = getBaseUrl(item.url);
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
                 var _qaMdl = chatSelectedModel;
-                var _qaM = chatResolveReadingModel('qa'); // 共读提问单独指定的模型，没配跟随当前
+                // ⚠️这一条路同时跑三件事：社科导读(_guide) / 背景追问(_bgCi) / 普通共读提问。
+                //   导读走自己那档；背景追问仍归 qa（它就是一次问答，且改归属会悄悄换掉她现在用的模型）。
+                var _qaM = chatResolveReadingModel(_guide ? 'guide' : 'qa');
                 if (_qaM) { baseUrl = _qaM.baseUrl; apiKey = _qaM.apiKey; _qaMdl = _qaM.model; }
                 // 带上前文已读章节的摘要，否则双击提问时 AI 看不到被压缩掉的前情（剧情/人物/伏笔）
                 var _askMsgs = [{ role: 'system', content: sysPrompt }];
@@ -26792,7 +26802,7 @@ body {
             var scanM = chatResolveCompressModel();
             if (!scanM) { alert(chatNoModelMsg()); return; }
             // 两个模型都在开章之前定死（开章会清空 chatSelectedModel，见 _rdBgExplain 上的注释）
-            var explainM = chatResolveReadingModel('qa') || {
+            var explainM = chatResolveReadingModel('explain') || {
                 baseUrl: getBaseUrl(mainIt.url),
                 apiKey: chatSelectedKeyStr || getActiveKey(mainIt),
                 model: chatSelectedModel
@@ -31897,16 +31907,46 @@ body {
             }
             sel.innerHTML = html;
         }
-        // kind: 'comment'=共读点评, 'qa'=共读提问。返回 {model,baseUrl,apiKey} 或 null（由调用方退回当前模型）。
+        /* kind: 'comment'=共读点评, 'qa'=共读提问, 'guide'=社科导读, 'explain'=标背景讲解。
+           返回 {model,baseUrl,apiKey} 或 null（由调用方退回当前模型）。
+
+           ⚠️2026-09-02 汐拆的。她说「导读和讲解的模型可以让我独立选择」——
+             一查发现 `'qa'` 这一个设置被**四件事**共用：共读提问、社科导读、背景追问、标背景讲解。
+             在「共读提问模型」里选什么，导读和讲解就被迫跟着用什么，名不副实。
+
+           ⚠️**未设置时退回 qa，不是退回「当前模型」**：
+             她今天要是已经把共读提问指到某个模型，导读和讲解本来就在用那个。
+             直接改成「跟随当前模型」等于**在她没察觉的情况下换掉了两件事的模型**。
+             所以空档的文案写的是「跟随共读提问」，行为跟改之前一模一样，
+             她想分开时再单独指一个。 */
+        var _READING_MODEL_KEYS = {
+            comment: 'chat_reading_comment_model',
+            qa:      'chat_reading_qa_model',
+            guide:   'chat_reading_guide_model',
+            explain: 'chat_reading_explain_model'
+        };
         function chatResolveReadingModel(kind) {
-            return _chatResolveModelCfg(_chatGetModelCfg(kind === 'qa' ? 'chat_reading_qa_model' : 'chat_reading_comment_model'));
+            var key = _READING_MODEL_KEYS[kind] || _READING_MODEL_KEYS.comment;
+            var cfg = _chatGetModelCfg(key);
+            // 导读/讲解没单独指定 → 沿用共读提问那档（见上面的注释，这是为了不悄悄改行为）
+            if (!cfg && (kind === 'guide' || kind === 'explain')) cfg = _chatGetModelCfg(_READING_MODEL_KEYS.qa);
+            return _chatResolveModelCfg(cfg);
         }
         function chatSaveReadingCommentModel(v) { _chatSaveModelCfg('chat_reading_comment_model', v); }
         function chatSaveReadingQaModel(v) { _chatSaveModelCfg('chat_reading_qa_model', v); }
+        function chatSaveReadingGuideModel(v) { _chatSaveModelCfg('chat_reading_guide_model', v); }
+        function chatSaveReadingExplainModel(v) { _chatSaveModelCfg('chat_reading_explain_model', v); }
         function chatSaveImageModel(v) { _chatSaveModelCfg('chat_image_model', v); }
         function chatRenderReadingModelSelects() {
             _chatRenderModelSelect('readingCommentModelSelect', 'chat_reading_comment_model');
             _chatRenderModelSelect('readingQaModelSelect', 'chat_reading_qa_model');
+            _chatRenderModelSelect('readingGuideModelSelect', 'chat_reading_guide_model');
+            _chatRenderModelSelect('readingExplainModelSelect', 'chat_reading_explain_model');
+            // ⚠️这两档的空选项不是「跟随当前模型」而是「跟随共读提问」——理由见 chatResolveReadingModel
+            ['readingGuideModelSelect', 'readingExplainModelSelect'].forEach(function (id) {
+                var el = document.getElementById(id);
+                if (el && el.options.length && el.options[0].value === '') el.options[0].textContent = '跟随共读提问';
+            });
             _chatRenderModelSelect('imageModelSelect', 'chat_image_model');
             // 生图模型没有「跟随当前」的概念：把空选项文案改清楚
             var imgSel = document.getElementById('imageModelSelect');
