@@ -5515,7 +5515,7 @@ body {
                         <button class="chat-topmenu-item" id="chatNavBtn" onclick="chatHideTopMenu();chatToggleNavPanel()">🧭 目录</button>
                         <button class="chat-topmenu-item" id="chatSummaryBtn" onclick="chatHideTopMenu();chatShowSummaryModal()" style="display:none">📋 摘要</button>
                         <button class="chat-topmenu-item" id="chatUsageBtn" onclick="chatHideTopMenu();apiLogShowPanel()" style="display:none">💰 用量</button>
-                        <button class="chat-topmenu-item" id="chatGenImgBtn" onclick="chatHideTopMenu();genImageOpenDialog()" style="display:none">🎨 生图</button>
+                        
                     </div>
                 </div>
                 <div class="reading-panel-mask" id="readingPanelMask" onclick="readingCloseFloatPanels()"></div>
@@ -5562,7 +5562,7 @@ body {
                         <button onclick="clawdMenuAct('summary')">📋 摘要</button>
                         <button id="clawdBookmarkBtn" onclick="clawdMenuAct('bookmark')">🔖 读痕</button>
                         <button onclick="clawdMenuAct('usage')">💰 用量</button>
-                        <button id="clawdGenImgBtn" onclick="clawdMenuAct('genimg')" style="display:none">🎨 生图</button>
+                        
                         <button id="clawdMsgToolsBtn" onclick="clawdMenuAct('msgtools')">👁 显示</button>
                         <button id="clawdNextChapBtn" onclick="clawdMenuAct('nextchap')">⏭️ 下一章</button>
                         <button onclick="clawdMenuAct('model')">🦀 clawd</button>
@@ -5949,11 +5949,7 @@ body {
                                 <select id="compressModelSelect" onchange="chatSaveCompressModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">跟随当前模型</option></select>
                             </div>
                             <div style="margin-top:8px">
-                                <span style="font-size:11px;color:var(--text-muted)">共读点评模型</span>
-                                <select id="readingCommentModelSelect" onchange="chatSaveReadingCommentModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">跟随当前模型</option></select>
-                            </div>
-                            <div style="margin-top:8px">
-                                <span style="font-size:11px;color:var(--text-muted)">共读提问模型</span>
+                                <span style="font-size:11px;color:var(--text-muted)">提问模型</span>
                                 <select id="readingQaModelSelect" onchange="chatSaveReadingQaModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">跟随当前模型</option></select>
                             </div>
                             <div style="margin-top:8px">
@@ -5964,19 +5960,7 @@ body {
                                 <span style="font-size:11px;color:var(--text-muted)">标背景讲解模型</span>
                                 <select id="readingExplainModelSelect" onchange="chatSaveReadingExplainModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">跟随共读提问</option></select>
                             </div>
-                            <div style="margin-top:8px">
-                                <span style="font-size:11px;color:var(--text-muted)">生图模型</span>
-                                <select id="imageModelSelect" onchange="chatSaveImageModel(this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none"><option value="">跟随当前模型</option></select>
-                            </div>
-                            <div style="margin-top:8px">
-                                <span style="font-size:11px;color:var(--text-muted)">生图尺寸</span>
-                                <select id="imageSizeSelect" onchange="localStorage.setItem('gen_image_size', this.value)" style="width:100%;margin-top:4px;padding:6px 8px;font-size:11px;background:var(--input-bg);color:var(--text);border:1px solid var(--card-border);border-radius:8px;outline:none">
-                                    <option value="1024x1024">1024×1024（方）</option>
-                                    <option value="1536x1024">1536×1024（横）</option>
-                                    <option value="1024x1536">1024×1536（竖）</option>
-                                </select>
-                            </div>
-                        </div>
+                                                    </div>
                     </div>
                 </div>
                 <!-- 昵称：预设页最末一行（2026-08-02 定的位置，放最上面显突兀）。
@@ -20175,11 +20159,10 @@ body {
             // 「查看摘要」同理只在对话模式的 ⋮ 菜单里出现：共读/翻译/阅读模式的 clawd 菜单已有「📋 摘要」入口
             var summaryBtn = document.getElementById('chatSummaryBtn');
             if (summaryBtn) summaryBtn.style.display = usageShow ? '' : 'none';
-            // 「生图」只在对话模式出现（共读/阅读已不做配图）；横幅 ⋮ 与 clawd 菜单两处同步
-            var genBtn = document.getElementById('chatGenImgBtn');
-            if (genBtn) genBtn.style.display = usageShow ? '' : 'none';
-            var clawdGenBtn = document.getElementById('clawdGenImgBtn');
-            if (clawdGenBtn) clawdGenBtn.style.display = usageShow ? '' : 'none';
+            // ⚠️2026-09-02 起 Toolbox 不做生图了（她原话「我不打算在 toolbox 生图，
+            //   tg 那边已经完全打通了」）。两个「🎨 生图」按钮和预设里的模型/尺寸都撤了，
+            //   但 genImageOpenDialog / genImageDialogRun 那套函数**故意留着**，
+            //   想回来只要把按钮加回去 + 恢复预设里那两个下拉。
             // 「读痕」反过来：对话模式里去掉，共读/翻译/阅读都留着
             var clawdBmBtn = document.getElementById('clawdBookmarkBtn');
             if (clawdBmBtn) clawdBmBtn.style.display = usageShow ? 'none' : '';
@@ -31919,40 +31902,41 @@ body {
              直接改成「跟随当前模型」等于**在她没察觉的情况下换掉了两件事的模型**。
              所以空档的文案写的是「跟随共读提问」，行为跟改之前一模一样，
              她想分开时再单独指一个。 */
+        /* ⚠️2026-09-02 她定的第二版：**设置以「功能」为准，不以「模式」为准**。
+           原话「我现在很少用共读模式，都是阅读模式，所以应该以功能为基准」。
+           于是「共读点评模型」整档去掉（她说「实际也是用默认」），
+           点评从此一律跟随当前模型；'comment' 这个 kind 保留只为不动两处调用点。 */
         var _READING_MODEL_KEYS = {
-            comment: 'chat_reading_comment_model',
             qa:      'chat_reading_qa_model',
             guide:   'chat_reading_guide_model',
             explain: 'chat_reading_explain_model'
         };
         function chatResolveReadingModel(kind) {
-            var key = _READING_MODEL_KEYS[kind] || _READING_MODEL_KEYS.comment;
+            var key = _READING_MODEL_KEYS[kind];
+            if (!key) return null;              // 'comment' 落到这儿 → 跟随当前模型
             var cfg = _chatGetModelCfg(key);
-            // 导读/讲解没单独指定 → 沿用共读提问那档（见上面的注释，这是为了不悄悄改行为）
+            // 导读/讲解没单独指定 → 沿用「提问模型」那档（见上面的注释，为了不悄悄改行为）
             if (!cfg && (kind === 'guide' || kind === 'explain')) cfg = _chatGetModelCfg(_READING_MODEL_KEYS.qa);
             return _chatResolveModelCfg(cfg);
         }
-        function chatSaveReadingCommentModel(v) { _chatSaveModelCfg('chat_reading_comment_model', v); }
         function chatSaveReadingQaModel(v) { _chatSaveModelCfg('chat_reading_qa_model', v); }
         function chatSaveReadingGuideModel(v) { _chatSaveModelCfg('chat_reading_guide_model', v); }
         function chatSaveReadingExplainModel(v) { _chatSaveModelCfg('chat_reading_explain_model', v); }
-        function chatSaveImageModel(v) { _chatSaveModelCfg('chat_image_model', v); }
         function chatRenderReadingModelSelects() {
-            _chatRenderModelSelect('readingCommentModelSelect', 'chat_reading_comment_model');
+            // ⚠️「共读点评模型」和「生图模型/尺寸」2026-09-02 已按她的要求撤掉。
+            //   顺手把存量键清掉——否则旧值还躺在 localStorage 里，界面上却没有开关能看见它。
+            ['chat_reading_comment_model', 'chat_image_model'].forEach(function (k) {
+                try { localStorage.removeItem(k); } catch (e) {}
+            });
             _chatRenderModelSelect('readingQaModelSelect', 'chat_reading_qa_model');
             _chatRenderModelSelect('readingGuideModelSelect', 'chat_reading_guide_model');
             _chatRenderModelSelect('readingExplainModelSelect', 'chat_reading_explain_model');
             // ⚠️这两档的空选项不是「跟随当前模型」而是「跟随共读提问」——理由见 chatResolveReadingModel
             ['readingGuideModelSelect', 'readingExplainModelSelect'].forEach(function (id) {
                 var el = document.getElementById(id);
-                if (el && el.options.length && el.options[0].value === '') el.options[0].textContent = '跟随共读提问';
+                if (el && el.options.length && el.options[0].value === '') el.options[0].textContent = '跟随提问模型';
             });
-            _chatRenderModelSelect('imageModelSelect', 'chat_image_model');
-            // 生图模型没有「跟随当前」的概念：把空选项文案改清楚
-            var imgSel = document.getElementById('imageModelSelect');
-            if (imgSel && imgSel.options.length && imgSel.options[0].value === '') imgSel.options[0].textContent = '未设置';
-            var sizeSel = document.getElementById('imageSizeSelect');
-            if (sizeSel) sizeSel.value = genImageSize();
+
         }
         function chatUpdateCompressLabel() {
             var t = parseInt(document.getElementById('compressThresholdInput').value) || 40;
