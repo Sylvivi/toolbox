@@ -25427,6 +25427,26 @@ body {
             for (var i = 0; i < lines.length; i++) {
                 if (rbLineIsHead(lines[i], i + 1 < lines.length ? lines[i + 1] : null)) raw.push(i + 1);
             }
+            /* ⚠️2026-09-03 汐加：**这一章只要有一个带记号的标题，就只认记号、不再猜。**
+               起因：《对白的解剖》导入时给 168 个 h2~h4 都打了 `▍`，
+               结果阅读器认出 178 节——多出来的 38 条全是猜的，
+               而且猜的正是麦基书里最多的那两样：**人物名单行**（「法兰克」）
+               和**台词行**（「白兰琪：有时——真的有神啊——这么快」）。
+               ⚠️《故事的解剖》早就吃过同样的亏（见 rbLineIsHead 里 08-21 那段注释：
+                 第 12 章猜出 7 条、6 条是台词），那本也自带 `▍`，所以这条一并治好它。
+               道理很简单：**书自己标了小节在哪，就没有再猜的必要**；
+               混着用只会把台词混进目录。没有记号的书照旧走启发式，一点没变。 */
+            var anyMark = false;
+            for (var mi = 0; mi < raw.length; mi++) {
+                if (rbHeadMark(lines[raw[mi] - 1])) { anyMark = true; break; }
+            }
+            if (anyMark) {
+                var only = [];
+                for (var mj = 0; mj < raw.length; mj++) {
+                    if (rbHeadMark(lines[raw[mj] - 1])) only.push(raw[mj]);
+                }
+                return only;
+            }
             // ⚠️「一小节至少 N 段」这条也只对**猜出来的**标题生效。
             //   带记号的是书自己标的，哪怕只有一段正文也是一节（`▍腦蟲`、`▍蒙太奇` 就是）。
             var out = [];
