@@ -1426,8 +1426,21 @@ body {
         body.rdbg-on .modal.chat-modal {
             background-image: var(--rd-bg-img) !important;
             background-size: 100% 100% !important;
-            background-position: center center !important;
+            background-position: center top !important;
             background-repeat: no-repeat !important;
+        }
+        /* ⚠️键盘弹出时别把底图压扁（2026-09-05 她截图报的：船变矮、月亮从圆压成扁椭圆）。
+           病根：底图是「拉伸铺满」，键盘把可视高度顶掉一截，图就跟着被垂直压缩。
+           解法：把背景高度锁成 **lvh**（large viewport height ＝ 地址栏收起时的视口高度）——
+           这个单位**不随键盘变化**，所以图保持原比例，只是下面那截被键盘挡住。
+           ⚠️配合 background-position: center **top**：锁高之后图比可视区高，
+             从顶部对齐才能保证顶上那片干净纸面始终在正确位置。
+           ⚠️留着上面那条 100% 100% 当退路：lvh 要 Chrome 108+/Safari 15.4+，
+             老浏览器落回原来的行为（会压扁，但至少铺满、不留白）。 */
+        @supports (height: 100lvh) {
+            body.rdbg-on .modal.chat-modal {
+                background-size: 100% var(--rd-bg-h, 100lvh) !important;
+            }
         }
         /* ⚠️⚠️**换 bg/ 下的图必须改文件名，加 ?v= 版本号没用**（2026-09-05 实测）。
            图片是静态资源、被 Cloudflare 边缘缓存（cf-cache-status: HIT、max-age=14400），
@@ -20881,6 +20894,26 @@ body {
             panel.style.display = open ? 'none' : 'flex';
             if (arrow) arrow.style.transform = open ? '' : 'rotate(90deg)';
         }
+        /* 底图高度基准（2026-09-05）。键盘弹出会把布局视口整个顶小，底图是拉伸铺满的，
+           于是船被压扁、月亮从圆压成扁椭圆（她截图报的，说「我其实还是有点强迫症的……
+           如果我每次打字都看到他变成那个样子我会很介意」）。
+           ⚠️只靠 CSS 的 lvh 解决不了：她那边键盘改的是布局视口，lvh 跟着一起变。
+             所以用 JS 锁一个高度，写进 --rd-bg-h。
+           ⚠️判据是**宽度变没变**：宽度没变＝键盘弹收，高度基准不动；宽度也变了＝转屏或
+             真的换了窗口大小，这时才重新量。这条是整件事的关键，别改成无脑跟着 resize 走。 */
+        var _rdBgLockW = 0;
+        function readingLockBgHeight() {
+            var w = window.innerWidth, h = window.innerHeight;
+            if (_rdBgLockW === w) return;          // 宽度没变 → 是键盘，不动
+            _rdBgLockW = w;
+            document.documentElement.style.setProperty('--rd-bg-h', h + 'px');
+        }
+        readingLockBgHeight();
+        window.addEventListener('resize', readingLockBgHeight);
+        window.addEventListener('orientationchange', function () {
+            _rdBgLockW = 0;                        // 转屏后强制重量一次
+            setTimeout(readingLockBgHeight, 250);  // 等系统把新尺寸报准
+        });
         // 阅读底图：读当前选的那张（没设过、或那条自定义已被删＝关）
         function readingGetBg() {
             var t = localStorage.getItem('reading_bg');
