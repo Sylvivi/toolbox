@@ -1436,8 +1436,6 @@ body {
              服务器上明明是 86558 字节的新图，边缘一直发 84296 的旧图。
            所以换图的正确姿势是**改文件名**（guji-b → guji-b2），改完这里和 deploy 无关、
            白名单是按目录放行的。 */
-        body.rdbg-guji-w { --rd-bg-img: url("bg/guji-w.webp?v=20260905b"); }
-        body.rdbg-guji-b { --rd-bg-img: url("bg/guji-b2.webp"); }   /* 2026-09-05 她说黑版裁完不如原样，已还原成未裁的原图；换了文件名才绕得开 CF 缓存 */
         /* 自定义：地址由 JS 写进 body 的 --rd-bg-url 行内变量（见 readingApplyBg） */
         body.rdbg-custom { --rd-bg-img: var(--rd-bg-url, none); }
         /* ⚠️字色**不在这里覆盖**（2026-09-05 她拍板）。
@@ -7031,10 +7029,13 @@ body {
             concrete: { cls: 'concrete-mask-on', label: '水泥白', color: '#f1efe9' }
         };
         // 阅读底图：点「底图」chip 按 关→古风白→古风黑→关 循环。图在 bg/ 下，见上面那段 CSS 注释。
-        var RD_BG_INFO = {
-            gujiW: { cls: 'rdbg-guji-w', label: '古风白', dark: false },
-            gujiB: { cls: 'rdbg-guji-b', label: '古风黑', dark: true }
-        };
+        /* 预置底图（2026-09-05 起是空的）。原来有「古风白/古风黑」两张，她用上自己的图之后
+           说「古风白和古风黑你可以帮我去掉了，我已经设置好了适合我自己的底图皮肤」。
+           ⚠️结构留着不删：往里加一条 {cls,label,dark} 再配一条 CSS 就能重新放预置图。
+           ⚠️那两张的原始素材还在 `~/gdrive_in/应用主题 - grenade-朱泥（新版阅读底图）.red`
+             里（zip，头上多 4 字节 RED 魔数），要用再从 reader_schema 下各 uuid 目录里的 bg.img 提。
+             ⚠️块注释里别写「斜杠-星号-斜杠」那种通配路径，星号挨着斜杠会把注释提前关掉（刚踩过两次）。 */
+        var RD_BG_INFO = {};
         /* 自定义底图是一个**列表**，不是一张（2026-09-05 她定的：「加一个 chip 然后可以让我
            填底图链接就行，我还能给命名啥的」）。每条 {id,name,url,dark}：
              dark ＝ 这张图是深色的吗，决定选它时切夜间还是白天（跟古风黑/白同一套规则）。
@@ -20816,7 +20817,7 @@ body {
              古风黑（850×1850，未裁）框线左7/右30、上21 → 取大的那边 → 16 / 14。
            ⚠️y 这个字段现在只管**上边距**（下边不管，见上面 CSS 那条注释），键名没改、别被 y 误导。
            ⚠️不开底图时默认 0/0，排版跟以前一模一样——这条是安全绳，别给它填非零默认值。 */
-        var RD_MARGIN_DEFAULTS = { off: { l: 0, r: 0, y: 0 }, gujiW: { l: 22, r: 22, y: 26 }, gujiB: { l: 16, r: 16, y: 14 } };
+        var RD_MARGIN_DEFAULTS = { off: { l: 0, r: 0, y: 0 } };   // 自定义底图没预设值，从 0 起调
         var RD_MARGIN_MAX = 80;
         function readingGetMargin(bgId) {
             var id = bgId || readingGetBg();
@@ -20952,8 +20953,6 @@ body {
                      + '<span class="rdbg-name">' + name + '</span>' + (ops || '') + '</div>';
             }
             h += row('off', '关（用主题底色）', '');
-            h += row('gujiW', '古风白', '');
-            h += row('gujiB', '古风黑', '');
             var list = readingBgList();
             for (var i = 0; i < list.length; i++) {
                 var c = list[i];
