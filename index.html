@@ -1445,7 +1445,7 @@ body {
            没激活的 chip 变成浅底浅字、整排字全看不见（她截图报的）。
            她给的解法比我修 bug 高明：「黑色的背景直接就让它变成夜间模式的那种感觉，
            别在这个基础上改了，因为夜间模式字体啊包括设置里面菜单那些都是适配的」——
-           于是改成：选古风黑自动开夜间、选古风白自动回白天（见 readingToggleBg），
+           于是改成：选古风黑自动开夜间、选古风白自动回白天（见 readingPickBg），
            字色交给那套现成的、全站适配过的夜间/白天方案。**别再往这儿加字色覆盖**。
 
            唯一还留在这层的是强调色：粘土的雾霾蓝 #5b8abf 压在灰白纸上对比度只有 2.4:1、糊掉了
@@ -1492,6 +1492,28 @@ body {
             padding-right: var(--rd-pad-x, 0px);
             margin-top: var(--rd-pad-y, 0px);
         }
+
+        /* 底图面板里的一行 */
+        .rdbg-item {
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 8px; border-radius: 8px; cursor: pointer;
+            border: 1px solid var(--card-border); background: var(--card-bg);
+            font-size: 12px; color: var(--text-sub);
+        }
+        .rdbg-item.active { border-color: var(--accent-mid); color: var(--text); background: var(--accent-light); }
+        .rdbg-item .rdbg-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* 行内的小按钮：她的口味是「要显眼靠提亮字色＋淡底」，所以不给实心色块 */
+        .rdbg-item .rdbg-op {
+            flex: 0 0 auto; border: none; background: none; cursor: pointer;
+            font-size: 12px; padding: 2px 4px; color: var(--text-muted); border-radius: 6px;
+        }
+        .rdbg-item .rdbg-op:hover { color: var(--accent); }
+        .rdbg-add {
+            padding: 6px 8px; border-radius: 8px; cursor: pointer; text-align: center;
+            border: 1px dashed var(--card-border); background: none;
+            font-size: 12px; color: var(--text-muted);
+        }
+        .rdbg-add:hover { color: var(--accent); border-color: var(--accent-mid); }
 
         /* ⚠️底栏那条小条**做过隐身又撤了**（2026-09-05 当天来回）：
            她先说「开自己的底图时它显得比较突兀，但我又时不时要点它用功能」，做成了
@@ -5927,12 +5949,16 @@ body {
                     <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0">背景</span>
                     <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
                         <button class="chip-btn active" id="chipNight" onclick="setNightMode(!nightMode)">夜间</button>
-                        <button class="chip-btn" id="chipReadBg" onclick="readingToggleBg()" title="点：换底图（古风白 / 古风黑 / 自定义）　长按：填自己的图片地址" style="display: none;">底图</button>
+                        <button class="chip-btn" id="chipReadBg" onclick="readingToggleBgPanel()" title="换阅读底图：点开挑一张，也可以填自己的图" style="display: none;">底图</button>
                         <button class="chip-btn" id="chipWarmMask" onclick="readingToggleWarmMask()" style="display: none;">白底</button>
                         <button class="chip-btn" id="chipBlackMask" onclick="readingToggleBlackMask()" title="夜间把弹窗底色压成暗底，循环切换 柔黑/夜岩" style="display: none;">暗底</button>
                         <button class="chip-btn" id="chipMask" onclick="toggleChatMaskChip()" style="display: none;">遮罩</button>
                     </div>
                 </div>
+                <!-- 底图面板（2026-09-05）：她要的是「加一个 chip，然后可以让我填底图链接就行，
+                     我还能给命名啥的」。做成展开式而不是浮层——它挂在「背景」那排下面，
+                     跟旁边的「间距」分组一个手感，不用再学一套浮层的开合规则。 -->
+                <div id="readingBgPanel" style="display:none;flex-direction:column;gap:6px;margin-top:8px"></div>
                 <div id="readingTuneRow">
                     <div onclick="chatToggleTuneSection()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none">
                         <span style="font-size:12px;font-weight:600;color:var(--text-muted)">微调</span>
@@ -6963,15 +6989,29 @@ body {
             concrete: { cls: 'concrete-mask-on', label: '水泥白', color: '#f1efe9' }
         };
         // 阅读底图：点「底图」chip 按 关→古风白→古风黑→关 循环。图在 bg/ 下，见上面那段 CSS 注释。
-        var RD_BGS = ['off', 'gujiW', 'gujiB', 'custom'];
         var RD_BG_INFO = {
             gujiW: { cls: 'rdbg-guji-w', label: '古风白', dark: false },
-            gujiB: { cls: 'rdbg-guji-b', label: '古风黑', dark: true },
-            // 自定义：她自己传到图片箱、把直链填进来（长按「底图」chip 填）。
-            // ⚠️图片箱那把通行证 cookie 种在 masterofmydomain.top 整个域上，
-            //   tool.* 和 box.* 属于同一 site，所以 SameSite=Lax 不拦这种跨子域取图。
-            custom: { cls: 'rdbg-custom', label: '自定义' }
+            gujiB: { cls: 'rdbg-guji-b', label: '古风黑', dark: true }
         };
+        /* 自定义底图是一个**列表**，不是一张（2026-09-05 她定的：「加一个 chip 然后可以让我
+           填底图链接就行，我还能给命名啥的」）。每条 {id,name,url,dark}：
+             dark ＝ 这张图是深色的吗，决定选它时切夜间还是白天（跟古风黑/白同一套规则）。
+           ⚠️id 拿时间戳，**边距也是按这个 id 存的**（reading_margins），所以删掉一条底图
+             它那份边距就成了孤儿——无所谓，几十字节，比「删完再加回来边距全丢」强。 */
+        function readingBgList() {
+            try {
+                var a = JSON.parse(localStorage.getItem('reading_bg_custom') || '[]');
+                return Array.isArray(a) ? a : [];
+            } catch (e) { return []; }
+        }
+        function readingBgSaveList(a) {
+            try { localStorage.setItem('reading_bg_custom', JSON.stringify(a || [])); } catch (e) {}
+        }
+        function readingBgFind(id) {
+            var a = readingBgList();
+            for (var i = 0; i < a.length; i++) if (a[i].id === id) return a[i];
+            return null;
+        }
         // 填进来的地址要进 CSS 的 url()，先把能截断字符串的那几个字符掐掉（引号/反斜杠/右括号/换行）
         function _rdBgSafeUrl(u) { return String(u || '').replace(/["'\\)\r\n]/g, '').trim(); }
         // 夜间暗色遮罩（仅夜间有意义）：对应白天那套白底，给夜读两种暗底质感挑。chip 关着显示「暗底」。
@@ -20758,85 +20798,139 @@ body {
             panel.style.display = open ? 'none' : 'flex';
             if (arrow) arrow.style.transform = open ? '' : 'rotate(90deg)';
         }
-        // 阅读底图：读当前选的那张（没设过＝关）
+        // 阅读底图：读当前选的那张（没设过、或那条自定义已被删＝关）
         function readingGetBg() {
             var t = localStorage.getItem('reading_bg');
-            return RD_BG_INFO[t] ? t : 'off';
+            if (RD_BG_INFO[t]) return t;
+            return readingBgFind(t) ? t : 'off';
         }
-        // 长按绑定：按住 500ms 弹地址框。⚠️松手时要挡掉紧跟着的那次 click，
-        // 否则「长按填完地址」会顺带把档位又往前推一格。
-        (function () {
-            var t = null, fired = false;
-            function bind() {
-                var el = document.getElementById('chipReadBg');
-                if (!el || el._rdBgLongBound) return;
-                el._rdBgLongBound = true;
-                function start() { fired = false; clearTimeout(t); t = setTimeout(function () { fired = true; readingAskBgUrl(); }, 500); }
-                function stop() { clearTimeout(t); }
-                el.addEventListener('touchstart', start, { passive: true });
-                el.addEventListener('touchend', stop);
-                el.addEventListener('touchcancel', stop);
-                el.addEventListener('mousedown', start);
-                el.addEventListener('mouseup', stop);
-                el.addEventListener('mouseleave', stop);
-                el.addEventListener('click', function (e) { if (fired) { e.stopPropagation(); e.preventDefault(); fired = false; } }, true);
-            }
-            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind); else bind();
-        })();
+        // 当前这张的展示名（chip 上显示它）
+        function readingBgLabel(id) {
+            if (id === 'off') return '底图';
+            if (RD_BG_INFO[id]) return RD_BG_INFO[id].label;
+            var c = readingBgFind(id);
+            return c ? (c.name || '自定义') : '底图';
+        }
         function readingApplyBg() {
             var cur = readingGetBg();
             // 先摘掉所有底图类再挂当前这张，免得切换时两张图的变量互相盖
             Object.keys(RD_BG_INFO).forEach(function(k) { document.body.classList.remove(RD_BG_INFO[k].cls); });
+            document.body.classList.remove('rdbg-custom');
             document.body.classList.toggle('rdbg-on', cur !== 'off');
-            if (cur !== 'off') document.body.classList.add(RD_BG_INFO[cur].cls);
+            if (RD_BG_INFO[cur]) {
+                document.body.classList.add(RD_BG_INFO[cur].cls);
+            } else if (cur !== 'off') {
+                var c = readingBgFind(cur);
+                var u = c ? _rdBgSafeUrl(c.url) : '';
+                // 自定义的地址走行内变量，CSS 那边只认 var(--rd-bg-url)，不必为每张图写一条样式
+                document.body.style.setProperty('--rd-bg-url', u ? 'url("' + u + '")' : 'none');
+                document.body.classList.add('rdbg-custom');
+            }
             readingApplyMargins();   // ⚠️边距是按底图存的，换了图必须重读一次，否则用的还是上一张的数
             /* ⚠️开/关底图会换掉强调色，而**波浪线和小注引线是 JS 生成、颜色写死在行内的**，
                不重刷就还是上一套色（applyTheme 里为切主题做的是同一件事，这里照做一遍）。 */
             if (typeof readingRefreshQuoteSvgs === 'function') readingRefreshQuoteSvgs();
             if (typeof rdGlRelayoutSoon === 'function') rdGlRelayoutSoon(0);
-            if (cur === 'custom') {
-                var u = _rdBgSafeUrl(localStorage.getItem('reading_bg_url'));
-                // 地址走行内变量，CSS 那边只认 var(--rd-bg-url)，不用为每张图改样式
-                document.body.style.setProperty('--rd-bg-url', u ? 'url("' + u + '")' : 'none');
-            }
             var chip = document.getElementById('chipReadBg');
             if (chip) {
                 chip.classList.toggle('active', cur !== 'off');
-                chip.textContent = cur === 'off' ? '底图' : RD_BG_INFO[cur].label;
+                chip.textContent = readingBgLabel(cur);
             }
+            readingRenderBgPanel();
         }
-        // 长按「底图」chip：改自定义底图的地址（不管当前在哪一档都能改）
-        function readingAskBgUrl() {
-            var cur = localStorage.getItem('reading_bg_url') || '';
-            var u = prompt('底图地址（把图传到图片箱，复制 box.masterofmydomain.top/pic/… 那个直链粘进来；留空＝清掉）', cur);
-            if (u === null) return false;                     // 取消：什么都不动
-            u = _rdBgSafeUrl(u);
-            localStorage.setItem('reading_bg_url', u);
-            if (!u && readingGetBg() === 'custom') localStorage.setItem('reading_bg', 'off');
+        // 点 chip ＝ 开合面板（不再循环切换：自定义会越攒越多，循环点二十下不现实）
+        function readingToggleBgPanel() {
+            var panel = document.getElementById('readingBgPanel');
+            if (!panel) return;
+            var open = panel.style.display !== 'none';
+            panel.style.display = open ? 'none' : 'flex';
+            if (!open) readingRenderBgPanel();
+        }
+        function readingPickBg(id) {
+            localStorage.setItem('reading_bg', id);
+            _rdBgSyncNight(id);      // 深色图→夜间，浅色图→白天
+            // 底图不透明、会把遮罩底色整个盖住，所以开底图时顺手把遮罩打开，
+            // 否则弹层是透明的、底图只能透过主题色看见半张（跟「白底」那边同一个道理）
+            if (id !== 'off' && localStorage.getItem('chat_mask') !== '1') toggleChatMask(true);
             readingApplyBg();
-            return !!u;
+        }
+        function readingRenderBgPanel() {
+            var panel = document.getElementById('readingBgPanel');
+            if (!panel || panel.style.display === 'none') return;
+            var cur = readingGetBg();
+            var h = '';
+            function row(id, name, ops) {
+                return '<div class="rdbg-item' + (cur === id ? ' active' : '') + '" onclick="readingPickBg(\'' + id + '\')">'
+                     + '<span class="rdbg-name">' + name + '</span>' + (ops || '') + '</div>';
+            }
+            h += row('off', '关（用主题底色）', '');
+            h += row('gujiW', '古风白', '');
+            h += row('gujiB', '古风黑', '');
+            var list = readingBgList();
+            for (var i = 0; i < list.length; i++) {
+                var c = list[i];
+                var esc = (c.name || '未命名').replace(/</g, '&lt;');
+                var ops = '<button class="rdbg-op" title="这张是深色图吗？决定选它时切夜间还是白天" onclick="event.stopPropagation();readingBgToggleDark(\'' + c.id + '\')">' + (c.dark ? '🌙' : '☀️') + '</button>'
+                        + '<button class="rdbg-op" title="改名字和地址" onclick="event.stopPropagation();readingBgEdit(\'' + c.id + '\')">✎</button>'
+                        + '<button class="rdbg-op" title="删掉这张" onclick="event.stopPropagation();readingBgDelete(\'' + c.id + '\')">✕</button>';
+                h += row(c.id, esc, ops);
+            }
+            h += '<div class="rdbg-add" onclick="readingBgAdd()">＋ 添加底图</div>';
+            panel.innerHTML = h;
+        }
+        function readingBgAdd() {
+            var u = _rdBgSafeUrl(prompt('底图地址\n\n把图传到图片箱，在那儿点「复制链接」，粘到这里。'));
+            if (!u) return;
+            var n = (prompt('给它起个名字', '我的底图') || '').trim().slice(0, 20) || '我的底图';
+            var list = readingBgList();
+            var id = 'c' + Date.now();
+            list.push({ id: id, name: n, url: u, dark: false });
+            readingBgSaveList(list);
+            readingPickBg(id);       // 加完直接用上，省得再点一次
+        }
+        function readingBgEdit(id) {
+            var c = readingBgFind(id);
+            if (!c) return;
+            var n = prompt('名字', c.name || '');
+            if (n === null) return;
+            var u = prompt('地址', c.url || '');
+            if (u === null) return;
+            c.name = (n || '').trim().slice(0, 20) || c.name;
+            c.url = _rdBgSafeUrl(u) || c.url;
+            var list = readingBgList();
+            for (var i = 0; i < list.length; i++) if (list[i].id === id) list[i] = c;
+            readingBgSaveList(list);
+            readingApplyBg();
+        }
+        function readingBgToggleDark(id) {
+            var list = readingBgList();
+            for (var i = 0; i < list.length; i++) {
+                if (list[i].id === id) {
+                    list[i].dark = !list[i].dark;
+                    readingBgSaveList(list);
+                    // 标完立刻按新标记切一次日夜，省得她还要去点「夜间」
+                    if (readingGetBg() === id) _rdBgSyncNight(id);
+                    break;
+                }
+            }
+            readingApplyBg();
+        }
+        function readingBgDelete(id) {
+            var c = readingBgFind(id);
+            if (!c) return;
+            if (!confirm('删掉「' + (c.name || '未命名') + '」？图本身还在图片箱里，删的只是这条记录。')) return;
+            readingBgSaveList(readingBgList().filter(function (x) { return x.id !== id; }));
+            if (readingGetBg() === id) localStorage.setItem('reading_bg', 'off');
+            readingApplyBg();
         }
         /* 底图的明暗决定用白天还是夜间那套配色。
            ⚠️只在**切底图那一刻**联动，不在 readingApplyBg 里做——
              那个函数每次启动都会跑，放进去等于每次开 app 都强制改她手动设的夜间开关。 */
         function _rdBgSyncNight(id) {
             if (id === 'off' || typeof setNightMode !== 'function') return;
-            var info = RD_BG_INFO[id];
-            if (!info || info.dark == null) return;   // 自定义底图没标明暗就不动夜间开关
+            var info = RD_BG_INFO[id] || readingBgFind(id);
+            if (!info || info.dark == null) return;
             if (!!nightMode !== !!info.dark) setNightMode(!!info.dark);
-        }
-        function readingToggleBg() {
-            var next = RD_BGS[(RD_BGS.indexOf(readingGetBg()) + 1) % RD_BGS.length];
-            // 轮到「自定义」但还没填过地址：当场问一次，不填就跳过这档接着轮到「关」
-            if (next === 'custom' && !_rdBgSafeUrl(localStorage.getItem('reading_bg_url'))) {
-                if (!readingAskBgUrl()) { localStorage.setItem('reading_bg', 'off'); readingApplyBg(); return; }
-            }
-            localStorage.setItem('reading_bg', next);
-            _rdBgSyncNight(next);      // 古风黑→夜间，古风白→白天
-            // 底图不透明、会把遮罩底色整个盖住，所以开底图时顺手把遮罩打开，
-            // 否则弹层是透明的、底图只能透过主题色看见半张（跟「白底」那边同一个道理）
-            if (next !== 'off' && localStorage.getItem('chat_mask') !== '1') toggleChatMask(true);
-            readingApplyBg();
         }
         // 夜间暗色遮罩：把弹窗底色压成某种暗底（纯黑/柔黑/暖黑/夜岩），仅夜间有意义（白天该 chip 隐藏）。
         // 读出当前选的暗底；带一段历史迁移：老的「纯黑开/关」单键 → 新的「暗底种类」，开过的人默认落在 soft（纯黑已下线）。
