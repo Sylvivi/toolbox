@@ -12064,12 +12064,12 @@ body {
                 if (gistPushRetries < 2) {
                     gistPushRetries++;
                     if (sl) sl.innerHTML = '☁️ <span style="color:var(--gold)">同步失败，' + (5 * gistPushRetries) + '秒后重试…</span>';
-                    setTimeout(syncPushData, 5000 * gistPushRetries);
+                    setTimeout(function () { syncPushData(true); }, 5000 * gistPushRetries);   // 重试要立刻发，别再叠一层防抖
                 } else {
                     gistPushRetries = 0;
                     if (sl) sl.innerHTML = '☁️ <span style="color:var(--red)">同步失败</span>'
                         + (why ? ' <span style="opacity:.7;font-size:11px">' + why + '</span>' : '')
-                        + ' <span onclick="syncPushData()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">重试</span>';
+                        + ' <span onclick="syncPushData(true)" style="cursor:pointer;text-decoration:underline;color:var(--accent)">重试</span>';
                 }
             });
         }
@@ -12174,10 +12174,40 @@ body {
         // 页面起来时先渲染一次：她可能是关掉 app 之后才想起来要看
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { syncRenderLastErr(); });
         else setTimeout(function () { try { syncRenderLastErr(); } catch (e) {} }, 0);
-        function syncPushData() {
+        /* ===== 推送防抖（2026-09-06 加）=====
+           ⚠️为什么必须有：**每推一次就要上传整个 `_manifest`，而它已经 2.64MB 了**。
+             全项目有 22 处调 syncPushData，其中「阅读边距的加减按钮」是最狠的一个——
+             她点一下就推一次，那晚调了几十次边距，等于往外传了七八十兆，
+             顺手把 Cloudflare D1 的每日写入额度也打满了
+             （`exceeded free tier daily row write limit`，就是那次搬家的起因）。
+           ⚠️**不能只给边距那两处加**：真正的问题是「短时间内连点」这个模式，
+             收藏、改名、拖滑块……随便哪个连点几下都是同一回事。所以防抖加在这个总闸上。
+           ⚠️**必须配 flush**：切走 app / 关页面时把欠着的立刻推出去。
+             否则「改完马上换设备」这个最常见的场景会丢掉最后一次改动——
+             阅读进度那边踩过同样的坑，解法也是同一个（见 flushReaderPosPush）。
+           ⚠️传 true ＝ 立刻推，别经过防抖：给 flush 和「用户明确点了推送」用。 */
+        var _syncPushTimer = null;
+        var SYNC_PUSH_DEBOUNCE = 2500;   // 连点期间只留最后一次；2.5 秒是「手指停下来」的量级
+        function _syncDoPush() {
+            _syncPushTimer = null;
             if (activeSyncProvider === 'cf') { cfPushData(); }
             else { gistPushData(); }
         }
+        function syncPushData(immediate) {
+            if (immediate === true) {
+                if (_syncPushTimer) { clearTimeout(_syncPushTimer); _syncPushTimer = null; }
+                return _syncDoPush();
+            }
+            if (_syncPushTimer) clearTimeout(_syncPushTimer);
+            _syncPushTimer = setTimeout(_syncDoPush, SYNC_PUSH_DEBOUNCE);
+        }
+        // 欠着债就切走/关页面 → 立刻还上。⚠️没这两行，防抖就是在制造丢改动的机会。
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden && _syncPushTimer) syncPushData(true);
+        });
+        window.addEventListener('beforeunload', function () {
+            if (_syncPushTimer) syncPushData(true);
+        });
 
 
         function gistSetStatus(msg, color) {
