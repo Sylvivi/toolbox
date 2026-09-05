@@ -11306,7 +11306,16 @@ body {
             }
             return fetch(url, opts).then(function(r) {
                 if (r.status === 404) return null;
-                if (!r.ok) throw new Error('HTTP ' + r.status);
+                if (!r.ok) {
+                    /* ⚠️错误里必须带上**是哪个键、发了多大**（2026-09-05 加）。
+                       她报「同步失败，提示是 500」时，光一个状态码定位不了——
+                       500 是后端报错，最大的嫌疑是 **Cloudflare D1 单行 2MB 上限**：
+                       对话有切块机制绕它（见 docs/云同步.md），但 `_manifest` 这一整包
+                       （划线/书签/问答摘要/名单…）没有，攒久了会撑爆。
+                       带上体积，一眼就能分辨是「太大」还是「后端真的挂了」。 */
+                    var _sz = opts.body ? opts.body.length : 0;
+                    throw new Error('HTTP ' + r.status + ' @' + key + (_sz ? '（' + (_sz / 1048576).toFixed(2) + 'MB）' : ''));
+                }
                 return method === 'DELETE' ? { ok: true } : r.json();
             });
         }
@@ -12078,15 +12087,19 @@ body {
                 localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
                 var sl = document.getElementById('gistStatusLine');
                 if (sl) sl.innerHTML = '☁️ ' + fmtTimeShort(new Date().toISOString()) + ' <span style="opacity:0.5">已同步</span>';
-            }).catch(function() {
+            }).catch(function(err) {
                 var sl = document.getElementById('gistStatusLine');
+                // ⚠️把具体原因带到界面上：只写「同步失败」的话，她能告诉我的也只有这四个字
+                var why = (err && err.message) ? String(err.message).slice(0, 60) : '';
                 if (gistPushRetries < 2) {
                     gistPushRetries++;
                     if (sl) sl.innerHTML = '☁️ <span style="color:var(--gold)">同步失败，' + (5 * gistPushRetries) + '秒后重试…</span>';
                     setTimeout(syncPushData, 5000 * gistPushRetries);
                 } else {
                     gistPushRetries = 0;
-                    if (sl) sl.innerHTML = '☁️ <span style="color:var(--red)">同步失败</span> <span onclick="syncPushData()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">重试</span>';
+                    if (sl) sl.innerHTML = '☁️ <span style="color:var(--red)">同步失败</span>'
+                        + (why ? ' <span style="opacity:.7;font-size:11px">' + why + '</span>' : '')
+                        + ' <span onclick="syncPushData()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">重试</span>';
                 }
             });
         }
