@@ -122,14 +122,16 @@ function boot() {
     ok('D1 关掉记忆表 → 那条 system 不再发出去', D.带了记忆表 === false, JSON.stringify(D));
     eq('D2 关掉后只剩人设一条 system', D.system条数, 1);
 
-    /* ── E 组：本段历史问答开关 ─────────────────────────────────────────── */
+    /* ── E 组：这一段自己的历史问答「必带」，没有开关可关 ─────────────────
+       2026-09-05 她说「我觉得可以去掉倒是」，跟共读那边「当前段问答写死必带」对齐。
+       ⚠️存量会话里可能还存着当时那个 qa:0，也必须照带不误。 */
     const E = await page.evaluate(() => window._ask({ pre: 0, post: 0, mt: 1, qa: 0 }));
-    ok('E1 关掉历史问答 → 不再回喂上一轮问答', E.带了历史问答 === false, JSON.stringify(E));
-    ok('E2 但这一段的译文仍在（那是追问对象，不能关）', E.带了已有译文, JSON.stringify(E));
+    ok('E1 存量的 qa:0 也不再生效，历史问答照带', E.带了历史问答, JSON.stringify(E));
+    ok('E2 这一段的译文仍在（那是追问对象）', E.带了已有译文, JSON.stringify(E));
 
     /* ── F 组：设置按会话各记一份 ───────────────────────────────────────── */
     const F = await page.evaluate(() => {
-        localStorage.setItem('trans_ask_ctx:conv_ta_test', JSON.stringify({ pre: 5, post: 0, mt: 0, qa: 0 }));
+        localStorage.setItem('trans_ask_ctx:conv_ta_test', JSON.stringify({ pre: 5, post: 0, mt: 0 }));
         const a = translateAskCtx();
         window.chatCurrentConvId = '别的剧集';
         const b = translateAskCtx();          // 换个会话 → 回到默认
@@ -137,18 +139,16 @@ function boot() {
         const c = translateAskCtx();          // 换回来 → 还是自己那份
         return { 这个会话: a, 别的会话: b, 换回来: c };
     });
-    eq('F1 存的是自己这个会话的设置', F.这个会话, { pre: 5, post: 0, mt: 0, qa: 0 });
-    eq('F2 换个会话回到默认（不互相污染）', F.别的会话, { pre: -1, post: 0, mt: 1, qa: 1 });
-    eq('F3 换回来还是自己那份', F.换回来, { pre: 5, post: 0, mt: 0, qa: 0 });
+    eq('F1 存的是自己这个会话的设置', F.这个会话, { pre: 5, post: 0, mt: 0 });
+    eq('F2 换个会话回到默认（不互相污染）', F.别的会话, { pre: -1, post: 0, mt: 1 });
+    eq('F3 换回来还是自己那份', F.换回来, { pre: 5, post: 0, mt: 0 });
 
     /* ── G 组：圆点档位 + 面板点击 ──────────────────────────────────────── */
     const G = await page.evaluate(() => {
         localStorage.removeItem('trans_ask_ctx:conv_ta_test');
         const lv默认 = translateAskCtxLv();
-        translateSetAskCtx({ qa: 0 });
-        const lv关问答 = translateAskCtxLv();
         translateSetAskCtx({ mt: 0 });
-        const lv全关 = translateAskCtxLv();
+        const lv关记忆 = translateAskCtxLv();
         // 面板点击：造一个追问条，点圆点展开，再点「前文 5段」
         localStorage.removeItem('trans_ask_ctx:conv_ta_test');
         const bar = document.createElement('div');
@@ -168,26 +168,24 @@ function boot() {
         // 再点一个，验证委托监听器没被 innerHTML 换掉（共读那边踩过：面板只能点一次）
         panel.querySelector('[data-tactx="mt"]').click();
         const 第二次也生效 = translateAskCtx().mt === 0;
-        // ⚠️关掉记忆表还不掉档：档位是 qa→2 / mt→1 / 都没有→0，qa 还开着就仍是满档。
-        //   要看圆点跟不跟着走，得点那个真会掉档的（关掉问答 → 2 掉到 0，因为 mt 已经关了）
-        const 关问答前 = dot.getAttribute('data-lv');
-        panel.querySelector('[data-tactx="qa"]').click();
         const 圆点跟着变 = dot.getAttribute('data-lv');
+        const 没有问答那一行 = !panel.querySelector('[data-tactx="qa"]');
+        const 面板行数 = panel.querySelectorAll('.rp-ctxrow').length;
         // 面板必须是追问条的最后一个孩子，否则 flex-wrap 会把输入框顶到第三行
         const 面板在最后 = bar.lastElementChild === panel;
         const 输入框在面板前 = !!(bar.querySelector('.ta-ask') && (bar.querySelector('.ta-ask').compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING));
         bar.remove();
-        return { lv默认, lv关问答, lv全关, 展开前, 展开后, 点完的pre, 第二次也生效, 关问答前, 圆点跟着变, 面板在最后, 输入框在面板前 };
+        return { lv默认, lv关记忆, 展开前, 展开后, 点完的pre, 第二次也生效, 圆点跟着变, 没有问答那一行, 面板行数, 面板在最后, 输入框在面板前 };
     });
-    eq('G1 默认圆点＝满档（记忆表+问答都带）', G.lv默认, 2);
-    eq('G2 关掉问答 → 半档', G.lv关问答, 1);
-    eq('G3 记忆表也关 → 空档', G.lv全关, 0);
+    eq('G1 默认圆点＝实心（带剧集记忆）', G.lv默认, 2);
+    eq('G2 关掉记忆表 → 空心', G.lv关记忆, 0);
+    ok('G3 面板里没有「本段问答」那一行了', G.没有问答那一行, JSON.stringify(G));
+    eq('G3b 面板只剩三行（前文/后文/剧集记忆）', G.面板行数, 3);
     eq('G4 面板默认收着', G.展开前, 'none');
     eq('G5 点圆点展开', G.展开后, 'flex');
     eq('G6 点「5段」真的存进去了', G.点完的pre, 5);
     ok('G7 面板能连点第二次（委托监听器没被 innerHTML 冲掉）', G.第二次也生效, JSON.stringify(G));
-    eq('G8 只关记忆表还不掉档（问答开着仍是满档）', G.关问答前, '2');
-    eq('G9 问答也关掉 → 圆点跟着变成空档', G.圆点跟着变, '0');
+    eq('G8 改完圆点跟着变（关掉记忆表 → 空心）', G.圆点跟着变, '0');
     ok('G10 面板是追问条的最后一个（不然会把输入框挤到第三行）', G.面板在最后, JSON.stringify(G));
     ok('G11 输入框排在面板前面', G.输入框在面板前, JSON.stringify(G));
 

@@ -27412,7 +27412,7 @@ body {
         var TA_CTX_POST_STEPS = [0, 2, 5, 10];          // 后文带几段；0 = 不给（默认）
         function _taCtxKey() { return 'trans_ask_ctx:' + (chatCurrentConvId || '_'); }
         function translateAskCtx() {
-            var d = { pre: -1, post: 0, mt: 1, qa: 1 };
+            var d = { pre: -1, post: 0, mt: 1 };
             try {
                 var o = JSON.parse(localStorage.getItem(_taCtxKey()) || 'null');
                 if (o && typeof o === 'object') { for (var k in d) if (o[k] != null) d[k] = o[k]; }
@@ -27425,11 +27425,12 @@ body {
             try { localStorage.setItem(_taCtxKey(), JSON.stringify(cur)); } catch (e) {}
             return cur;
         }
-        // 圆点的三档长相是从面板反推的（跟共读一致：原文范围不进圆点，它只表意「带不带记忆」）
+        /* 圆点长相从面板反推（跟共读一致：原文范围不进圆点，它只表意「带不带记忆」）。
+           ⚠️共读那边是 0/1/2 三档，这里只有两态——2026-09-05 去掉「本段问答」开关之后，
+           能进圆点的只剩剧集记忆一件事。空心＝不带、实心＝带，不用半档（半档表意「带一部分」，
+           这里没有一部分可言）。 */
         function translateAskCtxLv() {
-            var c = translateAskCtx();
-            if (c.qa) return 2;
-            return c.mt ? 1 : 0;
+            return translateAskCtx().mt ? 2 : 0;
         }
         function _taCtxChip(label, on, act) {
             return '<button type="button" class="chip-btn' + (on ? ' active' : '') + '" data-tactx="' + act + '">' + label + '</button>';
@@ -27448,8 +27449,7 @@ body {
             }).join('');
             return row('前文', '这一段往前带几段原文，帮 AI 理解指代和铺垫', pre)
                  + row('后文', '这一段往后带几段原文。会让 AI 看到你还没译到的地方，默认不给', post)
-                 + row('剧集记忆', '人物 / 译名 / 案件 / 设定四张表', _taCtxChip(c.mt ? '带' : '不带', !!c.mt, 'mt'))
-                 + row('本段问答', '之前就这一段问过的问答', _taCtxChip(c.qa ? '带' : '不带', !!c.qa, 'qa'));
+                 + row('剧集记忆', '人物 / 译名 / 案件 / 设定四张表', _taCtxChip(c.mt ? '带' : '不带', !!c.mt, 'mt'));
         }
         function translateAskLvHtml() {
             return '<span class="rp-lv" role="button" tabindex="0" data-lv="' + translateAskCtxLv() +
@@ -27620,7 +27620,9 @@ body {
             var curBlock = null;
             for (var b = 0; b < blocks.length; b++) { if (blocks[b].s === s && blocks[b].e === e) { curBlock = blocks[b]; break; } }
             var prevParsed = curBlock ? translateBlockSplitQA(curBlock.text) : { main: '', qas: [] };
-            var priorQA = (_tctx.qa && prevParsed.qas.length)
+            // ⚠️这一段自己的历史问答无条件带（2026-09-05 她说「我觉得可以去掉倒是」——
+            // 一度做成过开关，跟共读那边「当前段问答写死必带」对齐后又拿掉了）。
+            var priorQA = prevParsed.qas.length
                 ? '\n\n我们之前就这段的问答：\n' + prevParsed.qas.map(function(p) { return '问：' + p.q + '\n答：' + p.a; }).join('\n')
                 : '';
             var sysPrompt = '用户正在阅读你给出的中文翻译与注释，对其中含义仍有疑问，现在就同一段落向你追问。请用中文简洁、准确地解答，可结合原文与你之前的翻译，必要时补充音标 / 词源 / 文化背景，但不要整段重复翻译。如提供了前文，请结合前文理解语境（例如笑点、双关、指代、伏笔从何而来），但前文仅用于帮助你理解，不要翻译或复述前文。'
