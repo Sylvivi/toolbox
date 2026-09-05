@@ -12113,7 +12113,7 @@ body {
                 if (manifest.modelPrices) { try { localStorage.setItem('toolbox_model_prices', JSON.stringify(manifest.modelPrices)); localStorage.setItem('toolbox_model_prices_ts', manifest.modelPricesTs || new Date().toISOString()); } catch (e) {} }
                 if (manifest.presets) { try { localStorage.setItem('chat_sp_presets', JSON.stringify(manifest.presets)); localStorage.setItem('chat_sp_presets_ts', manifest.presetsTs || new Date().toISOString()); if (typeof chatRenderSpPresets === 'function') chatRenderSpPresets(); } catch (e) {} }
                 readingApplyFontSync(manifest); // 字体库+五个位置选择，带时间戳护栏（修复开机被云端旧值冲掉的问题）
-                readingApplyBgSync(manifest);   // 阅读底图列表 + 每张的边距，同款时间戳护栏
+                readingApplyBgSync(manifest, true);   // 阅读底图列表 + 每张的边距。⚠️true＝强制：这条路是「以云端为准」
                 if (manifest.readerPos) { try { localStorage.setItem('reader_pos', JSON.stringify(manifest.readerPos)); } catch (e) {} }
                 if (manifest.readerQA) { try { localStorage.setItem('reader_qa', JSON.stringify(manifest.readerQA)); } catch (e) {} }
                 if (manifest.readerSummaries) { try { localStorage.setItem('reader_summaries', JSON.stringify(manifest.readerSummaries)); } catch (e) {} }
@@ -21647,11 +21647,20 @@ body {
            只有云端比本地新才覆盖，免得开机时把刚加的底图被云端旧值冲掉。
            ⚠️**当前选中的是哪张（reading_bg）故意不同步**：手机用竖版底图、电脑上那张图
              会被拉伸得很难看，各设备自己选更合适。同步的是「有哪些图可选」和「每张的边距」。 */
-        function readingApplyBgSync(manifest) {
+        function readingApplyBgSync(manifest, force) {
             if (!manifest || !manifest.bgList) return;
-            var cloudTs = manifest.bgTs || '';
-            var localTs = localStorage.getItem('reading_bg_ts') || '';
-            if (cloudTs && localTs && cloudTs <= localTs) return;
+            /* ⚠️`force` 是给「拉取云端」用的，必须能穿透下面这道时间戳护栏（2026-09-05 修）。
+               她报「电脑上同步好了，另一台手机上没同步好」，而且「最新版、也拉取了云端」。
+               根因：只要在那台设备上碰过一次边距，本地 reading_bg_ts 就比云端新，
+               护栏从此把云端挡在门外——**连手动「拉取云端」都被挡**，那条路本意是
+               「以云端为准强制覆盖」，看它周围就知道：bookFolders/favModels/presets 全是
+               无条件 setItem，唯独底图这条自带护栏，是我加漏了。
+               ⚠️护栏本身要留：自动同步时它挡的是「开机把刚加的底图被云端旧值冲掉」。 */
+            if (!force) {
+                var cloudTs = manifest.bgTs || '';
+                var localTs = localStorage.getItem('reading_bg_ts') || '';
+                if (cloudTs && localTs && cloudTs <= localTs) return;
+            }
             try {
                 localStorage.setItem('reading_bg_custom', JSON.stringify(manifest.bgList || []));
                 if (manifest.bgMargins) localStorage.setItem('reading_margins', JSON.stringify(manifest.bgMargins));
