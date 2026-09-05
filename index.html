@@ -1482,7 +1482,8 @@ body {
         }
         /* 正文边距（2026-09-05）。她要的是「文字落在边框里才和谐」。
            ⚠️左右和上下是**两种机制**，别混：
-             左右＝给滚动容器加 padding，字往里收就行；
+             左右＝给滚动容器加 padding，字往里收就行（⚠️**左右分开两个数**：
+               她有张背景图「左边加了艺术字右边没有」，两边对称就压字）；
              上边＝给滚动容器加 margin-top，**把容器本身的上边界内缩**。
              上边不能用 padding——padding 里的内容照样会滚出来压在边框上，
              只有缩小容器边界才能让文字「永远在框内」（她选的就是这条）。
@@ -1494,8 +1495,8 @@ body {
              **别再加回去**。
            ⚠️只在开底图时生效：不开底图时这些变量都是 0，排版跟以前一模一样。 */
         body.rdbg-on .chat-messages {
-            padding-left: var(--rd-pad-x, 0px);
-            padding-right: var(--rd-pad-x, 0px);
+            padding-left: var(--rd-pad-l, 0px);
+            padding-right: var(--rd-pad-r, 0px);
             margin-top: var(--rd-pad-y, 0px);
         }
 
@@ -6035,11 +6036,19 @@ body {
                             </div>
                         </div>
                         <div style="display:flex;align-items:center;justify-content:space-between">
-                            <span style="font-size:12px;font-weight:600;color:var(--text-muted)" title="正文离左右两边多远。开底图时用来把字收进边框里，每张底图各记一份">左右边距</span>
+                            <span style="font-size:12px;font-weight:600;color:var(--text-muted)" title="正文离左边多远。开底图时用来把字收进边框里，每张底图各记一份">左边距</span>
                             <div style="display:flex;gap:6px;align-items:center">
-                                <button class="chip-btn" onclick="readingStepMargin('x',-2)" title="更窄" style="min-width:30px">−</button>
-                                <span id="readingMarginXVal" style="font-size:12px;color:var(--text-muted);min-width:40px;text-align:center">0px</span>
-                                <button class="chip-btn" onclick="readingStepMargin('x',2)" title="更宽" style="min-width:30px">＋</button>
+                                <button class="chip-btn" onclick="readingStepMargin('l',-2)" title="更窄" style="min-width:30px">−</button>
+                                <span id="readingMarginLVal" style="font-size:12px;color:var(--text-muted);min-width:40px;text-align:center">0px</span>
+                                <button class="chip-btn" onclick="readingStepMargin('l',2)" title="更宽" style="min-width:30px">＋</button>
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:center;justify-content:space-between">
+                            <span style="font-size:12px;font-weight:600;color:var(--text-muted)" title="正文离右边多远。左右分开是因为有的底图只在一边有花纹或艺术字">右边距</span>
+                            <div style="display:flex;gap:6px;align-items:center">
+                                <button class="chip-btn" onclick="readingStepMargin('r',-2)" title="更窄" style="min-width:30px">−</button>
+                                <span id="readingMarginRVal" style="font-size:12px;color:var(--text-muted);min-width:40px;text-align:center">0px</span>
+                                <button class="chip-btn" onclick="readingStepMargin('r',2)" title="更宽" style="min-width:30px">＋</button>
                             </div>
                         </div>
                         <div style="display:flex;align-items:center;justify-content:space-between">
@@ -20786,16 +20795,25 @@ body {
              古风黑（850×1850，未裁）框线左7/右30、上21 → 取大的那边 → 16 / 14。
            ⚠️y 这个字段现在只管**上边距**（下边不管，见上面 CSS 那条注释），键名没改、别被 y 误导。
            ⚠️不开底图时默认 0/0，排版跟以前一模一样——这条是安全绳，别给它填非零默认值。 */
-        var RD_MARGIN_DEFAULTS = { off: { x: 0, y: 0 }, gujiW: { x: 22, y: 26 }, gujiB: { x: 16, y: 14 } };
+        var RD_MARGIN_DEFAULTS = { off: { l: 0, r: 0, y: 0 }, gujiW: { l: 22, r: 22, y: 26 }, gujiB: { l: 16, r: 16, y: 14 } };
         var RD_MARGIN_MAX = 80;
         function readingGetMargin(bgId) {
             var id = bgId || readingGetBg();
             var d = RD_MARGIN_DEFAULTS[id] || { x: 0, y: 0 };
-            var out = { x: d.x, y: d.y };
+            var out = { l: d.l, r: d.r, y: d.y };
             try {
                 var all = JSON.parse(localStorage.getItem('reading_margins') || '{}');
                 var o = all[id];
-                if (o) { if (o.x != null) out.x = o.x; if (o.y != null) out.y = o.y; }
+                if (o) {
+                    /* ⚠️老数据里是 `x`（左右合用一个数，2026-09-05 早些时候那版）。
+                       她后来说「另外弄了一张背景图，左边加了艺术字右边没有，所以同样的
+                       左右边距不太合适」→ 拆成 l/r。这里把老的 x 摊给两边，
+                       她之前调好的宽窄不会因为这次改动突然变回默认。 */
+                    if (o.x != null) { out.l = o.x; out.r = o.x; }
+                    if (o.l != null) out.l = o.l;
+                    if (o.r != null) out.r = o.r;
+                    if (o.y != null) out.y = o.y;
+                }
             } catch (e) {}
             return out;
         }
@@ -20816,16 +20834,19 @@ body {
         function readingApplyMargins() {
             var m = readingGetMargin();
             var b = document.body;
-            b.style.setProperty('--rd-pad-x', m.x + 'px');
+            b.style.setProperty('--rd-pad-l', m.l + 'px');
+            b.style.setProperty('--rd-pad-r', m.r + 'px');
             b.style.setProperty('--rd-pad-y', m.y + 'px');
-            var vx = document.getElementById('readingMarginXVal');
+            var vl = document.getElementById('readingMarginLVal');
+            var vr = document.getElementById('readingMarginRVal');
             var vy = document.getElementById('readingMarginYVal');
-            if (vx) vx.textContent = m.x + 'px';
+            if (vl) vl.textContent = m.l + 'px';
+            if (vr) vr.textContent = m.r + 'px';
             if (vy) vy.textContent = m.y + 'px';
         }
         function readingStepMargin(axis, delta) {
             var m = readingGetMargin();
-            var v = Math.max(0, Math.min(RD_MARGIN_MAX, (axis === 'x' ? m.x : m.y) + delta));
+            var v = Math.max(0, Math.min(RD_MARGIN_MAX, (m[axis] || 0) + delta));
             var patch = {}; patch[axis] = v;
             readingSetMargin(null, patch);
             readingApplyMargins();
