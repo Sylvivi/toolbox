@@ -3290,43 +3290,43 @@ body {
         /* 提问「带多少材料」的三档小方块（2026-07-28）。用户选的形态：一个圆点，点一下换一档。
            ⚠️用 CSS 画、不用 ○◐● 这三个字符——半黑圆 ◐ 在部分安卓字体里会掉字或大小不一，
            而这个控件全靠形状表意，掉一个字就彻底看不懂了。 */
-        .reading-actbar .rp-lv {
+        .reading-actbar .rp-lv, .translate-askbar .rp-lv {
             flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; cursor: pointer;
             position: relative; box-sizing: border-box; overflow: hidden;
             border: 1.5px solid var(--accent-mid); background: var(--card-bg);
             -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
             touch-action: manipulation; transition: background 0.15s, border-color 0.15s;
         }
-        .reading-actbar .rp-lv[data-lv="1"]::after {
+        .reading-actbar .rp-lv[data-lv="1"]::after, .translate-askbar .rp-lv[data-lv="1"]::after {
             content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 50%;
             background: var(--accent);
         }
-        .reading-actbar .rp-lv[data-lv="2"] { background: var(--accent); border-color: var(--accent); }
+        .reading-actbar .rp-lv[data-lv="2"], .translate-askbar .rp-lv[data-lv="2"] { background: var(--accent); border-color: var(--accent); }
         /* 提问上下文面板（2026-08-29）：点那个小圆点展开，**按书各记一份**。
            起因：她的书在谷歌线路上会被安全策略拒答，而原来的三档里**原文那一块一档都关不掉**，
            偏偏它是最大、也最容易踩雷的一块。她要的是「提问前自己挑」，不是「被拒了再自动降级」。
            ⚠️`.reading-actbar button` 的特异性(0,1,1)高于 `.chip-btn`(0,1,0)，
              不写下面这两条，面板里的 chip 会被染成实心强调色按钮、选没选中完全看不出来。 */
-        .reading-actbar .rp-ctxpanel {
+        .reading-actbar .rp-ctxpanel, .translate-askbar .rp-ctxpanel {
             flex: 1 1 100%; flex-direction: column; gap: 0.4em;
             margin-top: 0.15em; padding-top: 0.45em; border-top: 1px solid var(--accent-mid);
         }
-        .reading-actbar .rp-ctxrow { display: flex; align-items: center; gap: 0.6em; }
+        .reading-actbar .rp-ctxrow, .translate-askbar .rp-ctxrow { display: flex; align-items: center; gap: 0.6em; }
         /* ⚠️min-width 而不是写死宽度：写死 3.6em 时「前文问答」四个字正好挤不下、会折成两行。
            min-width 让短标签仍然对齐，长的自己撑开；nowrap 是第二道保险。 */
-        .reading-actbar .rp-ctxlab {
+        .reading-actbar .rp-ctxlab, .translate-askbar .rp-ctxlab {
             flex: 0 0 auto; min-width: 3.6em; white-space: nowrap;
             font-size: 11px; color: var(--text-muted);
         }
-        .reading-actbar .rp-ctxchips {
+        .reading-actbar .rp-ctxchips, .translate-askbar .rp-ctxchips {
             display: flex; flex-wrap: wrap; gap: 0.3em; flex: 1 1 auto; justify-content: flex-end;
         }
-        .reading-actbar .rp-ctxpanel .chip-btn {
+        .reading-actbar .rp-ctxpanel .chip-btn, .translate-askbar .rp-ctxpanel .chip-btn {
             padding: 0.15em 0.6em; font-size: 11px; border-radius: 7px;
             border: 1px solid var(--card-border); background: var(--card-bg);
             color: var(--text-muted); font-weight: 400;
         }
-        .reading-actbar .rp-ctxpanel .chip-btn.active {
+        .reading-actbar .rp-ctxpanel .chip-btn.active, .translate-askbar .rp-ctxpanel .chip-btn.active {
             background: var(--accent-light); border-color: var(--accent-mid); color: var(--text);
         }
         /* 书签：已标记段落 */
@@ -27394,6 +27394,93 @@ body {
 
         // 译文块「追问」：在该块下方展开输入框
         // 长按译文块 = 追问（共读式一步提问）：直接弹出输入框、自动聚焦，回车/「提问」发送，再次长按收起
+        /* ===== 翻译追问的「带多少上下文」面板（2026-09-05）=====
+         * 她问「翻译模式下追问的上下文是什么，能否像阅读模式一样自行选择呢」→ 照搬共读那套面板。
+         * 长相、交互、CSS 全部复用 .rp-lv 圆点 + .rp-ctxpanel（见 docs/共读提问与成本.md 里
+         * 「提问上下文面板」那一节，那边的四条拍板同样适用：只做面板不做自动降级、前后文两个数
+         * 分开调、开关拆细、各记各的）。
+         *
+         * ⚠️为什么不直接调 readingAskCtx 那一套，而是另写一份平行的：
+         *   ① 存储范围不同——共读按「书」(readingNamesKey)，翻译按「会话」(一个会话＝一部剧，
+         *      剧集记忆本来就是按会话跨集积累的)；
+         *   ② 条目不同——翻译没有「摘要」，多的是「剧集记忆四张表」和「本段历史问答」；
+         *   ③ 共读那套挂着 tests/askcost.test.js 61 条，为省几十行去动它不划算。
+         *
+         * ⚠️默认值＝改这版之前的写死行为（前文全带 / 后文不带 / 记忆表带 / 本段问答带），
+         *   所以没碰过面板的会话，一个字都不会变。别为了「更省钱」偷偷调小默认值。 */
+        var TA_CTX_PRE_STEPS = [0, 2, 5, 10, 20, -1];   // 前文带几段；-1 = 本集全带（老行为，仍受 20 万字预算兜底）
+        var TA_CTX_POST_STEPS = [0, 2, 5, 10];          // 后文带几段；0 = 不给（默认）
+        function _taCtxKey() { return 'trans_ask_ctx:' + (chatCurrentConvId || '_'); }
+        function translateAskCtx() {
+            var d = { pre: -1, post: 0, mt: 1, qa: 1 };
+            try {
+                var o = JSON.parse(localStorage.getItem(_taCtxKey()) || 'null');
+                if (o && typeof o === 'object') { for (var k in d) if (o[k] != null) d[k] = o[k]; }
+            } catch (e) {}
+            return d;
+        }
+        function translateSetAskCtx(patch) {
+            var cur = translateAskCtx();
+            for (var k in patch) cur[k] = patch[k];
+            try { localStorage.setItem(_taCtxKey(), JSON.stringify(cur)); } catch (e) {}
+            return cur;
+        }
+        // 圆点的三档长相是从面板反推的（跟共读一致：原文范围不进圆点，它只表意「带不带记忆」）
+        function translateAskCtxLv() {
+            var c = translateAskCtx();
+            if (c.qa) return 2;
+            return c.mt ? 1 : 0;
+        }
+        function _taCtxChip(label, on, act) {
+            return '<button type="button" class="chip-btn' + (on ? ' active' : '') + '" data-tactx="' + act + '">' + label + '</button>';
+        }
+        function translateCtxPanelInner() {
+            var c = translateAskCtx();
+            function row(label, tip, inner) {
+                return '<div class="rp-ctxrow"><span class="rp-ctxlab" title="' + tip + '">' + label + '</span>'
+                     + '<span class="rp-ctxchips">' + inner + '</span></div>';
+            }
+            var pre = TA_CTX_PRE_STEPS.map(function (v) {
+                return _taCtxChip(v < 0 ? '整集' : (v === 0 ? '无' : v + '段'), c.pre === v, 'pre:' + v);
+            }).join('');
+            var post = TA_CTX_POST_STEPS.map(function (v) {
+                return _taCtxChip(v === 0 ? '无' : v + '段', c.post === v, 'post:' + v);
+            }).join('');
+            return row('前文', '这一段往前带几段原文，帮 AI 理解指代和铺垫', pre)
+                 + row('后文', '这一段往后带几段原文。会让 AI 看到你还没译到的地方，默认不给', post)
+                 + row('剧集记忆', '人物 / 译名 / 案件 / 设定四张表', _taCtxChip(c.mt ? '带' : '不带', !!c.mt, 'mt'))
+                 + row('本段问答', '之前就这一段问过的问答', _taCtxChip(c.qa ? '带' : '不带', !!c.qa, 'qa'));
+        }
+        function translateAskLvHtml() {
+            return '<span class="rp-lv" role="button" tabindex="0" data-lv="' + translateAskCtxLv() +
+                '" title="点一下：挑这次追问要带哪些上下文（这个会话单独记）"></span>'
+                 + '<div class="rp-ctxpanel" style="display:none"></div>';
+        }
+        function translateBindAskLv(bar) {
+            var el = bar && bar.querySelector('.rp-lv');
+            var panel = bar && bar.querySelector('.rp-ctxpanel');
+            if (!el || !panel) return;
+            el.addEventListener('click', function (e) {
+                e.stopPropagation();
+                if (panel.style.display === 'none') { panel.innerHTML = translateCtxPanelInner(); panel.style.display = 'flex'; }
+                else { panel.style.display = 'none'; }
+                try { navigator.vibrate && navigator.vibrate(8); } catch (x) {}
+            });
+            panel.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var b = (e.target && e.target.closest) ? e.target.closest('[data-tactx]') : null;
+                if (!b) return;
+                var act = b.getAttribute('data-tactx');
+                if (act.indexOf('pre:') === 0) translateSetAskCtx({ pre: parseInt(act.slice(4), 10) });
+                else if (act.indexOf('post:') === 0) translateSetAskCtx({ post: parseInt(act.slice(5), 10) });
+                else { var cur = translateAskCtx(), o = {}; o[act] = cur[act] ? 0 : 1; translateSetAskCtx(o); }
+                // ⚠️只换 innerHTML、不换元素：换元素会把这个委托监听器一起换掉，面板就只能点一次
+                panel.innerHTML = translateCtxPanelInner();
+                el.setAttribute('data-lv', String(translateAskCtxLv()));
+                try { navigator.vibrate && navigator.vibrate(6); } catch (x) {}
+            });
+        }
+
         function translateAskBlockTap(block) {
             if (translateBusy) return;
             if (!block) return;
@@ -27410,10 +27497,13 @@ body {
             var e = parseInt(block.getAttribute('data-e'));
             var bar = document.createElement('div');
             bar.className = 'translate-askbar';
-            bar.innerHTML = '<textarea class="ta-ask" rows="1" placeholder="这段没看懂？问问看…（如：这里的双关是什么意思？）"></textarea>' +
+            // 圆点排在最左（跟共读追问条同一个位置），面板 flex:1 1 100% 会自己换行铺在下面一行
+            bar.innerHTML = translateAskLvHtml() +
+                '<textarea class="ta-ask" rows="1" placeholder="这段没看懂？问问看…（如：这里的双关是什么意思？）"></textarea>' +
                 '<button class="ta-ask-del">删除</button>' +
                 '<button class="ta-ask-send">提问</button>';
             block.appendChild(bar);
+            translateBindAskLv(bar);
             var input = bar.querySelector('.ta-ask');
             var send = bar.querySelector('.ta-ask-send');
             // 随内容自增高：按屏宽自动换行、行数变了跟着长高
@@ -27491,29 +27581,43 @@ body {
             if (lo < 1 || hi > paras.length) { if (bar) bar.remove(); return; }
             var segment = paras.slice(lo - 1, hi).join('\n');
             // 前文上下文：取本段之前的原文，从最近往前在字数预算内尽量多带（帮助理解笑点/指代/伏笔）
-            // 大上下文模型（百万级）下放宽到 20 万字，基本可带整篇前文；上限仅防极端超长输入
+            // 大上下文模型（百万级）下放宽到 20 万字，基本可带整篇前文；上限仅防极端超长输入。
+            // 2026-09-05 起带几段由追问条上那个圆点面板决定（translateAskCtx），
+            // pre = -1 是默认、也是这一版之前的写死行为（铺到本集开头）；字数预算仍作兜底。
+            var _tctx = translateAskCtx();
             var CTX_CHAR_BUDGET = 200000;
             var ctxLines = [];
             var ctxUsed = 0;
-            for (var ci = lo - 2; ci >= 0; ci--) {
-                if (ctxUsed + paras[ci].length > CTX_CHAR_BUDGET) break;
-                ctxLines.unshift(paras[ci]);
-                ctxUsed += paras[ci].length + 1;
+            var _preStop = (_tctx.pre < 0) ? 0 : Math.max(0, (lo - 1) - _tctx.pre);   // 往前最多回溯到这一段（下标）
+            if (_tctx.pre !== 0) {
+                for (var ci = lo - 2; ci >= _preStop; ci--) {
+                    if (ctxUsed + paras[ci].length > CTX_CHAR_BUDGET) break;
+                    ctxLines.unshift(paras[ci]);
+                    ctxUsed += paras[ci].length + 1;
+                }
             }
             var ctxTruncated = ctxLines.length < (lo - 1);
             var contextBlock = ctxLines.length
-                ? '【前文（' + (ctxTruncated ? '因较长仅取最近部分，' : '') + '仅供你理解上下文，请勿翻译或复述这部分）】\n' + ctxLines.join('\n') + '\n\n'
+                ? '【前文（' + (ctxTruncated ? '仅取最近部分，' : '') + '仅供你理解上下文，请勿翻译或复述这部分）】\n' + ctxLines.join('\n') + '\n\n'
+                : '';
+            // 后文：她主动在面板里按了才给（默认 0）。翻译是逐段往下推的，默认给后文＝提前剧透。
+            var postLines = [];
+            for (var pj = hi; pj < Math.min(paras.length, hi + (_tctx.post || 0)); pj++) postLines.push(paras[pj]);
+            var postBlock = postLines.length
+                ? '\n\n【后文（这一段之后的原文，同样仅供你理解语境，请勿翻译或复述）】\n' + postLines.join('\n')
                 : '';
             var blocks = translateModeParseBlocks(msg.content);
             var curBlock = null;
             for (var b = 0; b < blocks.length; b++) { if (blocks[b].s === s && blocks[b].e === e) { curBlock = blocks[b]; break; } }
             var prevParsed = curBlock ? translateBlockSplitQA(curBlock.text) : { main: '', qas: [] };
-            var priorQA = prevParsed.qas.length
+            var priorQA = (_tctx.qa && prevParsed.qas.length)
                 ? '\n\n我们之前就这段的问答：\n' + prevParsed.qas.map(function(p) { return '问：' + p.q + '\n答：' + p.a; }).join('\n')
                 : '';
-            var sysPrompt = '用户正在阅读你给出的中文翻译与注释，对其中含义仍有疑问，现在就同一段落向你追问。请用中文简洁、准确地解答，可结合原文与你之前的翻译，必要时补充音标 / 词源 / 文化背景，但不要整段重复翻译。如提供了前文，请结合前文理解语境（例如笑点、双关、指代、伏笔从何而来），但前文仅用于帮助你理解，不要翻译或复述前文。';
+            var sysPrompt = '用户正在阅读你给出的中文翻译与注释，对其中含义仍有疑问，现在就同一段落向你追问。请用中文简洁、准确地解答，可结合原文与你之前的翻译，必要时补充音标 / 词源 / 文化背景，但不要整段重复翻译。如提供了前文，请结合前文理解语境（例如笑点、双关、指代、伏笔从何而来），但前文仅用于帮助你理解，不要翻译或复述前文。'
+                + (_tctx.post > 0 ? '这次我还给了这一段后面的几段原文，它们同样只用于帮你理解语境，不要翻译或复述。' : '');
             var userMsg = contextBlock +
                 '【我要追问的这一段（第 ' + (lo === hi ? lo : (lo + '–' + hi)) + ' 段）】：\n' + segment +
+                postBlock +
                 '\n\n你之前给出的翻译与解释：\n' + (prevParsed.main || '（无）') +
                 priorQA +
                 '\n\n我的问题是：' + question;
@@ -27532,7 +27636,7 @@ body {
                 var apiKey = chatSelectedKeyStr || getActiveKey(item);
                 var _memBlk = (typeof chatTransMemoryPromptBlock === 'function') ? chatTransMemoryPromptBlock() : '';
                 var _askMsgs = [{ role: 'system', content: sysPrompt }];
-                if (_memBlk) _askMsgs.push({ role: 'system', content: _memBlk });  // 回喂剧集记忆：结合已知人物/地点/文化背景作答
+                if (_memBlk && _tctx.mt) _askMsgs.push({ role: 'system', content: _memBlk });  // 回喂剧集记忆：结合已知人物/地点/文化背景作答（面板可关）
                 // 前情梳理不再喂给 AI（省额度，用户选择）：跨集信息靠上面三张记忆表传达；
                 // 前情现在只作「给人读的记忆」+「提取人物/地点的来源」。本集内语境靠 userMsg 里的「本集前文」。
                 _askMsgs.push({ role: 'user', content: userMsg });
