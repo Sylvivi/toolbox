@@ -6949,7 +6949,26 @@ body {
 
         // 随机模式下「此刻该用哪个皮肤」：夜间一律蓝橙；日间用本次开机摇到的那个。
         // ⚠️这里**不摇新的**——日夜来回切要稳定停在同一个皮肤上，只有开机(和手动点🎲)才换。
-        function themeRandomIdx() {
+        /* 开底图时的皮肤替补（2026-09-05）。她的话：「开了底图和随机主题的情况下，
+           哪怕随机到蓝橙，主题也保持是蓝金可以吗，实在是不搭我觉得吧」。
+           ⚠️只在**开着底图**时替换，不开底图随机照旧摇得到蓝橙——她嫌不搭的是
+             「蓝橙压在古籍纸上」这个组合，不是这个皮肤本身。
+           ⚠️也不走 THEME_RANDOM_SKIP（那是「永久不参与随机」的名单，性质不同：
+             进了那个名单，不开底图时也再摇不到了）。
+           以后还有别的皮肤嫌不搭，往这张表里加一行就行。 */
+        var RD_BG_THEME_SUB = { blueorange: 'warm' };   // 蓝橙 → 蓝金
+        function _rdBgSubTheme(idx) {
+            if (!document.body.classList.contains('rdbg-on')) return idx;
+            var t = THEMES[idx];
+            var sub = t && RD_BG_THEME_SUB[t.id];
+            if (!sub) return idx;
+            var j = themeIdxById(sub);
+            return j >= 0 ? j : idx;
+        }
+        // 对外仍叫 themeRandomIdx：显示「随机到哪个」的地方也该显示替补后的名字，
+        // 否则面板上写着蓝橙、眼前却是蓝金
+        function themeRandomIdx() { return _rdBgSubTheme(_themeRandomIdxRaw()); }
+        function _themeRandomIdxRaw() {
             if (nightMode) return themeIdxById(THEME_RANDOM_NIGHT_ID);
             var last = localStorage.getItem('toolbox_theme_last');
             /* ⚠️上次摇到的那个后来被列进「不参与随机」名单了 → 立刻重摇。
@@ -20856,6 +20875,12 @@ body {
             if (chip) {
                 chip.classList.toggle('active', cur !== 'off');
                 chip.textContent = readingBgLabel(cur);
+            }
+            /* 随机主题下开/关底图要重新摇一次：替补规则只在开底图时生效，
+               不重来的话关掉底图还留在替补皮肤上、开着底图又还是那个不搭的。
+               ⚠️只在随机模式下做——固定皮肤是她自己选的，不许自作主张换掉。 */
+            if (localStorage.getItem('toolbox_theme') === 'random' && typeof themeRandomApply === 'function') {
+                themeRandomApply();
             }
             readingRenderBgPanel();
         }
