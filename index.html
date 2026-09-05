@@ -1468,10 +1468,13 @@ body {
         /* 正文边距（2026-09-05）。她要的是「文字落在边框里才和谐」。
            ⚠️左右和上下是**两种机制**，别混：
              左右＝给滚动容器加 padding，字往里收就行；
-             上下＝给滚动容器加 margin，**把容器本身的上下边界内缩**。
-             上下不能用 padding——padding 里的内容照样会滚出来压在边框上，
+             上边＝给滚动容器加 margin-top，**把容器本身的上边界内缩**。
+             上边不能用 padding——padding 里的内容照样会滚出来压在边框上，
              只有缩小容器边界才能让文字「永远在框内」（她选的就是这条）。
-           ⚠️再叠一层 mask 渐隐：纯内缩会把字硬切成半行，渐隐让它在靠近边缘时淡出。
+           ⚠️**只管上边、不管下边**（2026-09-05 她定的）：「只需要管好上面，不需要管好下面，
+             下面跟那个横条契合得很完美」——底部本来就被那条收起的输入栏挡住了，
+             再内缩一次等于白扔一截可视高度。所以 margin-bottom 不设、渐隐也只留上端。
+           ⚠️上端叠一层 mask 渐隐：纯内缩会把字硬切成半行，渐隐让它在靠近边缘时淡出。
              mask 是相对容器的 border-box，容器本身不动、只有内容滚，所以这层渐隐
              会稳稳停在上下两端，正是要的效果。
            ⚠️只在开底图时生效：不开底图时这些变量都是 0，排版跟以前一模一样。 */
@@ -1479,9 +1482,8 @@ body {
             padding-left: var(--rd-pad-x, 0px);
             padding-right: var(--rd-pad-x, 0px);
             margin-top: var(--rd-pad-y, 0px);
-            margin-bottom: var(--rd-pad-y, 0px);
-            -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--rd-fade, 20px), #000 calc(100% - var(--rd-fade, 20px)), transparent 100%);
-            mask-image: linear-gradient(to bottom, transparent 0, #000 var(--rd-fade, 20px), #000 calc(100% - var(--rd-fade, 20px)), transparent 100%);
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--rd-fade, 20px), #000 100%);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 var(--rd-fade, 20px), #000 100%);
         }
 
         /* ⚠️底栏那条小条**做过隐身又撤了**（2026-09-05 当天来回）：
@@ -5994,7 +5996,7 @@ body {
                             </div>
                         </div>
                         <div style="display:flex;align-items:center;justify-content:space-between">
-                            <span style="font-size:12px;font-weight:600;color:var(--text-muted)" title="正文的可视范围离上下边多远。滚多远都不会压到边框上，靠近边缘时字淡出">上下边距</span>
+                            <span style="font-size:12px;font-weight:600;color:var(--text-muted)" title="正文的可视范围离顶边多远。滚多远都不会压到上边框，靠近顶端时字淡出。底部不用管——那儿正好被收起的输入栏挡着">上边距</span>
                             <div style="display:flex;gap:6px;align-items:center">
                                 <button class="chip-btn" onclick="readingStepMargin('y',-2)" title="更窄" style="min-width:30px">−</button>
                                 <span id="readingMarginYVal" style="font-size:12px;color:var(--text-muted);min-width:40px;text-align:center">0px</span>
@@ -20684,9 +20686,10 @@ body {
            她的话：「加左右边距功能跟这个（文字在框内）也有关系」。
            每张底图的边框宽度都不一样，所以这两个数天然是跟着图走的，不能全局一份。
            ⚠️预置图的默认值是**量出来的**、不是拍脑袋：
-             古风白（裁正后 850×1803）框线在左28/右26、上下各43 → 折成屏宽约 13px、屏高约 17px，
+             古风白（裁正后 850×1803）框线在左28/右26、上43 → 折成屏宽约 13px、屏高约 17px，
                各加一点呼吸 → 22 / 26；
-             古风黑（850×1850，未裁）框线左7/右30、上21/下12 → 取大的那边 → 16 / 14。
+             古风黑（850×1850，未裁）框线左7/右30、上21 → 取大的那边 → 16 / 14。
+           ⚠️y 这个字段现在只管**上边距**（下边不管，见上面 CSS 那条注释），键名没改、别被 y 误导。
            ⚠️不开底图时默认 0/0，排版跟以前一模一样——这条是安全绳，别给它填非零默认值。 */
         var RD_MARGIN_DEFAULTS = { off: { x: 0, y: 0 }, gujiW: { x: 22, y: 26 }, gujiB: { x: 16, y: 14 } };
         var RD_MARGIN_MAX = 80;
