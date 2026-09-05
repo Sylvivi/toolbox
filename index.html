@@ -1494,7 +1494,10 @@ body {
              「没有必要弄那种有渐入渐出感，不需要，这样比较利落」。硬边界是她要的观感，
              **别再加回去**。
            ⚠️只在开底图时生效：不开底图时这些变量都是 0，排版跟以前一模一样。 */
-        body.rdbg-on .chat-messages {
+        /* ⚠️`:not(.chat-in-list)` 不能省：对话列表跟正文共用 #chatMessages 这一个滚动容器，
+           不排除的话列表也会套上这套边距，而列表上头本来就有「书架/新建」那一行工具栏，
+           叠起来非常难看（2026-09-05 她报的）。 */
+        body.rdbg-on:not(.chat-in-list) .chat-messages {
             padding-left: var(--rd-pad-l, 0px);
             padding-right: var(--rd-pad-r, 0px);
             margin-top: var(--rd-pad-y, 0px);
@@ -14154,6 +14157,12 @@ body {
         /* ===== 视图切换 ===== */
         function chatSwitchView(view) {
             chatView = view;
+            /* ⚠️给 body 打个视图标记：**对话列表和正文用的是同一个滚动容器 #chatMessages**，
+               所以任何加在这个容器上的样式（比如底图那套上/左/右边距）在列表视图里也会生效。
+               她报的就是这个：「我在阅读界面设置的那个上边距居然会影响到对话列表的上边距……
+               它实际上是在上面有书架标志和添加标志的那行的基础上加上边距，那这个就很难看了」。
+               有了这个类，样式就能写成「只在正文视图下生效」。 */
+            document.body.classList.toggle('chat-in-list', view === 'list');
             var topList = document.getElementById('chatTopbarList');
             var topConv = document.getElementById('chatTopbarConv');
             var inputArea = document.getElementById('chatInputArea');
