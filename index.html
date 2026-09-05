@@ -11307,14 +11307,19 @@ body {
             return fetch(url, opts).then(function(r) {
                 if (r.status === 404) return null;
                 if (!r.ok) {
-                    /* ⚠️错误里必须带上**是哪个键、发了多大**（2026-09-05 加）。
-                       她报「同步失败，提示是 500」时，光一个状态码定位不了——
-                       500 是后端报错，最大的嫌疑是 **Cloudflare D1 单行 2MB 上限**：
-                       对话有切块机制绕它（见 docs/云同步.md），但 `_manifest` 这一整包
-                       （划线/书签/问答摘要/名单…）没有，攒久了会撑爆。
-                       带上体积，一眼就能分辨是「太大」还是「后端真的挂了」。 */
+                    /* ⚠️500 时**要把后端返回的正文也读出来**（2026-09-06 加）。
+                       她截到的第一条是 `HTTP 500 @chat_chat_1788404271862_35yu7y（0.01MB）`——
+                       只有 10KB，一举证伪了「manifest 撑爆 D1 2MB」那个猜测；
+                       失败的是一条具体对话。这种情况下真正有用的是 Worker/D1 吐出来的那句话
+                       （SQL 报错？额度用尽？），光一个状态码定位不了。
+                       ⚠️体积也一并留着：它当初是为了分辨「是不是太大」而加的，
+                         第一次报上来就靠它排除了 2MB 那条路，别顺手删掉。 */
                     var _sz = opts.body ? opts.body.length : 0;
-                    throw new Error('HTTP ' + r.status + ' @' + key + (_sz ? '（' + (_sz / 1048576).toFixed(2) + 'MB）' : ''));
+                    var _head = 'HTTP ' + r.status + ' @' + key + (_sz ? '（' + (_sz / 1048576).toFixed(2) + 'MB）' : '');
+                    // ⚠️读正文要兜住异常：正文读失败不能把原始的状态码错误也一起吞掉
+                    return r.text().catch(function () { return ''; }).then(function (t) {
+                        throw new Error(_head + (t ? ' ← ' + String(t).replace(/\s+/g, ' ').slice(0, 120) : ''));
+                    });
                 }
                 return method === 'DELETE' ? { ok: true } : r.json();
             });
@@ -12090,7 +12095,7 @@ body {
             }).catch(function(err) {
                 var sl = document.getElementById('gistStatusLine');
                 // ⚠️把具体原因带到界面上：只写「同步失败」的话，她能告诉我的也只有这四个字
-                var why = (err && err.message) ? String(err.message).slice(0, 60) : '';
+                var why = (err && err.message) ? String(err.message).slice(0, 180) : '';
                 /* ⚠️把失败记下来（2026-09-05 加）。她原话「我还没来得及截图就没了……」——
                    状态行每同步一轮就刷新一次，失败提示一闪而过，根本来不及看清、更别说截图。
                    落盘之后成功也不清，一直留到她自己点掉，什么时候想看都在。 */
