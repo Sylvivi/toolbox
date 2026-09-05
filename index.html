@@ -5044,69 +5044,28 @@ body {
         <div class="modal sync-modal" style="max-width:440px;width:100%">
             <h2>☁️ 云同步</h2>
             <div class="modal-body">
-                <!-- 同步方式选择 -->
-                <div style="display:flex;gap:6px;margin-bottom:10px">
-                    <button class="type-btn" id="syncProvGist" onclick="switchSyncProvider('gist')" style="flex:1;font-size:12px;padding:7px">GitHub Gist</button>
-                    <button class="type-btn active" id="syncProvCF" onclick="switchSyncProvider('cf')" style="flex:1;font-size:12px;padding:7px">Cloudflare D1</button>
-                </div>
 
-                <!-- GitHub Gist 配置 -->
-                <div id="syncGistFields" style="display: none;">
-                    <div id="gistGuide" style="font-size:13px;color:var(--text-sub);background:var(--card-inner);border-radius:10px;margin-bottom:10px;overflow:hidden">
-                        <div onclick="var c=document.getElementById('gistGuideBody');var a=this.querySelector('span');if(c.style.display==='none'){c.style.display='block';a.textContent='▲'}else{c.style.display='none';a.textContent='▼'}" style="padding:8px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
-                            <b style="color:var(--accent)">📖 首次配置步骤</b>
-                            <span style="font-size:12px;color:var(--text-muted)">▼</span>
-                        </div>
-                        <div id="gistGuideBody" style="display:none;padding:0 12px 12px;line-height:1.8">
-                            1. 登录 <a href="https://github.com" target="_blank" style="color:var(--accent)">github.com</a>（没有账号先注册）<br>
-                            2. 点右上角头像 → Settings<br>
-                            3. 左侧找 Developer settings → Personal access tokens → Tokens (classic)<br>
-                            4. Generate new token → 只勾选 <b>gist</b> 权限 → 生成<br>
-                            5. 复制那串 token 粘贴到下方 ↓
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>GitHub Token</label>
-                        <input type="password" id="gistToken" placeholder="ghp_xxxxxxxxxxxxxxxxxx">
-                    </div>
-                    <div class="form-group" id="gistIdGroup" style="display: none;">
-                        <label style="display:flex;justify-content:space-between">
-                            <span>Gist ID <span style="font-weight:400;color:var(--text-muted);font-size:11px">（自动生成，无需修改）</span></span>
-                        </label>
-                        <input type="text" id="gistId" placeholder="自动填入" readonly="" style="opacity:0.6">
-                    </div>
-                </div>
 
-                <!-- Cloudflare D1 配置 -->
+                <!-- 同步服务配置。⚠️2026-09-06 起是**自建后端**（cc-sync，服务器上的 SQLite），
+                     不再是 Cloudflare D1——她的 D1 免费额度被每天的写入行数打满了。
+                     ⚠️底层的变量名和函数名仍叫 cf*（cfReq/cfGetConfig/activeSyncProvider==='cf'），
+                       那是历史包袱，接口逐字兼容所以没改名；**别看到 cf 就以为还在用 Cloudflare**。
+                     ⚠️「GitHub Gist」那一套整个删掉了（她：「去掉github」），
+                       switchSyncProvider 也随之简化，别再往回加选择器。 -->
                 <div id="syncCFFields" style="display: block;">
                     <div class="form-group">
-                        <label>Worker 地址</label>
-                        <input type="text" id="cfWorkerUrl" placeholder="https://your-worker.xxx.workers.dev">
+                        <label>服务器地址</label>
+                        <input type="text" id="cfWorkerUrl" placeholder="https://tbsync.masterofmydomain.top">
                     </div>
                     <div class="form-group">
-                        <label>同步密钥</label>
-                        <input type="password" id="cfToken" placeholder="你设置的 SYNC_TOKEN">
+                        <label>访问令牌</label>
+                        <input type="password" id="cfToken" placeholder="服务器上那串 16 位令牌">
                     </div>
                 </div>
 
                 <div id="gistStatus" style="font-size: 12px; color: var(--text-muted); margin-top: 6px; min-height: 18px;"></div>
                 <div id="gistLastSync" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div>
 
-                <div id="deploySection" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--card-border);">
-                    <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">🚀 一键部署到 GitHub Pages</div>
-                    <div style="display:flex;gap:8px;margin-bottom:6px">
-                        <input type="text" id="deployRepo" placeholder="用户名/仓库名" style="flex:1;padding:6px 10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:7px;color:var(--text);font-size:12px;outline:none">
-                        <select id="deployBranch" style="flex:none;padding:6px 10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:7px;color:var(--text);font-size:12px;outline:none">
-                            <option value="main">main</option>
-                            <option value="gh-pages">gh-pages</option>
-                        </select>
-                    </div>
-                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                        <button class="btn-save" onclick="deployToGitHub()" style="flex:none;padding:8px 20px">🚀 部署</button>
-                        <span id="deployStatus" style="font-size: 12px; color: var(--text-muted);"></span>
-                    </div>
-                    <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5">💡 请确保仓库已在 Settings → Pages 中启用对应分支</div>
-                </div>
 
                 <!-- 书籍服务器 -->
                 <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--card-border)">
@@ -5605,7 +5564,7 @@ body {
                 </div>
                 <div id="snapshotList"><div style="background:var(--card-inner);border:1px solid var(--card-border);border-radius:10px;padding:12px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px"><div style="flex:1;min-width:0"><div style="font-size:13px;color:var(--text);font-weight:600">🕐 2026-05-06 00:06</div><div style="font-size:11px;color:var(--text-muted);margin-top:3px">原因：定时自动备份  |  🔑 11 条  |  📝 48 条</div></div></div><div style="display:flex;gap:6px"><button onclick="toggleSnapshotPin(0)" style="padding:6px 12px;background:var(--card-inner);border:1px solid var(--card-border);border-radius:6px;color:var(--text-muted);font-size:12px;cursor:pointer">☆ 收藏</button><button onclick="restoreSnapshot(0)" style="flex:1;padding:6px;background:var(--accent-light);border:none;border-radius:6px;color:var(--accent);font-size:12px;cursor:pointer;font-weight:500">♻️ 恢复此版本</button><button onclick="downloadSnapshot(0)" style="padding:6px 12px;background:var(--blue-bg);border:none;border-radius:6px;color:var(--blue);font-size:12px;cursor:pointer">💾 下载</button></div></div></div>
                 <div style="margin-top:10px;text-align:center">
-                    <a href="https://gist.github.com" target="_blank" style="font-size:12px;color:var(--accent);text-decoration:underline">🔗 打开 Gist.github.com 查看云端历史版本</a>
+
                 </div>
             </div>
             <div class="modal-actions">
@@ -11237,15 +11196,18 @@ body {
          * ========================================================================= */
         /* ----- GitHub Gist 云同步 ----- */
         var gistPushTimer = null;
-        var activeSyncProvider = localStorage.getItem('toolbox_sync_provider') || 'gist';
+        /* ⚠️默认值 2026-09-06 从 'gist' 改成 'cf'：GitHub Gist 那条路已经整个删掉，
+           老设备的 localStorage 里可能还存着 'gist'，落到那个分支就等于没有同步。 */
+        var activeSyncProvider = 'cf';
+        try { if (localStorage.getItem('toolbox_sync_provider') !== 'cf') localStorage.setItem('toolbox_sync_provider', 'cf'); } catch (e) {}
 
+        /* ⚠️只剩自建后端一种同步方式了（2026-09-06，她：「去掉github」「这边也不用 cloudflared1 了」）。
+           函数名和 'cf' 这个标识**故意留着**：cfReq/cfGetConfig/activeSyncProvider==='cf' 散布在
+           几十处判断里，接口又是逐字兼容的，为改名去动那些地方纯属找事。
+           ⚠️参数 provider 也留着：别处仍在传 'cf' 调它。传别的一律按自建那条走。 */
         function switchSyncProvider(provider) {
-            document.getElementById('syncProvGist').classList.toggle('active', provider === 'gist');
-            document.getElementById('syncProvCF').classList.toggle('active', provider === 'cf');
-            document.getElementById('syncGistFields').style.display = provider === 'gist' ? 'block' : 'none';
-            document.getElementById('syncCFFields').style.display = provider === 'cf' ? 'block' : 'none';
-            // 根据当前选择的 provider 显示连接状态
-            if (provider === 'gist') {
+            document.getElementById('syncCFFields').style.display = 'block';
+            if (false) {
                 var cfg = gistGetConfig();
                 document.getElementById('gistSyncBtns').style.display = cfg.gistId ? 'flex' : 'none';
                 document.getElementById('gistSaveBtn').textContent = cfg.gistId ? '重新连接' : '连接';
@@ -11257,20 +11219,15 @@ body {
                 document.getElementById('gistSyncBtns').style.display = cfCfg.url && cfCfg.token ? 'flex' : 'none';
                 document.getElementById('gistSaveBtn').textContent = cfCfg.url && cfCfg.token ? '重新连接' : '连接';
                 gistSetStatus(cfCfg.url && cfCfg.token ? '✅ 已连接' : '');
-                // CF 模式下也显示部署区域（如果有 GitHub token）
-                var ghToken = localStorage.getItem('toolbox_gist_token');
-                document.getElementById('deploySection').style.display = ghToken ? 'block' : 'none';
+
             }
             gistUpdateLastSync();
         }
 
+        /* ⚠️只剩自建后端一种方式（2026-09-06）。原来这里读 #syncProvCF 有没有 active 来分流，
+           那个按钮已经随界面删掉，再去读它会拿到 null 直接抛异常。 */
         function syncSaveConfig() {
-            var providerTab = document.getElementById('syncProvCF').classList.contains('active') ? 'cf' : 'gist';
-            if (providerTab === 'cf') {
-                cfSaveConfig();
-            } else {
-                gistSaveConfig();
-            }
+            cfSaveConfig();
         }
 
         function gistGetConfig() {
@@ -12238,21 +12195,14 @@ body {
         }
 
         function openGistModal() {
-            // 加载 Gist 配置
-            var cfg = gistGetConfig();
-            document.getElementById('gistToken').value = cfg.token;
-            document.getElementById('gistId').value = cfg.gistId;
-            document.getElementById('gistIdGroup').style.display = cfg.gistId ? 'block' : 'none';
-            // 加载 CF 配置
+            // ⚠️GitHub Gist 那三个输入框 2026-09-06 已随界面一起删掉（她：「去掉github」），
+            //   这里别再去 .value 它们——取到 null 再赋值会直接抛异常、整个弹窗打不开。
             var cfCfg = cfGetConfig();
             document.getElementById('cfWorkerUrl').value = cfCfg.url;
             document.getElementById('cfToken').value = cfCfg.token;
             // 书籍服务器配置
             bkSyncUILoad();
-            // 部署区域
-            document.getElementById('deployRepo').value = localStorage.getItem('toolbox_deploy_repo') || '';
-            document.getElementById('deployBranch').value = localStorage.getItem('toolbox_deploy_branch') || 'main';
-            document.getElementById('deployStatus').textContent = '';
+
             // 切换到当前活跃的 provider
             switchSyncProvider(activeSyncProvider);
             gistSetStatus('');
@@ -12265,6 +12215,9 @@ body {
             document.getElementById('gistModalOverlay').classList.remove('show');
         }
 
+        /* ⚠️已废弃（2026-09-06）：GitHub Gist 同步 的界面整个删掉了，这个函数**没有任何入口**。
+           留着不删是因为它引用的那些 DOM 已经不存在、真跑会抛异常，
+           而挖干净所有引用的风险大于收益。别再给它接入口。 */
         function gistSaveConfig() {
             var token = document.getElementById('gistToken').value.trim();
             if (!token) { gistSetStatus('⚠️ 请填写 Token', 'var(--red)'); return; }
@@ -34012,6 +33965,9 @@ body {
          * 说明：负责生成可部署 HTML 快照、推送 GitHub Pages 以及 PWA 资源定义。
          * ========================================================================= */
         /* ===== 一键部署到 GitHub Pages ===== */
+        /* ⚠️已废弃（2026-09-06）：一键部署到 GitHub Pages 的界面整个删掉了，这个函数**没有任何入口**。
+           留着不删是因为它引用的那些 DOM 已经不存在、真跑会抛异常，
+           而挖干净所有引用的风险大于收益。别再给它接入口。 */
         function deployGetCleanHtml() {
             // 深度清理 DOM 快照：移除所有动态渲染的列表内容、敏感值、运行时状态
             var overlays = document.querySelectorAll('.modal-overlay.show');
@@ -34072,6 +34028,9 @@ body {
             return html;
         }
 
+        /* ⚠️已废弃（2026-09-06）：一键部署到 GitHub Pages 的界面整个删掉了，这个函数**没有任何入口**。
+           留着不删是因为它引用的那些 DOM 已经不存在、真跑会抛异常，
+           而挖干净所有引用的风险大于收益。别再给它接入口。 */
         function deployToGitHub() {
             var token = document.getElementById('gistToken').value.trim() || localStorage.getItem('toolbox_gist_token') || '';
             var repo = document.getElementById('deployRepo').value.trim();
