@@ -12729,6 +12729,9 @@ body {
             for (var i = 0; i < list.length; i++) {
                 if (list[i].id === chatCurrentConvId) {
                     var oldMsgCount = list[i].messages ? list[i].messages.length : 0;
+                    // 存盘里「最后一条消息」的签名，跟下面的新签名比对，用来识别「条数没变但内容换了」
+                    var _oldMsgs = list[i].messages || [];
+                    var oldLastSig = _oldMsgs.length ? _chatMsgSig(_oldMsgs[_oldMsgs.length - 1]) : '';
                     list[i].messages = chatMessages.slice();
                     list[i].systemPrompt = document.getElementById('chatSysPrompt').value || '';
                     if (!list[i].aiTitle) list[i].title = chatConvTitle(chatMessages);
@@ -12751,8 +12754,19 @@ body {
                     list[i].spPresetIdx = chatActivePresetIdx;
                     list[i].readingMode = chatReadingMode || false;
                     list[i].translateMode = chatTranslateMode || false;
-                    // 只在消息数量变化（有新消息/删消息）或强制标脏（如追加评论）时更新时间
-                    if (chatMessages.length !== oldMsgCount || forceDirty) {
+                    // 只在「内容真的变了」或强制标脏（如追加评论）时更新时间。
+                    // ⚠️判据不能只看消息条数（2026-09-05 修）：「重新生成 / 重roll / 编辑后重发」这几条路
+                    // 都是先把最后一条 AI 回复删掉、再补一条新的，条数一进一出正好回到原样。只看条数
+                    // 会判成「没改动」→ 不更新 updated、不标 _dirty → 永远不推云端，另一台设备一直看旧的。
+                    // 用户原话：「一个会话我在另一个设备让它重回了，会话条数没变，内容不会同步，
+                    // 不过我再回一条就会同步了」——再回一条条数才变，这才把重新生成的内容顺路捎上去。
+                    // ⚠️危害不止「晚同步」，会真丢东西：那台没收到的设备接着聊两句就会把「旧回复」推上去，
+                    // 云端变长，_chatMergeMessages 遇到分叉「取更长的一方」，重新生成的结果被永久覆盖。
+                    // 修法＝再比一次最后一条消息的签名（复用 _chatMsgSig，跟同步合并用的是同一把尺子）。
+                    // ⚠️别图省事改成「每次保存都标脏」：切模型、改系统提示词、拖上下文滑块也会调到这里，
+                    // 它们最后一条消息没动、不该顶新时间戳去跟别的设备抢——原来那个条数判据挡的就是这些。
+                    var _newLastSig = _chatMsgSig(chatMessages[chatMessages.length - 1]);
+                    if (chatMessages.length !== oldMsgCount || _newLastSig !== oldLastSig || forceDirty) {
                         list[i].updated = Date.now();
                         list[i]._dirty = true;
                     }
