@@ -12091,6 +12091,14 @@ body {
                 var sl = document.getElementById('gistStatusLine');
                 // ⚠️把具体原因带到界面上：只写「同步失败」的话，她能告诉我的也只有这四个字
                 var why = (err && err.message) ? String(err.message).slice(0, 60) : '';
+                /* ⚠️把失败记下来（2026-09-05 加）。她原话「我还没来得及截图就没了……」——
+                   状态行每同步一轮就刷新一次，失败提示一闪而过，根本来不及看清、更别说截图。
+                   落盘之后成功也不清，一直留到她自己点掉，什么时候想看都在。 */
+                try {
+                    localStorage.setItem('toolbox_sync_lasterr',
+                        new Date().toLocaleString('zh-CN') + ' · ' + (why || '未知错误'));
+                } catch (e) {}
+                if (typeof syncRenderLastErr === 'function') syncRenderLastErr();
                 if (gistPushRetries < 2) {
                     gistPushRetries++;
                     if (sl) sl.innerHTML = '☁️ <span style="color:var(--gold)">同步失败，' + (5 * gistPushRetries) + '秒后重试…</span>';
@@ -12177,7 +12185,33 @@ body {
             });
         }
 
+        /* 最近一次同步失败的留痕。跟 gistStatusLine 分开放：那行每轮同步都会被重写，
+           留痕必须活得比它久。她点 ✕ 才清。 */
+        function syncRenderLastErr() {
+            var sl = document.getElementById('gistStatusLine');
+            if (!sl || !sl.parentNode) return;
+            var rec = '';
+            try { rec = localStorage.getItem('toolbox_sync_lasterr') || ''; } catch (e) {}
+            var box = document.getElementById('syncLastErr');
+            if (!rec) { if (box) box.remove(); return; }
+            if (!box) {
+                box = document.createElement('div');
+                box.id = 'syncLastErr';
+                box.style.cssText = 'font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.5';
+                sl.parentNode.insertBefore(box, sl.nextSibling);
+            }
+            box.innerHTML = '⚠️ 上次失败：' + rec.replace(/</g, '&lt;')
+                + ' <span onclick="syncClearLastErr()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">知道了</span>';
+        }
+        function syncClearLastErr() {
+            try { localStorage.removeItem('toolbox_sync_lasterr'); } catch (e) {}
+            syncRenderLastErr();
+        }
+
         /* ===== 统一同步调度 ===== */
+        // 页面起来时先渲染一次：她可能是关掉 app 之后才想起来要看
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { syncRenderLastErr(); });
+        else setTimeout(function () { try { syncRenderLastErr(); } catch (e) {} }, 0);
         function syncPushData() {
             if (activeSyncProvider === 'cf') { cfPushData(); }
             else { gistPushData(); }
