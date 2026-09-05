@@ -1429,12 +1429,15 @@ body {
             background-position: center center !important;
             background-repeat: no-repeat !important;
         }
-        /* ⚠️地址后面那个 ?v= 不是装饰：图片是静态资源，**Cloudflare 边缘会缓存**，
-           而我们手上只有 Worker 令牌、没有清 CF 缓存的权限（见记忆 newapi-gateway 那条）。
-           2026-09-05 裁完图重新部署后，服务器上明明是新文件，curl 线上拿到的还是旧的字节数。
-           **换了 bg/ 下的图，一定要把这个版本号一起改掉**，否则你在手机上看到的还是老图。 */
+        /* ⚠️⚠️**换 bg/ 下的图必须改文件名，加 ?v= 版本号没用**（2026-09-05 实测）。
+           图片是静态资源、被 Cloudflare 边缘缓存（cf-cache-status: HIT、max-age=14400），
+           而我们手上只有 Worker 令牌、没有清 CF 缓存的权限。
+           ⚠️**这个站的 CF 会忽略查询字符串**：`?v=c` 和 `?v=b` 命中同一个缓存条目，
+             服务器上明明是 86558 字节的新图，边缘一直发 84296 的旧图。
+           所以换图的正确姿势是**改文件名**（guji-b → guji-b2），改完这里和 deploy 无关、
+           白名单是按目录放行的。 */
         body.rdbg-guji-w { --rd-bg-img: url("bg/guji-w.webp?v=20260905b"); }
-        body.rdbg-guji-b { --rd-bg-img: url("bg/guji-b.webp?v=20260905c"); }   /* 2026-09-05 她说黑版裁完不如原样，已还原成未裁的原图 */
+        body.rdbg-guji-b { --rd-bg-img: url("bg/guji-b2.webp"); }   /* 2026-09-05 她说黑版裁完不如原样，已还原成未裁的原图；换了文件名才绕得开 CF 缓存 */
         /* 自定义：地址由 JS 写进 body 的 --rd-bg-url 行内变量（见 readingApplyBg） */
         body.rdbg-custom { --rd-bg-img: var(--rd-bg-url, none); }
         /* ⚠️字色**不在这里覆盖**（2026-09-05 她拍板）。
