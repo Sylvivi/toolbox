@@ -153,7 +153,8 @@ function boot() {
         localStorage.removeItem('trans_ask_ctx:conv_ta_test');
         const bar = document.createElement('div');
         bar.className = 'translate-askbar';
-        bar.innerHTML = translateAskLvHtml();
+        // ⚠️照真实调用点的顺序拼：圆点在前、面板在最后（面板夹中间会把输入框挤下去）
+        bar.innerHTML = translateAskLvHtml() + '<textarea class="ta-ask"></textarea>' + translateCtxPanelHtml();
         document.body.appendChild(bar);
         translateBindAskLv(bar);
         const dot = bar.querySelector('.rp-lv');
@@ -172,8 +173,11 @@ function boot() {
         const 关问答前 = dot.getAttribute('data-lv');
         panel.querySelector('[data-tactx="qa"]').click();
         const 圆点跟着变 = dot.getAttribute('data-lv');
+        // 面板必须是追问条的最后一个孩子，否则 flex-wrap 会把输入框顶到第三行
+        const 面板在最后 = bar.lastElementChild === panel;
+        const 输入框在面板前 = !!(bar.querySelector('.ta-ask') && (bar.querySelector('.ta-ask').compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING));
         bar.remove();
-        return { lv默认, lv关问答, lv全关, 展开前, 展开后, 点完的pre, 第二次也生效, 关问答前, 圆点跟着变 };
+        return { lv默认, lv关问答, lv全关, 展开前, 展开后, 点完的pre, 第二次也生效, 关问答前, 圆点跟着变, 面板在最后, 输入框在面板前 };
     });
     eq('G1 默认圆点＝满档（记忆表+问答都带）', G.lv默认, 2);
     eq('G2 关掉问答 → 半档', G.lv关问答, 1);
@@ -184,6 +188,8 @@ function boot() {
     ok('G7 面板能连点第二次（委托监听器没被 innerHTML 冲掉）', G.第二次也生效, JSON.stringify(G));
     eq('G8 只关记忆表还不掉档（问答开着仍是满档）', G.关问答前, '2');
     eq('G9 问答也关掉 → 圆点跟着变成空档', G.圆点跟着变, '0');
+    ok('G10 面板是追问条的最后一个（不然会把输入框挤到第三行）', G.面板在最后, JSON.stringify(G));
+    ok('G11 输入框排在面板前面', G.输入框在面板前, JSON.stringify(G));
 
     ok('全程没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
 

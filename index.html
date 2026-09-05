@@ -27453,8 +27453,16 @@ body {
         }
         function translateAskLvHtml() {
             return '<span class="rp-lv" role="button" tabindex="0" data-lv="' + translateAskCtxLv() +
-                '" title="点一下：挑这次追问要带哪些上下文（这个会话单独记）"></span>'
-                 + '<div class="rp-ctxpanel" style="display:none"></div>';
+                '" title="点一下：挑这次追问要带哪些上下文（这个会话单独记）"></span>';
+        }
+        /* ⚠️面板必须单独拼、而且要放在追问条的**最后一个**（2026-09-05 她当场看出来了：
+           「怎么不是从输入框往下出现面板，而是用面板把输入框往下挤了呢」）。
+           .translate-askbar 是 flex-wrap，面板 flex-basis:100% 一定会独占一行——
+           夹在圆点和输入框中间，占的就是第二行，输入框被顶到第三行去。
+           共读那边 readingCtxPanelHtml 的调用点旁边早写着同一句警告，我照搬时把
+           圆点和面板合成了一个函数，正好踩进去。别再合回去。 */
+        function translateCtxPanelHtml() {
+            return '<div class="rp-ctxpanel" style="display:none"></div>';
         }
         function translateBindAskLv(bar) {
             var el = bar && bar.querySelector('.rp-lv');
@@ -27497,11 +27505,13 @@ body {
             var e = parseInt(block.getAttribute('data-e'));
             var bar = document.createElement('div');
             bar.className = 'translate-askbar';
-            // 圆点排在最左（跟共读追问条同一个位置），面板 flex:1 1 100% 会自己换行铺在下面一行
+            // 圆点排在最左，面板挂在**最后**——它 flex-basis:100% 会自己换到下一整行，
+            // 这样是「从输入框往下展开」；放在圆点和输入框中间就变成把输入框往下挤（见函数注释）
             bar.innerHTML = translateAskLvHtml() +
                 '<textarea class="ta-ask" rows="1" placeholder="这段没看懂？问问看…（如：这里的双关是什么意思？）"></textarea>' +
                 '<button class="ta-ask-del">删除</button>' +
-                '<button class="ta-ask-send">提问</button>';
+                '<button class="ta-ask-send">提问</button>' +
+                translateCtxPanelHtml();
             block.appendChild(bar);
             translateBindAskLv(bar);
             var input = bar.querySelector('.ta-ask');
