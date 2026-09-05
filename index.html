@@ -7011,7 +7011,11 @@ body {
             } catch (e) { return []; }
         }
         function readingBgSaveList(a) {
-            try { localStorage.setItem('reading_bg_custom', JSON.stringify(a || [])); } catch (e) {}
+            try {
+                localStorage.setItem('reading_bg_custom', JSON.stringify(a || []));
+                localStorage.setItem('reading_bg_ts', String(Date.now()));   // 云同步靠它判新旧
+                if (typeof syncPushData === 'function') syncPushData();
+            } catch (e) {}
         }
         function readingBgFind(id) {
             var a = readingBgList();
@@ -11336,6 +11340,13 @@ body {
                 presetsTs: localStorage.getItem('chat_sp_presets_ts') || '',
                 fonts: readingFontsLoad(),
                 fontsTs: readingGetFontsTs(),
+                /* 阅读底图（2026-09-05 加）。她问「我传的这个底图能同步到其他设备吗」——
+                   图本身在服务器上、哪台设备都取得到，但**「这条底图记录」原来只在浏览器本地**。
+                   ⚠️底图列表和边距共用一个时间戳（reading_bg_ts）：边距是按底图 id 存的，
+                     两者拆开同步会出现「图同步过来了、边距还是上一张的」。 */
+                bgList: (function () { try { return JSON.parse(localStorage.getItem('reading_bg_custom') || '[]'); } catch (e) { return []; } })(),
+                bgMargins: (function () { try { return JSON.parse(localStorage.getItem('reading_margins') || '{}'); } catch (e) { return {}; } })(),
+                bgTs: localStorage.getItem('reading_bg_ts') || '',
                 fontName: localStorage.getItem('reading_font_name') || '',
                 fontSlots: {
                     body: localStorage.getItem('reading_font_name') || '',
@@ -11710,6 +11721,7 @@ body {
 
                 // fonts: 字体库 + 五个位置选择，按时间戳护栏覆盖（云端更新才覆盖，含当前选中的字体）
                 readingApplyFontSync(manifest);
+                readingApplyBgSync(manifest);
 
                 // 阅读进度：逐本书按时间戳取较新的（两台设备读不同的书不会互相覆盖）
                 if (manifest.readerPos) {
@@ -12065,6 +12077,7 @@ body {
                 if (manifest.modelPrices) { try { localStorage.setItem('toolbox_model_prices', JSON.stringify(manifest.modelPrices)); localStorage.setItem('toolbox_model_prices_ts', manifest.modelPricesTs || new Date().toISOString()); } catch (e) {} }
                 if (manifest.presets) { try { localStorage.setItem('chat_sp_presets', JSON.stringify(manifest.presets)); localStorage.setItem('chat_sp_presets_ts', manifest.presetsTs || new Date().toISOString()); if (typeof chatRenderSpPresets === 'function') chatRenderSpPresets(); } catch (e) {} }
                 readingApplyFontSync(manifest); // 字体库+五个位置选择，带时间戳护栏（修复开机被云端旧值冲掉的问题）
+                readingApplyBgSync(manifest);   // 阅读底图列表 + 每张的边距，同款时间戳护栏
                 if (manifest.readerPos) { try { localStorage.setItem('reader_pos', JSON.stringify(manifest.readerPos)); } catch (e) {} }
                 if (manifest.readerQA) { try { localStorage.setItem('reader_qa', JSON.stringify(manifest.readerQA)); } catch (e) {} }
                 if (manifest.readerSummaries) { try { localStorage.setItem('reader_summaries', JSON.stringify(manifest.readerSummaries)); } catch (e) {} }
@@ -20776,6 +20789,8 @@ body {
                 try { all = JSON.parse(localStorage.getItem('reading_margins') || '{}'); } catch (e2) {}
                 all[id] = cur;
                 localStorage.setItem('reading_margins', JSON.stringify(all));
+                localStorage.setItem('reading_bg_ts', String(Date.now()));   // 跟底图列表共用一个时间戳
+                if (typeof syncPushData === 'function') syncPushData();
             } catch (e) {}
             return cur;
         }
@@ -21561,6 +21576,26 @@ body {
         }
         // 兼容旧调用名（同步拉取等处仍在用）
 
+        /* 云同步拉取时套用阅读底图（列表 + 每张的边距），护栏跟字体那套一模一样：
+           只有云端比本地新才覆盖，免得开机时把刚加的底图被云端旧值冲掉。
+           ⚠️**当前选中的是哪张（reading_bg）故意不同步**：手机用竖版底图、电脑上那张图
+             会被拉伸得很难看，各设备自己选更合适。同步的是「有哪些图可选」和「每张的边距」。 */
+        function readingApplyBgSync(manifest) {
+            if (!manifest || !manifest.bgList) return;
+            var cloudTs = manifest.bgTs || '';
+            var localTs = localStorage.getItem('reading_bg_ts') || '';
+            if (cloudTs && localTs && cloudTs <= localTs) return;
+            try {
+                localStorage.setItem('reading_bg_custom', JSON.stringify(manifest.bgList || []));
+                if (manifest.bgMargins) localStorage.setItem('reading_margins', JSON.stringify(manifest.bgMargins));
+                if (manifest.bgTs) localStorage.setItem('reading_bg_ts', manifest.bgTs);
+            } catch (e) {}
+            // 本地正用着的那张要是在云端被删了，退回「关」，别留着一个指向空的档
+            if (readingGetBg() === 'off' && localStorage.getItem('reading_bg') !== 'off') {
+                localStorage.setItem('reading_bg', 'off');
+            }
+            try { readingApplyBg(); } catch (e) {}
+        }
         // 云同步拉取时套用字体设置（字体库 + 五个位置的选择），带时间戳护栏：
         // 只有云端比本地新才覆盖，避免开机时把刚选好的字体被云端旧值冲回默认。
         function readingApplyFontSync(manifest) {
