@@ -1465,16 +1465,33 @@ body {
             --accent-light: rgba(85,121,230,0.16);
             --accent-chip: rgba(85,121,230,0.5);
         }
-        /* 底栏那条收起状态的小条：开底图时平时隐身，碰屏幕底部才浮出来（她：
-           「在使用自己的底图的情况下它显得比较突兀，但是我又时不时需要点那个键用到功能」）。
-           ⚠️隐身时 pointer-events 也要关掉，否则那块地方仍然吃掉点击、正文选不中字。 */
-        body.rdbg-on .chat-input-area.reading-collapsed {
-            opacity: 0; pointer-events: none;
-            transition: opacity 0.35s ease;
+        /* 正文边距（2026-09-05）。她要的是「文字落在边框里才和谐」。
+           ⚠️左右和上下是**两种机制**，别混：
+             左右＝给滚动容器加 padding，字往里收就行；
+             上下＝给滚动容器加 margin，**把容器本身的上下边界内缩**。
+             上下不能用 padding——padding 里的内容照样会滚出来压在边框上，
+             只有缩小容器边界才能让文字「永远在框内」（她选的就是这条）。
+           ⚠️再叠一层 mask 渐隐：纯内缩会把字硬切成半行，渐隐让它在靠近边缘时淡出。
+             mask 是相对容器的 border-box，容器本身不动、只有内容滚，所以这层渐隐
+             会稳稳停在上下两端，正是要的效果。
+           ⚠️只在开底图时生效：不开底图时这些变量都是 0，排版跟以前一模一样。 */
+        body.rdbg-on .chat-messages {
+            padding-left: var(--rd-pad-x, 0px);
+            padding-right: var(--rd-pad-x, 0px);
+            margin-top: var(--rd-pad-y, 0px);
+            margin-bottom: var(--rd-pad-y, 0px);
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--rd-fade, 20px), #000 calc(100% - var(--rd-fade, 20px)), transparent 100%);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 var(--rd-fade, 20px), #000 calc(100% - var(--rd-fade, 20px)), transparent 100%);
         }
-        body.rdbg-on .chat-input-area.reading-collapsed.rdbg-peek {
-            opacity: 1; pointer-events: auto;
-        }
+
+        /* ⚠️底栏那条小条**做过隐身又撤了**（2026-09-05 当天来回）：
+           她先说「开自己的底图时它显得比较突兀，但我又时不时要点它用功能」，做成了
+           「平时隐身、碰屏幕底部才浮出」；当天就撤回——「区分好日间模式、夜间模式之后
+           它变得比较自然，另外把它隐藏了，底下也会因为它的存在而有一部分东西被遮挡，
+           所以没必要隐藏」。
+           **别再做隐身**：它占的那块地方不管显不显示都被它占着，藏起来只是看不见、
+           并不会把空间还给正文，纯粹换来一个「还得先把它叫出来」的额外动作。 */
+
 
         /* 「白底」开关单独控制：开了遮罩再开白底，所有主题统一换成同一种白（盖过上面各主题色）。
            不开白底则维持上面各主题自己的主题色遮罩。点「白底」chip 循环切换：关→纯白→柔白→暖白→关。
@@ -5949,12 +5966,41 @@ body {
                         <button class="chip-btn" onclick="readingStepFontScale(0.05)" title="放大" style="min-width:30px">A+</button>
                     </div>
                 </div>
-                <div id="readingParaRow" style="display:flex;align-items:center;justify-content:space-between">
-                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">段间距</span>
-                    <div style="display:flex;gap:6px;align-items:center">
-                        <button class="chip-btn" onclick="readingStepParaSpace(-2)" title="更紧凑" style="min-width:30px">−</button>
-                        <span id="readingParaVal" style="font-size:12px;color:var(--text-muted);min-width:40px;text-align:center">8px</span>
-                        <button class="chip-btn" onclick="readingStepParaSpace(2)" title="更宽松" style="min-width:30px">＋</button>
+                <!-- 「间距」分组（2026-09-05 她定的：「可以把段间距改成间距，然后里面收纳段间距、
+                     左右边距和上下边距，这样更合逻辑」）。展开长相照抄下面「字体」那一组。
+                     ⚠️三行的作用域**不一样**：段间距是全局排版偏好（老行为，一个数管到底），
+                       左右/上下边距**跟着底图各记一份**——每张底图的边框宽度不同，
+                       一套数值不可能通用。 -->
+                <div id="readingSpaceRow">
+                    <div onclick="readingToggleSpacePanel()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none">
+                        <span style="font-size:12px;font-weight:600;color:var(--text-muted)">间距</span>
+                        <span id="readingSpaceArrow" style="font-size:10px;color:var(--text-muted);transition:transform 0.2s;display:inline-block">▶</span>
+                    </div>
+                    <div id="readingSpacePanel" style="display:none;flex-direction:column;gap:10px;margin-top:8px">
+                        <div id="readingParaRow" style="display:flex;align-items:center;justify-content:space-between">
+                            <span style="font-size:12px;font-weight:600;color:var(--text-muted)">段间距</span>
+                            <div style="display:flex;gap:6px;align-items:center">
+                                <button class="chip-btn" onclick="readingStepParaSpace(-2)" title="更紧凑" style="min-width:30px">−</button>
+                                <span id="readingParaVal" style="font-size:12px;color:var(--text-muted);min-width:40px;text-align:center">8px</span>
+                                <button class="chip-btn" onclick="readingStepParaSpace(2)" title="更宽松" style="min-width:30px">＋</button>
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:center;justify-content:space-between">
+                            <span style="font-size:12px;font-weight:600;color:var(--text-muted)" title="正文离左右两边多远。开底图时用来把字收进边框里，每张底图各记一份">左右边距</span>
+                            <div style="display:flex;gap:6px;align-items:center">
+                                <button class="chip-btn" onclick="readingStepMargin('x',-2)" title="更窄" style="min-width:30px">−</button>
+                                <span id="readingMarginXVal" style="font-size:12px;color:var(--text-muted);min-width:40px;text-align:center">0px</span>
+                                <button class="chip-btn" onclick="readingStepMargin('x',2)" title="更宽" style="min-width:30px">＋</button>
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:center;justify-content:space-between">
+                            <span style="font-size:12px;font-weight:600;color:var(--text-muted)" title="正文的可视范围离上下边多远。滚多远都不会压到边框上，靠近边缘时字淡出">上下边距</span>
+                            <div style="display:flex;gap:6px;align-items:center">
+                                <button class="chip-btn" onclick="readingStepMargin('y',-2)" title="更窄" style="min-width:30px">−</button>
+                                <span id="readingMarginYVal" style="font-size:12px;color:var(--text-muted);min-width:40px;text-align:center">0px</span>
+                                <button class="chip-btn" onclick="readingStepMargin('y',2)" title="更宽" style="min-width:30px">＋</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div id="readingT2SRow" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
@@ -20634,36 +20680,71 @@ body {
             if (next !== 'off' && localStorage.getItem('chat_mask') !== '1') toggleChatMask(true);
             readingApplyWarmMask();
         }
+        /* ===== 正文边距：跟着底图各记一份（2026-09-05）=====
+           她的话：「加左右边距功能跟这个（文字在框内）也有关系」。
+           每张底图的边框宽度都不一样，所以这两个数天然是跟着图走的，不能全局一份。
+           ⚠️预置图的默认值是**量出来的**、不是拍脑袋：
+             古风白（裁正后 850×1803）框线在左28/右26、上下各43 → 折成屏宽约 13px、屏高约 17px，
+               各加一点呼吸 → 22 / 26；
+             古风黑（850×1850，未裁）框线左7/右30、上21/下12 → 取大的那边 → 16 / 14。
+           ⚠️不开底图时默认 0/0，排版跟以前一模一样——这条是安全绳，别给它填非零默认值。 */
+        var RD_MARGIN_DEFAULTS = { off: { x: 0, y: 0 }, gujiW: { x: 22, y: 26 }, gujiB: { x: 16, y: 14 } };
+        var RD_MARGIN_MAX = 80;
+        function readingGetMargin(bgId) {
+            var id = bgId || readingGetBg();
+            var d = RD_MARGIN_DEFAULTS[id] || { x: 0, y: 0 };
+            var out = { x: d.x, y: d.y };
+            try {
+                var all = JSON.parse(localStorage.getItem('reading_margins') || '{}');
+                var o = all[id];
+                if (o) { if (o.x != null) out.x = o.x; if (o.y != null) out.y = o.y; }
+            } catch (e) {}
+            return out;
+        }
+        function readingSetMargin(bgId, patch) {
+            var id = bgId || readingGetBg();
+            var cur = readingGetMargin(id);
+            for (var k in patch) cur[k] = patch[k];
+            try {
+                var all = {};
+                try { all = JSON.parse(localStorage.getItem('reading_margins') || '{}'); } catch (e2) {}
+                all[id] = cur;
+                localStorage.setItem('reading_margins', JSON.stringify(all));
+            } catch (e) {}
+            return cur;
+        }
+        function readingApplyMargins() {
+            var m = readingGetMargin();
+            var b = document.body;
+            b.style.setProperty('--rd-pad-x', m.x + 'px');
+            b.style.setProperty('--rd-pad-y', m.y + 'px');
+            // 渐隐带跟着上下边距走，但留个下限：边距为 0 时也别真的一点不淡
+            b.style.setProperty('--rd-fade', Math.max(12, Math.min(28, m.y)) + 'px');
+            var vx = document.getElementById('readingMarginXVal');
+            var vy = document.getElementById('readingMarginYVal');
+            if (vx) vx.textContent = m.x + 'px';
+            if (vy) vy.textContent = m.y + 'px';
+        }
+        function readingStepMargin(axis, delta) {
+            var m = readingGetMargin();
+            var v = Math.max(0, Math.min(RD_MARGIN_MAX, (axis === 'x' ? m.x : m.y) + delta));
+            var patch = {}; patch[axis] = v;
+            readingSetMargin(null, patch);
+            readingApplyMargins();
+        }
+        function readingToggleSpacePanel() {
+            var panel = document.getElementById('readingSpacePanel');
+            var arrow = document.getElementById('readingSpaceArrow');
+            if (!panel) return;
+            var open = panel.style.display !== 'none';
+            panel.style.display = open ? 'none' : 'flex';
+            if (arrow) arrow.style.transform = open ? '' : 'rotate(90deg)';
+        }
         // 阅读底图：读当前选的那张（没设过＝关）
         function readingGetBg() {
             var t = localStorage.getItem('reading_bg');
             return RD_BG_INFO[t] ? t : 'off';
         }
-        /* 底栏小条「碰底部才浮出」（2026-09-05）。
-           ⚠️热区是**屏幕底部那一带**、不是那条本身——它隐身时 pointer-events 是关的，
-             碰不到；要能把它叫出来，只能听整页的按下事件再看落点高度。
-           ⚠️只认「按下」不认「移动」：滚动时手指常常划过底部，用 move 会让它一路乱闪。
-           ⚠️浮出后再摸一次要重新计时，否则她正要点的时候它自己淡走了。 */
-        (function () {
-            var PEEK_MS = 3500, BOTTOM_ZONE = 0.12, t = null;
-            function peek() {
-                if (!document.body.classList.contains('rdbg-on')) return;
-                var el = document.querySelector('.chat-input-area.reading-collapsed');
-                if (!el) return;
-                el.classList.add('rdbg-peek');
-                clearTimeout(t);
-                t = setTimeout(function () { el.classList.remove('rdbg-peek'); }, PEEK_MS);
-            }
-            document.addEventListener('pointerdown', function (e) {
-                if (!document.body.classList.contains('rdbg-on')) return;
-                var h = window.innerHeight || document.documentElement.clientHeight;
-                if (e.clientY >= h * (1 - BOTTOM_ZONE)) peek();
-            }, true);
-            // 它自己被点到时也续一次命（点它＝开模型面板，别在手指抬起前淡走）
-            document.addEventListener('click', function (e) {
-                if (e.target && e.target.closest && e.target.closest('.chat-input-area.reading-collapsed')) peek();
-            }, true);
-        })();
         // 长按绑定：按住 500ms 弹地址框。⚠️松手时要挡掉紧跟着的那次 click，
         // 否则「长按填完地址」会顺带把档位又往前推一格。
         (function () {
@@ -20690,6 +20771,7 @@ body {
             Object.keys(RD_BG_INFO).forEach(function(k) { document.body.classList.remove(RD_BG_INFO[k].cls); });
             document.body.classList.toggle('rdbg-on', cur !== 'off');
             if (cur !== 'off') document.body.classList.add(RD_BG_INFO[cur].cls);
+            readingApplyMargins();   // ⚠️边距是按底图存的，换了图必须重读一次，否则用的还是上一张的数
             if (cur === 'custom') {
                 var u = _rdBgSafeUrl(localStorage.getItem('reading_bg_url'));
                 // 地址走行内变量，CSS 那边只认 var(--rd-bg-url)，不用为每张图改样式
