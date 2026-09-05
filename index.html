@@ -1433,13 +1433,40 @@ body {
         body.rdbg-guji-b { --rd-bg-img: url("bg/guji-b.webp"); }
         /* 自定义：地址由 JS 写进 body 的 --rd-bg-url 行内变量（见 readingApplyBg） */
         body.rdbg-custom { --rd-bg-img: var(--rd-bg-url, none); }
-        /* 古风·白：灰白纸(#dbd9d4 左右) + 深蓝黑双边框 → 用原主题里配的墨蓝字 */
-        body.rdbg-guji-w .modal.chat-modal {
-            --text: #1f2b3f; --text-sub: #46536b; --text-light: #6a7488; --text-muted: #8b93a3;
+        /* ⚠️字色**不在这里覆盖**（2026-09-05 她拍板）。
+           第一版我在 .modal 上重定义了 --text 那一组，结果设置面板也在这一层里，
+           没激活的 chip 变成浅底浅字、整排字全看不见（她截图报的）。
+           她给的解法比我修 bug 高明：「黑色的背景直接就让它变成夜间模式的那种感觉，
+           别在这个基础上改了，因为夜间模式字体啊包括设置里面菜单那些都是适配的」——
+           于是改成：选古风黑自动开夜间、选古风白自动回白天（见 readingToggleBg），
+           字色交给那套现成的、全站适配过的夜间/白天方案。**别再往这儿加字色覆盖**。
+
+           唯一还留在这层的是强调色：粘土的雾霾蓝 #5b8abf 压在灰白纸上对比度只有 2.4:1、糊掉了
+           （她：「粘土的那个蓝色在这个上面不太显眼」），换成她带来那套酒馆皮肤的印刷蓝
+           #2f55c7（纸上 6.5:1）。⚠️只在开底图时换、只在阅读这一层换——
+           不开底图时粘土还是她熟悉的样子，密钥页书架那些地方一点不动。 */
+        body.rdbg-on .modal.chat-modal {
+            --accent: #2f55c7;
+            --accent-mid: #4468d6;
+            --accent-light: rgba(47,85,199,0.12);
+            --accent-chip: rgba(47,85,199,0.55);
         }
-        /* 古风·黑：近黑纸 + 细白双边框 → 浅米字，别用纯白（纯白压在黑纸上晃眼） */
-        body.rdbg-guji-b .modal.chat-modal {
-            --text: #e6e3db; --text-sub: #b9b5ab; --text-light: #948f85; --text-muted: #75716a;
+        /* 夜间那套底图（古风黑）用提亮版，深蓝在黑纸上同样看不清 */
+        body.rdbg-on.dark .modal.chat-modal {
+            --accent: #5579e6;
+            --accent-mid: #4a6bd0;
+            --accent-light: rgba(85,121,230,0.16);
+            --accent-chip: rgba(85,121,230,0.5);
+        }
+        /* 底栏那条收起状态的小条：开底图时平时隐身，碰屏幕底部才浮出来（她：
+           「在使用自己的底图的情况下它显得比较突兀，但是我又时不时需要点那个键用到功能」）。
+           ⚠️隐身时 pointer-events 也要关掉，否则那块地方仍然吃掉点击、正文选不中字。 */
+        body.rdbg-on .chat-input-area.reading-collapsed {
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.35s ease;
+        }
+        body.rdbg-on .chat-input-area.reading-collapsed.rdbg-peek {
+            opacity: 1; pointer-events: auto;
         }
 
         /* 「白底」开关单独控制：开了遮罩再开白底，所有主题统一换成同一种白（盖过上面各主题色）。
@@ -6876,8 +6903,8 @@ body {
         // 阅读底图：点「底图」chip 按 关→古风白→古风黑→关 循环。图在 bg/ 下，见上面那段 CSS 注释。
         var RD_BGS = ['off', 'gujiW', 'gujiB', 'custom'];
         var RD_BG_INFO = {
-            gujiW: { cls: 'rdbg-guji-w', label: '古风白' },
-            gujiB: { cls: 'rdbg-guji-b', label: '古风黑' },
+            gujiW: { cls: 'rdbg-guji-w', label: '古风白', dark: false },
+            gujiB: { cls: 'rdbg-guji-b', label: '古风黑', dark: true },
             // 自定义：她自己传到图片箱、把直链填进来（长按「底图」chip 填）。
             // ⚠️图片箱那把通行证 cookie 种在 masterofmydomain.top 整个域上，
             //   tool.* 和 box.* 属于同一 site，所以 SameSite=Lax 不拦这种跨子域取图。
@@ -20605,6 +20632,31 @@ body {
             var t = localStorage.getItem('reading_bg');
             return RD_BG_INFO[t] ? t : 'off';
         }
+        /* 底栏小条「碰底部才浮出」（2026-09-05）。
+           ⚠️热区是**屏幕底部那一带**、不是那条本身——它隐身时 pointer-events 是关的，
+             碰不到；要能把它叫出来，只能听整页的按下事件再看落点高度。
+           ⚠️只认「按下」不认「移动」：滚动时手指常常划过底部，用 move 会让它一路乱闪。
+           ⚠️浮出后再摸一次要重新计时，否则她正要点的时候它自己淡走了。 */
+        (function () {
+            var PEEK_MS = 3500, BOTTOM_ZONE = 0.12, t = null;
+            function peek() {
+                if (!document.body.classList.contains('rdbg-on')) return;
+                var el = document.querySelector('.chat-input-area.reading-collapsed');
+                if (!el) return;
+                el.classList.add('rdbg-peek');
+                clearTimeout(t);
+                t = setTimeout(function () { el.classList.remove('rdbg-peek'); }, PEEK_MS);
+            }
+            document.addEventListener('pointerdown', function (e) {
+                if (!document.body.classList.contains('rdbg-on')) return;
+                var h = window.innerHeight || document.documentElement.clientHeight;
+                if (e.clientY >= h * (1 - BOTTOM_ZONE)) peek();
+            }, true);
+            // 它自己被点到时也续一次命（点它＝开模型面板，别在手指抬起前淡走）
+            document.addEventListener('click', function (e) {
+                if (e.target && e.target.closest && e.target.closest('.chat-input-area.reading-collapsed')) peek();
+            }, true);
+        })();
         // 长按绑定：按住 500ms 弹地址框。⚠️松手时要挡掉紧跟着的那次 click，
         // 否则「长按填完地址」会顺带把档位又往前推一格。
         (function () {
@@ -20653,6 +20705,15 @@ body {
             readingApplyBg();
             return !!u;
         }
+        /* 底图的明暗决定用白天还是夜间那套配色。
+           ⚠️只在**切底图那一刻**联动，不在 readingApplyBg 里做——
+             那个函数每次启动都会跑，放进去等于每次开 app 都强制改她手动设的夜间开关。 */
+        function _rdBgSyncNight(id) {
+            if (id === 'off' || typeof setNightMode !== 'function') return;
+            var info = RD_BG_INFO[id];
+            if (!info || info.dark == null) return;   // 自定义底图没标明暗就不动夜间开关
+            if (!!nightMode !== !!info.dark) setNightMode(!!info.dark);
+        }
         function readingToggleBg() {
             var next = RD_BGS[(RD_BGS.indexOf(readingGetBg()) + 1) % RD_BGS.length];
             // 轮到「自定义」但还没填过地址：当场问一次，不填就跳过这档接着轮到「关」
@@ -20660,6 +20721,7 @@ body {
                 if (!readingAskBgUrl()) { localStorage.setItem('reading_bg', 'off'); readingApplyBg(); return; }
             }
             localStorage.setItem('reading_bg', next);
+            _rdBgSyncNight(next);      // 古风黑→夜间，古风白→白天
             // 底图不透明、会把遮罩底色整个盖住，所以开底图时顺手把遮罩打开，
             // 否则弹层是透明的、底图只能透过主题色看见半张（跟「白底」那边同一个道理）
             if (next !== 'off' && localStorage.getItem('chat_mask') !== '1') toggleChatMask(true);
