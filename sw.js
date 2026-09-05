@@ -5,7 +5,7 @@
    改完之后：有缓存就瞬间出画面，新版在后台取、下次打开就是新的；
    取到新版时给页面发一条消息，弹「有新版本，点这里刷新」，免得她以为改动没生效。
    ⚠️版本号一定要跟着变（v8→v9），否则 activate 里那段清旧缓存不会跑。 */
-var CACHE = 'toolbox-v10';
+var CACHE = 'toolbox-v11';   // ⚠️2026-09-06 +1：靠 activate 里那段清掉被同步响应撑到 8.48GB 的旧缓存
 /* ⚠️故意**不预缓存 './'**：它和 'index.html' 是同一个 1.9MB 的文件，会白存两份。
    下面 fetch 里外壳一律归一到 SHELL_KEY，'./' 那份存了也没人读，纯浪费配额。
    而 Cache Storage 跟 IndexedDB **共用同一个源的配额**——顶满时字体落盘的 idbSet 会**静默**失败
@@ -56,6 +56,21 @@ self.addEventListener('fetch', function(e) {
   if (e.request.url.indexOf('api.github.com') !== -1) return;
   if (e.request.url.indexOf('/v1/') !== -1) return;
   if (e.request.url.indexOf('.workers.dev') !== -1) return;
+  /* ⚠️⚠️云同步的响应**绝对不能进缓存**（2026-09-06 查出来的，代价是 8.48GB）。
+     她截图问「为啥我的 toolbox 在本地有 9GB 数据」，明细一看：离线缓存 8.48GB，
+     而书和对话加起来才 109MB。
+     怎么堆起来的：自动同步每 30 秒 GET 一次 `_manifest`（**那一包已经 2.64MB**），
+     而 cfReq 为了防缓存在网址后面挂了 `_t=时间戳`——**每次网址都不一样**，
+     在 Cache Storage 眼里就是一个个全新的文件，于是一天两千多份、每份 2.64MB。
+     ⚠️原来只排除了 `.workers.dev`，可她的 Worker 挂在**自定义域** sync.masterofmydomain.top 上，
+       那条规则一次都没匹配上——**别再用「云服务商的默认域名」来做排除判断**。
+     ⚠️所以这里改成认两样东西，任缺一样都会漏：
+       ① 同步用的两个域名（旧 CF 的 sync.、自建的 tbsync.）；
+       ② 网址里带 `_t=` 的——那是「这一趟不许拿缓存」的标记，
+          任何带它的请求本来就不该被存下来。 */
+  if (e.request.url.indexOf('//sync.') !== -1) return;
+  if (e.request.url.indexOf('//tbsync.') !== -1) return;
+  if (/[?&]_t=\d/.test(e.request.url)) return;
   // 书籍/字体同步服务器（Caddy 把 https://<域名>/books/* 反代过去）：绝对不能进缓存。
   // 这是同步数据不是页面资源，缓存它有两个害处：① 一个字体响应就有 19MB，r.clone() 要在内存里
   // 多留一份、再写一份进 Cache Storage；② Cache Storage 和 IndexedDB 共用同一个源的存储配额，
