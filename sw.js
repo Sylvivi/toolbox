@@ -45,6 +45,14 @@ function _stamp(r) {
   return r ? (r.headers.get('ETag') || r.headers.get('Last-Modified') || '') : '';
 }
 
+/* 这个请求值不值得存进离线缓存。⚠️白名单，不是黑名单——理由见下面 fetch 末尾那段。 */
+function _cacheable(req) {
+  try {
+    var u = new URL(req.url);
+    return /\.(woff2?|ttf|otf|css|js|png|jpe?g|webp|gif|svg|ico)$/i.test(u.pathname);
+  } catch (e) { return false; }
+}
+
 function _tellClients() {
   return self.clients.matchAll({ includeUncontrolled: true, type: 'window' }).then(function(cs) {
     cs.forEach(function(c) { c.postMessage({ type: 'toolbox-update' }); });
@@ -103,7 +111,16 @@ self.addEventListener('fetch', function(e) {
     return;
   }
 
-  // 其余资源照旧：先走网络，断网才回缓存
+  /* 其余资源：先走网络，断网才回缓存。
+     ⚠️**但只有白名单里的才存**（2026-09-06 改）。原来是「只要 r.ok 就 put」，
+       配一串黑名单挡掉不该存的——而黑名单永远会漏：这次就漏在
+       「Worker 绑了自定义域名，`.workers.dev` 那条匹配不上」，一路漏了 8.48GB。
+     ⚠️白名单只认**扩展名**，认的是「这是一个看得见的资源文件」：
+       字体 / 图片 / 样式 / 图标。API 响应、同步数据、书库数据都没有这种扩展名，
+       天然进不来——**以后再加什么新接口、连什么新域名，都不需要记得来这里加排除**。
+     ⚠️代价：没有扩展名的资源不再被离线缓存（比如某些动态图片地址），
+       断网时它们取不到。那是可以接受的——真正要离线可用的是外壳，那条走上面的分支。 */
+  if (!_cacheable(e.request)) return;
   e.respondWith(
     fetch(e.request).then(function(r) {
       if (r.ok) { var rc = r.clone(); caches.open(CACHE).then(function(c) { c.put(e.request, rc); }); }
