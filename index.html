@@ -22135,15 +22135,32 @@ body {
                 });
                 if (_fixed && typeof readingApplyFonts === 'function') readingApplyFonts();
 
-                if (localStorage.getItem('reading_fonts_preset') === '1') return;
+                /* ⚠️**按项记账，不是一个总开关**（2026-09-06 当天返工）。
+                   第一版写的是「补过就 return」，结果她装完思源之后开关翻上了，
+                   后来加的三个花字体**一进门就 return、根本没跑到**——
+                   她刷新后说「只能看到本地的」就是这个。
+                   现在记的是「哪几个补过」：
+                     · 新增的预置项 → 不在名单里 → 补得进去；
+                     · 她主动删掉的 → 已在名单里 → 不会自己长回来（这条是当初加开关的初衷）。
+                   ⚠️旧值是字符串 '1'，当成「思源那个已补过」来兼容。 */
+                var seeded = [];
+                try {
+                    var raw = localStorage.getItem('reading_fonts_preset') || '[]';
+                    seeded = raw === '1' ? ['Source Han Serif CN'] : (JSON.parse(raw) || []);
+                    if (!Array.isArray(seeded)) seeded = [];
+                } catch (e) { seeded = []; }
+
                 var fonts = readingFontsLoad();
                 var added = 0;
                 RD_PRESET_FONTS.forEach(function (f) {
-                    for (var i = 0; i < fonts.length; i++) if (fonts[i].name === f.name) return;   // 已经有了就别重复
+                    if (seeded.indexOf(f.name) >= 0) return;            // 补过了（哪怕她后来删了）
+                    seeded.push(f.name);
+                    for (var i = 0; i < fonts.length; i++) if (fonts[i].name === f.name) return;   // 列表里已经有同名的
                     fonts.push(f.family ? { name: f.name, url: f.url, family: f.family } : { name: f.name, url: f.url });
                     added++;
                 });
                 if (added) readingFontsSave(fonts);
+                try { localStorage.setItem('reading_fonts_preset', JSON.stringify(seeded)); } catch (e) {}
                 /* 正文默认设成 Medium（2026-09-06 她挑的：「好像 medium 合适一些，400 跟原本的没有区别」）。
                    ⚠️**只在她还没选过正文字体时才设**：她要是自己挑过别的，这里一刀切会把她的选择冲掉。
                    ⚠️跟上面的补种共用同一个「只做一次」的记账，所以她哪天换成别的、或者选回默认，
@@ -22158,7 +22175,6 @@ body {
                     localStorage.setItem('reading_font_weight', '500');
                     added++;
                 }
-                localStorage.setItem('reading_fonts_preset', '1');
                 if (added && typeof readingApplyFonts === 'function') readingApplyFonts();
             } catch (e) {}
         }
