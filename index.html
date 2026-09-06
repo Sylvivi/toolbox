@@ -3025,13 +3025,7 @@ body {
              书名牌用不透明底，肉眼几乎无差别但零开销。
            ⚠️一行两本不是三本——三本放不下封面和书名牌。 */
         #rbShelfList { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px 10px; }
-        /* ⚠️2026-09-06 她要的：**文件夹那一层一行两个，书还是三个**。
-           文件夹数量少（23 个）、名字长，两列才放得开；进了文件夹是书，三列更密更好翻。
-           类挂在容器上而不是卡片上——一次切换整层，不用每张卡各判一次。 */
-        #rbShelfList.rb-lv-folder { grid-template-columns: repeat(2, 1fr); gap: 22px 14px; }
-        #rbShelfList.rb-lv-folder .rb-book-name { font-size: 14px; line-height: 1.3; }
-        #rbShelfList.rb-lv-folder .rb-no { font-size: 10px; padding: 3px 6px; }
-        #rbShelfList.rb-lv-folder .rb-book-meta { font-size: 11px; }
+
         .rb-book { position: relative; cursor: pointer; min-width: 0; }
         .rb-cover { position: relative; aspect-ratio: 3/4; border: 2.5px solid var(--text);
             box-shadow: 4px 4px 0 var(--text); overflow: hidden; padding: 7px;
@@ -3067,8 +3061,27 @@ body {
         /* 文件夹卡：⚠️2026-09-06 她说「目前文件夹是全黑呢」——原来做成实心墨底，太死。
            改成跟书**完全同一套**彩色封面＋纹理，只靠一圈**内描边**表示「这里面装着东西」，
            本数放角标（书那格是 NO.01）。这样整屏语言统一，层级靠内容而不是靠反色。 */
-        .rb-folder .rb-cover::after { content: ''; position: absolute; inset: 5px; border: 2px solid var(--text);
-            opacity: .34; pointer-events: none; }
+        /* ⚠️2026-09-06 她说「文件夹和书本身的封面区分度不够」→ 改成**后面压着另一张卡**：
+           斜露在右上角，一眼就是「这里面装着好几本」。
+           做法是叠三层 box-shadow，不加任何 DOM 零件：
+             ① 4px 4px  主硬投影（跟书一样）
+             ② 7px -7px 那张卡的**底色**（用 --plate，就是该文件夹封面色兑白那个，所以是彩的）
+             ③ 7px -7px 同位置再撑 2.5px 当它的**黑描边**
+           ⚠️顺序＝先写的画在上面，所以底色必须写在描边前面。
+           ⚠️box-shadow 不受 overflow:hidden 裁剪，所以能露到封面外面去。
+           ⚠️原来那圈内描边去掉了——有了压卡就多余，两个记号叠着反而乱。 */
+        .rb-folder .rb-cover {
+            box-shadow: 4px 4px 0 var(--text),
+                        7px -7px 0 0 var(--plate, #fff),
+                        7px -7px 0 2.5px var(--text);
+        }
+        .rb-folder:active .rb-cover {
+            box-shadow: 2px 2px 0 var(--text),
+                        5px -5px 0 0 var(--plate, #fff),
+                        5px -5px 0 2.5px var(--text);
+        }
+        /* 露出来的那张卡会顶到上一行，给文件夹这一层留点头 */
+        #rbShelfList .rb-folder { margin-top: 7px; }
         .rb-chap { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--card-border); border-radius: 8px; margin-bottom: 5px; cursor: pointer; transition: all 0.15s; }
         .rb-chap:hover { border-color: var(--accent); background: var(--accent-light); }
         .rb-chap.rb-read { opacity: 0.5; }
@@ -24973,7 +24986,6 @@ body {
                     if (b === '' && a !== '') return -1;
                     return (groups[b].length - groups[a].length) || a.localeCompare(b, 'zh');
                 });
-                box.classList.add('rb-lv-folder');      // ⚠️这一层是文件夹 → 两列
                 box.innerHTML = rbFolderNames.map(function (f, idx) {
                     var label = f === '' ? '未分类' : rbEsc(f);
                     var fcs = rbCoverStyle(label);
@@ -24999,7 +25011,6 @@ body {
                 // 2026-08-14：📁 emoji → 线条文件夹，跟顶层那个书本图标配套。
                 //   ‹ 保持文字符号不动——它是排版用的返回箭头，不是 emoji。
                 setTitle('‹ <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg> ' + (cur === '' ? '未分类' : rbEsc(cur)), rbFolderBack);
-                box.classList.remove('rb-lv-folder');   // ⚠️进了文件夹是书 → 回到三列
                 box.innerHTML = list.length
                     ? list.map(rbBookItemHtml).join('')
                     : '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:34px 0">这个文件夹空了<br><span onclick="rbFolderBack()" style="color:var(--accent);cursor:pointer">‹ 返回文件夹</span></div>';
