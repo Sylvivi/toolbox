@@ -22117,8 +22117,21 @@ body {
            ⚠️她存下来的值优先；没存过才用下面这张默认表。所以撤 UI 不会让她的 105% 变回去，
              而换新设备、云端还没同步下来时也是对的。 */
         var RD_FONT_SCALE_DEFAULT = {
-            '青春例外你是偏爱': 1.05   // 2026-09-07 她自己调出来的：这个字面比正文显小一点
+            '青春例外你是偏爱': 1.08   // 2026-09-07 她定的（先调到 105 说够了，当天又改口要 108）
         };
+        /* ⚠️她当初是用调节器调的，**105% 已经写进她本地 localStorage**，
+           而本地值优先于默认表 → 光改上面那个数字对她无效。
+           所以这里做一次性清理：把存下来的那条删掉，让新默认值接管。
+           ⚠️比例是**按设备存的、不进云同步**（查过 _manifest 里没有），所以另一台设备本来就吃默认值，
+             只有她调过的那台需要清。
+           ⚠️记账键带版本号：以后再改默认值，换个键名就能再清一次。 */
+        function readingFontScaleMigrate() {
+            try {
+                if (localStorage.getItem('reading_fscale_mig_108')) return;
+                localStorage.removeItem('reading_fscale_青春例外你是偏爱');
+                localStorage.setItem('reading_fscale_mig_108', '1');
+            } catch (e) {}
+        }
         function readingFontScaleGet(name) {
             var raw = localStorage.getItem('reading_fscale_' + name);
             if (raw != null) {
@@ -22133,6 +22146,7 @@ body {
         }
         /* 把比例写进各槽位的 CSS 变量。⚠️没选字体的槽位写 1（跟随正文，不缩放）。 */
         function readingApplyFontScales() {
+            readingFontScaleMigrate();
             READING_FONT_SLOTS.forEach(function (s) {
                 if (s.isFallback) return;
                 var n = localStorage.getItem(s.key) || '';
