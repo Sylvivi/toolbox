@@ -3020,16 +3020,16 @@ body {
             display: flex; align-items: flex-start; transition: transform .12s, box-shadow .12s; }
         .rb-book:active .rb-cover { transform: translate(2px,2px); box-shadow: 2px 2px 0 var(--text); }
         /* 封面纹理：全是 CSS 画的，不存任何图片（397 本书存图会把她手机同步撑爆） */
-        .rb-t0 { background-image: repeating-linear-gradient(45deg, rgba(0,0,0,.13) 0 7px, transparent 7px 15px); }
-        .rb-t1 { background-image: radial-gradient(rgba(0,0,0,.16) 1.6px, transparent 1.7px); background-size: 13px 13px; }
-        .rb-t2 { background-image: linear-gradient(rgba(0,0,0,.13) 2px, transparent 2px), linear-gradient(90deg, rgba(0,0,0,.13) 2px, transparent 2px); background-size: 20px 20px; }
-        .rb-t3 { background-image: repeating-radial-gradient(circle at 12% 100%, transparent 0 16px, rgba(0,0,0,.14) 16px 19px); }
+        .rb-t0 { background-image: repeating-linear-gradient(45deg, rgba(0,0,0,.18) 0 7px, transparent 7px 15px); }
+        .rb-t1 { background-image: radial-gradient(rgba(0,0,0,.2) 1.7px, transparent 1.8px); background-size: 12px 12px; }
+        .rb-t2 { background-image: linear-gradient(rgba(0,0,0,.18) 2px, transparent 2px), linear-gradient(90deg, rgba(0,0,0,.18) 2px, transparent 2px); background-size: 18px 18px; }
+        .rb-t3 { background-image: repeating-radial-gradient(circle at 12% 100%, transparent 0 15px, rgba(0,0,0,.19) 15px 18px); }
         .rb-t4 { }
         .rb-no { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 9px; font-weight: 700;
             letter-spacing: .1em; background: var(--text); color: var(--bg-solid, #fff); padding: 2px 4px; }
         .dark .rb-no { color: #1a2420; }
         /* 书名牌：压在封面下缘、故意往左探出一点，是参照她给的那张图 */
-        .rb-plate { position: absolute; left: -5px; right: 5px; bottom: 7px; background: var(--card-solid, #fff);
+        .rb-plate { position: absolute; left: -5px; right: 5px; bottom: 7px; background: var(--plate, #fff);
             border: 2.5px solid var(--text); padding: 5px 6px; box-shadow: 2.5px 2.5px 0 var(--text); }
         .dark .rb-plate { background: #1e2b25; }
         .rb-book-name { font-size: 11.5px; font-weight: 800; line-height: 1.28; color: var(--text);
@@ -24801,11 +24801,24 @@ body {
            ⚠️**不存任何图片**：397 本存图会把她手机的同步撑爆，也没法离线。
            ⚠️色板只有 5 个平涂色，不是 397 种——新粗野主义讲配色克制（NN/g：主色 2~3 个）。
            ⚠️同一本书永远算出同一张，靠的是书名哈希，不能改成随机数。 */
-        var RB_PAL = ['#FFD93D', '#8FD9C0', '#FF8FA3', '#9AB8FF', '#F5F1E6'];
+        /* ⚠️2026-09-06 她说「颜色好像有点少」「白色占比感觉有点多」→ 两件事一起修：
+             · 色板 5→10，**删掉原来那个近白的 #F5F1E6**（它一个就占掉 1/5 封面、全是白的）；
+             · 名牌不再是纯白，改成**该书封面色兑白**的淡色（见 rbTint），
+               黄封面配淡黄牌、蓝封面配淡蓝牌，白色大面积消失，黑字压上去照样清楚。
+           ⚠️还是平涂、还是无渐变——新粗野主义的规矩没破，只是把"主色 2~3 个"
+             理解成「同屏色相不打架」，而不是「全库只准 5 种」。 */
+        var RB_PAL = ['#FFD93D', '#FF8FA3', '#9AB8FF', '#8FD9C0', '#FFAB5E',
+                      '#C6A8FF', '#FF6B5A', '#7FE0D4', '#B9E34B', '#5FB0FF'];
+        function rbTint(hex, k) {   // 往白里兑，k=0 原色，k=1 纯白
+            var n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+            r = Math.round(r + (255 - r) * k); g = Math.round(g + (255 - g) * k); b = Math.round(b + (255 - b) * k);
+            return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        }
         function rbCoverStyle(name) {
             var n = 0;
             for (var i = 0; i < name.length; i++) n = (n * 31 + name.charCodeAt(i)) >>> 0;
-            return { cls: 'rb-t' + (n % 5), bg: RB_PAL[(n >> 3) % RB_PAL.length] };
+            var bg = RB_PAL[(n >> 3) % RB_PAL.length];
+            return { cls: 'rb-t' + (n % 5), bg: bg, plate: rbTint(bg, 0.76) };
         }
         // 单本书的一张卡（文件夹内视图 + 兼容无文件夹时用）
         function rbBookItemHtml(b, seq) {
@@ -24819,7 +24832,7 @@ body {
                     : (b.chapters.length + ' 章'));
             var no = b._remote ? '☁' : ('NO.' + String((seq || 0) + 1).padStart(2, '0'));
             return '<div class="rb-book" onclick="rbOpenBook(\'' + b.id + '\')">'
-                + '<div class="rb-cover ' + cs.cls + '" style="background-color:' + cs.bg + '">'
+                + '<div class="rb-cover ' + cs.cls + '" style="background-color:' + cs.bg + ';--plate:' + cs.plate + '">'
                 + '<span class="rb-no">' + no + '</span>'
                 + '<div class="rb-plate"><div class="rb-book-name">' + name + '</div></div>'
                 + '</div>'
@@ -24895,7 +24908,7 @@ body {
                     var label = f === '' ? '未分类' : rbEsc(f);
                     var fcs = rbCoverStyle(label);
                     return '<div class="rb-book rb-folder" onclick="rbOpenFolder(' + idx + ')">'
-                        + '<div class="rb-cover ' + fcs.cls + '" style="background-color:' + fcs.bg + '">'
+                        + '<div class="rb-cover ' + fcs.cls + '" style="background-color:' + fcs.bg + ';--plate:' + fcs.plate + '">'
                         + '<span class="rb-no">' + groups[f].length + ' 本</span>'
                         + '<div class="rb-plate"><div class="rb-book-name">' + label + '</div></div>'
                         + '</div>'
