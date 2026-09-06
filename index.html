@@ -6326,17 +6326,6 @@ body {
                             <div class="rfont-slot-row"><span class="rfont-slot-label" title="开「精句」时，每段最短的完整句单独用这个字体">精句</span><select id="readingFontSel_keysent" class="rfont-select" onchange="readingSetSlotFont('keysent', this.value)"></select></div>
                             <div class="rfont-slot-row"><span class="rfont-slot-label" title="上面那些字体没收的生僻字，改用这个字体显示；不选就掉回系统字体">缺字</span><select id="readingFontSel_fallback" class="rfont-select" onchange="readingSetSlotFont('fallback', this.value)"></select></div>
                         </div>
-                        <!-- ⚠️2026-09-07 她要的：「青春那个字体，能不能单独加个大小控制键，让我来找找感觉，然后固定下来」。
-                             做成**按字体记的比例**而不是给青春写死——她以后换别的花字体也能各自调。 -->
-                        <div class="rfont-slot-row" style="margin-top:9px">
-                            <span class="rfont-slot-label" style="width:auto;white-space:nowrap"
-                                  title="花字体的字面大小常常跟正文对不上：同样字号，有的显小一号。这里按字体各记一个比例。">大小</span>
-                            <select id="readingFontScaleSel" class="rfont-select" onchange="readingRenderFontScale()"></select>
-                            <button type="button" class="chip-btn" onclick="readingStepFontScale(-0.05)">−</button>
-                            <span id="readingFontScaleVal" style="font-size:12px;font-weight:700;min-width:3.2em;text-align:center">100%</span>
-                            <button type="button" class="chip-btn" onclick="readingStepFontScale(0.05)">＋</button>
-                            <button type="button" class="chip-btn" onclick="readingStepFontScale(0)">重置</button>
-                        </div>
                         <span id="readingFontStatus" class="rfont-status">正文：默认</span>
                     </div>
                 </div>
@@ -22120,49 +22109,27 @@ body {
             _readingFontLinks[name] = link;
         }
 
-        /* ── 按字体记的大小比例（2026-09-07）──
+        /* ── 按字体记的大小比例 ──
            花字体的字面大小常跟正文对不上（同字号显小一号），所以给**每个字体**记一个比例。
-           ⚠️记在字体名下，不是记在槽位下：同一个字体在短句和精句都用时，调一次两处都跟着变，
-             这才是她要的「找到感觉就固定下来」。
-           ⚠️比例只作用在**选了具体字体**的槽位上；选「默认」的槽位跟随正文，不该被缩放。 */
+           ⚠️2026-09-07：原本在字体面板放过一个 −/＋ 调节器让她找感觉；
+             **她调定在 105% 之后说「不需要其他变动」，调节器已撤掉**（面板本来就挤）。
+             机制留着——以后要再调，把那一行 UI 加回来就行（调用 readingFontScaleGet/Set）。
+           ⚠️她存下来的值优先；没存过才用下面这张默认表。所以撤 UI 不会让她的 105% 变回去，
+             而换新设备、云端还没同步下来时也是对的。 */
+        var RD_FONT_SCALE_DEFAULT = {
+            '青春例外你是偏爱': 1.05   // 2026-09-07 她自己调出来的：这个字面比正文显小一点
+        };
         function readingFontScaleGet(name) {
-            var v = parseFloat(localStorage.getItem('reading_fscale_' + name) || '1');
-            return (isFinite(v) && v > 0.3 && v < 3) ? v : 1;
+            var raw = localStorage.getItem('reading_fscale_' + name);
+            if (raw != null) {
+                var v = parseFloat(raw);
+                if (isFinite(v) && v > 0.3 && v < 3) return v;
+            }
+            return RD_FONT_SCALE_DEFAULT[name] || 1;
         }
         function readingFontScaleSet(name, v) {
-            if (Math.abs(v - 1) < 0.001) localStorage.removeItem('reading_fscale_' + name);
+            if (Math.abs(v - (RD_FONT_SCALE_DEFAULT[name] || 1)) < 0.001) localStorage.removeItem('reading_fscale_' + name);
             else localStorage.setItem('reading_fscale_' + name, String(Math.round(v * 100) / 100));
-        }
-        // 下拉里只列**当前真的被某个槽位用着**的字体——没用上的调了也看不见，徒增困惑
-        function readingFontsInUse() {
-            var used = [];
-            READING_FONT_SLOTS.forEach(function (s) {
-                var n = localStorage.getItem(s.key) || '';
-                if (n && used.indexOf(n) < 0) used.push(n);
-            });
-            return used;
-        }
-        function readingRenderFontScale() {
-            var sel = document.getElementById('readingFontScaleSel');
-            var val = document.getElementById('readingFontScaleVal');
-            if (!sel || !val) return;
-            var used = readingFontsInUse();
-            var cur = sel.value && used.indexOf(sel.value) >= 0 ? sel.value : (used[0] || '');
-            sel.innerHTML = used.length
-                ? used.map(function (n) {
-                    return '<option value="' + esc(n) + '"' + (n === cur ? ' selected' : '') + '>' + esc(n) + '</option>';
-                  }).join('')
-                : '<option value="">（还没给任何位置选字体）</option>';
-            val.textContent = cur ? Math.round(readingFontScaleGet(cur) * 100) + '%' : '--';
-            readingApplyFontScales();
-        }
-        function readingStepFontScale(d) {
-            var sel = document.getElementById('readingFontScaleSel');
-            if (!sel || !sel.value) return;
-            var n = sel.value;
-            readingFontScaleSet(n, d === 0 ? 1 : Math.min(2, Math.max(0.5, readingFontScaleGet(n) + d)));
-            readingRenderFontScale();
-            readingFontsTouch();   // 跟其他字体设置一样推云端，换设备不丢
         }
         /* 把比例写进各槽位的 CSS 变量。⚠️没选字体的槽位写 1（跟随正文，不缩放）。 */
         function readingApplyFontScales() {
@@ -22313,7 +22280,6 @@ body {
         }
         // 渲染字体库 chips（仅展示+删除）和四个位置下拉
         function readingRenderFontUI() {
-            try { setTimeout(readingRenderFontScale, 0); } catch (e) {}
             var all = readingAllFonts();
             var box = document.getElementById('readingFontList');
             if (box) {
