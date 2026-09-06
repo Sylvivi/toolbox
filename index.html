@@ -3005,49 +3005,16 @@ body {
         .rb-search-full { display: block; width: 100%; box-sizing: border-box; }
         .rb-split-tools { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
         .rb-split-tools .rb-select { flex: 1; min-width: 0; }
-        /* 书架：新粗野主义（2026-09-06 晗改，她指定的风格，先在 shelf-preview.html 上确认过效果）。
-           照 NN/g 那几条硬规则做的：配色克制（黑白+5 个平涂色）、粗边框实线撑结构、
-           **实心硬投影不带模糊**、标题粗、留白够。
-           ⚠️「墨」用 var(--text) 而不是写死 #111——暗色模式下自动变成浅色描边，
-             不然黑边在深色底上整个糊掉。
-           ⚠️**故意不用 backdrop-filter**：她手机为分章弹窗那层毛玻璃发过烫（见本文件下方那条），
-             书名牌用不透明底，肉眼几乎无差别但零开销。
-           ⚠️一行两本不是三本——三本放不下封面和书名牌。 */
-        #rbShelfList { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px 10px; }
-        .rb-book { position: relative; cursor: pointer; min-width: 0; }
-        .rb-cover { position: relative; aspect-ratio: 3/4; border: 2.5px solid var(--text);
-            box-shadow: 4px 4px 0 var(--text); overflow: hidden; padding: 7px;
-            display: flex; align-items: flex-start; transition: transform .12s, box-shadow .12s; }
-        .rb-book:active .rb-cover { transform: translate(2px,2px); box-shadow: 2px 2px 0 var(--text); }
-        /* 封面纹理：全是 CSS 画的，不存任何图片（397 本书存图会把她手机同步撑爆） */
-        .rb-t0 { background-image: repeating-linear-gradient(45deg, rgba(0,0,0,.18) 0 7px, transparent 7px 15px); }
-        .rb-t1 { background-image: radial-gradient(rgba(0,0,0,.2) 1.7px, transparent 1.8px); background-size: 12px 12px; }
-        .rb-t2 { background-image: linear-gradient(rgba(0,0,0,.18) 2px, transparent 2px), linear-gradient(90deg, rgba(0,0,0,.18) 2px, transparent 2px); background-size: 18px 18px; }
-        .rb-t3 { background-image: repeating-radial-gradient(circle at 12% 100%, transparent 0 15px, rgba(0,0,0,.19) 15px 18px); }
-        .rb-t4 { }
-        .rb-no { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 9px; font-weight: 700;
-            letter-spacing: .1em; background: var(--text); color: var(--bg-solid, #fff); padding: 2px 4px; }
-        .dark .rb-no { color: #1a2420; }
-        /* 书名牌：压在封面下缘、故意往左探出一点，是参照她给的那张图 */
-        .rb-plate { position: absolute; left: -5px; right: 5px; bottom: 7px; background: var(--plate, #fff);
-            border: 2.5px solid var(--text); padding: 5px 6px; box-shadow: 2.5px 2.5px 0 var(--text); }
-        .dark .rb-plate { background: #1e2b25; }
-        .rb-book-name { font-size: 11.5px; font-weight: 800; line-height: 1.28; color: var(--text);
-            font-family: "Songti SC", "Noto Serif CJK SC", serif;
-            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
-        .rb-book-foot { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-top: 7px; }
-        .rb-book-meta { font-size: 10px; font-weight: 600; color: var(--text-sub); min-width: 0;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .rb-book-more { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--text);
-            background: transparent; color: var(--text); font-size: 11px; line-height: 1; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; box-shadow: 2px 2px 0 var(--text);
-            -webkit-tap-highlight-color: transparent; padding: 0; }
-        .rb-book-more:active { transform: translate(1.5px,1.5px); box-shadow: 1px 1px 0 var(--text); }
-        /* 文件夹卡：⚠️2026-09-06 她说「目前文件夹是全黑呢」——原来做成实心墨底，太死。
-           改成跟书**完全同一套**彩色封面＋纹理，只靠一圈**内描边**表示「这里面装着东西」，
-           本数放角标（书那格是 NO.01）。这样整屏语言统一，层级靠内容而不是靠反色。 */
-        .rb-folder .rb-cover::after { content: ''; position: absolute; inset: 5px; border: 2px solid var(--text);
-            opacity: .34; pointer-events: none; }
+        /* 书架：阅读器风格网格，一行三本，上面书籍 emoji、下面书名，纵向滚动 */
+        #rbShelfList { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .rb-book { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 15px 8px 11px; border: 1px solid var(--card-border); border-radius: 12px; cursor: pointer; transition: border-color 0.15s, background 0.15s; min-width: 0; }
+        .rb-book:hover { border-color: var(--accent); }
+        .rb-book-icon { font-size: 34px; line-height: 1; }
+        .rb-book-info { width: 100%; min-width: 0; }
+        .rb-book-name { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+        .rb-book-meta { font-size: 10px; color: var(--text-muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .rb-book-more { position: absolute; top: 2px; right: 2px; width: 24px; height: 24px; border: none; background: transparent; color: var(--text-muted); font-size: 15px; line-height: 1; cursor: pointer; border-radius: 7px; opacity: 0.5; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
+        .rb-book-more:hover, .rb-book-more:active { opacity: 1; background: var(--card-inner); }
         .rb-chap { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--card-border); border-radius: 8px; margin-bottom: 5px; cursor: pointer; transition: all 0.15s; }
         .rb-chap:hover { border-color: var(--accent); background: var(--accent-light); }
         .rb-chap.rb-read { opacity: 0.5; }
@@ -24797,51 +24764,19 @@ body {
             return true;
         }
 
-        /* 一本书按书名算出固定的封面配色和纹理（2026-09-06 晗）。
-           ⚠️**不存任何图片**：397 本存图会把她手机的同步撑爆，也没法离线。
-           ⚠️色板只有 5 个平涂色，不是 397 种——新粗野主义讲配色克制（NN/g：主色 2~3 个）。
-           ⚠️同一本书永远算出同一张，靠的是书名哈希，不能改成随机数。 */
-        /* ⚠️2026-09-06 她说「颜色好像有点少」「白色占比感觉有点多」→ 两件事一起修：
-             · 色板 5→10，**删掉原来那个近白的 #F5F1E6**（它一个就占掉 1/5 封面、全是白的）；
-             · 名牌不再是纯白，改成**该书封面色兑白**的淡色（见 rbTint），
-               黄封面配淡黄牌、蓝封面配淡蓝牌，白色大面积消失，黑字压上去照样清楚。
-           ⚠️还是平涂、还是无渐变——新粗野主义的规矩没破，只是把"主色 2~3 个"
-             理解成「同屏色相不打架」，而不是「全库只准 5 种」。 */
-        var RB_PAL = ['#FFD93D', '#FF8FA3', '#9AB8FF', '#8FD9C0', '#FFAB5E',
-                      '#C6A8FF', '#FF6B5A', '#7FE0D4', '#B9E34B', '#5FB0FF'];
-        function rbTint(hex, k) {   // 往白里兑，k=0 原色，k=1 纯白
-            var n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
-            r = Math.round(r + (255 - r) * k); g = Math.round(g + (255 - g) * k); b = Math.round(b + (255 - b) * k);
-            return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
-        }
-        function rbCoverStyle(name) {
-            /* ⚠️必须容错：占位书/刚同步下来的书可能没有书名，
-               直接读 name.length 会抛 TypeError，**整个 rbRenderShelf 中断**，
-               表现出来就是「书架/目录点不出来」（2026-09-06 她报的）。 */
-            name = String(name == null ? '' : name) || '书';
-            var n = 0;
-            for (var i = 0; i < name.length; i++) n = (n * 31 + name.charCodeAt(i)) >>> 0;
-            var bg = RB_PAL[(n >> 3) % RB_PAL.length];
-            return { cls: 'rb-t' + (n % 5), bg: bg, plate: rbTint(bg, 0.76) };
-        }
-        // 单本书的一张卡（文件夹内视图 + 兼容无文件夹时用）
-        function rbBookItemHtml(b, seq) {
+        // 单本书的一行 HTML（文件夹内视图 + 兼容无文件夹时用）
+        function rbBookItemHtml(b) {
             var name = rbEsc(rbBookDisplayName(b));
-            var cs = rbCoverStyle(rbBookDisplayName(b));
             var more = '<button class="rb-book-more" onclick="event.stopPropagation();rbBookMenuOpen(\'' + b.id + '\',event)" title="更多">⋯</button>';
-            var meta = b._remote
-                ? ((b._nchap || 0) + ' 章 · 点击下载')
-                : ((b.lastChapter != null && b.lastChapter >= 0)
-                    ? ('读到 ' + (b.lastChapter + 1) + '/' + b.chapters.length + ' 章')
-                    : (b.chapters.length + ' 章'));
-            var no = b._remote ? '☁' : ('NO.' + String((seq || 0) + 1).padStart(2, '0'));
-            return '<div class="rb-book" onclick="rbOpenBook(\'' + b.id + '\')">'
-                + '<div class="rb-cover ' + cs.cls + '" style="background-color:' + cs.bg + ';--plate:' + cs.plate + '">'
-                + '<span class="rb-no">' + no + '</span>'
-                + '<div class="rb-plate"><div class="rb-book-name">' + name + '</div></div>'
-                + '</div>'
-                + '<div class="rb-book-foot"><span class="rb-book-meta">' + meta + '</span>' + more + '</div>'
-                + '</div>';
+            if (b._remote) {
+                return '<div class="rb-book" onclick="rbOpenBook(\'' + b.id + '\')">' + more
+                    + '<span class="rb-book-icon">☁️</span>'
+                    + '<div class="rb-book-info"><div class="rb-book-name">' + name + '</div><div class="rb-book-meta">' + (b._nchap || 0) + ' 章 · 点击下载</div></div></div>';
+            }
+            var prog = (b.lastChapter != null && b.lastChapter >= 0) ? ('读到 ' + (b.lastChapter + 1) + '/' + b.chapters.length + ' 章') : (b.chapters.length + ' 章');
+            return '<div class="rb-book" onclick="rbOpenBook(\'' + b.id + '\')">' + more
+                + '<span class="rb-book-icon">' + rbBookEmoji(b) + '</span>'
+                + '<div class="rb-book-info"><div class="rb-book-name">' + name + '</div><div class="rb-book-meta">' + prog + '</div></div></div>';
         }
         // 书架当前所在层：null=文件夹列表；字符串=某文件夹内（''=未分类）
         var rbCurrentFolder = null;
@@ -24910,15 +24845,10 @@ body {
                 });
                 box.innerHTML = rbFolderNames.map(function (f, idx) {
                     var label = f === '' ? '未分类' : rbEsc(f);
-                    var fcs = rbCoverStyle(label);
-                    return '<div class="rb-book rb-folder" onclick="rbOpenFolder(' + idx + ')">'
-                        + '<div class="rb-cover ' + fcs.cls + '" style="background-color:' + fcs.bg + ';--plate:' + fcs.plate + '">'
-                        + '<span class="rb-no">' + groups[f].length + ' 本</span>'
-                        + '<div class="rb-plate"><div class="rb-book-name">' + label + '</div></div>'
-                        + '</div>'
-                        + '<div class="rb-book-foot"><span class="rb-book-meta">文件夹</span>'
-                        + '<span class="rb-book-more" style="border:none;box-shadow:none;font-size:15px">›</span></div>'
-                        + '</div>';
+                    return '<div class="rb-book" onclick="rbOpenFolder(' + idx + ')">'
+                        + '<span class="rb-book-icon">📁</span>'
+                        + '<div class="rb-book-info"><div class="rb-book-name">' + label + '</div><div class="rb-book-meta">' + groups[f].length + ' 本</div></div>'
+                        + '<span style="flex-shrink:0;color:var(--text-muted);font-size:17px;margin-left:6px">›</span></div>';
                 }).join('');
             } else {
                 // —— 某文件夹内 ——
