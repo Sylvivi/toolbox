@@ -3280,7 +3280,7 @@ body {
            正文在这之前**从来没有设过行高**，直接给个"舒适值"会让她一升级就发现
            排版整个变了——那不是新功能，那是把她原来的观感改掉了。
            所以：没调过 ＝ 一模一样，只有她自己动了滑块才生效。 */
-        .reading-merged { font-size: var(--reading-fs, 1em); font-family: var(--reading-font, inherit); line-height: var(--reading-lh, normal); }
+        .reading-merged { font-size: var(--reading-fs, 1em); font-family: var(--reading-font, inherit); line-height: var(--reading-lh, normal); font-weight: var(--reading-fw, normal); }
         /* 分位置字体：引号 / 章节标题 / 人名 各自可选字体（未选时 inherit=跟随正文）。
            由 readingApplyFonts 把选中的字体写进对应 CSS 变量；没选就不写、自动继承正文。 */
         .reading-merged .reading-quote { font-family: var(--reading-font-quote, inherit); }
@@ -6031,6 +6031,10 @@ body {
                         <span id="readingFontVal" style="font-size:12px;color:var(--text-muted);min-width:40px;text-align:center">110%</span>
                         <button class="chip-btn" onclick="readingStepFontScale(0.05)" title="放大" style="min-width:30px">A+</button>
                     </div>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0" title="正文的笔画粗细。四档都是字体里真有的字重，不是浏览器硬撑出来的">字重</span>
+                    <div id="readingFwChips" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end"></div>
                 </div>
                 <div id="readingT2SRow" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
                     <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0" title="把繁体书的正文显示成简体。只转显示，原文不动">简繁</span>
@@ -10308,6 +10312,7 @@ body {
             readingApplyFontScale();
             readingApplyParaSpace();
             readingApplyLineHeight();
+            readingApplyFontWeight();
             readingApplyQuoteHl();
             readingApplyQuoteUl();
             readingApplyQuoteBand();
@@ -20777,6 +20782,36 @@ body {
             }
             if (typeof rdGlRelayoutSoon === 'function') rdGlRelayoutSoon();
         }
+        /* 正文字重（2026-09-06）。四个字重合并成一个字族之后，「选字体」只能选到字体、
+           选不到粗细——粗细得靠 font-weight 挑，所以配套加了这个。
+           ⚠️只给这四档：她手上传来的就是 400/500/600/700 四份，**字族里没有的档位
+             浏览器会自己合成**（把现有的字硬撑），中文笔画多、撑出来糊，跟没加一样。
+             以后她再传 Light(300) 之类的，这里加一档、切片合并进去就行。
+           ⚠️默认 normal(400)：没调过时跟浏览器默认一致，不给她一个突兀的起点。 */
+        var RD_FONT_WEIGHTS = [
+            { v: '400', label: '常规' },
+            { v: '500', label: '中等' },
+            { v: '600', label: '半粗' },
+            { v: '700', label: '加粗' }
+        ];
+        function readingApplyFontWeight() {
+            var w = localStorage.getItem('reading_font_weight') || '400';
+            if (!RD_FONT_WEIGHTS.some(function (x) { return x.v === w; })) w = '400';
+            document.documentElement.style.setProperty('--reading-fw', w);
+            var box = document.getElementById('readingFwChips');
+            if (box) {
+                box.innerHTML = RD_FONT_WEIGHTS.map(function (x) {
+                    return '<button type="button" class="chip-btn' + (x.v === w ? ' active' : '')
+                        + '" onclick="readingSetFontWeight(\'' + x.v + '\')">' + x.label + '</button>';
+                }).join('');
+            }
+            // 字重变了字宽跟着变，小注引线要重量（跟换字体/改字号同一个道理）
+            if (typeof rdGlRelayoutSoon === 'function') rdGlRelayoutSoon();
+        }
+        function readingSetFontWeight(w) {
+            localStorage.setItem('reading_font_weight', String(w));
+            readingApplyFontWeight();
+        }
         function readingStepLineHeight(delta) {
             var v = localStorage.getItem('reading_line_height');
             // ⚠️从「默认」起步时先落到 1.2：那是最接近 normal 的一档，
@@ -20787,6 +20822,7 @@ body {
             if (n < 1.2) n = 1.2; if (n > 2.4) n = 2.4;
             localStorage.setItem('reading_line_height', String(n));
             readingApplyLineHeight();
+            readingApplyFontWeight();
         }
         function readingStepParaSpace(delta) {
             var s = parseInt(localStorage.getItem('reading_para_space') || '8', 10);
@@ -20796,6 +20832,7 @@ body {
             localStorage.setItem('reading_para_space', String(s));
             readingApplyParaSpace();
             readingApplyLineHeight();
+            readingApplyFontWeight();
         }
 
         // 引号样式总应用：按 4 个样式开关 + 「长短」开关统一设置 body class 与 chip 高亮。
@@ -22086,6 +22123,12 @@ body {
                      下次开 app 都不会被强行改回来。 */
                 if (!localStorage.getItem('reading_font_name')) {
                     localStorage.setItem('reading_font_name', 'Source Han Serif CN');
+                    added++;
+                }
+                // ⚠️她之前选的是「…Medium」那个分身（500）。合族之后字体名统一了，
+                //   粗细得靠字重挑——不把 500 补进来，她的正文会悄悄退回常规。
+                if (!localStorage.getItem('reading_font_weight')) {
+                    localStorage.setItem('reading_font_weight', '500');
                     added++;
                 }
                 localStorage.setItem('reading_fonts_preset', '1');
