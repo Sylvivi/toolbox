@@ -21881,6 +21881,15 @@ body {
         }
 
         // 确保某在线字体的 CSS <link> 已挂载（多个位置可同时用不同在线字体）
+        /* 把「显示名」翻成「CSS 字族名」。查不到就原样返回——
+           本地字体和她自己填的在线字体都是名字即字族名。 */
+        function _rdFontFamilyOf(name) {
+            var fonts = readingFontsLoad();
+            for (var i = 0; i < fonts.length; i++) {
+                if (fonts[i].name === name) return fonts[i].family || name;
+            }
+            return name;
+        }
         function readingEnsureOnlineFontLink(name) {
             if (_readingFontLinks[name]) return;
             var fonts = readingFontsLoad(), cur = null;
@@ -21912,8 +21921,14 @@ body {
                 // 这不会让装饰位置「变样」：浏览器是逐字回退的，主字体有的字轮不到兜底，只有主字体缺的字才用它，
                 // 而那些字本来就已经掉回系统字体了。槽位选「默认」时照旧不写变量（保持 CSS inherit），
                 // 继承来的是父元素算好的整条链、兜底会跟着继承过来，所以不用也不能在这里补。
+                /* ⚠️「她看到的名字」不一定等于「CSS 里的字族名」（2026-09-06 加）。
+                   她那三个花字体，列表里显示的是中文（溪涧山雪璞玉浑金…），
+                   而字体文件内部注册的是英文缩写（XJSX PYHJ…）——@font-face 用的是后者。
+                   直接把中文名写进 font-family，浏览器一个都匹配不上、选了等于没选。
+                   所以这里查一次映射：有 family 就用 family，没有就退回 name（本地字体、
+                   她自己填的在线字体都是名字即字族名，行为不变）。 */
                 var useFb = fb && fb !== name && s.slot !== 'body';
-                var chain = '"' + name + '"' + (useFb ? ', "' + fb + '"' : '');
+                var chain = '"' + _rdFontFamilyOf(name) + '"' + (useFb ? ', "' + _rdFontFamilyOf(fb) + '"' : '');
                 // font-family 值里不能放 inherit（会让整条声明失效），只放字体名 + 通用兜底 serif
                 document.documentElement.style.setProperty(s.varName, chain + ', serif');
             });
@@ -22068,7 +22083,16 @@ body {
            ⚠️所以**别再拆回一个字重一个条目**，也别给它们改成带后缀的名字（cn-font-split
              默认会给非标准字重加后缀，合并时要把后缀去掉）。 */
         var RD_PRESET_FONTS = [
-            { name: 'Source Han Serif CN', url: 'https://tool.masterofmydomain.top/wfonts/shs/result.css' }
+            { name: 'Source Han Serif CN', url: 'https://tool.masterofmydomain.top/wfonts/shs/result.css' },
+            /* 她的三个花字体（2026-09-06 一起做了镜像）。原来是整份 ttf 存在书库服务器上、
+               每次要下 7~14MB；切片之后读到哪个字才下哪一片。
+               ⚠️`family` 是字体文件**内部**的英文名（XJSX PYHJ 之类），CSS 里的 @font-face
+                 就是用它注册的，**必须一字不差**；`name` 是给她看的中文名。
+                 两者不同时，挂 link 用 url、写 font-family 用 family——见 readingApplyFonts。
+               ⚠️宋刻本她说不要，没做。 */
+            { name: '溪涧山雪璞玉浑金', family: 'XJSX PYHJ',    url: 'https://tool.masterofmydomain.top/wfonts/hz-xijian/result.css' },
+            { name: '唯独浪漫盛开山茶', family: 'WeiDLMSKSC',   url: 'https://tool.masterofmydomain.top/wfonts/hz-shancha/result.css' },
+            { name: '青春例外你是偏爱', family: 'QingCLWNSPA',  url: 'https://tool.masterofmydomain.top/wfonts/hz-qingchun/result.css' }
         ];
         // 老版本装过的三个分身条目，见到就清掉，免得字体列表里堆着一排用不了的
         var RD_LEGACY_FONT_NAMES = ['Source Han Serif CN Medium', 'Source Han Serif CN SemiBold'];
@@ -22086,7 +22110,10 @@ body {
                    补种那段见到同名就跳过，地址永远留在老的上，四个字重照样拿不到。 */
                 _kept.forEach(function (f) {
                     RD_PRESET_FONTS.forEach(function (pf) {
-                        if (f.name === pf.name && f.url !== pf.url) { f.url = pf.url; _fixed++; }
+                        if (f.name !== pf.name) return;
+                        if (f.url !== pf.url) { f.url = pf.url; _fixed++; }
+                        // ⚠️老条目没有 family 字段，补上，否则花字体选了不生效
+                        if (pf.family && f.family !== pf.family) { f.family = pf.family; _fixed++; }
                     });
                 });
                 if (_kept.length !== _all.length || _fixed) {
@@ -22113,7 +22140,7 @@ body {
                 var added = 0;
                 RD_PRESET_FONTS.forEach(function (f) {
                     for (var i = 0; i < fonts.length; i++) if (fonts[i].name === f.name) return;   // 已经有了就别重复
-                    fonts.push({ name: f.name, url: f.url });
+                    fonts.push(f.family ? { name: f.name, url: f.url, family: f.family } : { name: f.name, url: f.url });
                     added++;
                 });
                 if (added) readingFontsSave(fonts);
