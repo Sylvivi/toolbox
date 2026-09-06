@@ -3423,14 +3423,25 @@ body {
            → 这四个槽位一律把字重钉回 normal，**只有真的没换字体时才跟随正文**。
            ⚠️用 `:not([style])` 之类判断不了（变量写在根上），所以直接钉死 400；
              她要某个槽位粗，那是「精句加粗」那套开关的事，跟正文字重是两码事。 */
+        /* ⚠️2026-09-06 第二版。第一版把这四个槽位的字重一律钉死，她立刻指出不对：
+           **「用了这个字体的也应该变呀，因为引号内的思源字体字重没变」**。
+           对——该分的不是「哪个槽位」，是**这个槽位选的字体有没有真字重**：
+             · 思源宋体（400/500/600/700 四个真字重）→ **跟随正文字重**；
+             · 花字体（只有一个字重）→ 不跟随，否则浏览器合成假粗、糊成一团
+               （她 07-28 / 07-30 两次定过的规矩，见 [[toolbox-font-slot-no-bold]]）。
+           CSS 判断不了字体有几个字重 → 由 readingApplyFonts 在 body 上挂
+           `rf-mw-<槽位>`（mw = multi-weight），挂了才跟随。
+           ⚠️**没选字体的槽位也算「跟随」**：它 inherit 的就是正文那个字体。 */
         .reading-merged .reading-quote,
-        .reading-merged .reading-quote:not(.rq-wide),
         .reading-merged .reading-keysent { font-weight: 400; }
+        body.rf-mw-quote .reading-merged .reading-quote.rq-wide,
+        body.rf-mw-quoteShort .reading-merged .reading-quote:not(.rq-wide),
+        body.rf-mw-keysent .reading-merged .reading-keysent { font-weight: var(--reading-fw, normal); }
         /* ⚠️人名**不能**写死 400：精句/短句自己开了加粗时，名词要跟着整句一起粗，
-           写死会在加粗的句子中间露出一个细字（3540 那条注释里她 07-28 明确要过「跟着精句走」）。
-           这里只要把它从「正文字重」里摘出来就够——normal 等于不跟随 --reading-fw，
-           但仍可被外层的加粗规则带起来。 */
+           写死会在加粗的句子中间露出一个细字（她 07-28 明确要过「跟着精句走」）。
+           normal ＝ 不跟随 --reading-fw，但仍可被外层的加粗规则带起来。 */
         .reading-merged .reading-name { font-weight: normal; }
+        body.rf-mw-person .reading-merged .reading-name { font-weight: var(--reading-fw, normal); }
         .reading-merged .reading-quote { font-family: var(--reading-font-quote, inherit); }
         /* 短句字体：长短分工(reading-ls-on)开时，短句(非 rq-wide)可单独换字体；没单独选就回退「引号」字体 */
         body.reading-ls-on .reading-merged .reading-quote:not(.rq-wide) { font-family: var(--reading-font-quote-short, var(--reading-font-quote, inherit)); }
@@ -22100,9 +22111,24 @@ body {
             var fb = localStorage.getItem('reading_font_fallback') || '';
             if (fb && !online[fb] && !local[fb]) fb = '';
             if (fb && online[fb]) readingEnsureOnlineFontLink(fb);
+            /* ⚠️2026-09-06：哪些槽位该跟随「正文字重」（见 CSS 里 rf-mw-* 那段）。
+               判据是**这个槽位选的字体有没有真字重**：
+                 · 没选（＝跟随正文那个字体）→ 跟随；
+                 · 选了预置里标了 mw 的（思源宋体，400/500/600/700）→ 跟随；
+                 · 选了花字体/本地单字重字体 → **不跟随**，否则浏览器合成假粗、糊成一团。
+               ⚠️她第一版看完就指出来了：「用了这个字体的也应该变呀」——
+                 所以不能按槽位一刀切，必须按字体分。 */
+            var _mwNames = {};
+            (typeof RD_PRESET_FONTS !== 'undefined' ? RD_PRESET_FONTS : []).forEach(function (f) {
+                if (f.mw) _mwNames[f.name] = 1;
+            });
             READING_FONT_SLOTS.forEach(function (s) {
                 if (s.isFallback) return;  // 它不占渲染位置，只作为别人链尾出现（见下面 chain）
                 var name = localStorage.getItem(s.key) || '';
+                try {
+                    var _follow = !name || !!_mwNames[name];
+                    document.body.classList.toggle('rf-mw-' + s.slot, _follow);
+                } catch (e) {}
                 if (!name) { document.documentElement.style.removeProperty(s.varName); return; }
                 // 找不到字体「先不应用、也绝不删选择」：本地字体要等 IndexedDB 读完才在册，开机这一刻可能还没就绪；
                 // 删除应交给「× 删除字体」(readingDeleteFontAny) 处理，这里乱删会把刷新前选好的本地字体冲成默认。
@@ -22274,7 +22300,7 @@ body {
            ⚠️所以**别再拆回一个字重一个条目**，也别给它们改成带后缀的名字（cn-font-split
              默认会给非标准字重加后缀，合并时要把后缀去掉）。 */
         var RD_PRESET_FONTS = [
-            { name: 'Source Han Serif CN', url: 'https://tool.masterofmydomain.top/wfonts/shs/result.css' },
+            { name: 'Source Han Serif CN', url: 'https://tool.masterofmydomain.top/wfonts/shs/result.css', mw: true },   // mw=多字重(400/500/600/700)，字重开关只对它这类生效
             /* 她的三个花字体（2026-09-06 一起做了镜像）。原来是整份 ttf 存在书库服务器上、
                每次要下 7~14MB；切片之后读到哪个字才下哪一片。
                ⚠️`family` 是字体文件**内部**的英文名（XJSX PYHJ 之类），CSS 里的 @font-face
