@@ -25105,6 +25105,21 @@ body {
             if (!b) return;
             // 占位书（服务器独有）：先把正文从服务器下载下来，再正常打开
             if (b._remote && (!b.chapters || !b.chapters.length)) {
+                /* ⚠️2026-09-06 她要的：「点一下那个封面就直接下载了，能不能弹一个窗口来问一下我呀，
+                   因为我可能是误触了呢」。一行三本之后封面变小，误触概率更高，
+                   而一本大书要下几十秒、还占她手机存储。
+                   ⚠️用原生 confirm()——工具箱里一直是这么做的（十九处），别为这一个另造弹窗。
+                   ⚠️提示里带上**书名和大小**：她要能一眼认出点中的是不是想要的那本。 */
+                /* ⚠️小书别显示「0.0 MB」（她那些一章的短篇全是这样，难看且没信息量）→ 不足 100KB 走 KB。 */
+                var _mb = !b.fileSize ? ''
+                    : (b.fileSize >= 102400 ? (b.fileSize / 1048576).toFixed(1) + ' MB'
+                                            : Math.max(1, Math.round(b.fileSize / 1024)) + ' KB');
+                var _nch = b._nchap ? ('，' + b._nchap + ' 章') : '';
+                if (!confirm('这本书还在服务器上，要下载到这台设备吗？\n\n「' + rbBookNiceName(b) + '」'
+                        + (_mb ? ('\n' + _mb + _nch) : _nch))) {
+                    rbActiveBookId = null;
+                    return;   // ⚠️取消就什么都不做，**留在书架**（别把视图切过去再退回来，会闪）
+                }
                 document.getElementById('rbShelfView').style.display = 'none';
                 document.getElementById('rbChapterView').style.display = '';
                 document.getElementById('rbBookTitle').textContent = rbBookNiceName(b);
