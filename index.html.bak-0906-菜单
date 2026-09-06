@@ -3032,8 +3032,11 @@ body {
         .rb-plate { position: absolute; left: -5px; right: 5px; bottom: 7px; background: var(--plate, #fff);
             border: 2.5px solid var(--text); padding: 5px 6px; box-shadow: 2.5px 2.5px 0 var(--text); }
         .dark .rb-plate { background: #1e2b25; }
+        /* ⚠️2026-09-06 书名改用思源宋体（汐当天做的自建镜像切片，四个真字重 400/500/600/700）。
+           ⚠️字族名必须是 "Source Han Serif CN"，跟切片 CSS 里**一字不差**，见 RD_PRESET_FONTS。
+           ⚠️后面仍留系统宋体兜底：字体还没下完的那一瞬间不至于跳成黑体。 */
         .rb-book-name { font-size: 11.5px; font-weight: 800; line-height: 1.28; color: var(--text);
-            font-family: "Songti SC", "Noto Serif CJK SC", serif;
+            font-family: "Source Han Serif CN", "Songti SC", "Noto Serif CJK SC", serif;
             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
         .rb-book-foot { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-top: 7px; }
         .rb-book-meta { font-size: 10px; font-weight: 600; color: var(--text-sub); min-width: 0;
@@ -21936,6 +21939,11 @@ body {
 
         // 应用四个位置的字体：读各自选中的字体 → 确保加载 → 写/清 CSS 变量
         function readingApplyFonts() {
+            /* ⚠️2026-09-06：书架书名钉死用思源宋体，所以**无条件**确保它的切片 CSS 挂上一次。
+               不能指望「她正好把它选成了正文字体」——她换成别的字体时书架就掉字了。
+               ⚠️代价极小：cn-font-split 切片只下载真正渲染到的那几片，不是整份 14MB。
+               ⚠️`readingEnsureOnlineFontLink` 自带去重（_readingFontLinks），重复调用无害。 */
+            try { readingEnsureOnlineFontLink('Source Han Serif CN'); } catch (e) {}
             var online = {}; readingFontsLoad().forEach(function (f) { online[f.name] = true; });
             var local = {}; readingLocalFontsLoad().forEach(function (f) { local[f.name] = true; });
             // 「缺字」兜底字体：同样要在册才算数（本地字体开机时可能还没从 IndexedDB 读回来）
@@ -24810,6 +24818,7 @@ body {
         var RB_PAL = ['#FFD93D', '#FF8FA3', '#9AB8FF', '#8FD9C0', '#FFAB5E',
                       '#C6A8FF', '#FF6B5A', '#7FE0D4', '#B9E34B', '#5FB0FF'];
         function rbTint(hex, k) {   // 往白里兑，k=0 原色，k=1 纯白
+            if (!hex || hex.charAt(0) !== '#') return '#fff';   // ⚠️兜底，别再让它抛
             var n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
             r = Math.round(r + (255 - r) * k); g = Math.round(g + (255 - g) * k); b = Math.round(b + (255 - b) * k);
             return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
@@ -24821,7 +24830,16 @@ body {
             name = String(name == null ? '' : name) || '书';
             var n = 0;
             for (var i = 0; i < name.length; i++) n = (n * 31 + name.charCodeAt(i)) >>> 0;
-            var bg = RB_PAL[(n >> 3) % RB_PAL.length];
+            /* ⚠️⚠️必须用 **>>> 无符号右移**，不能用 >>（2026-09-06 踩的，代价是她整页 JS 死掉）。
+               `n` 经过 `>>> 0` 最大到 42 亿，**超过 21 亿时 `n >> 3` 会变成负数**，
+               而 JS 里 **负数 % 长度 仍是负数** → `RB_PAL[-9]` 取出 undefined。
+               ⚠️实测她 419 个书名/文件夹名里 **136 个（32.5%）**都落在负数上。
+               ⚠️为什么 5 色版没事、10 色版才炸：5 色版只是把 undefined 拼进
+                 `style="background-color:undefined"`（浏览器忽略，难看但不崩）；
+                 10 色版新加的 rbTint 对 undefined 调 .slice() → 抛异常 →
+                 rbRenderShelf 中断 → **整页脚本全死，手势和目录都召唤不出来**。
+               ⚠️她的观察「5 个好使、加到 10 就不行」是定位这个 bug 的关键线索。 */
+            var bg = RB_PAL[(n >>> 3) % RB_PAL.length];
             return { cls: 'rb-t' + (n % 5), bg: bg, plate: rbTint(bg, 0.76) };
         }
         // 单本书的一张卡（文件夹内视图 + 兼容无文件夹时用）

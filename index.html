@@ -4324,6 +4324,35 @@ body {
         .chat-hist-menu > div:last-child { border-radius: 0 0 6px 6px; }
         .chat-hist-menu > div:hover { background: var(--card-inner); }
         .chat-hist-menu > div.danger { color: var(--red); }
+        /* 书架 `⋯` 菜单：新粗野主义（2026-09-06 她要的「那个你也按照新粗野主义设计一下吧」）。
+           ⚠️**只加 .rb-menu 这一层覆盖，不动 .chat-hist-menu 本身**——那是共用类，
+             对话历史那边的菜单也在用它，改底子会顺手改掉她没要求的地方。
+           ⚠️墨色一律用 var(--text)，暗色模式下自动翻成浅色描边，跟书架卡片同一套逻辑。 */
+        .rb-menu {
+            border: 2.5px solid var(--text) !important;
+            border-radius: 0 !important;
+            box-shadow: 5px 5px 0 var(--text) !important;
+            /* ⚠️必须**实心不透明**：--modal-bg 是 72% 半透明的，
+               而这个菜单会浮在花花绿绿的书架封面上，透出来就看不清字了。
+               新粗野主义本来也不用毛玻璃/半透明那一套。 */
+            background: #fff !important;
+            padding: 0 !important; min-width: 148px;
+        }
+        .dark .rb-menu { background: #1e2b25 !important; }
+        .rb-menu > div {
+            padding: 11px 14px; font-size: 13px; font-weight: 700; border-radius: 0 !important;
+            border-bottom: 2px solid var(--text); letter-spacing: .02em;
+        }
+        .rb-menu > div:last-child { border-bottom: none; }
+        /* 按下去往右下位移，跟书架卡片一个手感（硬投影跟着缩） */
+        /* ⚠️反白的字色用实色，别用 var(--modal-bg)——那个可能是半透明的，压在墨底上会糊。
+           跟 .rb-no 同一套写法：亮色配白字，暗色那条单独覆盖。 */
+        .rb-menu > div:active { background: var(--text); color: #fff; }
+        .dark .rb-menu > div:active { color: #1a2420; }
+        .rb-menu > div:hover { background: var(--accent-light); }
+        /* 危险项：新粗野主义不用淡红字，直接整条反白 */
+        .rb-menu > div.danger { color: var(--red); }
+        .rb-menu > div.danger:hover { background: var(--red); color: #fff; }
         .chat-hist-empty {
             flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
             color: var(--text-muted); font-size: 14px; gap: 16px;
@@ -24972,7 +25001,7 @@ body {
             var b = rbGetBook(id); if (!b) return;
             var menu = document.createElement('div');
             menu.id = 'rbBookMenu';
-            menu.className = 'chat-hist-menu';
+            menu.className = 'chat-hist-menu rb-menu';   // ⚠️rb-menu 只作用于书架这个菜单，见上面样式那段的说明
             menu.style.display = 'block';
             var items = '<div onclick="rbBookMenuAction(\'rename\')">✏️ 改名</div>';
             items += '<div onclick="rbBookMenuAction(\'move\')">📁 移动到文件夹</div>';
