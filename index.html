@@ -24815,6 +24815,10 @@ body {
             return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
         }
         function rbCoverStyle(name) {
+            /* ⚠️必须容错：占位书/刚同步下来的书可能没有书名，
+               直接读 name.length 会抛 TypeError，**整个 rbRenderShelf 中断**，
+               表现出来就是「书架/目录点不出来」（2026-09-06 她报的）。 */
+            name = String(name == null ? '' : name) || '书';
             var n = 0;
             for (var i = 0; i < name.length; i++) n = (n * 31 + name.charCodeAt(i)) >>> 0;
             var bg = RB_PAL[(n >> 3) % RB_PAL.length];
