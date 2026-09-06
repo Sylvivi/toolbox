@@ -10317,6 +10317,7 @@ body {
             readingApplyBlackMask();
             readingApplyBg();
             readingApplyNames();
+            readingSeedPresetFonts();   // ⚠️要在 readingApplyFonts 之前：补完才轮得到它去挂 link
             readingRegisterLocalFonts();
             readingApplyFonts();
             try { localStorage.removeItem('reading_stats'); } catch (e) {}   // 阅读时长统计已移除，顺手清掉各端残留的旧数据
@@ -16194,6 +16195,7 @@ body {
             readingApplyBlackMask();
             readingApplyBg();
             readingApplyNames();
+            readingSeedPresetFonts();   // ⚠️要在 readingApplyFonts 之前：补完才轮得到它去挂 link
             readingRegisterLocalFonts();
             readingApplyFonts();
             chatSyncReadingToggleVis();
@@ -22009,6 +22011,37 @@ body {
         }
 
         // 添加在线字体（url + name）
+        /* ===== 预置字体（2026-09-06）=====
+           她把思源宋体全套七个字重传给了我，切好片放进了服务器上的字体镜像。
+           本来只要她自己在「＋ 添加字体」里填两次地址，但她问「你不可以帮我弄嘛」——
+           **她手机里的 localStorage 我改不到，但我可以让代码替她填**。
+           ⚠️名称必须跟切片 CSS 里的 font-family **一字不差**，否则挂上了也用不了：
+             Regular 那份是 "Source Han Serif CN"，SemiBold 那份 cn-font-split
+             自动加了后缀、是 "Source Han Serif CN SemiBold"。两份 family 名不同，
+             所以能同时存在、各占一档。
+           ⚠️**只补一次**（用 reading_fonts_preset 记账）：她哪天嫌多把它删了，
+             不能下次开 app 又自己长回来——那种「删不掉」最招人烦。 */
+        var RD_PRESET_FONTS = [
+            { name: 'Source Han Serif CN', url: 'https://tool.masterofmydomain.top/wfonts/shs-regular/result.css' },          // 400 常规
+            { name: 'Source Han Serif CN Medium', url: 'https://tool.masterofmydomain.top/wfonts/shs-medium/result.css' },    // 500 中等
+            { name: 'Source Han Serif CN SemiBold', url: 'https://tool.masterofmydomain.top/wfonts/shs-semibold/result.css' } // 600 半粗
+        ];
+        function readingSeedPresetFonts() {
+            try {
+                if (localStorage.getItem('reading_fonts_preset') === '1') return;
+                var fonts = readingFontsLoad();
+                var added = 0;
+                RD_PRESET_FONTS.forEach(function (f) {
+                    for (var i = 0; i < fonts.length; i++) if (fonts[i].name === f.name) return;   // 已经有了就别重复
+                    fonts.push({ name: f.name, url: f.url });
+                    added++;
+                });
+                if (added) readingFontsSave(fonts);
+                localStorage.setItem('reading_fonts_preset', '1');
+                if (added && typeof readingApplyFonts === 'function') readingApplyFonts();
+            } catch (e) {}
+        }
+
         function readingAddFont() {
             var url = (document.getElementById('readingFontUrlInput').value || '').trim();
             var name = (document.getElementById('readingFontNameInput').value || '').trim();
@@ -22035,7 +22068,8 @@ body {
             var pending = files.length, added = [];
             function done() {
                 readingLocalFontsSave(arr);
-                readingRegisterLocalFonts();
+                readingSeedPresetFonts();   // ⚠️要在 readingApplyFonts 之前：补完才轮得到它去挂 link
+            readingRegisterLocalFonts();
                 readingApplyFonts();
                 if (bkSyncCfg()) arr.forEach(function (f) { if (added.indexOf(f.name) >= 0) bkSyncPushFont(f); }); // 配了服务器就顺手上传新字体
                 if (st && added.length) st.textContent = '已上传本地字体：' + added.join('、') + '，可在下面给某个位置选用';
