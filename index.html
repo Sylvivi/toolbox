@@ -7113,6 +7113,15 @@ body {
             } else {
                 applyTheme(getThemeIdx());
             }
+            /* ⚠️底图跟着日夜一起换（2026-09-06 她要的）：她的原话——「底图存在的情况下，
+               如果是夜间底图，我在首页长按加号换日间模式，底图不是跟着换日间诶」
+               「我意思是底图从适配夜间的那个换成适配日间的那个哈，整个图要变得」。
+               原来只有单向的：选深色底图 → 自动进夜间（_rdBgSyncNight）；
+               反过来手动切日夜时底图不动，于是夜间模式配着日间的纸，白到刺眼。
+               ⚠️靠**配对**实现，不猜：每张自定义底图可以指定「我的另一半是哪张」（pair 字段），
+                 切日夜时只在「当前这张的明暗跟新模式对不上、且它有配对」时才换。
+                 不做「按名字自动猜配对」——她有好几组图（船、扑克…），猜错比不换更烦人。 */
+            if (typeof readingSwapBgForMode === 'function') readingSwapBgForMode();
             if (typeof chatRenderThemeList === 'function') chatRenderThemeList();
             if (typeof syncChatMaskToggleStyle === 'function') syncChatMaskToggleStyle();
             if (typeof chatSyncReadingToggleVis === 'function') chatSyncReadingToggleVis();
@@ -21019,6 +21028,53 @@ body {
             }
             readingRenderBgPanel();
         }
+        /* 切日夜时把底图换成配对的那张。⚠️三道闸，缺一个就会乱换：
+             ① 没开底图 / 开的是预置图 → 不管；
+             ② 当前这张没标明暗、或没配对 → 不管（宁可不换也别猜）；
+             ③ 当前这张的明暗**已经跟新模式一致** → 不用换（避免来回跳）。 */
+        function readingSwapBgForMode() {
+            var cur = readingGetBg();
+            if (cur === 'off' || RD_BG_INFO[cur]) return;
+            var c = readingBgFind(cur);
+            if (!c || c.dark == null || !c.pair) return;
+            if (!!c.dark === !!nightMode) return;       // 已经对得上
+            var other = readingBgFind(c.pair);
+            if (!other) return;
+            if (other.dark != null && !!other.dark !== !!nightMode) return;  // 搭档也不对就别换
+            localStorage.setItem('reading_bg', other.id);
+            readingApplyBg();
+        }
+        /* 给一张底图挑「另一半」。⚠️两边都写：配对是双向的，
+           只写一边的话从另一张切回来时又不认识对方了。 */
+        function readingBgPair(id) {
+            var list = readingBgList();
+            var me = readingBgFind(id);
+            if (!me) return;
+            var others = list.filter(function (x) { return x.id !== id; });
+            if (!others.length) { alert('还只有这一张底图，先添加另一张（比如同一套图的深色版）再来配对。'); return; }
+            var menu = others.map(function (x, i) {
+                return (i + 1) + ') ' + (x.name || '未命名') + (x.dark ? '（深）' : x.dark === false ? '（浅）' : '');
+            }).join('\n');
+            var cur = me.pair ? readingBgFind(me.pair) : null;
+            var ans = prompt('给「' + (me.name || '未命名') + '」挑一张日夜搭档\n'
+                + '（切日间/夜间时会自动换成它）\n\n' + menu + '\n\n输入编号，0 = 取消配对'
+                + (cur ? '\n当前搭档：' + (cur.name || '未命名') : ''));
+            if (ans === null) return;
+            var n = parseInt(String(ans).trim(), 10);
+            if (n === 0) {
+                list.forEach(function (x) { if (x.id === id || x.pair === id) delete x.pair; });
+                readingBgSaveList(list); readingApplyBg(); return;
+            }
+            var pick = others[n - 1];
+            if (!pick) return;
+            list.forEach(function (x) {
+                if (x.id === id) x.pair = pick.id;
+                else if (x.id === pick.id) x.pair = id;      // ⚠️双向
+                else if (x.pair === id || x.pair === pick.id) delete x.pair;  // 拆掉旧的三角关系
+            });
+            readingBgSaveList(list);
+            readingApplyBg();
+        }
         // 点 chip ＝ 开合面板（不再循环切换：自定义会越攒越多，循环点二十下不现实）
         function readingToggleBgPanel() {
             var panel = document.getElementById('readingBgPanel');
@@ -21049,7 +21105,9 @@ body {
             for (var i = 0; i < list.length; i++) {
                 var c = list[i];
                 var esc = (c.name || '未命名').replace(/</g, '&lt;');
+                var _pair = c.pair ? readingBgFind(c.pair) : null;
                 var ops = '<button class="rdbg-op" title="这张是深色图吗？决定选它时切夜间还是白天" onclick="event.stopPropagation();readingBgToggleDark(\'' + c.id + '\')">' + (c.dark ? '🌙' : '☀️') + '</button>'
+                        + '<button class="rdbg-op" title="' + (_pair ? ('日夜搭档：' + (_pair.name || '未命名').replace(/"/g, '') + '（切日夜时自动换成它）') : '给它挑一张日夜搭档') + '" onclick="event.stopPropagation();readingBgPair(\'' + c.id + '\')">' + (_pair ? '🔗' : '⛓') + '</button>'
                         + '<button class="rdbg-op" title="改名字和地址" onclick="event.stopPropagation();readingBgEdit(\'' + c.id + '\')">✎</button>'
                         + '<button class="rdbg-op" title="删掉这张" onclick="event.stopPropagation();readingBgDelete(\'' + c.id + '\')">✕</button>';
                 h += row(c.id, esc, ops);
