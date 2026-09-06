@@ -3283,7 +3283,16 @@ body {
             background: var(--accent-light); border-color: var(--accent-mid);
             color: var(--text); font-weight: 600;
         }
-        .rfont-chip-name { cursor: pointer; }
+        /* ⚠️2026-09-06 她要的：字体 chip「别完全展示，弄小一点点，大概显示个 2~3 个字就行，
+           不然有点太占位置了」。她那三个花字体都是 8 个字、思源宋体是一长串英文，
+           一排下来把面板挤满了。
+           ⚠️截断只做在**这排展示用的 chip** 上——下面四个位置的下拉框仍显示全名，
+             那里是真要挑字体的地方，截了就没法认。
+           ⚠️全名放进 title，长按/悬停看得到。 */
+        .rfont-chip-name {
+            cursor: pointer; display: inline-block; vertical-align: bottom;
+            max-width: 3.6em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
         .rfont-chip-x {
             display: inline-flex; align-items: center; justify-content: center;
             width: 16px; height: 16px; border-radius: 50%; font-size: 13px;
@@ -22136,7 +22145,7 @@ body {
                     for (var i = 0; i < all.length; i++) {
                         var nm = all[i].name, safe = nm.replace(/'/g, "\\'");
                         var tag = all[i].kind === 'local' ? '<span class="rfont-chip-tag">本地</span>' : '';
-                        h += '<span class="rfont-chip no-x"><span class="rfont-chip-name">' + esc(nm) + '</span>' + tag
+                        h += '<span class="rfont-chip no-x" title="' + esc(nm) + '"><span class="rfont-chip-name">' + esc(nm) + '</span>' + tag
                            + '<span class="rfont-chip-x" title="删除" onclick="readingDeleteFontAny(\'' + safe + '\')">×</span></span>';
                     }
                     box.innerHTML = h;
