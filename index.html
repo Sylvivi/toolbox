@@ -22143,6 +22143,23 @@ body {
                      · 新增的预置项 → 不在名单里 → 补得进去；
                      · 她主动删掉的 → 已在名单里 → 不会自己长回来（这条是当初加开关的初衷）。
                    ⚠️旧值是字符串 '1'，当成「思源那个已补过」来兼容。 */
+                /* ⚠️一次性修复（2026-09-06）：她删本地花字体时，被上面那个「同名一刀切」的
+                   bug 连带删掉了在线条目。而按项记账会认为「补过了」、不再补回来。
+                   这里把那三个从名单里摘一次，让它们能重新出现；只跑一次，不影响
+                   「她主动删掉的不复活」这条规矩。 */
+                try {
+                    if (localStorage.getItem('reading_fonts_refix0906') !== '1') {
+                        var _raw = localStorage.getItem('reading_fonts_preset') || '[]';
+                        if (_raw !== '1') {
+                            var _sd = JSON.parse(_raw) || [];
+                            var _hz = ['溪涧山雪璞玉浑金', '唯独浪漫盛开山茶', '青春例外你是偏爱'];
+                            _sd = _sd.filter(function (n) { return _hz.indexOf(n) < 0; });
+                            localStorage.setItem('reading_fonts_preset', JSON.stringify(_sd));
+                        }
+                        localStorage.setItem('reading_fonts_refix0906', '1');
+                    }
+                } catch (e) {}
+
                 var seeded = [];
                 try {
                     var raw = localStorage.getItem('reading_fonts_preset') || '[]';
@@ -22231,10 +22248,23 @@ body {
         }
 
         // 删除字体库某项（在线/本地都查）；有位置在用则回退默认
+        /* ⚠️⚠️删字体要分清「删的是哪一份」（2026-09-06 修，代价是她的三个花字体被误删）。
+           原来这里按**名字**一刀切：本地库、在线库、服务器上那份，同名的全删。
+           而 2026-09-06 起本地和在线**会同名**——她原本上传的花字体叫「溪涧山雪璞玉浑金」，
+           我做的切片镜像为了让她认得，显示名也叫这个。于是她删掉本地那份时，
+           在线那条和服务器上的原件一起没了（她：「糟糕，我把本地的删了，镜像的也跟着没了」）。
+           现在：**只删她点的那一份**。
+             · 本地库里有同名的 → 删本地 + 服务器那份（那两个本来就是一体的）；
+             · 本地库里没有 → 那就是纯在线条目，只从在线列表里摘掉，别去动服务器。
+           ⚠️别图省事改回「两边都删」：镜像版是公用资源，删掉要重新切片。 */
         function readingDeleteFontAny(name) {
-            readingFontsSave(readingFontsLoad().filter(function (f) { return f.name !== name; }));
-            readingLocalFontsSave(readingLocalFontsLoad().filter(function (f) { return f.name !== name; }));
-            bkSyncDelFont(name);  // 一并从服务器删（否则换设备/刷新时又被自动拉回来、删不掉）
+            var isLocal = readingLocalFontsLoad().some(function (f) { return f.name === name; });
+            if (isLocal) {
+                readingLocalFontsSave(readingLocalFontsLoad().filter(function (f) { return f.name !== name; }));
+                bkSyncDelFont(name);  // 一并从服务器删（否则换设备/刷新时又被自动拉回来、删不掉）
+            } else {
+                readingFontsSave(readingFontsLoad().filter(function (f) { return f.name !== name; }));
+            }
             if (_readingFontLinks[name]) { try { _readingFontLinks[name].remove(); } catch (e) {} delete _readingFontLinks[name]; }
             delete _readingLocalFontFaces[name];
             READING_FONT_SLOTS.forEach(function (s) { if ((localStorage.getItem(s.key) || '') === name) localStorage.removeItem(s.key); });
