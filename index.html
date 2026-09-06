@@ -3082,6 +3082,12 @@ body {
         }
         /* 露出来的那张卡会顶到上一行，给文件夹这一层留点头 */
         #rbShelfList .rb-folder { margin-top: 7px; }
+        /* ⚠️2026-09-06 她要的第二层区分：角标从「23 本」改成**图标＋数字**。
+           ⚠️用内联 SVG 线条图标，**不用 emoji**——她 08-14 就把书架那个 📚 换掉了，
+             emoji 跟这套平涂硬边的风格打架，而且各家系统长得还不一样。
+           stroke 用 currentColor，所以跟着角标的字色走（亮色白、暗色深）。 */
+        .rb-folder .rb-no { display: inline-flex; align-items: center; gap: 3px; }
+        .rb-folder .rb-no svg { display: block; flex-shrink: 0; }
         .rb-chap { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--card-border); border-radius: 8px; margin-bottom: 5px; cursor: pointer; transition: all 0.15s; }
         .rb-chap:hover { border-color: var(--accent); background: var(--accent-light); }
         .rb-chap.rb-read { opacity: 0.5; }
@@ -24934,6 +24940,9 @@ body {
         }
         // 书架标题上那个线条书本图标。⚠️跟 HTML 里 #rbShelfTitle 初始那份必须一模一样——
         // rbRenderShelf 一跑就会把标题整个重写，两边不一致的话图标会在渲染前后跳一下。
+        /* 文件夹角标用的粗线条图标（2026-09-06）。stroke-width 拉到 3：
+           新粗野主义要的是"粗、实、看得清"，2 在 10px 尺寸下会显得虚。 */
+        var RB_ICON_FOLDER = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"><path d="M3 6.5h6l2.2 3H21v11H3z"/></svg>';
         var RB_ICON_SHELF = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>';
         function rbRenderShelf() {
             var box = document.getElementById('rbShelfList');
@@ -24991,7 +25000,7 @@ body {
                     var fcs = rbCoverStyle(label);
                     return '<div class="rb-book rb-folder" onclick="rbOpenFolder(' + idx + ')">'
                         + '<div class="rb-cover ' + fcs.cls + '" style="background-color:' + fcs.bg + ';--plate:' + fcs.plate + '">'
-                        + '<span class="rb-no">' + groups[f].length + ' 本</span>'
+                        + '<span class="rb-no">' + RB_ICON_FOLDER + groups[f].length + '</span>'
                         + '<div class="rb-plate"><div class="rb-book-name">' + label + '</div></div>'
                         + '</div>'
                         + '<div class="rb-book-foot"><span class="rb-book-meta">文件夹</span>'
