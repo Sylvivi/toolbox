@@ -3442,6 +3442,15 @@ body {
            normal ＝ 不跟随 --reading-fw，但仍可被外层的加粗规则带起来。 */
         .reading-merged .reading-name { font-weight: normal; }
         body.rf-mw-person .reading-merged .reading-name { font-weight: var(--reading-fw, normal); }
+        /* ⚠️2026-09-07：把「按字体记的大小比例」接到各槽位上（变量由 readingApplyFontScales 写）。
+           ⚠️用 em 不用 px：em 是相对父级字号，所以她调正文字号时这几处**跟着一起变**，
+             比例只负责「这个花字体相对正文该大多少」这一件事，两者不打架。
+           ⚠️没选字体的槽位变量是 1，等于不缩放。 */
+        .reading-merged .reading-quote.rq-wide { font-size: calc(1em * var(--rfs-quote, 1)); }
+        .reading-merged .reading-quote:not(.rq-wide) { font-size: calc(1em * var(--rfs-quoteShort, 1)); }
+        .reading-merged .reading-name { font-size: calc(1em * var(--rfs-person, 1)); }
+        .reading-merged .reading-keysent { font-size: calc(1em * var(--rfs-keysent, 1)); }
+        .reading-merged .reading-chap-title { font-size: calc(1em * var(--rfs-title, 1)); }
         .reading-merged .reading-quote { font-family: var(--reading-font-quote, inherit); }
         /* 短句字体：长短分工(reading-ls-on)开时，短句(非 rq-wide)可单独换字体；没单独选就回退「引号」字体 */
         body.reading-ls-on .reading-merged .reading-quote:not(.rq-wide) { font-family: var(--reading-font-quote-short, var(--reading-font-quote, inherit)); }
@@ -6316,6 +6325,17 @@ body {
                             <div class="rfont-slot-row"><span class="rfont-slot-label">人名</span><select id="readingFontSel_person" class="rfont-select" onchange="readingSetSlotFont('person', this.value)"></select></div>
                             <div class="rfont-slot-row"><span class="rfont-slot-label" title="开「精句」时，每段最短的完整句单独用这个字体">精句</span><select id="readingFontSel_keysent" class="rfont-select" onchange="readingSetSlotFont('keysent', this.value)"></select></div>
                             <div class="rfont-slot-row"><span class="rfont-slot-label" title="上面那些字体没收的生僻字，改用这个字体显示；不选就掉回系统字体">缺字</span><select id="readingFontSel_fallback" class="rfont-select" onchange="readingSetSlotFont('fallback', this.value)"></select></div>
+                        </div>
+                        <!-- ⚠️2026-09-07 她要的：「青春那个字体，能不能单独加个大小控制键，让我来找找感觉，然后固定下来」。
+                             做成**按字体记的比例**而不是给青春写死——她以后换别的花字体也能各自调。 -->
+                        <div class="rfont-slot-row" style="margin-top:9px">
+                            <span class="rfont-slot-label" style="width:auto;white-space:nowrap"
+                                  title="花字体的字面大小常常跟正文对不上：同样字号，有的显小一号。这里按字体各记一个比例。">大小</span>
+                            <select id="readingFontScaleSel" class="rfont-select" onchange="readingRenderFontScale()"></select>
+                            <button type="button" class="chip-btn" onclick="readingStepFontScale(-0.05)">−</button>
+                            <span id="readingFontScaleVal" style="font-size:12px;font-weight:700;min-width:3.2em;text-align:center">100%</span>
+                            <button type="button" class="chip-btn" onclick="readingStepFontScale(0.05)">＋</button>
+                            <button type="button" class="chip-btn" onclick="readingStepFontScale(0)">重置</button>
                         </div>
                         <span id="readingFontStatus" class="rfont-status">正文：默认</span>
                     </div>
@@ -22100,6 +22120,60 @@ body {
             _readingFontLinks[name] = link;
         }
 
+        /* ── 按字体记的大小比例（2026-09-07）──
+           花字体的字面大小常跟正文对不上（同字号显小一号），所以给**每个字体**记一个比例。
+           ⚠️记在字体名下，不是记在槽位下：同一个字体在短句和精句都用时，调一次两处都跟着变，
+             这才是她要的「找到感觉就固定下来」。
+           ⚠️比例只作用在**选了具体字体**的槽位上；选「默认」的槽位跟随正文，不该被缩放。 */
+        function readingFontScaleGet(name) {
+            var v = parseFloat(localStorage.getItem('reading_fscale_' + name) || '1');
+            return (isFinite(v) && v > 0.3 && v < 3) ? v : 1;
+        }
+        function readingFontScaleSet(name, v) {
+            if (Math.abs(v - 1) < 0.001) localStorage.removeItem('reading_fscale_' + name);
+            else localStorage.setItem('reading_fscale_' + name, String(Math.round(v * 100) / 100));
+        }
+        // 下拉里只列**当前真的被某个槽位用着**的字体——没用上的调了也看不见，徒增困惑
+        function readingFontsInUse() {
+            var used = [];
+            READING_FONT_SLOTS.forEach(function (s) {
+                var n = localStorage.getItem(s.key) || '';
+                if (n && used.indexOf(n) < 0) used.push(n);
+            });
+            return used;
+        }
+        function readingRenderFontScale() {
+            var sel = document.getElementById('readingFontScaleSel');
+            var val = document.getElementById('readingFontScaleVal');
+            if (!sel || !val) return;
+            var used = readingFontsInUse();
+            var cur = sel.value && used.indexOf(sel.value) >= 0 ? sel.value : (used[0] || '');
+            sel.innerHTML = used.length
+                ? used.map(function (n) {
+                    return '<option value="' + esc(n) + '"' + (n === cur ? ' selected' : '') + '>' + esc(n) + '</option>';
+                  }).join('')
+                : '<option value="">（还没给任何位置选字体）</option>';
+            val.textContent = cur ? Math.round(readingFontScaleGet(cur) * 100) + '%' : '--';
+            readingApplyFontScales();
+        }
+        function readingStepFontScale(d) {
+            var sel = document.getElementById('readingFontScaleSel');
+            if (!sel || !sel.value) return;
+            var n = sel.value;
+            readingFontScaleSet(n, d === 0 ? 1 : Math.min(2, Math.max(0.5, readingFontScaleGet(n) + d)));
+            readingRenderFontScale();
+            readingFontsTouch();   // 跟其他字体设置一样推云端，换设备不丢
+        }
+        /* 把比例写进各槽位的 CSS 变量。⚠️没选字体的槽位写 1（跟随正文，不缩放）。 */
+        function readingApplyFontScales() {
+            READING_FONT_SLOTS.forEach(function (s) {
+                if (s.isFallback) return;
+                var n = localStorage.getItem(s.key) || '';
+                document.documentElement.style.setProperty(
+                    '--rfs-' + s.slot, n ? String(readingFontScaleGet(n)) : '1');
+            });
+        }
+
         // 应用四个位置的字体：读各自选中的字体 → 确保加载 → 写/清 CSS 变量
         function readingApplyFonts() {
             /* ⚠️2026-09-06：书架书名钉死用思源宋体，所以**无条件**确保它的切片 CSS 挂上一次。
@@ -22107,6 +22181,7 @@ body {
                ⚠️代价极小：cn-font-split 切片只下载真正渲染到的那几片，不是整份 14MB。
                ⚠️`readingEnsureOnlineFontLink` 自带去重（_readingFontLinks），重复调用无害。 */
             try { readingEnsureOnlineFontLink('Source Han Serif CN'); } catch (e) {}
+            try { readingApplyFontScales(); } catch (e) {}
             var online = {}; readingFontsLoad().forEach(function (f) { online[f.name] = true; });
             var local = {}; readingLocalFontsLoad().forEach(function (f) { local[f.name] = true; });
             // 「缺字」兜底字体：同样要在册才算数（本地字体开机时可能还没从 IndexedDB 读回来）
@@ -22238,6 +22313,7 @@ body {
         }
         // 渲染字体库 chips（仅展示+删除）和四个位置下拉
         function readingRenderFontUI() {
+            try { setTimeout(readingRenderFontScale, 0); } catch (e) {}
             var all = readingAllFonts();
             var box = document.getElementById('readingFontList');
             if (box) {
