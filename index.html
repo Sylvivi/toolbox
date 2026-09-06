@@ -22021,13 +22021,56 @@ body {
              所以能同时存在、各占一档。
            ⚠️**只补一次**（用 reading_fonts_preset 记账）：她哪天嫌多把它删了，
              不能下次开 app 又自己长回来——那种「删不掉」最招人烦。 */
+        /* ⚠️只有**一个**条目，但它里面装着四个真字重（400/500/600/700）。
+           这是 2026-09-06 当天返工的重点：一开始我按「一个字重一个条目」装了三份，
+           那样在浏览器眼里是**三个互不相干的字体**——页面说「这里要 700」时，
+           它在「…Medium」那个族里找不到 700，只能把现有的字**硬撑粗**（合成粗体），
+           中文笔画多，撑出来就糊。
+           现在四份切片的 font-family 统一改成 "Source Han Serif CN"、各自带 400/500/600/700，
+           合并成一份 CSS。浏览器就能按 font-weight 自己挑出真正的那一档。
+           ⚠️所以**别再拆回一个字重一个条目**，也别给它们改成带后缀的名字（cn-font-split
+             默认会给非标准字重加后缀，合并时要把后缀去掉）。 */
         var RD_PRESET_FONTS = [
-            { name: 'Source Han Serif CN', url: 'https://tool.masterofmydomain.top/wfonts/shs-regular/result.css' },          // 400 常规
-            { name: 'Source Han Serif CN Medium', url: 'https://tool.masterofmydomain.top/wfonts/shs-medium/result.css' },    // 500 中等
-            { name: 'Source Han Serif CN SemiBold', url: 'https://tool.masterofmydomain.top/wfonts/shs-semibold/result.css' } // 600 半粗
+            { name: 'Source Han Serif CN', url: 'https://tool.masterofmydomain.top/wfonts/shs/result.css' }
         ];
+        // 老版本装过的三个分身条目，见到就清掉，免得字体列表里堆着一排用不了的
+        var RD_LEGACY_FONT_NAMES = ['Source Han Serif CN Medium', 'Source Han Serif CN SemiBold'];
         function readingSeedPresetFonts() {
             try {
+                /* ⚠️老分身的清理必须在「只做一次」那道闸**之前**——这一步跟记账无关。
+                   她可能在补种之后、这次升级之前就已经选了「…Medium」，那个名字现在
+                   已经没有对应的 CSS 了；放在闸后面等于永远跑不到（改完第一版就是这样，
+                   实测老条目纹丝不动）。 */
+                var _fixed = 0;
+                var _all = readingFontsLoad();
+                var _kept = _all.filter(function (f) { return RD_LEGACY_FONT_NAMES.indexOf(f.name) < 0; });
+                /* ⚠️同名条目还要**把地址也换成合并版**。老用户列表里那条
+                   「Source Han Serif CN」指的是只含 400 的 shs-regular，光改名字没用——
+                   补种那段见到同名就跳过，地址永远留在老的上，四个字重照样拿不到。 */
+                _kept.forEach(function (f) {
+                    RD_PRESET_FONTS.forEach(function (pf) {
+                        if (f.name === pf.name && f.url !== pf.url) { f.url = pf.url; _fixed++; }
+                    });
+                });
+                if (_kept.length !== _all.length || _fixed) {
+                    readingFontsSave(_kept);
+                    // 地址变了要把已挂的 link 摘掉重挂，否则页面上还是老那份
+                    RD_PRESET_FONTS.forEach(function (pf) {
+                        if (_readingFontLinks[pf.name]) {
+                            try { _readingFontLinks[pf.name].remove(); } catch (e) {}
+                            delete _readingFontLinks[pf.name];
+                        }
+                    });
+                    _fixed++;
+                }
+                READING_FONT_SLOTS.forEach(function (sl) {
+                    if (RD_LEGACY_FONT_NAMES.indexOf(localStorage.getItem(sl.key) || '') >= 0) {
+                        localStorage.setItem(sl.key, 'Source Han Serif CN');   // 改指到合并版
+                        _fixed++;
+                    }
+                });
+                if (_fixed && typeof readingApplyFonts === 'function') readingApplyFonts();
+
                 if (localStorage.getItem('reading_fonts_preset') === '1') return;
                 var fonts = readingFontsLoad();
                 var added = 0;
@@ -22042,7 +22085,7 @@ body {
                    ⚠️跟上面的补种共用同一个「只做一次」的记账，所以她哪天换成别的、或者选回默认，
                      下次开 app 都不会被强行改回来。 */
                 if (!localStorage.getItem('reading_font_name')) {
-                    localStorage.setItem('reading_font_name', 'Source Han Serif CN Medium');
+                    localStorage.setItem('reading_font_name', 'Source Han Serif CN');
                     added++;
                 }
                 localStorage.setItem('reading_fonts_preset', '1');
