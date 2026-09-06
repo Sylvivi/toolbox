@@ -3025,6 +3025,15 @@ body {
              书名牌用不透明底，肉眼几乎无差别但零开销。
            ⚠️一行两本不是三本——三本放不下封面和书名牌。 */
         #rbShelfList { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px 10px; }
+        /* ⚠️2026-09-06 她报的：「在电脑上这个封面怎么变得超级超级大呀」。
+           病根：三列平分一个很宽的容器 → 每格很宽，而封面是 aspect-ratio 3/4，
+           **宽度一大高度跟着翻倍**，一张封面能占掉大半屏。
+           修法：手机保持 `repeat(3, 1fr)` 不动（她要的就是三列），
+           宽屏改成**按最小宽度自动排列**——列数自己变多、每张卡维持在手机上那个尺寸。
+           ⚠️断点取 640px：手机竖屏（含大屏机）都在这之下，不会被误伤。 */
+        @media (min-width: 640px) {
+            #rbShelfList { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); }
+        }
 
         .rb-book { position: relative; cursor: pointer; min-width: 0; }
         .rb-cover { position: relative; aspect-ratio: 3/4; border: 2.5px solid var(--text);
