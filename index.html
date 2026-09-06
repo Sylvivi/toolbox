@@ -16983,7 +16983,14 @@ body {
             var container = document.getElementById('chatMessages');
             if (!container) return;
             var box = document.createElement('div');
-            box.style.cssText = 'padding:.2em 1em .8em;font-size:12px;color:var(--text-muted);line-height:1.8';
+            /* ⚠️2026-09-06 她报的：电脑上这条「🍄 记住了…」**跑到最左边、占掉一大片空白**，手机正常。
+               病根：它是直接塞进 #chatMessages 的裸 div，**没跟着消息那套限宽走**——
+               `.chat-msg` 是 `max-width:768px; margin:0 auto` 居中的，而 .chat-messages 是
+               纵向 flex（子元素默认 stretch），所以这个 div 在宽屏上铺满整行、字贴到最左。
+               手机屏本来就窄于 768px，两者重合，所以看不出来。
+               → 抄 `.chat-msg` 同一套约束，左右内边距也对齐（16px ≈ 1em）。 */
+            box.style.cssText = 'max-width:768px;width:100%;margin:0 auto;box-sizing:border-box;'
+                + 'padding:.2em 16px .8em;font-size:12px;color:var(--text-muted);line-height:1.8';
             box.innerHTML = items.map(function (it) {
                 var undo = it.undo ? ' <span data-umundo="' + esc(it.undo) + '" style="cursor:pointer;text-decoration:underline;opacity:.75">撤销</span>' : '';
                 return '<div>' + it.icon + ' ' + esc(it.text) + undo + '</div>';
