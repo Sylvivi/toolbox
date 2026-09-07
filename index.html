@@ -25403,6 +25403,22 @@ body {
             });
         }
         function rbBackToShelf() {
+            /* ⚠️2026-09-07 她要的：「目录退出，能不能退到这本书所在的文件夹呀，
+               而不是直接退到文件夹集合界面」。
+               原来这里不管 rbCurrentFolder，而 rbOpenShelf 每次都把它清成 null，
+               所以从任何一本书退出来都掉回最外层，还得重新点进文件夹找回原处。
+               → 退出前先把「这本书在哪个文件夹」记回 rbCurrentFolder。
+               ⚠️只有那个文件夹**确实还在**才回去：书可能刚被移走或文件夹被清空，
+                 那时候回一个不存在的层会是空白页，不如老老实实退到最外层。 */
+            var b = rbActiveBookId ? rbGetBook(rbActiveBookId) : null;
+            if (b) {
+                var f = rbBookFolder(b) || '';
+                /* ⚠️不能拿 rbFolderNames 判断在不在：那个数组**只在渲染文件夹列表那一支才会被填**，
+                   她要是开了工具箱直接进书（没先看过文件夹列表），它还是空的，
+                   判断永远不通过 = 这个功能等于没加。→ 从实际书目现算。 */
+                var exists = rbBooks.some(function (x) { return (rbBookFolder(x) || '') === f; });
+                rbCurrentFolder = exists ? f : null;
+            }
             rbActiveBookId = null;
             document.getElementById('rbShelfView').style.display = '';
             document.getElementById('rbChapterView').style.display = 'none';
