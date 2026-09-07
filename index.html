@@ -12395,14 +12395,14 @@ body {
                 var sl = document.getElementById('gistStatusLine');
                 // ⚠️把具体原因带到界面上：只写「同步失败」的话，她能告诉我的也只有这四个字
                 var why = (err && err.message) ? String(err.message).slice(0, 180) : '';
-                /* ⚠️把失败记下来（2026-09-05 加）。她原话「我还没来得及截图就没了……」——
-                   状态行每同步一轮就刷新一次，失败提示一闪而过，根本来不及看清、更别说截图。
-                   落盘之后成功也不清，一直留到她自己点掉，什么时候想看都在。 */
-                try {
-                    localStorage.setItem('toolbox_sync_lasterr',
-                        new Date().toLocaleString('zh-CN') + ' · ' + (why || '未知错误'));
-                } catch (e) {}
-                if (typeof syncRenderLastErr === 'function') syncRenderLastErr();
+                /* ⚠️2026-09-07 撤掉了「上次失败」那条常驻留痕（原是 09-05 加的，
+                     因为状态行一闪而过、她来不及截图）。她原话：
+                     「不然每次偶尔的断网都要我去手动关掉，难受」——
+                     偶尔断网是常态（服务器那条梯子本来就会抖），而这条留痕**成功也不会自己消**，
+                     等于每抖一次就留一份家务给她。
+                   ⚠️信息没有全丢：失败原因仍然写在下面那行状态行上（连重试链接一起），
+                     只是不再赖着不走。真要长期留痕的话，得做成「连着失败 N 次才留、成功自动清」，
+                     **别直接把这段加回来**。 */
                 if (gistPushRetries < 2) {
                     gistPushRetries++;
                     if (sl) sl.innerHTML = '☁️ <span style="color:var(--gold)">同步失败，' + (5 * gistPushRetries) + '秒后重试…</span>';
@@ -12489,28 +12489,17 @@ body {
             });
         }
 
-        /* 最近一次同步失败的留痕。跟 gistStatusLine 分开放：那行每轮同步都会被重写，
-           留痕必须活得比它久。她点 ✕ 才清。 */
+        /* 「上次失败」那条常驻留痕 2026-09-07 撤了（理由见 cfPushData 里的注释）。
+           这里只剩**扫尾**：把之前存下来的那条清掉，并抹掉可能还挂在页面上的旧节点——
+           不清的话，她那台设备上最后一次失败的记录会一直躺在 localStorage 里，
+           哪天谁把渲染加回来，一个几天前的报错又会凭空出现在首页上。
+           ⚠️函数名和调用点故意留着：别的地方还在调它，改名等于又要动四处。 */
         function syncRenderLastErr() {
-            var sl = document.getElementById('gistStatusLine');
-            if (!sl || !sl.parentNode) return;
-            var rec = '';
-            try { rec = localStorage.getItem('toolbox_sync_lasterr') || ''; } catch (e) {}
-            var box = document.getElementById('syncLastErr');
-            if (!rec) { if (box) box.remove(); return; }
-            if (!box) {
-                box = document.createElement('div');
-                box.id = 'syncLastErr';
-                box.style.cssText = 'font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.5';
-                sl.parentNode.insertBefore(box, sl.nextSibling);
-            }
-            box.innerHTML = '⚠️ 上次失败：' + rec.replace(/</g, '&lt;')
-                + ' <span onclick="syncClearLastErr()" style="cursor:pointer;text-decoration:underline;color:var(--accent)">知道了</span>';
-        }
-        function syncClearLastErr() {
             try { localStorage.removeItem('toolbox_sync_lasterr'); } catch (e) {}
-            syncRenderLastErr();
+            var box = document.getElementById('syncLastErr');
+            if (box) box.remove();
         }
+        function syncClearLastErr() { syncRenderLastErr(); }
 
         /* ===== 统一同步调度 ===== */
         // 页面起来时先渲染一次：她可能是关掉 app 之后才想起来要看
