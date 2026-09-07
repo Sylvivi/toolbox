@@ -3832,6 +3832,14 @@ body {
         :root {
             --bg-ink-1: #eec400; --bg-ink-2: #e8722a; --bg-ink-3: #3a9a4a;
             --bg-ink-4: #1E50A2; --bg-ink-5: #e85f7f; --bg-ink-6: #7a5cc4;
+            /* 手写小注的三个字体变量。⚠️**必须定义在 :root**：真值是 readingApplyFonts()
+               写到 documentElement 的行内样式上的，定义在 .rd-gl-label 里会被那份局部值挡住
+               （2026-09-07 踩过：JS 明明算对了，小注还是一片 cursive）。
+               这里的 cursive 只是 JS 没跑到时的兜底。⚠️别往这三行写中文显示名——
+               显示名（青春例外你是偏爱）不等于字族名（QingCLWNSPA），写了一个都匹配不上。 */
+            --gl-font-py: cursive;    /* 拼音：只认溪涧（唯一声调齐全的） */
+            --gl-font-cn: cursive;    /* 中文：默认青春，缺字回退兜底字体 */
+            --gl-font-lab: cursive;   /* 整条标签的兜底：挑覆盖最全的那个 */
         }
         body.dark {
             --bg-ink-1: #ffe500; --bg-ink-2: #ff9a52; --bg-ink-3: #5fc46a;
@@ -3875,9 +3883,11 @@ body {
            所以按「·」切开，整段拼音锁死用溪涧、中文那半用青春（青春缺的字再回退溪涧）。 */
         .rd-gl-label {
             position: absolute;
-            --gl-font-py: '溪涧山雪璞玉浑金', cursive;                        /* 拼音：唯一声调齐全的 */
-            --gl-font-cn: '青春例外你是偏爱', '溪涧山雪璞玉浑金', cursive;      /* 中文：她偏爱的，缺字回退 */
-            font-family: '溪涧山雪璞玉浑金', cursive;   /* 没有「·」时的兜底，覆盖最全 */
+            /* ⚠️三个字体变量定义在 :root、真值由 readingApplyFonts() 现算（原因见那边的注释）。
+               2026-09-07 她报「我的小注字体怎么变为默认字体了」，病根就是这儿原来写死了
+               **显示名**：09-06 花字体搬到自建镜像后字族名变成 QingCLWNSPA 这种真名，
+               中文显示名在 CSS 里一个都匹配不上，小注整块掉回默认。**别再写死字体名**。 */
+            font-family: var(--gl-font-lab, cursive);   /* 没有「·」时的兜底，挑覆盖最全的那个 */
             font-size: 13px; line-height: 1.05;
             /* ⚠️默认仍是 nowrap，**别改成 normal**（2026-08-06 踩过，见下）。
                允许折两行是在 JS 里**只对真超出一行的那几条**开的（rdGlLayout 里 _glWrap 那段）：
@@ -22252,6 +22262,29 @@ body {
                 || rs.getPropertyValue('--reading-font-quote-short')
                 || rs.getPropertyValue('--reading-font-quote'));
             if (document.body) document.body.classList.toggle('rn-has-font', personFontOn);
+            /* 手写小注的两个字体（--gl-font-cn / --gl-font-py）也在这儿现算。
+               ⚠️**显示名只能拿来查库、不能直接写进 font-family**——理由见 CSS 那两行的注释。
+               ⚠️拼音那条**只认「溪涧山雪璞玉浑金」**：实测三个花字体里只有它声调符号齐全
+                 （āǎēěīǐōǒūǔǖǘǚǜ 这 14 个，青春和山茶都没有），缺了就是逐字掉回系统字体、
+                 跟旁边的花字对不上。它不在字体库里时**宁可留空**走 CSS 兜底，别硬塞一个没声调的。
+               ⚠️中文那条的顺序是她定的：青春（默认）→ 缺字兜底字体 → 溪涧。 */
+            function _glFontStack(names) {
+                var out = [];
+                names.forEach(function (n) {
+                    if (!n) return;
+                    if (online[n]) readingEnsureOnlineFontLink(n);
+                    else if (!local[n]) return;      // 不在册（含开机时 IndexedDB 还没读回来）就跳过
+                    var fam = '"' + _rdFontFamilyOf(n) + '"';
+                    if (out.indexOf(fam) < 0) out.push(fam);
+                });
+                return out.length ? out.join(', ') + ', cursive' : '';
+            }
+            var _glCn = _glFontStack(['青春例外你是偏爱', fb, '溪涧山雪璞玉浑金']);
+            var _glPy = _glFontStack(['溪涧山雪璞玉浑金']);
+            var _glLab = _glFontStack(['溪涧山雪璞玉浑金', fb, '青春例外你是偏爱']);  // 覆盖最全的排前面
+            if (_glCn) rs.setProperty('--gl-font-cn', _glCn); else rs.removeProperty('--gl-font-cn');
+            if (_glPy) rs.setProperty('--gl-font-py', _glPy); else rs.removeProperty('--gl-font-py');
+            if (_glLab) rs.setProperty('--gl-font-lab', _glLab); else rs.removeProperty('--gl-font-lab');
             readingRenderFontUI();
             // 换正文字体会让每行的位置整体偏移 → 小注引线重量（同 readingApplyFontScale）
             if (typeof rdGlRelayoutSoon === 'function') rdGlRelayoutSoon();

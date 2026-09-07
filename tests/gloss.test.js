@@ -486,6 +486,18 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
            ⚠️不能靠「青春优先、溪涧兜底」的逐字回退：青春**有** a~z，只缺 ā ǎ ē ě 等 17 个，
            那样 shēng 会变成 sh(青春)+ē(溪涧)+ng(青春)，一个词三种笔迹。必须按「·」切开。 */
         {
+            /* ⚠️2026-09-07 起这两个字体是 readingApplyFonts() **现算**的，不再写死在 CSS 里。
+               所以先把字体库摆好再验——顺便钉住那次真实的故障：
+               她把花字体搬到自建镜像后，字体库里的**显示名**（青春例外你是偏爱）
+               和 CSS 要的**字族名**（QingCLWNSPA）不是一回事，
+               旧代码把显示名直接写进 font-family，于是小注整块掉回默认字体。 */
+            localStorage.setItem('reading_fonts', JSON.stringify([
+                { name: '青春例外你是偏爱', url: 'https://tool.masterofmydomain.top/wfonts/hz-qingchun/result.css', family: 'QingCLWNSPA' },
+                { name: '唯独浪漫盛开山茶', url: 'https://tool.masterofmydomain.top/wfonts/hz-shancha/result.css', family: 'WeiDLMSKSC' },
+                { name: '溪涧山雪璞玉浑金', url: 'https://tool.masterofmydomain.top/wfonts/hz-xijian/result.css', family: 'XJSX PYHJ' }
+            ]));
+            localStorage.setItem('reading_font_fallback', '唯独浪漫盛开山茶');
+            readingApplyFonts();
             const lab = document.createElement('div');
             lab.className = 'rd-gl-label';
             const t = 'gǎo sù·穿白色丧服', d = t.indexOf('·');
@@ -493,11 +505,15 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             document.body.appendChild(lab);
             const f = el => getComputedStyle(el).fontFamily.split(',')[0].replace(/["']/g, '').trim();
             const py = lab.querySelector('.rd-gl-py'), cn = lab.querySelector('.rd-gl-cn');
-            out.P_拼音用溪涧 = f(py) === '溪涧山雪璞玉浑金';
-            out.P_中文用青春 = f(cn) === '青春例外你是偏爱';
+            out.P_拼音用溪涧 = f(py) === 'XJSX PYHJ';          // 溪涧的字族名
+            out.P_中文用青春 = f(cn) === 'QingCLWNSPA';        // 青春的字族名
             out.P_两半不同字体 = f(py) !== f(cn);
-            // 中文那半要有回退（青春只到 GB2312，缺字得接得住）
-            out.P_中文有回退 = getComputedStyle(cn).fontFamily.indexOf('溪涧') >= 0;
+            // 中文那半要有回退（青春只到 GB2312，缺字得接得住）：兜底字体山茶接在后面
+            out.P_中文有回退 = getComputedStyle(cn).fontFamily.indexOf('WeiDLMSKSC') >= 0;
+            /* ⚠️这条是那次故障的正身：变量里**一个中文显示名都不许有**。
+               只要有，就说明又有人把「她看到的名字」当字族名写进了 font-family。 */
+            out.P_不含中文显示名 = !/[\u4e00-\u9fa5]/.test(
+                getComputedStyle(py).fontFamily + getComputedStyle(cn).fontFamily);
             out.P_文字没丢 = lab.textContent === t;
             lab.remove();
         }
@@ -512,7 +528,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             lab.innerHTML = '<span class="rd-gl-cn">河东河内河南三郡</span>';
             document.body.appendChild(lab);
             const f = el => getComputedStyle(el).fontFamily.split(',')[0].replace(/["']/g, '').trim();
-            out.Q_无拼音走中文字体 = f(lab.querySelector('.rd-gl-cn')) === '青春例外你是偏爱';
+            out.Q_无拼音走中文字体 = f(lab.querySelector('.rd-gl-cn')) === 'QingCLWNSPA';
             lab.remove();
             // 截断：无拼音时按「意思」的额度，不是整行的额度
             const longCn = '这是一句非常非常长的解释一直写下去停不下来';
@@ -827,6 +843,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('Q4 提示词里分了「注音/不注音」两路', R.Q_提示词分了两路);
     ok('P1 拼音用溪涧山雪（声调齐全）', R.P_拼音用溪涧);
     ok('P2 中文用青春例外（她偏爱的）', R.P_中文用青春);
+    ok('⚠️P5 字体变量里不许出现中文显示名（显示名≠字族名，写错就整块掉回默认字体）', R.P_不含中文显示名);
     ok('P3 两半确实是不同字体', R.P_两半不同字体);
     ok('P4 中文那半有缺字回退', R.P_中文有回退);
     ok('P5 拆开后文字一个不少', R.P_文字没丢);
