@@ -276,6 +276,7 @@ function bootBook() {
             return {
                 表格摘要: sent.messages.some(m => /人物表|前情摘要/.test(m.content)),
                 人物表: sent.messages.some(m => /人物表/.test(m.content)),
+                主线表: sent.messages.some(m => /主线\/伏笔表/.test(m.content)),
                 前情摘要: sent.messages.some(m => /前情摘要/.test(m.content)),
                 前文问答: /早先答过的/.test(last),
                 段号: [...new Set((last.match(/\[P(\d+)\]/g) || []).map(x => parseInt(x.slice(2), 10)))].sort((a, b) => a - b),
@@ -342,6 +343,26 @@ function bootBook() {
         window.readerBookId = 'bk_l';
         window.chatCurrentConvId = 'reader_bk_l';
         out.换回来还在 = readingAskCtx(false).pre;
+        /* ⑥ 记忆表**分表开关**（2026-09-07 晗加。她：「摘要有好几张表，可不可以让我自己决定带哪张」）。
+           用「人物」和「主线」两张对着验：关掉一张时另一张必须还在，
+           这一条要是松了，分表就退化回原来那个「四张捆一起」的总开关，用户看不出来。 */
+        window.chatMemoryTables.plotlines = [{ '章节': '1', '事件': '伏笔甲', '细节': '', '已解决': '' }];
+        readingSetAskCtx(false, { pre: 0, post: 0, sum: 0, qa: 0, mt: 1 });
+        readingSetAskCtx(false, { mtc: 0 });                         // 只关人物
+        out.只关人物 = await askAt(null);
+        readingSetAskCtx(false, { mtc: 1, mtl: 0 });                 // 只关主线
+        out.只关主线 = await askAt(null);
+        readingSetAskCtx(false, { mtc: 0, mtp: 0, mtt: 0, mtl: 0 }); // 四张全关＝不带记忆表
+        out.四张全关 = await askAt(null);
+        out.全关时总开关 = readingAskCtx(false).mt;
+        clearCtx();
+        /* 老记录（08-29～09-07 那版只存一个总的 mt、没有分表键）：必须把 mt 摊到四张表上。
+           不摊的话，「以前关掉记忆表」的书会因为四张表各吃默认值 1 而悄悄把表带回去。 */
+        localStorage.setItem(_rdCtxKey(), JSON.stringify({ n: { pre: -1, post: 0, mt: 0, sum: 1, qa: 0 } }));
+        var _old = readingAskCtx(false);
+        out.老记录摊开 = { mt: _old.mt, 人物: _old.mtc, 主线: _old.mtl, 摘要: _old.sum };
+        clearCtx();
+        window.chatMemoryTables.plotlines = [];
         clearCtx();
         return out;
     });
@@ -374,6 +395,12 @@ function bootBook() {
     ok('只带记忆表：有人物表、没有前情摘要', E.只带表.人物表 && !E.只带表.前情摘要, JSON.stringify(E.只带表));
     ok('只带摘要：有前情摘要、没有人物表', E.只带摘要.前情摘要 && !E.只带摘要.人物表, JSON.stringify(E.只带摘要));
     ok('两个都关：一样都不发', !E.都不带.表格摘要, JSON.stringify(E.都不带));
+    // 分表开关（2026-09-07）
+    ok('只关人物表：人物表没了、主线表还在', !E.只关人物.人物表 && E.只关人物.主线表, JSON.stringify(E.只关人物));
+    ok('只关主线表：主线表没了、人物表还在', E.只关主线.人物表 && !E.只关主线.主线表, JSON.stringify(E.只关主线));
+    ok('四张表全关＝整块记忆表都不发', !E.四张全关.人物表 && !E.四张全关.主线表, JSON.stringify(E.四张全关));
+    eq('⚠️全关时总开关要自己变 0（它是推出来的，不是单独存的）', E.全关时总开关, 0);
+    eq('⚠️老记录里那个总的 mt 要摊到四张表上，别把表偷偷带回去', E.老记录摊开, { mt: 0, 人物: 0, 主线: 0, 摘要: 1 });
     ok('前文问答那一栏搬进面板后照样管用', E.带前文问答.前文问答);
     eq('⚠️按书各记一份：换本书回到默认（全章），换回来自己那份还在',
         [E.这本书, E.另一本书, E.换回来还在], [10, -1, 10]);

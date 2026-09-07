@@ -2803,15 +2803,16 @@ body {
              桌面留着也只是费电；而且新粗野主义本来就不用半透明那一套。
            ⚠️底色必须**实心**——var(--modal-bg) 是 72% 半透明的，
              这菜单浮在正文上，透出来字会糊。
-           ⚠️2026-09-07 收窄（她：「标题基本上只有两个字」）：min-width 152→112→**96px**、
-             左右内边距 14→12px。第二刀是把「下一章」改成「续章」换来的（她拍板）——
-             之前最宽的就是那条，占掉约 89px，卡着 112 下不去。
-             ⚠️现在最宽的变成「🦀 clawd」（约 86px），96 只剩一点余量：
-             **再加长条目名或再收窄，菜单就会被最长那条顶开**（white-space:nowrap 不换行，
-             表现是整个菜单忽然变宽，不是那一条自己撑）。 */
+           ⚠️2026-09-07 收窄（她：「标题基本上只有两个字」）：min-width 152→112→96→**124px**、
+             左右内边距 14→12px。「下一章」也在这天改成了「续章」（她拍板），留着别改回去。
+             ⚠️**96px 试过，当天就退回来了**——她原话「太窄有点小家子气」。
+             124 是回调后的落点：比原来的 152 窄一截，又不至于瘦成一条。
+             ⚠️内容本身最宽的是「🦀 clawd」（约 86px），所以 124 有余量；
+             但**别再把条目名加长**，超过 100px 菜单就会被最长那条整个顶宽
+             （white-space:nowrap 不换行，表现是菜单忽然变宽、不是那一条自己撑）。 */
         .clawd-reading-menu {
             display: none; position: absolute; right: 22px; bottom: 46px; z-index: 60;
-            flex-direction: column; min-width: 96px; padding: 0;
+            flex-direction: column; min-width: 124px; padding: 0;
             background: #fff;
             border: 2.5px solid var(--text); border-radius: 0;
             box-shadow: 5px 5px 0 var(--text);
@@ -24662,9 +24663,13 @@ body {
         // in-flight 请求绝不重复），返回这段区间内有序的摘要行。多数情况下后台已备好，这里基本零等待。
         // opts（2026-08-29 加）：{mt, sum} —— 提问上下文面板里「记忆表」「摘要」两个开关。
         // 不传＝两样都带（旧调用点行为不变）。sum 关掉时连补生成都不做，别白烧。
+        // ⚠️2026-09-07 起还认 {mtc,mtp,mtt,mtl} 四张表的分开关；同样是**不传＝带**，
+        //   所以别的调用点（导读、背景追问那几处）一字不用改。
         async function readerEnsureSummaries(bookId, curChap, lookback, signal, genAllowed, opts) {
             var _wantMt = !opts || opts.mt !== false;
             var _wantSum = !opts || opts.sum !== false;
+            var _mtOn = {};
+            RD_CTX_MT_KEYS.forEach(function (t) { _mtOn[t.k] = !opts || opts[t.k] !== false; });
             var b = rbGetBook(bookId);
             if (!b || !b.chapters || curChap == null || curChap < 1) return [];
             var fileKey = readerBookKey(bookId);
@@ -24701,11 +24706,11 @@ body {
             var _mt = readerMemTablesGet(fileKey);
             if (_wantMt && _mt && (_mt.characters.length || (_mt.places && _mt.places.length) || (_mt.timeline && _mt.timeline.length) || _mt.plotlines.length) && (!_mt.upTo || _mt.upTo < curChap)) {
                 var _memText = '';
-                if (_mt.characters.length) _memText += '【人物表】\n' + _readerRenderTableMd(_mtCharCols, _mt.characters);
-                if (_mt.places && _mt.places.length) _memText += (_memText ? '\n\n' : '') + '【地点表】\n' + _readerRenderTableMd(_mtPlaceCols, _mt.places);
-                if (_mt.timeline && _mt.timeline.length) _memText += (_memText ? '\n\n' : '') + '【大事年表】\n' + _readerRenderTableMd(_mtTimeCols, _mt.timeline);
-                if (_mt.plotlines.length) _memText += (_memText ? '\n\n' : '') + '【主线/伏笔表】\n' + _readerRenderTableMd(_mtPlotCols, _mt.plotlines);
-                out.push(_memText);
+                if (_mtOn.mtc && _mt.characters.length) _memText += '【人物表】\n' + _readerRenderTableMd(_mtCharCols, _mt.characters);
+                if (_mtOn.mtp && _mt.places && _mt.places.length) _memText += (_memText ? '\n\n' : '') + '【地点表】\n' + _readerRenderTableMd(_mtPlaceCols, _mt.places);
+                if (_mtOn.mtt && _mt.timeline && _mt.timeline.length) _memText += (_memText ? '\n\n' : '') + '【大事年表】\n' + _readerRenderTableMd(_mtTimeCols, _mt.timeline);
+                if (_mtOn.mtl && _mt.plotlines.length) _memText += (_memText ? '\n\n' : '') + '【主线/伏笔表】\n' + _readerRenderTableMd(_mtPlotCols, _mt.plotlines);
+                if (_memText) out.push(_memText);
             } else if (_useOutline && _wantSum) {
                 // 大纲是「摘要」那一类（它就是各章摘要折出来的），跟着摘要开关走
                 out.push('【全书前情大纲（至第 ' + readerChapterNo(b, _o.upTo) + ' 章）】\n' + _o.sum);
@@ -27381,6 +27386,21 @@ body {
          *   行为跟以前一模一样（普通提问＝1 档、背景追问＝0 档）。 */
         var RD_CTX_PRE_STEPS = [0, 2, 5, 10, 20, -1];   // 前文带几段；-1 = 全章（＝一直以来的「往前铺到章首、8000 字封顶」）
         var RD_CTX_POST_STEPS = [0, 2, 5, 10];          // 后文带几段；0 = 不给（默认）
+        /* 记忆表**分表开关**（2026-09-07 加。她：「摘要有好几张表，可不可以让我自己决定带哪张」）。
+           原来「记忆表」是一个总开关、四张表捆在一起走。现在每张表各一个键，
+           总开关 mt 改成**推出来的**（四张全关＝不带），不再单独存——一套真相，
+           免得出现「总开关关着、某张表却开着」这种自相矛盾的状态。
+           ⚠️key 要跟 chatMemoryTables / readerMemTablesGet 里的字段一一对得上，改名要三处联动。 */
+        var RD_CTX_MT_KEYS = [
+            { k: 'mtc', label: '人物', field: 'characters' },
+            { k: 'mtp', label: '地点', field: 'places' },
+            { k: 'mtt', label: '年表', field: 'timeline' },
+            { k: 'mtl', label: '主线', field: 'plotlines' }
+        ];
+        function _rdCtxAnyMt(c) {
+            for (var i = 0; i < RD_CTX_MT_KEYS.length; i++) if (c[RD_CTX_MT_KEYS[i].k]) return true;
+            return false;
+        }
         function _rdCtxKey() {
             // 按书一份。readingNamesKey() 在阅读模式和共读模式下都能给出同一本书的稳定 key
             var bk = (typeof readingNamesKey === 'function') ? readingNamesKey() : '';
@@ -27388,20 +27408,42 @@ body {
         }
         function _rdCtxFallback(isBg) {
             var lv = readingAskLv(isBg);   // 老三档当默认：没调过面板的书，行为一字不变
-            return { pre: isBg ? 3 : -1, post: isBg ? 3 : 0,
-                     mt: lv >= 1 ? 1 : 0, sum: lv >= 1 ? 1 : 0, qa: lv >= 2 ? 1 : 0 };
+            var m = lv >= 1 ? 1 : 0;
+            var d = { pre: isBg ? 3 : -1, post: isBg ? 3 : 0,
+                      mt: m, sum: lv >= 1 ? 1 : 0, qa: lv >= 2 ? 1 : 0 };
+            RD_CTX_MT_KEYS.forEach(function (t) { d[t.k] = m; });   // 四张表默认跟老档位一致
+            return d;
         }
         function readingAskCtx(isBg) {
             var d = _rdCtxFallback(!!isBg);
+            var o = null;
             try {
                 var all = JSON.parse(localStorage.getItem(_rdCtxKey()) || '{}');
-                var o = all[isBg ? 'bg' : 'n'];
+                o = all[isBg ? 'bg' : 'n'];
                 if (o && typeof o === 'object') { for (var k in d) if (o[k] != null) d[k] = o[k]; }
             } catch (e) {}
+            /* ⚠️老记录（2026-08-29～09-07 那版）里只有一个总的 mt、没有分表键。
+               这时必须把 mt 摊到四张表上：不摊的话，「以前特意关掉记忆表」的那本书
+               会因为四张表各自吃到默认值 1，悄悄把表又带回去——用户那边看不见、只会觉得又变贵了。 */
+            if (o && typeof o === 'object' && o.mt != null && !_rdCtxHasSplit(o)) {
+                RD_CTX_MT_KEYS.forEach(function (t) { d[t.k] = o.mt ? 1 : 0; });
+            }
+            d.mt = _rdCtxAnyMt(d) ? 1 : 0;   // 总开关是推出来的，不看存的那个
             return d;
+        }
+        function _rdCtxHasSplit(o) {
+            for (var i = 0; i < RD_CTX_MT_KEYS.length; i++) if (o[RD_CTX_MT_KEYS[i].k] != null) return true;
+            return false;
         }
         function readingSetAskCtx(isBg, patch) {
             var cur = readingAskCtx(isBg);
+            /* ⚠️`mt` 现在是四张表推出来的，直接写它没有任何效果。
+               但老调用点（和 tests/askcost.test.js）仍在传 {mt:0/1} 当总开关用，
+               所以在这里把它**摊到四张表上**——总开关的语义原样保住，
+               不摊的话「关掉记忆表」会变成一句静悄悄的空话。 */
+            if (patch && patch.mt != null) {
+                RD_CTX_MT_KEYS.forEach(function (t) { cur[t.k] = patch.mt ? 1 : 0; });
+            }
             for (var k in patch) cur[k] = patch[k];
             try {
                 var all = {};
@@ -27432,9 +27474,13 @@ body {
             var post = RD_CTX_POST_STEPS.map(function (v) {
                 return _rdCtxChip(v === 0 ? '无' : v + '段', c.post === v, 'post:' + v);
             }).join('');
+            // 记忆表四张各一个 chip（2026-09-07）。点击走的还是下面那条通用取反分支，不用单独接线。
+            var mtChips = RD_CTX_MT_KEYS.map(function (t) {
+                return _rdCtxChip(t.label, !!c[t.k], t.k);
+            }).join('');
             return row('前文', '这一段往前带几段原文', pre)
                  + row('后文', '这一段往后带几段原文。会让 AI 看到你还没读的内容，默认不给', post)
-                 + row('记忆表', '人物 / 地点 / 大事年表 / 主线伏笔', _rdCtxChip(c.mt ? '带' : '不带', !!c.mt, 'mt'))
+                 + row('记忆表', '四张表分开挑：要哪张点亮哪张，全灭＝这次不带记忆表', mtChips)
                  + row('摘要', '前面章节的剧情摘要', _rdCtxChip(c.sum ? '带' : '不带', !!c.sum, 'sum'))
                  + row('前文问答', '本章前面别的段落聊过的问答', _rdCtxChip(c.qa ? '带' : '不带', !!c.qa, 'qa'));
         }
@@ -27753,13 +27799,14 @@ body {
                    代价说清楚：她顺口拐到剧情时，模型对前几十章的记忆会糙一点——想认真聊剧情就双击正文段落，
                    那条路一字未改、材料照旧全带。 */
                 if ((_ctxCfg.mt || _ctxCfg.sum) && chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length)) {
+                    // 2026-09-07：四张表各听各的开关（_ctxCfg.mtc/mtp/mtt/mtl），面板上分开点
                     var _mtText = '';
-                    if (chatMemoryTables.characters.length) _mtText += '【人物表】\n| 人物 | 身份 | 关系 | 当前状态 | 备注 |\n| --- | --- | --- | --- | --- |\n' + chatMemoryTables.characters.map(function(r) { return '| ' + (r['人物']||'') + ' | ' + (r['身份']||'') + ' | ' + (r['关系']||'') + ' | ' + (r['当前状态']||'') + ' | ' + (r['备注']||'') + ' |'; }).join('\n');
-                    if (chatMemoryTables.places && chatMemoryTables.places.length) _mtText += (_mtText ? '\n\n' : '') + '【地点表】\n| 地点 | 规模/特征 | 关联 | 简介 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.places.map(function(r) { return '| ' + (r['地点']||'') + ' | ' + (r['规模/特征']||'') + ' | ' + (r['关联']||'') + ' | ' + (r['简介']||'') + ' |'; }).join('\n');
-                    if (chatMemoryTables.timeline && chatMemoryTables.timeline.length) _mtText += (_mtText ? '\n\n' : '') + '【大事年表】\n| 时间 | 事件 |\n| --- | --- |\n' + chatMemoryTables.timeline.map(function(r) { return '| ' + (r['时间']||'') + ' | ' + (r['事件']||'') + ' |'; }).join('\n');
-                    if (chatMemoryTables.plotlines.length) _mtText += (_mtText ? '\n\n' : '') + '【主线/伏笔表】\n| 章节 | 事件 | 细节 | 已解决 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.plotlines.map(function(r) { return '| ' + (r['章节']||'') + ' | ' + (r['事件']||'') + ' | ' + (r['细节']||'') + ' | ' + (r['已解决']||'') + ' |'; }).join('\n');
+                    if (_ctxCfg.mtc && chatMemoryTables.characters.length) _mtText += '【人物表】\n| 人物 | 身份 | 关系 | 当前状态 | 备注 |\n| --- | --- | --- | --- | --- |\n' + chatMemoryTables.characters.map(function(r) { return '| ' + (r['人物']||'') + ' | ' + (r['身份']||'') + ' | ' + (r['关系']||'') + ' | ' + (r['当前状态']||'') + ' | ' + (r['备注']||'') + ' |'; }).join('\n');
+                    if (_ctxCfg.mtp && chatMemoryTables.places && chatMemoryTables.places.length) _mtText += (_mtText ? '\n\n' : '') + '【地点表】\n| 地点 | 规模/特征 | 关联 | 简介 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.places.map(function(r) { return '| ' + (r['地点']||'') + ' | ' + (r['规模/特征']||'') + ' | ' + (r['关联']||'') + ' | ' + (r['简介']||'') + ' |'; }).join('\n');
+                    if (_ctxCfg.mtt && chatMemoryTables.timeline && chatMemoryTables.timeline.length) _mtText += (_mtText ? '\n\n' : '') + '【大事年表】\n| 时间 | 事件 |\n| --- | --- |\n' + chatMemoryTables.timeline.map(function(r) { return '| ' + (r['时间']||'') + ' | ' + (r['事件']||'') + ' |'; }).join('\n');
+                    if (_ctxCfg.mtl && chatMemoryTables.plotlines.length) _mtText += (_mtText ? '\n\n' : '') + '【主线/伏笔表】\n| 章节 | 事件 | 细节 | 已解决 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.plotlines.map(function(r) { return '| ' + (r['章节']||'') + ' | ' + (r['事件']||'') + ' | ' + (r['细节']||'') + ' | ' + (r['已解决']||'') + ' |'; }).join('\n');
                     // 记忆表和摘要各听各的开关（面板 08-29 拆开的）：可以「留着人物表、只扔掉摘要」
-                    if (_ctxCfg.mt) { _summaryLines.push(_mtText); _mtLen = _mtText.length; }
+                    if (_ctxCfg.mt && _mtText) { _summaryLines.push(_mtText); _mtLen = _mtText.length; }
                     if (_ctxCfg.sum) {
                         var _segs = chatCompressSummaries.slice(-CHAT_SUMMARY_MAX_SEGS);
                         _sumLen = _segs.join('').length;
@@ -27776,7 +27823,9 @@ body {
                         // ⚠️摘要那个开关关掉时 genOK 也要跟着关：readerEnsureSummaries 会**现场调 API 生成摘要**，
                         //   不挡就是白烧一笔它根本不会发出去的钱（跟背景追问那条路踩过的是同一个坑）。
                         var _genOK = readerSummaryEnabled() && !!_ctxCfg.sum;
-                        _summaryLines = await readerEnsureSummaries(readerBookId, msg.readerChapter, READER_SUMMARY_LOOKBACK, _pd.ctl.signal, _genOK, { mt: !!_ctxCfg.mt, sum: !!_ctxCfg.sum });
+                        var _mtOpts = { mt: !!_ctxCfg.mt, sum: !!_ctxCfg.sum };
+                        RD_CTX_MT_KEYS.forEach(function (t) { _mtOpts[t.k] = !!_ctxCfg[t.k]; });
+                        _summaryLines = await readerEnsureSummaries(readerBookId, msg.readerChapter, READER_SUMMARY_LOOKBACK, _pd.ctl.signal, _genOK, _mtOpts);
                     } catch (eSum) { if (eSum && eSum.name === 'AbortError') throw eSum; _summaryLines = []; }
                 }
                 // 走的是另外两条分支（没有记忆表）时，整份都算「前文摘要」
