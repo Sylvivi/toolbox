@@ -22582,7 +22582,7 @@ body {
                 readingDropNotoOnce();      // ⚠️必须在 applyFonts 之前：改完选择才轮到它去挂对的字体
             readingRegisterLocalFonts();
                 readingApplyFonts();
-                if (bkSyncCfg()) arr.forEach(function (f) { if (added.indexOf(f.name) >= 0) bkSyncPushFont(f); }); // 配了服务器就顺手上传新字体
+                if (bkSyncCfg()) arr.forEach(function (f) { if (added.indexOf(f.name) >= 0) bkSyncPushFont(f, false, true); }); // 配了服务器就顺手上传新字体（fresh=她亲手选的，可以撤掉旧墓碑）
                 if (st && added.length) st.textContent = '已上传本地字体：' + added.join('、') + '，可在下面给某个位置选用';
             }
             for (var i = 0; i < files.length; i++) {
@@ -23241,14 +23241,18 @@ body {
             return bytes.buffer;
         }
         // 上传一个本地字体到服务器（静默，失败重试一次）
-        function bkSyncPushFont(f, _retry) {
+        /* ⚠️`fresh` 只有「用户亲手选了字体文件」那条路才给（2026-09-09 加）。
+           服务器靠它区分「她重新上传」和「另一台把旧副本补传回来」——不能靠时间戳，
+           因为这里推的 ts 一律是 `Date.now()`、永远晚于删除墓碑，等于碑白立了。
+           她报的「本地字体还是不停回来」就是这么来的：删 → 另一台补传 → 碑被撤 → 复活。 */
+        function bkSyncPushFont(f, _retry, fresh) {
             var cfg = bkSyncCfg(); if (!cfg || !f || !f.name || !f.buf) return;
             var b64; try { b64 = _ab2b64(f.buf); } catch (e) { return; }
             var book = { fileName: f.name, fileSize: (f.buf.byteLength || 0), _isFont: 1, mime: f.mime || '', b64: b64, chapters: [] };
-            var payload = { fileKey: FONT_KEY_PREFIX + f.name, ts: Date.now(), book: book };
+            var payload = { fileKey: FONT_KEY_PREFIX + f.name, ts: Date.now(), book: book, fresh: fresh ? 1 : 0 };
             fetch(cfg.url + '/put', { method: 'POST', headers: bkSyncHeaders(cfg, true), body: JSON.stringify(payload) })
-                .then(function (r) { if (!r.ok && !_retry) setTimeout(function () { bkSyncPushFont(f, true); }, 2000); })
-                .catch(function () { if (!_retry) setTimeout(function () { bkSyncPushFont(f, true); }, 2000); });
+                .then(function (r) { if (!r.ok && !_retry) setTimeout(function () { bkSyncPushFont(f, true, fresh); }, 2000); })
+                .catch(function () { if (!_retry) setTimeout(function () { bkSyncPushFont(f, true, fresh); }, 2000); });
         }
         // 字体双向同步：把「服务器有、本地没有」的拉回本地并注册；同时把「本地有、服务器没有」的补传上去
         // （换设备自动补齐 + 修掉「配服务器前就已存在的字体从没上传」的盲区）。收齐后统一落盘一次，避免并发覆盖。
@@ -23276,6 +23280,26 @@ body {
                 .then(function (d) {
                     if (!d || !d.items) throw new Error('清单格式不对');
                     var localArr = readingLocalFontsLoad();
+                    /* ⚠️先按服务器的删除墓碑清掉本地残留（2026-09-09 加）。
+                       没有这一步，「在 A 上删掉」只是把服务器那份删了，B 上本地那份还在，
+                       B 一同步就当成「本地有、服务器没有」原样补传回去 → 她那边看到的就是
+                       「删了又回来，删多少次都回来」。删除要能跨设备生效，就得让 B 自己也删。
+                       ⚠️只清本地库那份；在线/镜像同名的那条不动（同名连坐的教训见 readingDeleteFontAny）。 */
+                    var _tombs = (d && d.deleted) || {}, _killed = [];
+                    localArr = localArr.filter(function (f) {
+                        if (f && f.name && _tombs[FONT_KEY_PREFIX + f.name]) { _killed.push(f.name); return false; }
+                        return true;
+                    });
+                    if (_killed.length) {
+                        readingLocalFontsSave(localArr);
+                        _killed.forEach(function (nm) {
+                            if (_readingFontLinks[nm]) { try { _readingFontLinks[nm].remove(); } catch (e) {} delete _readingFontLinks[nm]; }
+                            delete _readingLocalFontFaces[nm];
+                            READING_FONT_SLOTS.forEach(function (s2) { if ((localStorage.getItem(s2.key) || '') === nm) localStorage.removeItem(s2.key); });
+                        });
+                        try { readingApplyFonts(); } catch (e) {}
+                        say('「' + _killed.join('、') + '」已在别的设备删掉，这台也清掉了');
+                    }
                     var local = {}; localArr.forEach(function (f) { local[f.name] = 1; });
                     var serverNames = {}, need = [];
                     Object.keys(d.items).forEach(function (fk) {
