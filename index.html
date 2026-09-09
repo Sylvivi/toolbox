@@ -23979,21 +23979,29 @@ body {
             var toggleBar = '<div style="padding:12px 16px 0">' + toggle + '</div>';
             // 记忆表格状态 + 「补齐/重建」条（有摘要可用时才显示）——挂在每张记忆表 Tab 顶部
             var rebuildBar = '';
-            if (chaps.length) {
+            /* ⚠️2026-09-09 放宽条件：原来是「有摘要才显示这一行」，于是**一条摘要都没有的书
+               整行消失、连「补齐」入口都没有**——而「整本书都没总结过」恰恰最需要补齐。
+               现在只要「有摘要」或「有缺口」就显示。 */
+            var _gapPre = readerSummaryGaps(fileKey, readerChapterIdx);
+            if (chaps.length || _gapPre.list.length) {
                 var _rawMt = (readerSummariesAll()[fileKey] || {}).memTables;
                 var _covered = (_rawMt && _rawMt.upTo >= 0) ? ('覆盖至第 ' + readerChapterNo(_bSum, _rawMt.upTo) + ' 章') : '尚未生成';
                 // ⚠️更新时间挪进悬停提示：这一行在窄屏上要放得下，多一截就会被挤掉（她对截字很敏感）
                 var _when = '';
                 var _whenTip = (_rawMt && _rawMt.ts) ? (' · ' + readerRelTime(_rawMt.ts) + '更新') : '';
                 var _err = readerMemTblErrGet(fileKey);
+                var _busy = (typeof _readerPrefetchRunning !== 'undefined' && _readerPrefetchRunning)
+                    || _readerMemTablesRunning || _readerRebuilding;
                 var _statusLine = _err
                     ? '<span style="color:#e5484d">⚠ 上次更新失败：' + (_err.msg || '未知错误').replace(/</g, '&lt;') + ' · 点右侧重试</span>'
-                    : '<span style="color:var(--text-muted)" title="记忆表格' + _whenTip + '">🧠 ' + _covered + '</span>';
+                    : '<span style="color:var(--text-muted)" title="记忆表格' + _whenTip + '">🧠 ' + _covered
+                      // ⚠️后台在补时明说一句，否则「静默」在用户眼里跟「没反应」没区别
+                      + (_busy ? '<span style="color:var(--accent)"> · 补摘要中…</span>' : '') + '</span>';
                 /* ⚠️2026-09-09 并成一行（她：「有点头重脚轻，上面堆的东西太多了」）。
                    原来是两条独立的框：表格状态一条、缺口一条，加上顶上的总开关就是三层，
                    还没看到内容先垫三块。现在状态和缺口写在同一行、动作改成文字——
                    ⚠️别再用实心色块按钮，她的口味是「显眼靠提亮字色＋淡底，别加实心零件」。 */
-                var _gap = readerSummaryGaps(fileKey, readerChapterIdx);
+                var _gap = _gapPre;
                 /* ⚠️写范围不写数量（2026-09-09 她提的）：「缺 46 章」在中文里会被读成
                    「缺第 46 章」，数量和序号撞车。改成「缺第 1-45、47 章」就没有歧义了。
                    章数放进悬停提示，想知道总共几章还是查得到。 */
@@ -24331,6 +24339,14 @@ body {
                 }
             } finally { _readerPrefetchRunning = false; }
             if (wrote && activeSyncProvider === 'cf') syncPushData();
+            /* ⚠️2026-09-09 加：补完把摘要面板重画一次。
+               起因：她开了开关翻到前面的章，「发现他没动静」。其实是在补的——
+               但这套是**故意静默**的（不弹提示不挡 UI），而面板在开关切换的**那一刻**就画好了，
+               生成完没人通知它，于是她看到的永远是开关打开前那一版数字。
+               ⚠️只在面板开着时重画，别打扰正在看书的人。 */
+            if (wrote && document.querySelector('.chat-summary-modal-mask')) {
+                try { readerShowSummaryModal(true); } catch (e) {}
+            }
         }
         // 把已滑出提问窗口（curChap 往前 5 章之外）的章节摘要折进全书大纲。
         // 攒满 3 章才折一次（省 API）；折叠失败下次再试，不会丢章。
