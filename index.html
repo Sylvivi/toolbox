@@ -22756,8 +22756,18 @@ body {
         }
         /* 目录顶部显示用的书名：去掉 .epub/.txt 这类文件后缀。
            只动显示，fileName 一个字不改——它是同步身份证（云同步、阅读进度、划线都靠它认书）。 */
+        /* ⚠️后缀要能剥「多层」+「带副本号」（2026-09-08 她报的「书名后面跟着 txt，还得手动一本本改」）：
+             她库里有 `你不知道的事.md.txt`（md 存下来又另存成 txt）、`他怀里的潮汐.md (3).txt`
+             （重复下载带的 `(3)`），老写法只认「结尾正好一个后缀」，这两类一个都剥不掉。
+           ⚠️`(N)` 是**保留**的——同名不同份靠它区分，剥了两本书在书架上长得一模一样。
+           ⚠️光秃秃不带点的 `《卧底》txt` 也剥，但**只在前一个字是非 ASCII 时**，
+             免得把真以 txt 结尾的英文词（textbook 之类）吃掉。全库 401 个真名跑过：
+             346 个变干净、剩下的一个没伤到。 */
+        var RB_EXT_RE = /(?:\.(?:epub|txt|md|markdown|text|mobi|azw3|azw))+(\s*\(\d+\))?$/i;
         function rbBookNiceName(b) {
-            return rbBookDisplayName(b).replace(/\.(epub|txt|md|markdown|text|mobi|azw3|azw)$/i, '');
+            var s = rbBookDisplayName(b), prev;
+            do { prev = s; s = s.replace(RB_EXT_RE, '$1').replace(/([^\x00-\x7F])\s*txt$/i, '$1'); } while (s !== prev);
+            return s.trim() || prev;
         }
         // 目录顶部的「⚙ 分章设置」：导书时才用一次，平时收起
         function rbToggleSplitTools() {
@@ -25164,7 +25174,11 @@ body {
         }
         // 单本书的一张卡（文件夹内视图 + 兼容无文件夹时用）
         function rbBookItemHtml(b, seq) {
-            var name = rbEsc(rbBookDisplayName(b));
+            /* ⚠️书架卡片上显示 NiceName（剥掉 .txt/.epub），别用 DisplayName——
+               目录页顶上一直是剥过的，只有书架这一处露着后缀，她得一本本手动改名才干净。
+               ⚠️但**封面配色仍按 DisplayName 算**：颜色是书名哈希出来的，
+                 换成 NiceName 会让全书架的颜色重新洗一遍牌。 */
+            var name = rbEsc(rbBookNiceName(b));
             var cs = rbCoverStyle(rbBookDisplayName(b));
             var more = '<button class="rb-book-more" onclick="event.stopPropagation();rbBookMenuOpen(\'' + b.id + '\',event)" title="更多">⋯</button>';
             var meta = b._remote
