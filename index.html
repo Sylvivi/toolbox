@@ -23981,23 +23981,23 @@ body {
                 var _statusLine = _err
                     ? '<span style="color:#e5484d">⚠ 上次更新失败：' + (_err.msg || '未知错误').replace(/</g, '&lt;') + ' · 点右侧重试</span>'
                     : '<span style="color:var(--text-muted)">🧠 记忆表格 · ' + _covered + _when + '</span>';
-                rebuildBar = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;margin-bottom:10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px">'
-                    + '<div style="min-width:0;font-size:11.5px;line-height:1.5;overflow:hidden;text-overflow:ellipsis">' + _statusLine + '</div>'
-                    + '<button onclick="readerRebuildMemTables(this)" style="flex-shrink:0;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap">重折表格</button>'
-                    + '</div>';
-                /* 缺口条（2026-09-09 加）：摘要开关中途开关会留下没摘要的章，
-                   而水位线一旦越过它们就再也补不回来。这里把缺口明说出来，并给一键补齐。
-                   ⚠️跟上面那条**分开放**：重折是免费的（只动已有摘要），补齐要花钱（真去生成），
-                     两件事混在一个按钮里，她点下去就不知道自己在花钱还是没花。 */
+                /* ⚠️2026-09-09 并成一行（她：「有点头重脚轻，上面堆的东西太多了」）。
+                   原来是两条独立的框：表格状态一条、缺口一条，加上顶上的总开关就是三层，
+                   还没看到内容先垫三块。现在状态和缺口写在同一行、动作改成文字——
+                   ⚠️别再用实心色块按钮，她的口味是「显眼靠提亮字色＋淡底，别加实心零件」。 */
                 var _gap = readerSummaryGaps(fileKey, readerChapterIdx);
+                var _gapTxt = _gap.list.length
+                    ? ' · <span style="color:var(--gold,#d9a400)">缺 ' + _gap.list.length + ' 章</span>'
+                    : '';
+                var _acts = '<span onclick="readerRebuildMemTables(this)" title="把已有摘要重新折一遍，清掉增量攒下的漂移；不重读正文" style="cursor:pointer;color:var(--accent);font-weight:600">重折</span>';
                 if (_gap.list.length) {
-                    rebuildBar += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;margin-bottom:10px;background:var(--input-bg);border:1px solid var(--gold,#d9a400);border-radius:10px">'
-                        + '<div style="min-width:0;font-size:11.5px;line-height:1.5;overflow:hidden;text-overflow:ellipsis;color:var(--text-muted)">'
-                        + '⚠️ 缺 ' + _gap.list.length + ' 章摘要 · ' + readerGapLabel(_bSum, _gap.list)
-                        + '<br><span style="opacity:.75">这些章进不了记忆表，补齐要调用摘要模型</span></div>'
-                        + '<button onclick="readerFillGaps(this)" style="flex-shrink:0;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap">补齐缺口</button>'
-                        + '</div>';
+                    _acts += '<span style="opacity:.35;margin:0 .5em">·</span>'
+                        + '<span onclick="readerFillGaps(this)" title="' + readerGapLabel(_bSum, _gap.list).replace(/"/g, '') + ' 没有摘要，进不了记忆表。补齐要逐章调用摘要模型" style="cursor:pointer;color:var(--accent);font-weight:600">补齐</span>';
                 }
+                rebuildBar = '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:1em;padding:0 .2em .7em;margin-bottom:.7em;border-bottom:1px solid var(--card-border);font-size:11.5px;line-height:1.6">'
+                    + '<div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _statusLine + _gapTxt + '</div>'
+                    + '<div style="flex-shrink:0;font-size:12px">' + _acts + '</div>'
+                    + '</div>';
             }
             var panes = [];   // 每个 Tab 一块内容：{key,label,html}
             // 记忆表格——每张表各成一个 Tab
