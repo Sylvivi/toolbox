@@ -23830,7 +23830,10 @@ body {
         function readerSummaryGaps(fileKey, upto) {
             var b = rbGetBook(readerBookId);
             if (!b || !b.chapters) return { list: [], chars: 0 };
-            var end = Math.min(upto, b.chapters.length - 1);
+            /* ⚠️不含当前章（2026-09-09 修）：扫到 upto-1 为止。
+               当前章还在读，它没摘要是正常的——后台预生成会在翻页时顺手补上。
+               早先写成 <= upto，面板上就会冒出「缺第 119 章」，而她正读着 119 章，看着莫名其妙。 */
+            var end = Math.min(upto - 1, b.chapters.length - 1);
             var list = [], chars = 0;
             for (var i = 0; i <= end; i++) {
                 var body = (b.chapters[i] && b.chapters[i].body) || '';
@@ -23991,8 +23994,12 @@ body {
                    还没看到内容先垫三块。现在状态和缺口写在同一行、动作改成文字——
                    ⚠️别再用实心色块按钮，她的口味是「显眼靠提亮字色＋淡底，别加实心零件」。 */
                 var _gap = readerSummaryGaps(fileKey, readerChapterIdx);
+                /* ⚠️写范围不写数量（2026-09-09 她提的）：「缺 46 章」在中文里会被读成
+                   「缺第 46 章」，数量和序号撞车。改成「缺第 1-45、47 章」就没有歧义了。
+                   章数放进悬停提示，想知道总共几章还是查得到。 */
                 var _gapTxt = _gap.list.length
-                    ? ' · <span style="color:var(--gold,#d9a400)">缺 ' + _gap.list.length + ' 章</span>'
+                    ? ' · <span style="color:var(--gold,#d9a400)" title="共 ' + _gap.list.length + ' 章没有摘要，进不了记忆表">缺'
+                      + readerGapLabel(_bSum, _gap.list) + '</span>'
                     : '';
                 var _acts = '<span onclick="readerRebuildMemTables(this)" title="把已有摘要重新折一遍，清掉增量攒下的漂移；不重读正文" style="cursor:pointer;color:var(--accent);font-weight:600">重折</span>';
                 if (_gap.list.length) {
