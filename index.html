@@ -14440,7 +14440,16 @@ body {
             // 记账：有真实 usage 用真实值，否则按 messages / 回复文本估算
             try {
                 if (_usage) {
-                    apiLogRecord(opts.purpose, opts.model, _usage.inTok, _usage.outTok, false, opts.baseUrl || '', _usage.cacheTok, opts.parts);
+                    /* ⚠️2026-09-09 加：**报了 usage 但输出是 0** 也要兜底估算。
+                       她报「明明有回复有字数，用量里输出 token 却是 0」——图上 ↓0 的全是
+                       `汐/claude-opus-4-6`（订阅桥那条线）。根因：cc-bridge 拼回复时
+                       **压根没有 usage 字段**（见 bridge.py 的 chat.completion 分支），
+                       网关补的那帧 usage 里 completion_tokens 就是 0。
+                       原来的兜底只管「完全没有 usage」，这种「有 usage 但输出为 0」漏了。
+                       ⚠️只在**确实收到了正文**时才估，真的一个字没回就该老实记 0。 */
+                    var _outTok = _usage.outTok, _outEst = false;
+                    if (!_outTok && full) { _outTok = estTokens(full); _outEst = true; }
+                    apiLogRecord(opts.purpose, opts.model, _usage.inTok, _outTok, _outEst, opts.baseUrl || '', _usage.cacheTok, opts.parts);
                 } else {
                     var _inStr = (opts.messages || []).map(function (m) { return typeof m.content === 'string' ? m.content : ''; }).join('\n');
                     apiLogRecord(opts.purpose, opts.model, estTokens(_inStr), estTokens(full), true, opts.baseUrl || '', 0, opts.parts);
@@ -18134,7 +18143,10 @@ body {
                 try {
                     var _docPurpose = (chatReadingMode && _userSentChapter) ? '共读点评' : (chatTranslateMode ? '翻译' : '对话');
                     if (_docUsage) {
-                        apiLogRecord(_docPurpose, _reqModel, _docUsage.inTok, _docUsage.outTok, false, baseUrl || '', _docUsage.cacheTok);
+                        // 同上：有 usage 但输出为 0（订阅桥那条线）时按正文估一个，别记成 0
+                        var _dOut = _docUsage.outTok, _dEst = false;
+                        if (!_dOut && (fullContent || thinkContent)) { _dOut = estTokens(fullContent + thinkContent); _dEst = true; }
+                        apiLogRecord(_docPurpose, _reqModel, _docUsage.inTok, _dOut, _dEst, baseUrl || '', _docUsage.cacheTok);
                     } else {
                         var _docInStr = (reqMsgs || []).map(function (m) { return typeof m.content === 'string' ? m.content : ''; }).join('\n');
                         apiLogRecord(_docPurpose, _reqModel, estTokens(_docInStr), estTokens(fullContent + thinkContent), true, baseUrl || '');
