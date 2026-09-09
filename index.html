@@ -4325,6 +4325,10 @@ body {
             background: var(--accent);
         }
         .reading-actbar .rp-lv[data-lv="2"] { background: var(--accent); border-color: var(--accent); }
+        /* AI 回复里的段落定位「§56」。⚠️别做成实心色块按钮——她的口味是提亮字色 + 淡底线。 */
+        .rd-pref { color: var(--accent); font-size: .88em; cursor: pointer; white-space: nowrap;
+                   border-bottom: 1px dotted var(--accent-mid); padding-bottom: 1px; }
+        .rd-pref:active { background: var(--accent-light); }
         /* 书签：已标记段落 */
         .reading-merged p[data-p].rp-marked {
             border-left: 3px solid var(--accent); padding-left: 8px; margin-left: -11px;
@@ -10455,11 +10459,33 @@ body {
                 /`.+`/.test(text);                   // 行内代码
         }
 
+        /* ===== AI 回复里的段落定位（2026-09-09 加）=====
+         * 病根：喂给模型的原文每段带 `[P56]` 编号，它**偶尔会拿来当引用**
+         *   （「你看她自己在 [P56] 里的老实交代」）。而所有出口一律 `replace(/\[P\d+\]/g,'')`
+         *   删干净 → 句子里留个洞，或者留下一对空括号「面对（）」。
+         *   ⚠️2026-09-09 她截图报的就是这个，她的原话：「我感觉像是一个定位」——猜对了。
+         * 现在：**行首的照旧删**（那是复述原文的开头，本来就不该出现），
+         *   **句中的换成 `§56`** 存下来，渲染时再变成可点的小标记，点了滚到那一段。
+         * ⚠️存的是纯文本 `§56` 而不是 HTML：这些答案要写进 msg.content、
+         *   还要被 readingModeParseComments 再解析一遍，塞 HTML 进去会把解析搅乱。 */
+        function rdKeepPRef(s) {
+            return String(s == null ? '' : s)
+                .replace(/(^|\n)[ \t]*\[P\d+\][ \t]*/gi, '$1')          // 行首：删
+                .replace(/[（(][ \t]*\[P(\d+)\][ \t]*[）)]/gi, '§$1')     // 整对括号包着：连括号一起换
+                .replace(/\[P(\d+)\]/gi, '§$1');                          // 句中：换成 §N
+        }
         function renderText(text) {
             if (!text) return '';
-            return parseMd(text);
+            return _rdPRefChips(parseMd(text));
         }
 
+        // 把 §56 渲染成可点的小标记。⚠️放在 parseMd 出口统一做，别在各个调用点各写一遍
+        //（共读评论有五六个渲染入口，分散写必然漏）。数字限 1~4 位，免得误伤正常文本里的 §。
+        function _rdPRefChips(html) {
+            return String(html || '').replace(/§(\d{1,4})\b/g, function (m, n) {
+                return '<span class="rd-pref" data-pref="' + n + '" title="跳到第 ' + n + ' 段">§' + n + '</span>';
+            });
+        }
         function parseMd(text) {
             // 轻量 Markdown 解析
             var html = esc(text);
@@ -19184,6 +19210,22 @@ body {
             if (next >= b.chapters.length) { showToast('已经是最后一章啦'); return; }
             rbInsertChapter(b.id, next);
         }
+        /* 点「§56」跳到第 56 段：在正文里找 p[data-p="56"]，滚过去再闪一下。
+           ⚠️复用已有的 rp-flash 动画，别再造一个。找不到就说清楚，别默默无反应。 */
+        document.addEventListener('click', function (e) {
+            var chip = e.target && e.target.closest ? e.target.closest('.rd-pref') : null;
+            if (!chip) return;
+            e.stopPropagation();
+            var n = chip.getAttribute('data-pref');
+            var p = document.querySelector('#chatMessages .reading-merged p[data-p="' + n + '"]');
+            if (!p) { showToast('第 ' + n + ' 段不在当前这一章里'); return; }
+            p.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            p.classList.remove('rp-flash');
+            void p.offsetWidth;                      // 强制重排，让动画能重复触发
+            p.classList.add('rp-flash');
+            setTimeout(function () { p.classList.remove('rp-flash'); }, 1300);
+        }, true);
+
         document.addEventListener('click', function(e) {
             var m = document.getElementById('clawdReadingMenu');
             var btn = document.getElementById('clawdModelBtn');
@@ -27117,7 +27159,7 @@ body {
         /* 气泡的 HTML：占位态和流式态**同一套骨架**，渲染函数和流式增量共用一份，
            免得两处各写一遍、日子久了长歪（翻译那边就是分两处写的，改一处忘一处过）。 */
         function readingPendingHtml(pp) {
-            var body = (pp.partial || '').replace(/\[P\d+\]/gi, '');
+            var body = rdKeepPRef(pp.partial || '');
             var started = !!body.trim();
             var h = '<blockquote class="rd-stream-bq' + (started ? '' : ' rd-pending') + '" data-pid="' + pp.id + '"' +
                 ' style="position:relative;margin:0.4em 0 0.6em;padding:0.5em 12px 0.4em;border-left:3px solid var(--accent);background:var(--quote-bg, var(--accent-light));border-radius:0 8px 8px 0;font-size:0.92em;color:var(--text-sub);line-height:1.6">' +
@@ -27145,7 +27187,7 @@ body {
             node.classList.remove('rd-pending');
             var ans = node.querySelector('.rd-stream-ans');
             if (!ans) return;
-            ans.innerHTML = renderText((pp.partial || '').replace(/\[P\d+\]/gi, '')) + '<span class="rd-stream-cursor">▍</span>';
+            ans.innerHTML = renderText(rdKeepPRef(pp.partial || '')) + '<span class="rd-stream-cursor">▍</span>';
             var cont = document.getElementById('chatMessages');
             if (!cont) return;
             var r = node.getBoundingClientRect(), c = cont.getBoundingClientRect();
@@ -27788,7 +27830,7 @@ body {
                 var commentText = '';
                 for (var c = 0; c < parsed.length; c++) { if (parsed[c].p === pNum) { commentText = parsed[c].text; break; } }
                 if (!commentText) { for (var c2 = 0; c2 < parsed.length; c2++) { if (parsed[c2].p > 0) { commentText = parsed[c2].text; break; } } }
-                if (!commentText) commentText = content.replace(/\[P\d+\]/gi, '').trim();
+                if (!commentText) commentText = rdKeepPRef(content).trim();
                 msg.content += '\n[P' + pNum + '] ' + commentText;
                 chatSaveCurrentConv(true);
                 readingRemovePending(_pd.id);
@@ -28053,7 +28095,7 @@ body {
                 // 去掉段落标记，并把答案内部的空行折叠为单换行——
                 // 否则空行会被 readingModeParseComments 当作该段评论的结束，
                 // 导致答案被丢到整条消息末尾的 trailing 区而非贴在本段下方。
-                answer = answer.replace(/\[P\d+\]/gi, '').replace(/\n\s*\n+/g, '\n').trim();
+                answer = rdKeepPRef(answer).replace(/\n\s*\n+/g, '\n').trim();
                 if (!answer) throw new Error('空回复');
                 // 以「汐：问题 / 答案」形式接在该段下方（与评论共用渲染）。
                 // 问题与答案之间只用单换行，确保它们仍属于同一个 [Pn] 评论块。
@@ -28503,7 +28545,7 @@ body {
                 // 有时够有时不够，于是「第 1 条插进去了，后面全没了」（用户实测，且每条还白重试一遍）。
                 max_tokens: 4000
             }, 90000, _rdMdlName(mdl));   // 单条只讲 120 字，90 秒还没回就是卡了
-            var txt = (out || '').replace(/\[P\d+\]/gi, '').replace(/\n\s*\n+/g, '\n').trim();
+            var txt = rdKeepPRef(out || '').replace(/\n\s*\n+/g, '\n').trim();
             // 空回复必须抛错，不能当"这条讲完了"返回空串：外层只会 failed++ 然后 continue，
             // lastErr 还是空的，收尾提示就成了「N 条没成功：」后面什么都没有——请求发了、钱扣了，
             // 却完全看不出为什么。抛出来才能走重试、并在提示里说清原因。
