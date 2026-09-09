@@ -23819,6 +23819,78 @@ body {
         }
         // 手动「补齐/重建记忆表格」：无视水位线，扫所有已有摘要的章重折（只用现有摘要、不新生成，省钱）
         var _readerRebuilding = false;
+        /* ===== 摘要缺口（2026-09-09 加）=====
+         * 起因：她问「我有时候从中间把摘要开关打开，下次又在别的地方打开，
+         *   表格会不会做得乱七八糟」。查完代码：**不会乱，但会有洞**——
+         *   记忆表有条水位线(upTo)，只收「水位线之后」的章；
+         *   开关关着的那几章没生成摘要，等水位线越过它们，就**永远补不回来**了。
+         *   往回读倒是安全的（curChap < upTo 时那个循环根本不执行）。
+         * ⚠️「补齐/重建」只是把**已有**摘要重折一遍，治的是增量漂移，**填不了洞**。
+         *   填洞必须真去生成那几章的摘要，要花 API，所以**先把数字摆给她看再让她点**。 */
+        function readerSummaryGaps(fileKey, upto) {
+            var b = rbGetBook(readerBookId);
+            if (!b || !b.chapters) return { list: [], chars: 0 };
+            var end = Math.min(upto, b.chapters.length - 1);
+            var list = [], chars = 0;
+            for (var i = 0; i <= end; i++) {
+                var body = (b.chapters[i] && b.chapters[i].body) || '';
+                if (!body.trim()) continue;                    // 空章不算缺
+                if (readerSummaryGet(fileKey, i)) continue;     // 已有摘要
+                list.push(i); chars += body.length;
+            }
+            return { list: list, chars: chars };
+        }
+        // 把缺口章号压成人话：「第 3-7、12、20-22 章」
+        function readerGapLabel(b, list) {
+            if (!list.length) return '';
+            var runs = [[list[0], list[0]]];
+            for (var i = 1; i < list.length; i++) {
+                if (list[i] === runs[runs.length-1][1] + 1) runs[runs.length-1][1] = list[i];
+                else runs.push([list[i], list[i]]);
+            }
+            // ⚠️「第」只写一次：早先每段都带「第」，出来是「第1-5、第10 章」，读着别扭
+            var parts = runs.slice(0, 4).map(function (r) {
+                var a = readerChapterNo(b, r[0]), z = readerChapterNo(b, r[1]);
+                return a === z ? String(a) : (a + '-' + z);
+            });
+            return '第 ' + parts.join('、') + (runs.length > 4 ? ' 等' : '') + ' 章';
+        }
+        async function readerFillGaps(btn) {
+            if (_readerRebuilding || _readerMemTablesRunning) { showToast('正在更新中，请稍候…'); return; }
+            if (readerBookId == null) return;
+            var fileKey = readerBookKey(readerBookId);
+            var b = rbGetBook(readerBookId);
+            var g = readerSummaryGaps(fileKey, readerChapterIdx);
+            if (!g.list.length) { showToast('当前进度之前没有缺口'); return; }
+            var mc = chatResolveCompressModel();
+            if (!mc) { showToast(chatNoModelMsg()); return; }
+            // ⚠️先摆数字再动手：要补几章、多少字、用哪个模型，一次说清楚，别偷偷烧钱。
+            if (!confirm('要补 ' + g.list.length + ' 章的摘要（' + readerGapLabel(b, g.list) + '）\n'
+                       + '正文合计约 ' + Math.round(g.chars / 10000 * 10) / 10 + ' 万字\n'
+                       + '用模型：' + mc.model + '\n\n补完会自动重建记忆表格。继续吗？')) return;
+            _readerRebuilding = true;
+            var _t0 = Date.now(), _timer = null, done = 0;
+            if (btn) {
+                btn.disabled = true; btn.style.opacity = '0.7'; btn.style.cursor = 'wait';
+                var _tick = function () { btn.textContent = '补齐中 ' + done + '/' + g.list.length + ' · ' + Math.floor((Date.now()-_t0)/1000) + 's'; };
+                _tick(); _timer = setInterval(_tick, 1000);
+            }
+            var failed = 0;
+            try {
+                // 并发 4 条，跟 readerEnsureSummaries 同一个口径：快得多，又不至于把接口打爆
+                await _readerRunPool(g.list, 4, async function (idx) {
+                    try { await readerSummarizeChapterOnce(b, fileKey, idx, mc); }
+                    catch (e) { failed++; }
+                    done++;
+                });
+                await readerUpdateMemoryTables(fileKey, readerChapterIdx, mc, true);
+            } finally { _readerRebuilding = false; if (_timer) clearInterval(_timer); }
+            if (activeSyncProvider === 'cf') syncPushData();
+            showToast(failed ? ('补了 ' + (g.list.length - failed) + ' 章，' + failed + ' 章失败，可再点一次')
+                             : ('✅ 补齐 ' + g.list.length + ' 章，记忆表格已重建'));
+            readerShowSummaryModal(true);
+        }
+
         async function readerRebuildMemTables(btn) {
             if (_readerRebuilding || _readerMemTablesRunning) { showToast('正在更新中，请稍候…'); return; }
             if (readerBookId == null) return;
@@ -23911,8 +23983,21 @@ body {
                     : '<span style="color:var(--text-muted)">🧠 记忆表格 · ' + _covered + _when + '</span>';
                 rebuildBar = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;margin-bottom:10px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:10px">'
                     + '<div style="min-width:0;font-size:11.5px;line-height:1.5;overflow:hidden;text-overflow:ellipsis">' + _statusLine + '</div>'
-                    + '<button onclick="readerRebuildMemTables(this)" style="flex-shrink:0;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap">补齐/重建</button>'
+                    + '<button onclick="readerRebuildMemTables(this)" style="flex-shrink:0;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap">重折表格</button>'
                     + '</div>';
+                /* 缺口条（2026-09-09 加）：摘要开关中途开关会留下没摘要的章，
+                   而水位线一旦越过它们就再也补不回来。这里把缺口明说出来，并给一键补齐。
+                   ⚠️跟上面那条**分开放**：重折是免费的（只动已有摘要），补齐要花钱（真去生成），
+                     两件事混在一个按钮里，她点下去就不知道自己在花钱还是没花。 */
+                var _gap = readerSummaryGaps(fileKey, readerChapterIdx);
+                if (_gap.list.length) {
+                    rebuildBar += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;margin-bottom:10px;background:var(--input-bg);border:1px solid var(--gold,#d9a400);border-radius:10px">'
+                        + '<div style="min-width:0;font-size:11.5px;line-height:1.5;overflow:hidden;text-overflow:ellipsis;color:var(--text-muted)">'
+                        + '⚠️ 缺 ' + _gap.list.length + ' 章摘要 · ' + readerGapLabel(_bSum, _gap.list)
+                        + '<br><span style="opacity:.75">这些章进不了记忆表，补齐要调用摘要模型</span></div>'
+                        + '<button onclick="readerFillGaps(this)" style="flex-shrink:0;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap">补齐缺口</button>'
+                        + '</div>';
+                }
             }
             var panes = [];   // 每个 Tab 一块内容：{key,label,html}
             // 记忆表格——每张表各成一个 Tab
