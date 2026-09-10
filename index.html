@@ -3289,14 +3289,6 @@ body {
         }
         .chat-action-item:hover, .chat-action-item:active { background: var(--card-inner); }
         .chat-action-item.danger { color: var(--red); }
-        /* 长按面板顶上的「这条是谁答的」印记（2026-09-10 她要的：
-           「有些模型表现特别好，回答完我就忘了是哪个，希望能追溯」）。
-           ⚠️故意做成淡色小字、不加底色色块——见记忆 user-taste-minimal-no-badges。 */
-        .chat-sheet-model {
-            font-size: 0.8em; color: var(--text-muted);
-            padding: 0.2em 1em 0.7em; text-align: center;
-            word-break: break-all; user-select: text;
-        }
         .chat-action-item .act-icon { font-size: 18px; width: 26px; text-align: center; }
 
         /* ===== 回到底部按钮 ===== */
@@ -3646,11 +3638,14 @@ body {
             font-size: 12px; animation: readingCommentIn 0.18s ease;
         }
         /* 长按问答块时显示「这条是哪个模型答的」（2026-09-10 她要的追溯印记）。
-           ⚠️flex 基准给 100% 让它**独占第一行**，不跟三个按钮挤——操作条本身是
-           flex-wrap:wrap，模型名往往很长（像 优/「按量」gpt-5.6-terra）。 */
+           ⚠️第一版让它独占一行，她说「不喜欢额外多出一行」——改成挤在同一行里：
+             `margin-left:auto` 把它连同「重新回答」一起推到右边、紧贴那个按钮。
+           ⚠️必须 nowrap + 省略号：操作条是 flex-wrap:wrap，模型名一长
+             （像 优/「按量」gpt-5.6-terra）就会掉到下一行，又变回她不要的样子。 */
         .reading-actbar .rp-model {
-            flex: 0 0 100%; font-size: 0.85em; color: var(--text-muted);
-            opacity: 0.85; word-break: break-all; padding: 0.1em 0.5em 0.2em 0;
+            margin-left: auto; min-width: 0;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            font-size: 0.85em; color: var(--text-muted); opacity: 0.85;
         }
         .reading-actbar input.rp-ask, .reading-actbar textarea.rp-ask {
             flex: 1 1 140px; min-width: 0; border: 1px solid var(--accent-mid);
@@ -18626,14 +18621,10 @@ body {
             items.innerHTML = '';
             var isUser = msg.role === 'user';
             var isAi = msg.role === 'assistant';
-            /* 这条是哪个模型答的。⚠️只有**加了这个功能之后**产生的消息才有 model 字段，
-               老消息没有就不显示（她说不用追溯以前的，别为此补一个「未知」出来占地方）。 */
-            if (isAi && msg.model) {
-                var _mtag = document.createElement('div');
-                _mtag.className = 'chat-sheet-model';
-                _mtag.textContent = '🏷 ' + msg.model;
-                items.appendChild(_mtag);
-            }
+            /* ⚠️2026-09-10：这里原本也显示「🏷 模型名」，她说「对话模式下的可以去掉」，
+               只在阅读模式的问答块上留着（见 readingOnBlockLongPress）。
+               ⚠️**消息上的 model 字段照旧在存**（chatMessages.push 那几处），
+                 留着不显示而已——哪天想加回来数据是现成的，别顺手把存的那段也删了。 */
             var actions = [];
             actions.push({ label: '复制内容', fn: function() { chatSheetCopy(idx); } });
             if (isUser) actions.push({ label: '编辑消息', fn: function() { chatSheetEdit(idx); } });
@@ -28041,10 +28032,12 @@ body {
             bqEl.classList.add('rp-active');
             var bar = document.createElement('div');
             bar.className = 'reading-actbar rp-actions';
+            /* ⚠️2026-09-10 她定的排法：删除在左，模型印记贴着右边的「重新回答」，同一行，
+               **不要独占一行、也不要居中**。「取消」她让去掉了——点别的段落、
+               或者删除/重新回答本身都会收起操作条，关不掉的情况不存在。 */
             var _bqMdl = readerQAModelOf(msgIdx, pNum, ci);
-            bar.innerHTML = (_bqMdl ? '<span class="rp-model">🏷 ' + esc(_bqMdl) + '</span>' : '') +
-                '<button class="rp-del">删除</button>' +
-                '<button class="rp-cancel" onclick="readingClearActbar()">取消</button>' +
+            bar.innerHTML = '<button class="rp-del">删除</button>' +
+                (_bqMdl ? '<span class="rp-model">🏷 ' + esc(_bqMdl) + '</span>' : '') +
                 '<button class="rp-regen">重新回答</button>';
             bqEl.insertAdjacentElement('afterend', bar);
             var del = bar.querySelector('.rp-del');
