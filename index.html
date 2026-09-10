@@ -10488,6 +10488,32 @@ body {
            一份几千字的表格能刷屏，还看不出「这是一个附件」。
            ⚠️只改**显示**：存储里那段原文一个字不动，所以 **AI 收到的仍是全文**。
            ⚠️卡片点一下能展开看全文——她要核对内容时得看得见。 */
+        /* 用户消息（纯文本、已转义显示）里的附件 → 卡片。
+           存储原文不动，所以 AI 收到的仍是全文；这里只是把「[ 文件名 ] + ```内容```」
+           那一坨换成一行卡片，点一下展开。 */
+        function _userTextWithFileCards(text) {
+            var t = String(text == null ? '' : text);
+            if (t.indexOf('```') < 0) {
+                return '<div style="white-space:pre-wrap;word-break:break-word">' + esc(t) + '</div>';
+            }
+            var out = '', re = /\[\s*([^\]\n]+?)\s*\]\n```\n([\s\S]*?)\n```/g, last = 0, m;
+            while ((m = re.exec(t))) {
+                if (m.index > last) out += '<div style="white-space:pre-wrap;word-break:break-word">' + esc(t.slice(last, m.index)) + '</div>';
+                var id = 'ufc' + (++_fileCardSeq);
+                var body = m[2] || '';
+                var sz = body.length < 1024 ? (body.length + ' 字') : ((body.length / 1024).toFixed(1) + 'K 字');
+                out += '<div class="chat-filecard" onclick="var b=document.getElementById(\'' + id + '\');'
+                     + 'b.style.display=b.style.display===\'none\'?\'block\':\'none\'">'
+                     + '<span class="fc-ico">📄</span><span class="fc-main">'
+                     + '<span class="fc-name">' + esc(m[1]) + '</span>'
+                     + '<span class="fc-sub">' + sz + ' · 点一下看内容</span></span></div>'
+                     + '<div id="' + id + '" style="display:none;white-space:pre-wrap;word-break:break-word;'
+                     + 'max-height:50vh;overflow:auto;font-size:.9em;margin:.3em 0">' + esc(body) + '</div>';
+                last = m.index + m[0].length;
+            }
+            if (last < t.length) out += '<div style="white-space:pre-wrap;word-break:break-word">' + esc(t.slice(last)) + '</div>';
+            return out;
+        }
         var _fileCardSeq = 0;
         function _fileCards(html) {
             // ⚠️代码块外面还包着 <div class="code-wrap">（带「复制」按钮），
@@ -15575,7 +15601,11 @@ body {
                     }
                     bubble.innerHTML = ih;
                 } else {
-                    bubble.innerHTML = '<div style="white-space:pre-wrap;word-break:break-word">' + esc(_displayText) + '</div>';
+                    /* ⚠️2026-09-10：卡片必须挂在**这条分支**上。
+                       用户自己发的消息**不走 Markdown 渲染**（`esc()` 原样显示，免得她打的字
+                       被 Markdown 乱解释），所以第一版把 _fileCards 挂在 renderText 里
+                       对她的消息完全不生效——她连试三次都「没有卡片」，我还以为是缓存。 */
+                    bubble.innerHTML = _userTextWithFileCards(_displayText);
                 }
             } else {
                 if (typeof text === 'string') text = chatStripTimeTag(text);
