@@ -6075,7 +6075,7 @@ body {
                         <div class="chat-input-modelmeta" id="chatInputModelMeta" style="display:none"></div>
                         <div class="fav-quick" id="favQuick"></div>
                         <input type="file" id="chatAttachPhoto" accept="image/*" multiple="" style="display:none" onchange="chatOnFileSelect(this)">
-                        <input type="file" id="chatAttachFile" multiple="" style="display:none" onchange="chatOnFileSelect(this)">
+                        <input type="file" id="chatAttachFile" multiple="" accept=".txt,.md,.csv,.json,.docx,.xlsx,.log,.xml,.yaml,.yml,.js,.ts,.py,.html,.css,.sql" style="display:none" onchange="chatOnFileSelect(this)">
                         <input type="file" id="chatAttachCamera" accept="image/*" capture="environment" style="display:none" onchange="chatOnFileSelect(this)">
                         <div id="chatCtxIndicator" class="chat-ctx-indicator has-summary" style="" onclick="chatToggleSummaryPopup(event)"><span style="opacity: 0.7;">◉ </span>51 轮 ✓<div id="chatSummaryPopup" class="chat-summary-popup"></div></div>
                         <button class="chat-send-btn" id="chatSendBtn" onclick="chatSend()" title="发送" aria-label="发送"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="6 11 12 5 18 11"></polyline></svg></button>
@@ -19170,6 +19170,109 @@ body {
         }
 
         /* ===== 附件输入（图片+文件） ===== */
+        /* ===== 读 Word / Excel（2026-09-10 加）=====
+         * 她问「我这个跟 Cherry Studio 区别大吗」——最明显的缺口就是文档：
+         * 以前她给 Cherry 发 pdf/doc 让它整理复试数据，Toolbox 这边对不认识的格式是
+         * **当纯文本硬读**，docx 是压缩包，读出来一堆乱码，AI 还会硬着头皮编。
+         * ⚠️不引任何库：docx/xlsx 都是 zip，而现代浏览器自带 `DecompressionStream`，
+         *   自己按 zip 格式走一遍中央目录就能取出里面的 XML。
+         * ⚠️PDF 不在这次范围内（它不是 zip+XML，得整套 pdf.js，另说）。 */
+        async function _zipEntries(buf) {
+            var dv = new DataView(buf), u8 = new Uint8Array(buf);
+            // 从尾部找「中央目录结束记录」(EOCD, 0x06054b50)，注释最长 65535
+            var eocd = -1, min = Math.max(0, buf.byteLength - 65557);
+            for (var i = buf.byteLength - 22; i >= min; i--) {
+                if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+            }
+            if (eocd < 0) throw new Error('不是有效的 zip');
+            var n = dv.getUint16(eocd + 10, true), off = dv.getUint32(eocd + 16, true);
+            var out = {}, ptr = off;
+            for (var k = 0; k < n; k++) {
+                if (dv.getUint32(ptr, true) !== 0x02014b50) break;
+                var method = dv.getUint16(ptr + 10, true);
+                var csize = dv.getUint32(ptr + 20, true);
+                var nameLen = dv.getUint16(ptr + 28, true);
+                var extraLen = dv.getUint16(ptr + 30, true);
+                var cmtLen = dv.getUint16(ptr + 32, true);
+                var lho = dv.getUint32(ptr + 42, true);
+                var name = new TextDecoder().decode(u8.subarray(ptr + 46, ptr + 46 + nameLen));
+                // 本地文件头里的两个长度字段可能跟中央目录不同，必须按本地头算数据起点
+                var lNameLen = dv.getUint16(lho + 26, true), lExtraLen = dv.getUint16(lho + 28, true);
+                var start = lho + 30 + lNameLen + lExtraLen;
+                out[name] = { method: method, data: u8.subarray(start, start + csize) };
+                ptr += 46 + nameLen + extraLen + cmtLen;
+            }
+            return out;
+        }
+        async function _zipRead(entries, name) {
+            var e = entries[name];
+            if (!e) return '';
+            if (e.method === 0) return new TextDecoder().decode(e.data);       // 没压缩
+            if (typeof DecompressionStream === 'undefined') throw new Error('这个浏览器不支持解压');
+            var ds = new DecompressionStream('deflate-raw');
+            var blob = new Blob([e.data]).stream().pipeThrough(ds);
+            return await new Response(blob).text();
+        }
+        // Word：把 <w:t> 里的字取出来，按段落换行、按 <w:tab/> 补制表符
+        function _docxXmlToText(xml) {
+            var body = xml.replace(/<w:tab\b[^>]*\/>/g, '\t')
+                          .replace(/<w:br\b[^>]*\/>/g, '\n')
+                          .replace(/<\/w:p>/g, '\n');
+            var out = [], re = /<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>|\n|\t/g, m;
+            while ((m = re.exec(body))) out.push(m[1] != null ? m[1] : m[0]);
+            return out.join('')
+                .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+                .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+                .replace(/[ \t]+\n/g, '\n')
+                .replace(/\n{2,}/g, '\n').trim();   // ⚠️段落间只留单换行：空行白占额度，模型也不需要
+        }
+        async function chatDocxToText(buf) {
+            var z = await _zipEntries(buf);
+            var xml = await _zipRead(z, 'word/document.xml');
+            if (!xml) throw new Error('这个 .docx 里没找到正文');
+            return _docxXmlToText(xml);
+        }
+        // Excel：每张表转成「制表符分隔」的纯文本，模型读表格最稳的形态
+        async function chatXlsxToText(buf) {
+            var z = await _zipEntries(buf);
+            var shared = [];
+            var ss = await _zipRead(z, 'xl/sharedStrings.xml');
+            if (ss) {
+                var reS = /<si>([\s\S]*?)<\/si>/g, m1;
+                while ((m1 = reS.exec(ss))) {
+                    var parts = [], reT = /<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g, m2;
+                    while ((m2 = reT.exec(m1[1]))) parts.push(m2[1]);
+                    shared.push(parts.join(''));
+                }
+            }
+            var names = Object.keys(z).filter(function (n) { return /^xl\/worksheets\/sheet\d+\.xml$/.test(n); }).sort();
+            var lines = [];
+            for (var si = 0; si < names.length; si++) {
+                var sx = await _zipRead(z, names[si]);
+                if (names.length > 1) lines.push('【' + names[si].replace(/^.*\//, '').replace('.xml', '') + '】');
+                var reR = /<row[^>]*>([\s\S]*?)<\/row>/g, mr;
+                while ((mr = reR.exec(sx))) {
+                    var cells = [], reC = /<c\b([^>]*)>([\s\S]*?)<\/c>|<c\b([^>]*)\/>/g, mc;
+                    while ((mc = reC.exec(mr[1]))) {
+                        var attr = mc[1] || mc[3] || '', inner = mc[2] || '';
+                        var v = /<v>([\s\S]*?)<\/v>/.exec(inner);
+                        var isStr = /t="s"/.test(attr);
+                        var t = '';
+                        if (v) t = isStr ? (shared[parseInt(v[1], 10)] || '') : v[1];
+                        else {
+                            var it = /<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/.exec(inner);
+                            if (it) t = it[1];
+                        }
+                        // ⚠️WPS 的单元格内嵌图片公式，是图不是字，丢掉（解 xlsx 那次踩过）
+                        if (t.indexOf('=DISPIMG') === 0) t = '';
+                        cells.push(t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'));
+                    }
+                    if (cells.join('').trim()) lines.push(cells.join('\t'));
+                }
+            }
+            return lines.join('\n').trim();
+        }
+
         var CHAT_TEXT_EXTS = /\.(txt|md|csv|json|js|ts|jsx|tsx|py|html|css|xml|yaml|yml|log|sh|bat|c|cpp|java|sql|toml|ini|cfg|conf|env|rb|go|rs|swift|kt|lua|r|m|h|php)$/i;
         /* ===== 发出去之前把图压小（2026-09-10 加）=====
          * 起因：她在对话模式发了张手机截图（854KB）问问题，**转圈五分半才回**，
@@ -19230,6 +19333,25 @@ body {
                         var reader = new FileReader();
                         reader.onload = function(e) { chatAddImage(e.target.result, file.type); };
                         reader.readAsDataURL(file);
+                    } else if (/\.(docx|xlsx)$/i.test(file.name)) {
+                        // Word/Excel：当场在浏览器里解成纯文本，再当普通文本附件走
+                        var isDoc = /\.docx$/i.test(file.name);
+                        showToast('正在读 ' + file.name + '…');
+                        var rd2 = new FileReader();
+                        rd2.onload = function (ev) {
+                            (isDoc ? chatDocxToText(ev.target.result) : chatXlsxToText(ev.target.result))
+                                .then(function (txt) {
+                                    if (!txt || !txt.trim()) { showToast('⚠️ ' + file.name + ' 里没读到文字'); return; }
+                                    chatPendingFiles.push({ name: file.name, content: txt, size: txt.length });
+                                    chatRenderAttachPreview(); chatUpdateTokenHint();
+                                    showToast('✅ ' + file.name + '：读到 ' + txt.length + ' 字');
+                                })
+                                .catch(function (err) {
+                                    // ⚠️失败要说清楚，别让她以为传上去了（发图那次就是这么坑的）
+                                    showToast('⚠️ 读不了 ' + file.name + '：' + ((err && err.message) || '格式不认识'));
+                                });
+                        };
+                        rd2.readAsArrayBuffer(file);
                     } else if (file.type.startsWith('text/') || CHAT_TEXT_EXTS.test(file.name)) {
                         var reader = new FileReader();
                         reader.onload = function(e) {
