@@ -10497,8 +10497,19 @@ body {
                 return '<div style="white-space:pre-wrap;word-break:break-word">' + esc(t) + '</div>';
             }
             var out = '', re = /\[\s*([^\]\n]+?)\s*\]\n```\n([\s\S]*?)\n```/g, last = 0, m;
+            // ⚠️2026-09-10 汐修：紧贴卡片的那些换行必须削掉再输出。
+            //   这几个 div 是 white-space:pre-wrap，换行会**原样画出来**——
+            //   附件格式是「[名]\n```内容```\n\n正文」，那两个 \n 就成了两个空行，
+            //   手机上表现为卡片和字之间空出一大块（她原话「隔那么远，很突兀」）。
+            //   ⚠️只削紧邻卡片的，正文内部的换行是她自己打的、一个都不能动。
+            var _trimEdge = function (x, where) {
+                return where === 'before' ? x.replace(/\n+$/, '') : x.replace(/^\n+/, '');
+            };
             while ((m = re.exec(t))) {
-                if (m.index > last) out += '<div style="white-space:pre-wrap;word-break:break-word">' + esc(t.slice(last, m.index)) + '</div>';
+                if (m.index > last) {
+                    var _pre = _trimEdge(t.slice(last, m.index), 'before');
+                    if (_pre) out += '<div style="white-space:pre-wrap;word-break:break-word">' + esc(_pre) + '</div>';
+                }
                 var id = 'ufc' + (++_fileCardSeq);
                 var body = m[2] || '';
                 var sz = body.length < 1024 ? (body.length + ' 字') : ((body.length / 1024).toFixed(1) + 'K 字');
@@ -10511,7 +10522,11 @@ body {
                      + 'max-height:50vh;overflow:auto;font-size:.9em;margin:.3em 0">' + esc(body) + '</div>';
                 last = m.index + m[0].length;
             }
-            if (last < t.length) out += '<div style="white-space:pre-wrap;word-break:break-word">' + esc(t.slice(last)) + '</div>';
+            if (last < t.length) {
+                var _rest = _trimEdge(t.slice(last), 'after');
+                // ⚠️只剩换行时整个 div 都不要输出，否则又是一块空白
+                if (_rest) out += '<div style="white-space:pre-wrap;word-break:break-word">' + esc(_rest) + '</div>';
+            }
             return out;
         }
         var _fileCardSeq = 0;
