@@ -17960,9 +17960,38 @@ body {
                 }
                 src = src.slice(startIdx);
             }
+            /* ⚠️只把**最近一轮**的图真发出去（2026-09-10 她拍板选的档）。
+               病根：带图的用户消息是以 [image_url, text] 数组存进历史的，而发请求时
+               历史原样重发 → **你发一次图，之后每一轮都把它重传一遍**，
+               而且默认「发送最近」是「全部」＝没有上限，一直传到清空对话为止。
+               代价两块：每轮多背 100~200KB（慢），图按 token 计费、每轮重算一次（贵）。
+               规则：找到最后一条带图的用户消息，它的图照发；**更早的图剥成「[图片]」文字**。
+               ⚠️只改「发出去的那一份」，**存储里的图一个不动**——她翻聊天记录照样看得见。 */
+            var _lastImgIdx = -1;
+            for (var _li = src.length - 1; _li >= 0; _li--) {
+                if (src[_li].role === 'user' && Array.isArray(src[_li].content)
+                    && src[_li].content.some(function (x) { return x && x.type === 'image_url'; })) {
+                    _lastImgIdx = _li; break;
+                }
+            }
+            function _dropOldImages(content, idx) {
+                if (idx === _lastImgIdx || !Array.isArray(content)) return content;
+                var kept = [], nImg = 0;
+                for (var k = 0; k < content.length; k++) {
+                    if (content[k] && content[k].type === 'image_url') { nImg++; continue; }
+                    kept.push(content[k]);
+                }
+                if (!nImg) return content;
+                var txt = kept.filter(function (x) { return x && x.type === 'text' && x.text; })
+                              .map(function (x) { return x.text; }).join('\n');
+                var tag = nImg > 1 ? ('[' + nImg + '张图片]') : '[图片]';
+                return (tag + (txt ? '\n' + txt : ''));
+            }
+
             for (var i = 0; i < src.length; i++) {
                 if (src[i].genImage) continue; // 独立生图消息不进上下文（无文本内容，纯图）
-                var _mc = _stripGenImgMarkers(src[i].content); // 剥掉内联图标记，绝不把图相关内容带给 AI
+                var _mc = _dropOldImages(src[i].content, i);   // 旧图剥成「[图片]」，只留最近一轮的真图
+                _mc = _stripGenImgMarkers(_mc); // 剥掉内联图标记，绝不把图相关内容带给 AI
                 _mc = chatQaTagToName(_mc);  // 正文里的问答块存的是「汐：」，发出去这份换成当前昵称（存储不动）
                 if (typeof _mc === 'string' && !_mc.trim()) continue; // 剥完空了（整段只有图）就跳过，不发空消息
                 // 时间戳作为 system 提示插入，不污染用户消息原文
