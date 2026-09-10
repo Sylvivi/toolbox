@@ -6077,7 +6077,7 @@ body {
                         <button id="clawdMsgToolsBtn" onclick="clawdMenuAct('msgtools')">👁 显示</button>
                         <!-- 2026-09-10 她要的：常用「重新生成」，原来得先在上面那个开关里把
                              消息按钮显示出来、点完再关掉，来回折腾。这里直接一步到位。 -->
-                        <button onclick="clawdMenuAct('regen')">🔄 重答</button>
+                        <button id="clawdRegenBtn" onclick="clawdMenuAct('regen')">🔄 重答</button>
                         <button id="clawdNextChapBtn" onclick="clawdMenuAct('nextchap')">⏭️ 续章</button>
                         <button onclick="clawdMenuAct('model')">🦀 clawd</button>
                     </div>
@@ -19626,6 +19626,16 @@ body {
         function clawdToggleMenu() {
             var m = document.getElementById('clawdReadingMenu');
             if (!m) return;
+            /* 「🔄 重答」只在能对话的场景露面（2026-09-10 她要的：
+               「阅读模式下那个就不要出来了，对话模式下是会频繁用到的」）。
+               ⚠️判「纯看书」**只能用 chatReaderMode**，不能用 chatReadingMode——
+                 后者在**阅读和共读下都为真**（readerOpenChapter 里两个都设），
+                 拿它当条件会把共读模式一起误伤。同一个坑「续章」那条踩过，
+                 见 readingSyncAutoScrollUI 里那段注释。
+               ⚠️放在开菜单这一刻算，而不是搭 readingSyncAutoScrollUI 的车——
+                 那个函数只在模式切换时跑，菜单打开时状态未必刷新过。 */
+            var rb = document.getElementById('clawdRegenBtn');
+            if (rb) rb.style.display = (typeof chatReaderMode !== 'undefined' && chatReaderMode) ? 'none' : '';
             m.classList.toggle('show');
         }
         function clawdCloseMenu() {
