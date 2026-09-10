@@ -3645,6 +3645,13 @@ body {
             background: var(--accent-light); border-radius: 10px;
             font-size: 12px; animation: readingCommentIn 0.18s ease;
         }
+        /* 长按问答块时显示「这条是哪个模型答的」（2026-09-10 她要的追溯印记）。
+           ⚠️flex 基准给 100% 让它**独占第一行**，不跟三个按钮挤——操作条本身是
+           flex-wrap:wrap，模型名往往很长（像 优/「按量」gpt-5.6-terra）。 */
+        .reading-actbar .rp-model {
+            flex: 0 0 100%; font-size: 0.85em; color: var(--text-muted);
+            opacity: 0.85; word-break: break-all; padding: 0.1em 0.5em 0.2em 0;
+        }
         .reading-actbar input.rp-ask, .reading-actbar textarea.rp-ask {
             flex: 1 1 140px; min-width: 0; border: 1px solid var(--accent-mid);
             background: var(--card-bg); color: var(--text); border-radius: 8px;
@@ -24256,6 +24263,22 @@ body {
                 if (removed && pk === removed) continue;  // 这一条是刚被明确删掉的，不留
                 list.push(prev[t]);              // 视图里没有、也不是被删的 → 本机还没同步到，保住
             }
+            /* 「这条是哪个模型答的」印记（2026-09-10 她要的，用来回头追溯哪个模型答得好）。
+               ⚠️list 是**从正文重新解析**出来的，身上没有模型信息，所以要分两步：
+                 ① 先从 prev 把旧条目的 m 继承回来（否则每存一次盘就全丢了）；
+                 ② 再用本次真正调用的模型覆盖「刚问完的那一条」。
+               ⚠️顺序不能反：_qaKey 只算「段号+问题」不含答案，同一个问题重新回答时
+                 key 不变，先覆盖再继承的话会被旧印记盖回去。 */
+            var _prevM = {};
+            for (var pm = 0; pm < prev.length; pm++) if (prev[pm] && prev[pm].m) _prevM[_qaKey(prev[pm])] = prev[pm].m;
+            for (var lm = 0; lm < list.length; lm++) {
+                var _lk = _qaKey(list[lm]);
+                if (_prevM[_lk]) list[lm].m = _prevM[_lk];
+            }
+            if (opts && opts.model) {
+                for (var nm = 0; nm < list.length; nm++)
+                    if (list[nm].p === opts.p && list[nm].q === opts.q) list[nm].m = opts.model;
+            }
             list.sort(function (x, y) { return (x.p | 0) - (y.p | 0); });   // Array.sort 稳定，同段内保持原顺序
             all[fileKey][chap] = { list: list, ts: Date.now() }; // 即使空也写，靠新时间戳压过云端旧值
             readerQASaveAll(all);
@@ -28018,7 +28041,9 @@ body {
             bqEl.classList.add('rp-active');
             var bar = document.createElement('div');
             bar.className = 'reading-actbar rp-actions';
-            bar.innerHTML = '<button class="rp-del">删除</button>' +
+            var _bqMdl = readerQAModelOf(msgIdx, pNum, ci);
+            bar.innerHTML = (_bqMdl ? '<span class="rp-model">🏷 ' + esc(_bqMdl) + '</span>' : '') +
+                '<button class="rp-del">删除</button>' +
                 '<button class="rp-cancel" onclick="readingClearActbar()">取消</button>' +
                 '<button class="rp-regen">重新回答</button>';
             bqEl.insertAdjacentElement('afterend', bar);
@@ -28030,6 +28055,27 @@ body {
                 del.textContent = '确认删除';
             };
             bar.querySelector('.rp-regen').onclick = function() { readingRegenBlock(msgIdx, pNum, ci); };
+        }
+
+        /* 这一块问答是哪个模型答的（存在 reader_qa 的 m 字段里，见 readerPersistQA）。
+           ⚠️只有**加这个功能之后**新问的才有；老问答返回空串、界面上那行就不出现。
+           ⚠️按 _qaKey（段号+问题）匹配，跟删除/重答那两处认条目的方式保持一致。 */
+        function readerQAModelOf(msgIdx, pNum, ci) {
+            try {
+                if (!chatReaderMode || readerBookId == null) return '';
+                var msg = chatMessages[msgIdx];
+                if (!msg || msg.readerChapter == null || typeof msg.content !== 'string') return '';
+                var comments = readingModeParseComments(msg.content);
+                var absIdx = readingFindCommentAbsIdx(comments, pNum, ci);
+                if (absIdx < 0) return '';
+                var idq = _qaOfComment(comments[absIdx]);
+                if (!idq) return '';
+                var cell = (readerQAAll()[readerBookKey(readerBookId)] || {})[msg.readerChapter];
+                var list = (cell && cell.list) || [];
+                for (var i = 0; i < list.length; i++)
+                    if (_qaKey(list[i]) === _qaKey(idq)) return list[i].m || '';
+            } catch (e) {}
+            return '';
         }
 
         // 找到「该段第 ci 条评论」在解析后数组里的绝对下标
@@ -28646,7 +28692,8 @@ body {
                     var _newCi = readingModeParseComments(msg.content).filter(function (c) { return c.p === pNum; }).length - 1;
                     if (_newCi >= 0) _rdBgOpen[_rdBgFoldKey(_mi, pNum, String(_newCi))] = 1;
                 } catch (eOpen) {}
-                readerPersistQA(_mi); // 阅读模式：把该章问答整体抽出存进可同步的 reader_qa
+                // ⚠️带上本次真正调用的模型（_qaMdl，已含「提问/导读」分档的覆盖），供长按追溯
+                readerPersistQA(_mi, { model: _qaMdl, p: pNum, q: question });
                 readingAddQuestionBookmark(_mi, pNum, question);
                 readingRemovePending(_pd.id);
                 readingRerenderMsg(_mi, pNum);
