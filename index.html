@@ -13501,6 +13501,18 @@ body {
            用户 2026-07-28 问「共读提问一次上万 token，怎么优化」——总数看得见、构成看不见，
            砍哪一块全靠猜。所以先量再砍：{原文:7200, 记忆表:1600, ...}，明细里点开就看得到。
            ⚠️记的是**字数不是 token**（token 只有整笔的真实值，拆不到块），比例够用来做决定。 */
+        // 耗时那一小截：「· 首字 2.1s · 总 14s」。秒数小于 10 秒给一位小数，大了就取整
+        function _apiFmtSec(ms) {
+            var v = ms / 1000;
+            return (v < 10 ? v.toFixed(1) : Math.round(v)) + 's';
+        }
+        function _apiTimeSpan(r) {
+            var out = '';
+            if (r.ttft != null) out += ' · 首字 ' + _apiFmtSec(r.ttft);
+            if (r.dur != null) out += ' · 总 ' + _apiFmtSec(r.dur);
+            return out;
+        }
+        var _apiLastTiming = null;   // {ttft, dur} 毫秒；记完一条就清空，别串到下一条上
         function apiLogRecord(purpose, model, inTok, outTok, est, station, cacheTok, parts) {
             inTok = Math.max(0, Math.round(inTok || 0));
             outTok = Math.max(0, Math.round(outTok || 0));
@@ -13512,6 +13524,16 @@ body {
             var mkey = _mkey(model, station);  // 按「模型+站点」聚合，让不同站的同名模型各按各价、不互相串价
             var log = apiLogLoad();
             var _rec = { ts: Date.now(), purpose: purpose, model: model, station: station, inTok: inTok, outTok: outTok, est: !!est, cacheTok: cacheTok };
+            /* 耗时（2026-09-10 加，她照着 youkies 那张卡片要的：「⚡首字 11.6s ⏱总 14s」）。
+               ⚠️**不额外发任何请求**——就是发起前记一个时间戳、收到第一个字记一个、结束记一个，
+                 两个减法。她担心「后台消耗大不大」：每条记录多两个数字，可以忽略。
+               ⚠️挂在模块级变量上传进来，而不是给 apiLogRecord 再加参数——
+                 那个函数已经八个参数了，再加就没人记得住顺序。 */
+            if (_apiLastTiming) {
+                if (_apiLastTiming.ttft != null) _rec.ttft = _apiLastTiming.ttft;
+                if (_apiLastTiming.dur != null) _rec.dur = _apiLastTiming.dur;
+                _apiLastTiming = null;
+            }
             if (parts && typeof parts === 'object') {
                 // 只留有字数的块，省地方也省得展开时一排 0
                 var _pp = {}, _pk = Object.keys(parts);
@@ -14365,7 +14387,7 @@ body {
                         + '<div style="min-width:0;flex:1">'
                         + '<span style="color:var(--text);font-weight:600">' + _apiEsc(r.purpose) + (_hasParts ? ' <span style="color:var(--text-muted);font-weight:400">▾</span>' : '') + '</span>'
                         + '<span style="color:var(--text-muted);font-size:10px"> · ' + _apiTime(r.ts) + '</span>'
-                        + '<div style="color:var(--text-muted);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">[' + detailLabel + '] ' + _apiEsc(r.model) + ' · ↑' + _apiNum(r.inTok) + ' ↓' + _apiNum(r.outTok) + (r.est ? ' · 约' : '') + '</div>'
+                        + '<div style="color:var(--text-muted);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">[' + detailLabel + '] ' + _apiEsc(r.model) + ' · ↑' + _apiNum(r.inTok) + ' ↓' + _apiNum(r.outTok) + (r.est ? ' · 约' : '') + _apiTimeSpan(r) + '</div>'
                         + (_hasParts ? '<div class="api-parts" style="display:none;margin-top:4px">' + _apiPartsHtml(r.parts) + '</div>' : '')
                         + '</div>'
                         + '<span style="color:var(--accent);flex-shrink:0">' + (hasAnyPrice ? '￥' + _apiMoney(rc) : '') + '</span>'
@@ -14387,6 +14409,7 @@ body {
          *       中转站切换与模型列表拉取/缓存/排序。
          * ========================================================================= */
         async function chatStreamChat(opts) {
+            var _t0 = Date.now(), _tFirst = null;   // 掐表：发起 / 第一个字
             // 记「最近调用」：仅用户主动发起的环节（共读点评/共读提问/翻译/翻译追问）带 markUsed，
             // 自动后台任务（标题/摘要/大纲/记忆表格/人名识别）不记，免得它们把收藏排序搅乱。
             // 收藏面板据此把刚用过的模型排到本站组最前——这条路原来漏了记账，共读/翻译里调用的模型一直升不上去。
@@ -14423,6 +14446,7 @@ body {
                         if (_isAnth) chunk = aiNormalizeChunk(chunk, _anthState);
                         var delta = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
                         if (delta && delta.content) {
+                            if (_tFirst === null) _tFirst = Date.now();   // 首字
                             full += delta.content;
                             if (opts.onDelta) opts.onDelta(full);
                         }
@@ -14438,6 +14462,7 @@ body {
                 }
             }
             // 记账：有真实 usage 用真实值，否则按 messages / 回复文本估算
+            _apiLastTiming = { ttft: (_tFirst ? _tFirst - _t0 : null), dur: Date.now() - _t0 };
             try {
                 if (_usage) {
                     /* ⚠️2026-09-09 加：**报了 usage 但输出是 0** 也要兜底估算。
