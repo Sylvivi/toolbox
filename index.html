@@ -4325,6 +4325,15 @@ body {
             background: var(--accent);
         }
         .reading-actbar .rp-lv[data-lv="2"] { background: var(--accent); border-color: var(--accent); }
+        /* 消息里的文件卡片（2026-09-10）。⚠️别做成实心色块，她一贯的口味是淡底 + 提亮字色。 */
+        .chat-filecard { display: flex; align-items: center; gap: .6em; cursor: pointer;
+            padding: .55em .7em; margin: .3em 0; border: 1px solid var(--card-border);
+            border-radius: 10px; background: var(--input-bg); }
+        .chat-filecard:active { background: var(--accent-light); }
+        .chat-filecard .fc-ico { font-size: 1.35em; flex-shrink: 0; }
+        .chat-filecard .fc-main { min-width: 0; display: flex; flex-direction: column; }
+        .chat-filecard .fc-name { font-size: .92em; color: var(--text); word-break: break-all; }
+        .chat-filecard .fc-sub { font-size: .78em; color: var(--text-muted); margin-top: .1em; }
         /* AI 回复里的段落定位「§56」。⚠️别做成实心色块按钮——她的口味是提亮字色 + 淡底线。 */
         .rd-pref { color: var(--accent); font-size: .88em; cursor: pointer; white-space: nowrap;
                    border-bottom: 1px dotted var(--accent-mid); padding-bottom: 1px; }
@@ -10474,9 +10483,32 @@ body {
                 .replace(/[（(][ \t]*\[P(\d+)\][ \t]*[）)]/gi, '§$1')     // 整对括号包着：连括号一起换
                 .replace(/\[P(\d+)\]/gi, '§$1');                          // 句中：换成 §N
         }
+        /* 把消息里的「[ 文件名 ]＋代码块」渲染成一张**文件卡片**（2026-09-10 她要的：
+           「希望像 qq 群里发文件那种显示」）。在这之前是把整份文档摊在气泡里，
+           一份几千字的表格能刷屏，还看不出「这是一个附件」。
+           ⚠️只改**显示**：存储里那段原文一个字不动，所以 **AI 收到的仍是全文**。
+           ⚠️卡片点一下能展开看全文——她要核对内容时得看得见。 */
+        var _fileCardSeq = 0;
+        function _fileCards(html) {
+            // ⚠️代码块外面还包着 <div class="code-wrap">（带「复制」按钮），
+            //   只认光秃秃的 <pre> 会匹配不上——第一版就是这么空跑的。
+            return String(html || '').replace(
+                /<p>\[\s*([^\]<]+?)\s*\]<\/p>\s*(<div class="code-wrap">[\s\S]*?<\/div>)/g,
+                function (m, name, pre) {
+                    var id = 'fc' + (++_fileCardSeq);
+                    var chars = pre.replace(/<[^>]+>/g, '').replace(/&[a-z]+;/g, ' ').length;
+                    var sz = chars < 1024 ? (chars + ' 字') : ((chars / 1024).toFixed(1) + 'K 字');
+                    return '<div class="chat-filecard" onclick="var b=document.getElementById(\'' + id + '\');'
+                        + 'b.style.display=b.style.display===\'none\'?\'block\':\'none\'">'
+                        + '<span class="fc-ico">📄</span>'
+                        + '<span class="fc-main"><span class="fc-name">' + name + '</span>'
+                        + '<span class="fc-sub">' + sz + ' · 点一下看内容</span></span>'
+                        + '</div><div id="' + id + '" style="display:none">' + pre + '</div>';
+                });
+        }
         function renderText(text) {
             if (!text) return '';
-            return _rdPRefChips(parseMd(text));
+            return _fileCards(_rdPRefChips(parseMd(text)));
         }
 
         // 把 §56 渲染成可点的小标记。⚠️放在 parseMd 出口统一做，别在各个调用点各写一遍
@@ -17846,6 +17878,9 @@ body {
                 }).join('\n\n');
                 text = fileParts + (text ? '\n\n' + text : '');
                 chatPendingFiles = [];
+                // ⚠️2026-09-10 补：图片那边清空后有重画预览，文件这边**漏了**，
+                //   于是发完消息附件卡片还杵在输入框上，她不知道到底发没发出去。
+                chatRenderAttachPreview();
             }
 
             // 共读模式：给原文标段落号
@@ -19245,16 +19280,46 @@ body {
                     shared.push(parts.join(''));
                 }
             }
+            // 列号字母 → 下标（A=0, B=1, ... AA=26）
+            function _colIdx(letters) {
+                var n = 0;
+                for (var i = 0; i < letters.length; i++) n = n * 26 + (letters.charCodeAt(i) - 64);
+                return n - 1;
+            }
             var names = Object.keys(z).filter(function (n) { return /^xl\/worksheets\/sheet\d+\.xml$/.test(n); }).sort();
             var lines = [];
             for (var si = 0; si < names.length; si++) {
                 var sx = await _zipRead(z, names[si]);
                 if (names.length > 1) lines.push('【' + names[si].replace(/^.*\//, '').replace('.xml', '') + '】');
-                var reR = /<row[^>]*>([\s\S]*?)<\/row>/g, mr;
+                /* ⚠️合并单元格：xlsx 里**只有左上角那格有值，其余全空**。
+                   她那张表「一所学校占两行」（两个科目），学校名是上下合并的，
+                   不处理的话第二行就成了没有学校名的一串数字（2026-09-10 实测到的）。
+                   做法：先把 mergeCell 记下来，行拼完之后把左上角的值补进整个区域。 */
+                var merges = [];
+                var reM = /<mergeCell[^>]*ref="([A-Z]+)(\d+):([A-Z]+)(\d+)"/g, mm;
+                while ((mm = reM.exec(sx))) {
+                    merges.push({ c1: _colIdx(mm[1]), r1: +mm[2], c2: _colIdx(mm[3]), r2: +mm[4] });
+                }
+                var rowMap = {};
+                var reR = /<row[^>]*r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g, mr;
                 while ((mr = reR.exec(sx))) {
+                    /* ⚠️必须按单元格坐标 r="B5" 定位到**正确的列**，不能有几个拼几个。
+                       xlsx 里**空单元格是整个省略掉的**，顺序拼接会让后面所有格子左移——
+                       2026-09-10 她那张「押题统计」就是这么错的：某行学校名和科目是空的，
+                       结果一行只剩 `44 83 85 78 45 66 41 53` 一串数字，跟错了学校。 */
                     var cells = [], reC = /<c\b([^>]*)>([\s\S]*?)<\/c>|<c\b([^>]*)\/>/g, mc;
-                    while ((mc = reC.exec(mr[1]))) {
+                    // ⚠️行正则改成带行号捕获后，**行内容变成了 mr[2]**（mr[1] 是行号）。
+                    //   这里一开始忘了跟着改，拿行号「10」去找单元格 → 一个都找不到、整表解出 0 字。
+                    while ((mc = reC.exec(mr[2]))) {
                         var attr = mc[1] || mc[3] || '', inner = mc[2] || '';
+                        var mref = /r="([A-Z]+)\d+"/.exec(attr);
+                        var col = -1;
+                        if (mref) {
+                            col = 0;
+                            for (var ci = 0; ci < mref[1].length; ci++) col = col * 26 + (mref[1].charCodeAt(ci) - 64);
+                            col -= 1;
+                            while (cells.length < col) cells.push('');   // 空格子补位
+                        }
                         var v = /<v>([\s\S]*?)<\/v>/.exec(inner);
                         var isStr = /t="s"/.test(attr);
                         var t = '';
@@ -19267,8 +19332,29 @@ body {
                         if (t.indexOf('=DISPIMG') === 0) t = '';
                         cells.push(t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'));
                     }
-                    if (cells.join('').trim()) lines.push(cells.join('\t'));
+                    rowMap[+mr[1]] = cells;
                 }
+                // 合并区域：把左上角的值铺满整块
+                for (var mi = 0; mi < merges.length; mi++) {
+                    var mg = merges[mi];
+                    var srcRow = rowMap[mg.r1];
+                    var val = srcRow ? (srcRow[mg.c1] || '') : '';
+                    if (!val) continue;
+                    for (var rr = mg.r1; rr <= mg.r2; rr++) {
+                        if (!rowMap[rr]) rowMap[rr] = [];
+                        for (var cc = mg.c1; cc <= mg.c2; cc++) {
+                            while (rowMap[rr].length <= cc) rowMap[rr].push('');
+                            /* ⚠️无条件覆盖，不能只补空的：合并区域里**被盖住的格子常常留着旧值**
+                               （Excel 显示时忽略它们）。她那张表第 11 行 A 列就残留着一个 `44`，
+                               只补空位的话学校名补不进去，那一行还是没头没脑的一串数字。 */
+                            rowMap[rr][cc] = val;
+                        }
+                    }
+                }
+                Object.keys(rowMap).map(Number).sort(function (a, b) { return a - b; }).forEach(function (rn) {
+                    var cs = rowMap[rn];
+                    if (cs.join('').trim()) lines.push(cs.join('\t'));
+                });
             }
             return lines.join('\n').trim();
         }
