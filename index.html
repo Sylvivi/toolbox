@@ -4420,8 +4420,11 @@ body {
             border: none; font-size: 11px; cursor: pointer;
             display: flex; align-items: center; justify-content: center;
         }
+        /* ⚠️2026-09-10 她拍板缩到 90（原来 220）：照 rikkahub 的观感，
+           图小、紧贴文字，一屏能多装几条对话。她看过 220/140/90 三版预览指的这个。
+           ⚠️配套的 margin 也要跟着收（原来 6px），不然图小了、空隙还杵在那儿。 */
         .chat-bubble img.chat-user-img {
-            max-width: 220px; max-height: 220px; border-radius: 10px; margin: 6px 0;
+            max-width: 90px; max-height: 90px; border-radius: 8px; margin: 3px 0;
             display: block;
         }
         /* 生图气泡 */
@@ -15609,12 +15612,15 @@ body {
                         '<div class="reading-collapse-body" style="display:none;margin-top:8px;white-space:pre-wrap;word-break:break-word;font-size:13px;max-height:400px;overflow-y:auto">' + esc(_plainForCollapse) + '</div>' +
                         '</div>';
                 } else if (Array.isArray(_displayText)) {
-                    var ih = '';
+                    /* ⚠️2026-09-10 她要「图片一律在消息上方」。原来是照数组原序拼的，
+                       而数组顺序＝她当时的操作顺序——先打字再选图，图就跑到字下面去了，
+                       同样两条消息长得不一样。所以这里**分两趟**：图片先、文字后。 */
+                    var ih = '', ihTxt = '';
                     for (var k = 0; k < _displayText.length; k++) {
-                        if (_displayText[k].type === 'text') ih += '<div style="white-space:pre-wrap;word-break:break-word">' + esc(_displayText[k].text) + '</div>';
+                        if (_displayText[k].type === 'text') ihTxt += '<div style="white-space:pre-wrap;word-break:break-word">' + esc(_displayText[k].text) + '</div>';
                         else if (_displayText[k].type === 'image_url') ih += '<img class="chat-user-img" src="' + _displayText[k].image_url.url + '">';
                     }
-                    bubble.innerHTML = ih;
+                    bubble.innerHTML = ih + ihTxt;
                 } else {
                     /* ⚠️2026-09-10：卡片必须挂在**这条分支**上。
                        用户自己发的消息**不走 Markdown 渲染**（`esc()` 原样显示，免得她打的字
