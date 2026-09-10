@@ -19280,7 +19280,16 @@ body {
                     shared.push(parts.join(''));
                 }
             }
-            // 列号字母 → 下标（A=0, B=1, ... AA=26）
+            // XML 转义还原：命名实体 + 数字实体（&#10; 这种，xlsx 里换行就是它）
+        function _xmlUnescape(t) {
+            return String(t == null ? '' : t)
+                .replace(/&#(\d+);/g, function (m, n) { return String.fromCharCode(+n); })
+                .replace(/&#x([0-9a-f]+);/gi, function (m, n) { return String.fromCharCode(parseInt(n, 16)); })
+                .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+                .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+                .replace(/&amp;/g, '&');
+        }
+        // 列号字母 → 下标（A=0, B=1, ... AA=26）
             function _colIdx(letters) {
                 var n = 0;
                 for (var i = 0; i < letters.length; i++) n = n * 26 + (letters.charCodeAt(i) - 64);
@@ -19330,7 +19339,8 @@ body {
                         }
                         // ⚠️WPS 的单元格内嵌图片公式，是图不是字，丢掉（解 xlsx 那次踩过）
                         if (t.indexOf('=DISPIMG') === 0) t = '';
-                        cells.push(t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'));
+                        // ⚠️还要解数字实体：她表里那句口号带 &#10;（换行），不解就直接显示成乱码
+                        cells.push(_xmlUnescape(t));
                     }
                     rowMap[+mr[1]] = cells;
                 }
@@ -19346,8 +19356,12 @@ body {
                             while (rowMap[rr].length <= cc) rowMap[rr].push('');
                             /* ⚠️无条件覆盖，不能只补空的：合并区域里**被盖住的格子常常留着旧值**
                                （Excel 显示时忽略它们）。她那张表第 11 行 A 列就残留着一个 `44`，
-                               只补空位的话学校名补不进去，那一行还是没头没脑的一串数字。 */
-                            rowMap[rr][cc] = val;
+                               只补空位的话学校名补不进去，那一行还是没头没脑的一串数字。
+                               ⚠️但**横向合并只保留左上角**（2026-09-10 当天修）：标题那种
+                                 「A1:E1 合并成一条」的，铺满会把同一句话重复五遍，纯噪音。
+                                 纵向合并（学校名跨两行）才需要往下填。 */
+                            if (mg.r2 > mg.r1 || cc === mg.c1) rowMap[rr][cc] = val;
+                            else rowMap[rr][cc] = '';
                         }
                     }
                 }
