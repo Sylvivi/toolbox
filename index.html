@@ -3289,6 +3289,14 @@ body {
         }
         .chat-action-item:hover, .chat-action-item:active { background: var(--card-inner); }
         .chat-action-item.danger { color: var(--red); }
+        /* 长按面板顶上的「这条是谁答的」印记（2026-09-10 她要的：
+           「有些模型表现特别好，回答完我就忘了是哪个，希望能追溯」）。
+           ⚠️故意做成淡色小字、不加底色色块——见记忆 user-taste-minimal-no-badges。 */
+        .chat-sheet-model {
+            font-size: 0.8em; color: var(--text-muted);
+            padding: 0.2em 1em 0.7em; text-align: center;
+            word-break: break-all; user-select: text;
+        }
         .chat-action-item .act-icon { font-size: 18px; width: 26px; text-align: center; }
 
         /* ===== 回到底部按钮 ===== */
@@ -18399,10 +18407,10 @@ body {
                     if (_rafPending) { cancelAnimationFrame(_rafId); _rafPending = false; }
                     if (chatReadingMode && fullContent && readingModeHasMarkers(fullContent)) {
                         chatRenderReadingModeFinal(bubbleEl, thinkContent, fullContent, _readingModeOrigText);
-                        chatMessages.push({ role: 'assistant', content: fullContent, thinking: (thinkContent && thinkContent.trim()) ? thinkContent : undefined, ts: Date.now(), readingMode: true });
+                        chatMessages.push({ role: 'assistant', content: fullContent, thinking: (thinkContent && thinkContent.trim()) ? thinkContent : undefined, ts: Date.now(), readingMode: true, model: _reqModel });
                     } else {
                         chatRenderStreamFinal(bubbleEl, thinkContent, fullContent);
-                        chatMessages.push({ role: 'assistant', content: fullContent, thinking: (thinkContent && thinkContent.trim()) ? thinkContent : undefined, ts: Date.now() });
+                        chatMessages.push({ role: 'assistant', content: fullContent, thinking: (thinkContent && thinkContent.trim()) ? thinkContent : undefined, ts: Date.now(), model: _reqModel });
                         if (chatReadingMode && _userSentChapter && _readingRetry) showToast('这个模型不太按段落格式输出，可换个模型再试');
                     }
                 } else {
@@ -18416,10 +18424,10 @@ body {
                         if (_rafPending) { cancelAnimationFrame(_rafId); _rafPending = false; }
                         if (chatReadingMode && fullContent && readingModeHasMarkers(fullContent)) {
                             chatRenderReadingModeFinal(bubbleEl, thinkContent, fullContent, _readingModeOrigText);
-                            chatMessages.push({ role: 'assistant', content: fullContent, thinking: (thinkContent && thinkContent.trim()) ? thinkContent : undefined, ts: Date.now(), readingMode: true });
+                            chatMessages.push({ role: 'assistant', content: fullContent, thinking: (thinkContent && thinkContent.trim()) ? thinkContent : undefined, ts: Date.now(), readingMode: true, model: _reqModel });
                         } else {
                             chatRenderStreamFinal(bubbleEl, thinkContent, fullContent);
-                            chatMessages.push({ role: 'assistant', content: fullContent, thinking: (thinkContent && thinkContent.trim()) ? thinkContent : undefined, ts: Date.now() });
+                            chatMessages.push({ role: 'assistant', content: fullContent, thinking: (thinkContent && thinkContent.trim()) ? thinkContent : undefined, ts: Date.now(), model: _reqModel });
                         }
                     } else {
                         bubbleEl.innerHTML = '<span style="color:var(--text-muted)">（已中断）</span>';
@@ -18611,6 +18619,14 @@ body {
             items.innerHTML = '';
             var isUser = msg.role === 'user';
             var isAi = msg.role === 'assistant';
+            /* 这条是哪个模型答的。⚠️只有**加了这个功能之后**产生的消息才有 model 字段，
+               老消息没有就不显示（她说不用追溯以前的，别为此补一个「未知」出来占地方）。 */
+            if (isAi && msg.model) {
+                var _mtag = document.createElement('div');
+                _mtag.className = 'chat-sheet-model';
+                _mtag.textContent = '🏷 ' + msg.model;
+                items.appendChild(_mtag);
+            }
             var actions = [];
             actions.push({ label: '复制内容', fn: function() { chatSheetCopy(idx); } });
             if (isUser) actions.push({ label: '编辑消息', fn: function() { chatSheetEdit(idx); } });
