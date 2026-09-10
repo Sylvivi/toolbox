@@ -6075,6 +6075,9 @@ body {
                         <button onclick="clawdMenuAct('usage')">💰 用量</button>
                         
                         <button id="clawdMsgToolsBtn" onclick="clawdMenuAct('msgtools')">👁 显示</button>
+                        <!-- 2026-09-10 她要的：常用「重新生成」，原来得先在上面那个开关里把
+                             消息按钮显示出来、点完再关掉，来回折腾。这里直接一步到位。 -->
+                        <button onclick="clawdMenuAct('regen')">🔄 重答</button>
                         <button id="clawdNextChapBtn" onclick="clawdMenuAct('nextchap')">⏭️ 续章</button>
                         <button onclick="clawdMenuAct('model')">🦀 clawd</button>
                     </div>
@@ -19652,12 +19655,32 @@ body {
             if (wasBottom) chatScrollBottom();
         }
         chatApplyMsgTools();
+        /* 菜单里的「🔄 重答」：直接重生成最后一条 AI 回复。
+           ⚠️复用 chatSheetRegenFrom(idx)，别另写一套——那个函数已经处理了
+             截断消息、清掉 reroll 按钮、重渲染、再发请求这一串。
+           ⚠️从后往前找 assistant，因为末尾可能跟着用户刚发还没回的消息。 */
+        function clawdRegenLast() {
+            if (chatStreaming) { showToast('正在回答，等它说完再重答'); return; }
+            for (var i = chatMessages.length - 1; i >= 0; i--) {
+                var _m = chatMessages[i];
+                if (!_m || _m.role !== 'assistant') continue;
+                /* ⚠️生图消息不能走这条路：chatSheetRegenFrom 会 splice 掉它再发**文字**请求，
+                   等于把她刚生成的图删了换成一段话。往前找也不行——那会连图一起截断。
+                   所以直接拦下来，让她用图片上的按钮重生成。 */
+                if (_m.genImage) { showToast('最后一条是图片，重新生成请点图片上的按钮'); return; }
+                chatSheetRegenFrom(i);
+                return;
+            }
+            showToast('还没有可以重答的回复');
+        }
+
         function clawdMenuAct(what) {
             clawdCloseMenu();
             if (what === 'back') { chatBackToList(); return; }
             if (what === 'shelf') { rbOpenShelf(); return; }
             if (what === 'nextchap') { clawdNextChapter(); return; }
             if (what === 'usage') { apiLogShowPanel(); return; }
+            if (what === 'regen') { clawdRegenLast(); return; }
             if (what === 'genimg') { genImageOpenDialog(); return; }
             if (what === 'msgtools') { clawdToggleMsgTools(); return; }
             if (what === 'model') { chatOpenModelSheet(); return; }
