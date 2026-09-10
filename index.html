@@ -2571,6 +2571,15 @@ body {
             border: 1px solid var(--card-border); border-radius: 12px;
             box-shadow: 0 8px 24px rgba(0,0,0,0.14); padding: 6px;
             max-height: 46vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+            /* ⚠️2026-09-10 汐改：宽度按**内容**走，不再跟锚点等宽。
+               原来 JS 拿 `chatInputModelMeta`（输入框下面那行小字）的 rect 当宽度，
+               而那行小字是块元素、宽度＝整个输入框 → 弹层横跨大半屏，
+               里面却只有几个短短的模型名（她原话「那个选模型的框好宽啊」）。
+               ⚠️`.fq-grp::after` 那根引线是 flex:1，靠它自己的 min-width:1em 兜底，
+                 不会把 max-content 撑开；改这里不用动它。 */
+            width: max-content;
+            min-width: 200px;
+            max-width: min(340px, calc(100vw - 20px));
         }
         .fav-quick.show { display: block; }
         /* 中转站分组的标题。⚠️2026-09-02 汐做的，她说「中转站的名字可不可以弄点样式，
@@ -21315,8 +21324,10 @@ body {
                ⚠️光把里面每一行的行高钉成整数**不够**（那是同一天早先修的另一半）：
                  行内偏移齐了，容器本身还是歪的，最后照样落在小数上。**两半都要有。** */
             var r = meta.getBoundingClientRect();
-            var w = Math.round(Math.min(Math.max(r.width, 220), window.innerWidth - 20));
-            pop.style.width = w + 'px';
+            /* ⚠️宽度交给 CSS 的 max-content，这里只**读**不设。
+               先清掉上一次可能留下的行内宽度，否则量到的是旧值（style 属性是会赖着的）。 */
+            pop.style.width = '';
+            var w = Math.round(pop.getBoundingClientRect().width);
             var left = Math.round(Math.min(Math.max(r.left, 10), window.innerWidth - w - 10));
             pop.style.left = left + 'px';
             pop.style.top = 'auto';
