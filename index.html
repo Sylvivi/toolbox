@@ -17672,10 +17672,72 @@ body {
         document.getElementById('chatInput').addEventListener('compositionend', function() { _chatComposing = false; });
 
         // 支持直接粘贴图片到输入框
+        /* ⚠️2026-09-10 她报「粘贴在对话框的图片它看不到，只有点加号上传的才行」。
+           桌面 Chromium 里模拟粘贴是好的（items 里有 kind='file'），说明代码那条路没坏——
+           是**手机给的剪贴板形态不一样**：安卓粘贴截图常常不给 file，而是给一段
+           text/html（里面嵌 <img src="data:...">），甚至只给 files 不给 items。
+           所以这里补两条兜底，并且**一条都没接住时明确提示她改用 ➕**，
+           别让她以为发出去了、结果 AI 一脸茫然（她就是这么被坑的）。 */
         document.getElementById('chatInput').addEventListener('paste', function(e) {
-            var items = (e.clipboardData || window.clipboardData) && (e.clipboardData || window.clipboardData).items;
-            if (!items) return;
+            var cd = e.clipboardData || window.clipboardData;
+            if (!cd) return;
+            var items = cd.items;
             var found = false;
+
+            // 兜底①：有些浏览器只填 files、不填 items
+            if ((!items || !items.length) && cd.files && cd.files.length) {
+                for (var fi = 0; fi < cd.files.length; fi++) {
+                    var ff = cd.files[fi];
+                    if (ff && ff.type && ff.type.indexOf('image/') === 0) {
+                        found = true;
+                        (function (f2) {
+                            var rd = new FileReader();
+                            rd.onload = function (ev2) { chatAddImage(ev2.target.result, f2.type); };
+                            rd.readAsDataURL(f2);
+                        })(ff);
+                    }
+                }
+                if (found) { e.preventDefault(); return; }
+            }
+
+            // 兜底②：剪贴板只给 HTML 片段时，从里面把内嵌的 data: 图抠出来
+            if (items) {
+                var html = '';
+                try { html = cd.getData('text/html') || ''; } catch (e2) {}
+                if (html && html.indexOf('data:image/') >= 0) {
+                    var re = /<img[^>]+src=["'](data:image\/[^"']+)["']/gi, m2, got = 0;
+                    while ((m2 = re.exec(html)) && got < 4) {
+                        got++;
+                        chatAddImage(m2[1], (m2[1].split(';')[0] || 'data:image/png').slice(5));
+                    }
+                    if (got) { e.preventDefault(); return; }
+                }
+                /* 兜底③：**从网页上复制图片**时（她在电脑上就是这么干的），剪贴板给的 HTML 里
+                   是 `<img src="https://...">` ——一个**网址**，不是图片数据。
+                   这里现场把它抓下来转成 data:。⚠️抓不到多半是对方站点不给跨域，
+                   那就老实提示用 ➕，别默默失败。 */
+                if (html && /<img[^>]+src=["']https?:/i.test(html)) {
+                    var reU = /<img[^>]+src=["'](https?:\/\/[^"']+)["']/i;
+                    var mu = reU.exec(html);
+                    if (mu) {
+                        e.preventDefault();
+                        fetch(mu[1], { mode: 'cors' })
+                            .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+                            .then(function (blob) {
+                                if (blob.type.indexOf('image/') !== 0) throw new Error('不是图片');
+                                var rd = new FileReader();
+                                rd.onload = function (ev3) { chatAddImage(ev3.target.result, blob.type); };
+                                rd.readAsDataURL(blob);
+                            })
+                            .catch(function () {
+                                showToast('这张图在对方站点上取不到（跨域），用左边的 ➕ 传一下');
+                            });
+                        return;
+                    }
+                }
+            }
+
+            if (!items) return;
             for (var i = 0; i < items.length; i++) {
                 var it = items[i];
                 if (it.kind === 'file' && it.type && it.type.indexOf('image/') === 0) {
@@ -17689,7 +17751,13 @@ body {
                     })(file);
                 }
             }
-            if (found) e.preventDefault(); // 阻止把图片当作文本/文件路径插入，保留纯文本粘贴
+            if (found) { e.preventDefault(); return; } // 阻止把图片当作文本/文件路径插入，保留纯文本粘贴
+            /* 一条都没接住，但剪贴板确实像是图片 → 明说，别让她白发一条 */
+            try {
+                var types = Array.prototype.slice.call(cd.types || []);
+                var looksImg = types.some(function (t) { return String(t).indexOf('image') >= 0; });
+                if (looksImg) showToast('这张图粘不进来，用左边的 ➕ 传一下（手机浏览器的剪贴板限制）');
+            } catch (e3) {}
         });
 
         document.addEventListener('keydown', function(e) {
