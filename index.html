@@ -18224,6 +18224,12 @@ body {
                 if (!we && _el > 0) { var td = document.querySelector('.chat-typing'); if (td) { we = document.createElement('span'); we.className = 'chat-wait-timer'; td.appendChild(we); } }
                 if (we) we.textContent = chatFmtElapsed(_el);
             }, 1000);
+            /* ⚠️2026-09-10 补：主流程原来不掐表，所以用量明细里只有「对话摘要」带
+               「首字 x.xs · 总 x.xs」，普通「对话」什么都没有（她看着奇怪，来问）。
+               病根是**记账点有四个**（这条主流程、chatStreamChat、记忆、记忆整理），
+               当天只给 chatStreamChat 加了掐表。⚠️以后动记账相关的，
+               先 `grep apiLogRecord(` 把四个点都过一遍，别只改手边这个。 */
+            var _tReqStart = Date.now(), _tFirstChar = null;
             var fullContent = '';
             var thinkContent = '';
             var inThinkTag = false;
@@ -18287,11 +18293,13 @@ body {
                             // 思维链字段（覆盖各家中转站变体）
                             var thinkDelta = delta.reasoning_content || delta.reasoning || delta.thinking;
                             if (thinkDelta) {
+                                if (_tFirstChar === null) _tFirstChar = Date.now();   // 思维链也算「有动静了」
                                 if (!chatThinkStart) chatThinkStart = Date.now();
                                 thinkContent += thinkDelta;
                                 _scheduleRender(true);
                             }
                             if (delta.content) {
+                                if (_tFirstChar === null) _tFirstChar = Date.now();
                                 _contentBuf += delta.content;
                                 var safeCut = _contentBuf.length;
                                 var ltIdx = _contentBuf.lastIndexOf('<');
@@ -18351,6 +18359,7 @@ body {
 
                 // 记账：判用途环节 → 有真实 usage 用真实值，否则按 messages / 回复(含思维)估算
                 try {
+                    _apiLastTiming = { ttft: (_tFirstChar ? _tFirstChar - _tReqStart : null), dur: Date.now() - _tReqStart };
                     var _docPurpose = (chatReadingMode && _userSentChapter) ? '共读点评' : (chatTranslateMode ? '翻译' : '对话');
                     if (_docUsage) {
                         // 同上：有 usage 但输出为 0（订阅桥那条线）时按正文估一个，别记成 0
