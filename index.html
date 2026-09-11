@@ -10627,11 +10627,21 @@ body {
          *   **句中的换成 `§56`** 存下来，渲染时再变成可点的小标记，点了滚到那一段。
          * ⚠️存的是纯文本 `§56` 而不是 HTML：这些答案要写进 msg.content、
          *   还要被 readingModeParseComments 再解析一遍，塞 HTML 进去会把解析搅乱。 */
-        function rdKeepPRef(s) {
-            return String(s == null ? '' : s)
-                .replace(/(^|\n)[ \t]*\[P\d+\][ \t]*/gi, '$1')          // 行首：删
+        /* ⚠️`keepLead`＝**别删行首那个 [Pn]**，改成跟句中一样转成 §N（2026-09-11 加）。
+           起因：她报《故事的解剖》奇爱博士那条追问「有符号被隐藏了」。查下来不是渲染吃字，
+           是模型在回答里引用段号、写成行首的 `[P35] 提到的高潮是…`，被下面第一条规则
+           **整个删掉**，于是句子从半空开始（「提到的高潮是…」「里列出的那三个场景…」）。
+           ⚠️第一条规则本身没错，它是给**点评**用的：点评里的 `[P3]` 是「这条挂在第3段」的
+             **标签**，位置信息已经被 readingModeParseComments 用过了，留着就是噪音。
+             但在**追问 / 背景讲解**里，行首的 `[Pn]` 是**引用**，删掉就丢了意思。
+           → 点评照旧删；追问、背景讲解、以及它们的流式预览传 true。
+           ⚠️转成 §N 之后 `_rdPRefChips` 会把它变成可点的小标，点一下跳到那一段——比原样留着还好使。 */
+        function rdKeepPRef(s, keepLead) {
+            var t = String(s == null ? '' : s);
+            if (!keepLead) t = t.replace(/(^|\n)[ \t]*\[P\d+\][ \t]*/gi, '$1');   // 行首：删（只对点评）
+            return t
                 .replace(/[（(][ \t]*\[P(\d+)\][ \t]*[）)]/gi, '§$1')     // 整对括号包着：连括号一起换
-                .replace(/\[P(\d+)\]/gi, '§$1');                          // 句中：换成 §N
+                .replace(/\[P(\d+)\]/gi, '§$1');                          // 句中（含行首，keepLead 时）：换成 §N
         }
         /* 把消息里的「[ 文件名 ]＋代码块」渲染成一张**文件卡片**（2026-09-10 她要的：
            「希望像 qq 群里发文件那种显示」）。在这之前是把整份文档摊在气泡里，
@@ -28618,7 +28628,7 @@ body {
         /* 气泡的 HTML：占位态和流式态**同一套骨架**，渲染函数和流式增量共用一份，
            免得两处各写一遍、日子久了长歪（翻译那边就是分两处写的，改一处忘一处过）。 */
         function readingPendingHtml(pp) {
-            var body = rdKeepPRef(pp.partial || '');
+            var body = rdKeepPRef(pp.partial || '', pp.kind !== 'comment');   // 流式预览要跟最终结果一致
             var started = !!body.trim();
             var h = '<blockquote class="rd-stream-bq' + (started ? '' : ' rd-pending') + '" data-pid="' + pp.id + '"' +
                 ' style="position:relative;margin:0.4em 0 0.6em;padding:0.5em 12px 0.4em;border-left:3px solid var(--accent);background:var(--quote-bg, var(--accent-light));border-radius:0 8px 8px 0;font-size:0.92em;color:var(--text-sub);line-height:1.6">' +
@@ -28646,7 +28656,7 @@ body {
             node.classList.remove('rd-pending');
             var ans = node.querySelector('.rd-stream-ans');
             if (!ans) return;
-            ans.innerHTML = renderText(rdKeepPRef(pp.partial || '')) + '<span class="rd-stream-cursor">▍</span>';
+            ans.innerHTML = renderText(rdKeepPRef(pp.partial || '', pp.kind !== 'comment')) + '<span class="rd-stream-cursor">▍</span>';
             var cont = document.getElementById('chatMessages');
             if (!cont) return;
             var r = node.getBoundingClientRect(), c = cont.getBoundingClientRect();
@@ -29590,7 +29600,7 @@ body {
                 // 去掉段落标记，并把答案内部的空行折叠为单换行——
                 // 否则空行会被 readingModeParseComments 当作该段评论的结束，
                 // 导致答案被丢到整条消息末尾的 trailing 区而非贴在本段下方。
-                answer = rdKeepPRef(answer).replace(/\n\s*\n+/g, '\n').trim();
+                answer = rdKeepPRef(answer, true).replace(/\n\s*\n+/g, '\n').trim();   // 追问：行首段号是引用，保留成 §N
                 if (!answer) throw new Error('空回复');
                 // 以「汐：问题 / 答案」形式接在该段下方（与评论共用渲染）。
                 // 问题与答案之间只用单换行，确保它们仍属于同一个 [Pn] 评论块。
@@ -30052,7 +30062,7 @@ body {
                 // 有时够有时不够，于是「第 1 条插进去了，后面全没了」（用户实测，且每条还白重试一遍）。
                 max_tokens: 4000
             }, 90000, _rdMdlName(mdl));   // 单条只讲 120 字，90 秒还没回就是卡了
-            var txt = rdKeepPRef(out || '').replace(/\n\s*\n+/g, '\n').trim();
+            var txt = rdKeepPRef(out || '', true).replace(/\n\s*\n+/g, '\n').trim();   // 背景讲解：同上
             // 空回复必须抛错，不能当"这条讲完了"返回空串：外层只会 failed++ 然后 continue，
             // lastErr 还是空的，收尾提示就成了「N 条没成功：」后面什么都没有——请求发了、钱扣了，
             // 却完全看不出为什么。抛出来才能走重试、并在提示里说清原因。
