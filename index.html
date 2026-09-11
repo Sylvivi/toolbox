@@ -6300,7 +6300,6 @@ body {
                     <div style="display:flex;gap:6px">
                         <button class="chip-btn" data-mode="normal" onclick="chatSetMode('normal')">对话</button>
                         <button class="chip-btn" data-mode="translate" onclick="chatSetMode('translate')">翻译</button>
-                        <button class="chip-btn active" data-mode="reading" onclick="chatSetMode('reading')">共读</button>
                         <button class="chip-btn" data-mode="reader" onclick="chatSetMode('reader')">阅读</button>
                     </div>
                 </div>
@@ -15279,10 +15278,15 @@ body {
             chatCompressedCount = conv.compressedCount || 0;
             chatSelectedModel = conv.model || '';
             chatSelectedKeyStr = conv.keyStr || '';
-            chatReadingMode = conv.readingMode || false;
             chatTranslateMode = conv.translateMode || false;
             // 阅读模式会话（id 以 reader_ 开头）：标记阅读态，记下书 id 与已载入到第几章，供「翻到底自动续章」用
             chatReaderMode = (conv.id && conv.id.indexOf('reader_') === 0);
+            /* ⚠️2026-09-11 共读撤掉后，正文渲染态**由会话身份推出来**，不再读存档里的 `readingMode`。
+               对阅读会话结果完全一样（那个字段本来就是跟着一起存的 true），
+               但万一从另一台设备同步回来一个旧的共读会话，它会被当普通对话打开、不再复活共读。
+               ⚠️那种会话的正文照样显示得好好的——段号/正文渲染看的是**每条消息自己**的
+                 `readingMode` 标记（见 `_isReadingMsg`），跟这个全局态是两回事。 */
+            chatReadingMode = chatReaderMode;
             if (chatReaderMode) {
                 readerBookId = conv.id.slice(7);
                 readerHydrateLoadedQA(); // 用已同步的 reader_qa 重灌正文问答（渲染前，修「换设备正文看不到问答」）
@@ -21554,10 +21558,6 @@ body {
             chatReadingMode = on;
             if (changed) { if (on) readingCollapseInput(); else readingExpandInput(false); }
             if (on && chatTranslateMode) { chatTranslateMode = false; translateSyncToggle(); }
-            var track = document.getElementById('readingModeTrack');
-            var thumb = document.getElementById('readingModeThumb');
-            if (track) track.style.background = on ? 'var(--accent)' : 'var(--card-border)';
-            if (thumb) thumb.style.transform = on ? 'translateX(18px)' : 'translateX(0)';
             // 共读/翻译模式各走各的压缩逻辑（共读按「章」、翻译固定 10 条），都不依赖也不该改写
             // 对话模式的「触发」阈值——这里只刷新滑块的禁用态与显示标签，不动 chatCompressThreshold，
             // 避免把对话模式的设置覆盖掉（以前进共读会写成 10 并存盘，切回对话还原不可靠，导致卡在 10）。
@@ -21584,7 +21584,15 @@ body {
             if (typeof readingApplyTopbarMode === 'function') readingApplyTopbarMode();
         }
 
-        // 四选一模式选择器：对话 / 翻译 / 共读 / 阅读（互斥）
+        /* 三选一模式选择器：对话 / 翻译 / 阅读（互斥）
+           ⚠️2026-09-11 **「共读」整个撤掉了**（她：「我把共读都删除了，阅读模式已经满足了我所有的需求」）。
+             共读＝「开着正文渲染、但没套书库那层壳」，入口就只有这里的一个 chip。
+           ⚠️**没有连带删共用实现**，是故意的：正文渲染器、段号、划线、小注、摘要、
+             点段点评、记忆表，阅读模式全都在用同一套——`readerOpenChapter` 里
+             `chatReadingMode` 和 `chatReaderMode` 是**一起置真**的。
+             所以别看到「共读」字样就去清，多半是阅读也在走的那条路。
+           ⚠️`chatReadingMode` 这个变量**保留**且仍有意义：现在它＝「已经进到某一章的正文」，
+             而 `chatReaderMode` 还包含「阅读入口/书架开着但还没选章」那个中间态。 */
         function chatSetMode(mode) {
             // 「阅读」是覆盖层式入口，不改变底层会话模式：打开书架选书 → 进阅读器
             if (mode === 'reader') {
@@ -21592,21 +21600,15 @@ body {
                 return;
             }
             chatReaderMode = false;
-            if (mode === 'reading') {
-                toggleReadingMode(true);      // 内部会关掉翻译
-            } else if (mode === 'translate') {
-                toggleTranslateMode(true);    // 内部会关掉共读
-            } else {
-                toggleReadingMode(false);
-                toggleTranslateMode(false);
-            }
+            toggleReadingMode(false);              // 退出正文渲染态
+            toggleTranslateMode(mode === 'translate');
             chatSyncModeButtons();
             if (typeof readingApplyTopbarMode === 'function') readingApplyTopbarMode();
         }
 
         // 把当前模式同步到分段按钮的高亮
         function chatSyncModeButtons() {
-            var mode = chatReaderMode ? 'reader' : (chatReadingMode ? 'reading' : (chatTranslateMode ? 'translate' : 'normal'));
+            var mode = chatReaderMode ? 'reader' : (chatTranslateMode ? 'translate' : 'normal');
             var btns = document.querySelectorAll('#chatModeRow .chip-btn');
             for (var i = 0; i < btns.length; i++) {
                 btns[i].classList.toggle('active', btns[i].getAttribute('data-mode') === mode);
@@ -27696,13 +27698,11 @@ body {
         })();
 
         // 同步设置面板里的「共读模式」开关到当前状态
+        /* 只剩「把当前模式同步到那排 chip 的高亮」这一件事。
+           ⚠️2026-09-11 顺手清的死代码：这里原来还去摸 `readingModeTrack`/`readingModeThumb`/
+             `readingModeToggle` 三个元素——**它们早就不在页面里了**（整份 HTML 里 0 处），
+             共读那个小滑块界面在更早的某一版就被 chip 取代了，只剩这几句空摸。 */
         function readingSyncReadingModeToggle() {
-            var rmChk = document.getElementById('readingModeToggle');
-            if (rmChk) rmChk.checked = chatReadingMode;
-            var rmTrack = document.getElementById('readingModeTrack');
-            var rmThumb = document.getElementById('readingModeThumb');
-            if (rmTrack) rmTrack.style.background = chatReadingMode ? 'var(--accent)' : 'var(--card-border)';
-            if (rmThumb) rmThumb.style.transform = chatReadingMode ? 'translateX(18px)' : 'translateX(0)';
             chatSyncModeButtons();
         }
 
@@ -34435,14 +34435,11 @@ body {
             return '';
         }
 
+        /* ⚠️名字还叫 chip，但共读那个 chip 已经没了；现在它只负责翻译开关 + 上下文指示器。
+           ⚠️2026-09-11 顺手清的死代码：这里原来还去摸 `readingModeTrack`/`readingModeThumb`/
+             `readingModeToggle` 三个元素——**它们早就不在页面里了**（整份 HTML 里 0 处），
+             共读那个小滑块界面在更早的某一版就被 chip 取代了，只剩这几句空摸。 */
         function chatSyncReadingChip() {
-            // 同步设置面板里的开关
-            var toggle = document.getElementById('readingModeToggle');
-            if (toggle) toggle.checked = chatReadingMode;
-            var track = document.getElementById('readingModeTrack');
-            var thumb = document.getElementById('readingModeThumb');
-            if (track) track.style.background = chatReadingMode ? 'var(--accent)' : 'var(--card-border)';
-            if (thumb) thumb.style.transform = chatReadingMode ? 'translateX(18px)' : 'translateX(0)';
             translateSyncToggle();
             chatUpdateCtxIndicator();
         }
