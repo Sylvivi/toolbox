@@ -2620,6 +2620,20 @@ body {
             cursor: pointer; user-select: none;
         }
         .chat-input-modelmeta:active { opacity: 1; }
+        /* 预设那一小块：跟模型同款小字，但 **flex-shrink:0 + 不 flex:1**——
+           宽度优先让给模型名（那个长得多），预设名她最长的是「考研数据助手」6 个字。
+           ⚠️中间那条竖线用 border-left 不用字符，字符会跟着省略号一起被截掉。 */
+        .chat-input-presetmeta {
+            flex: 0 0 auto; max-width: 40%;
+            font-size: 10px; color: var(--text-muted); opacity: 0.7;
+            line-height: 1.5; letter-spacing: 0.03em;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            padding-left: 8px; padding-right: 4px;
+            border-left: 1px solid var(--card-border);
+            cursor: pointer; user-select: none;
+        }
+        .chat-input-presetmeta:active { opacity: 1; }
+        .chat-input-presetmeta .mm-arrow { opacity: 0.55; margin-left: 0.35em; font-size: 0.9em; }
         .chat-input-modelmeta .mm-arrow { opacity: 0.55; margin-left: 0.35em; font-size: 0.9em; }
         /* 收藏模型的快选弹层。定位用 fixed + 按小字的位置算，因为输入区在不同模式下
            父容器的定位上下文不一样（共读折叠态会改布局），absolute 会飘。 */
@@ -6206,6 +6220,10 @@ body {
                             </div>
                         </div>
                         <div class="chat-input-modelmeta" id="chatInputModelMeta" style="display:none"></div>
+                        <!-- 2026-09-11 她要的：「除了点一下能看到在用哪个模型，还得让我知道在用哪个预设，
+                             点一下也能选择更换」。跟模型那行小字并排，同一套观感、同一套交互。 -->
+                        <div class="chat-input-presetmeta" id="chatInputPresetMeta" style="display:none"></div>
+                        <div class="fav-quick" id="presetQuick"></div>
                         <div class="fav-quick" id="favQuick"></div>
                         <input type="file" id="chatAttachPhoto" accept="image/*" multiple="" style="display:none" onchange="chatOnFileSelect(this)">
                         <input type="file" id="chatAttachFile" multiple="" accept=".txt,.md,.csv,.json,.docx,.xlsx,.log,.xml,.yaml,.yml,.js,.ts,.py,.html,.css,.sql" style="display:none" onchange="chatOnFileSelect(this)">
@@ -21875,6 +21893,71 @@ body {
             el.appendChild(a);
         }
 
+        /* 输入框那行小字里的「预设」（2026-09-11 她要的）。
+           ⚠️只在对话模式显示：阅读/翻译那两个模式她说过「感觉可以不用改什么」，
+             而且预设在那儿也不是主要开关。
+           ⚠️名字截断到 6 个字：她最长的是「考研数据助手」，再长会把模型名挤没。 */
+        function chatUpdateInputPresetMeta() {
+            var el = document.getElementById('chatInputPresetMeta');
+            if (!el) return;
+            var inChat = !(typeof chatReaderMode !== 'undefined' && chatReaderMode)
+                      && !(typeof chatTranslateMode !== 'undefined' && chatTranslateMode);
+            if (!inChat) { el.style.display = 'none'; return; }
+            var nm = '无预设';
+            try {
+                var ps = chatGetSpPresets();
+                if (chatActivePresetIdx >= 0 && ps[chatActivePresetIdx]) nm = ps[chatActivePresetIdx].name || '未命名';
+            } catch (e) {}
+            if (nm.length > 6) nm = nm.slice(0, 6) + '…';
+            el.textContent = nm;
+            var a = document.createElement('span');
+            a.className = 'mm-arrow';
+            a.textContent = '⌄';
+            el.appendChild(a);
+        }
+
+        /* 点一下弹出预设列表，选一个就换。复用收藏模型那个弹层的样式和定位手法
+           （`.fav-quick` + fixed 定位），两处手感一致。 */
+        var _presetQuickOpen = false;
+        function presetQuickClose() {
+            var p = document.getElementById('presetQuick');
+            if (p) p.classList.remove('show');
+            _presetQuickOpen = false;
+            var inp = document.getElementById('chatInput');
+            if (inp && document.activeElement !== inp) {
+                var m1 = document.getElementById('chatInputModelMeta');
+                var m2 = document.getElementById('chatInputPresetMeta');
+                if (m1) m1.style.display = 'none';
+                if (m2) m2.style.display = 'none';
+            }
+        }
+        function presetQuickOpen() {
+            var pop = document.getElementById('presetQuick');
+            var anchor = document.getElementById('chatInputPresetMeta');
+            if (!pop || !anchor) return;
+            var ps = [];
+            try { ps = chatGetSpPresets() || []; } catch (e) {}
+            var html = '<div class="fq-item" data-i="-1">' + (chatActivePresetIdx < 0 ? '✓ ' : '') + '无预设</div>';
+            for (var i = 0; i < ps.length; i++) {
+                html += '<div class="fq-item" data-i="' + i + '">'
+                     + (i === chatActivePresetIdx ? '✓ ' : '') + esc(ps[i].name || '未命名') + '</div>';
+            }
+            html += '<div class="fq-item" data-more="1">管理预设…</div>';
+            pop.innerHTML = html;
+            pop.classList.add('show');
+            var r = anchor.getBoundingClientRect();
+            pop.style.left = Math.max(8, Math.round(r.left)) + 'px';
+            pop.style.bottom = Math.round(window.innerHeight - r.top + 8) + 'px';
+            _presetQuickOpen = true;
+        }
+        /* ⚠️「无预设」＝把套用状态取消，但**不清空提示词框里的字**。
+           清掉的话她点错一下就丢了正在写的系统提示词，那是不可逆的。 */
+        function chatClearSpPreset() {
+            chatActivePresetIdx = -1;
+            try { chatRenderSpPresets(); } catch (e) {}
+            try { chatSaveCurrentConv(); } catch (e) {}
+        }
+
         /* ===== 输入框下面那行小字 → 点一下换收藏模型（2026-08-16）=====
          * 她的原话：「我希望那个地方可以点击，然后切换收藏模型，这样我就不需要点clawd图标去设置里切换了」。
          * 原来换模型要三步：点 🦀 → 开面板 → 切到「模型」tab → 挑。现在一步。
@@ -21987,9 +22070,47 @@ body {
             var pop = document.getElementById('favQuick');
             if (!inp || !meta || !pop) return;
 
-            inp.addEventListener('focus', function () { chatUpdateInputModelMeta(); meta.style.display = 'block'; });
+            var pmeta = document.getElementById('chatInputPresetMeta');
+            var ppop = document.getElementById('presetQuick');
+
+            inp.addEventListener('focus', function () {
+                chatUpdateInputModelMeta(); meta.style.display = 'block';
+                // ⚠️预设那块自己判断在不在对话模式，所以先亮出来再让它决定藏不藏
+                if (pmeta) { pmeta.style.display = 'block'; chatUpdateInputPresetMeta(); }
+            });
             // ⚠️弹层开着时别把小字藏了——藏了就等于把弹层的锚点抽掉，而且看着像"闪了一下"
-            inp.addEventListener('blur', function () { if (!_favQuickOpen) meta.style.display = 'none'; });
+            inp.addEventListener('blur', function () {
+                if (_favQuickOpen || _presetQuickOpen) return;
+                meta.style.display = 'none';
+                if (pmeta) pmeta.style.display = 'none';
+            });
+
+            if (pmeta && ppop) {
+                // ⚠️同样必须 pointerdown：等到 click 时输入框已 blur、这行小字已经藏起来了
+                pmeta.addEventListener('pointerdown', function (e) {
+                    e.preventDefault(); e.stopPropagation();
+                    if (_favQuickOpen) favQuickClose();
+                    if (_presetQuickOpen) presetQuickClose(); else presetQuickOpen();
+                });
+                ppop.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+                ppop.addEventListener('click', function (e) {
+                    var it = e.target.closest ? e.target.closest('.fq-item') : null;
+                    if (!it) return;
+                    if (it.getAttribute('data-more')) {
+                        presetQuickClose(); chatOpenModelSheet(); switchSheetTab('preset'); return;
+                    }
+                    var i = +it.getAttribute('data-i');
+                    if (i < 0) { chatClearSpPreset(); showToast('已取消预设'); }
+                    else {
+                        var ps = chatGetSpPresets();
+                        if (ps[i]) { chatApplySpPreset(i); showToast('已套用「' + (ps[i].name || '未命名') + '」'); }
+                    }
+                    chatUpdateInputPresetMeta();
+                    presetQuickClose();
+                });
+                document.addEventListener('pointerdown', function () { if (_presetQuickOpen) presetQuickClose(); });
+                window.addEventListener('resize', function () { if (_presetQuickOpen) presetQuickClose(); });
+            }
 
             // ⚠️必须是 pointerdown：等到 click 的时候输入框早就 blur、小字已经 display:none 了
             meta.addEventListener('pointerdown', function (e) {
