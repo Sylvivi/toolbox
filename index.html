@@ -6490,14 +6490,6 @@ body {
                                 </div>
                             </div>
                             <div style="margin-top:0.75em">
-                                <span style="font-size:11px;color:var(--text-muted)">提问模型</span>
-                                <div class="chat-model-wrap" style="position:relative;margin-top:0.35em">
-                                    <input type="text" class="preset-pick" id="presetPick_qa" readonly onclick="presetTogglePicker('qa')">
-                                    <span class="preset-caret">▾</span>
-                                    <div class="chat-model-dropdown preset-dd" id="presetDd_qa"></div>
-                                </div>
-                            </div>
-                            <div style="margin-top:0.75em">
                                 <span style="font-size:11px;color:var(--text-muted)">导读 / 讲解模型</span>
                                 <div class="chat-model-wrap" style="position:relative;margin-top:0.35em">
                                     <input type="text" class="preset-pick" id="presetPick_explain" readonly onclick="presetTogglePicker('explain')">
@@ -34406,10 +34398,13 @@ body {
            加一档就要改两处，这次一并收拢。 */
         var _PRESET_SLOTS = {
             compress: { key: 'chat_compress_model',        empty: '跟随当前模型' },
-            qa:       { key: 'chat_reading_qa_model',      empty: '跟随当前模型' },
-            // ⚠️这两档的空档是「跟随提问模型」不是「跟随当前模型」，理由见 chatResolveReadingModel
-            // ⚠️导读和讲解已合并成一档（她 09-02 定的），别再拆回去
-            explain:  { key: 'chat_reading_explain_model', empty: '跟随提问模型' },
+            /* ⚠️2026-09-11 她撤掉了「提问模型」那一档：「没有必要，肯定是用默认的那个呀」。
+               连带两处要一起改，别只删界面：
+                 · _READING_MODEL_KEYS 里的 qa 也删了 → resolve('qa') 返回 null → 提问跟随当前模型；
+                 · 讲解档的空档文案从「跟随提问模型」改回「跟随当前模型」——原来那句
+                   指的就是这个已经不存在的档位。
+               ⚠️导读和讲解是合并成一档的（她 09-02 定的），别再拆回去。 */
+            explain:  { key: 'chat_reading_explain_model', empty: '跟随当前模型' },
             /* 摘要被谷歌拒掉时改用的模型（2026-09-11 加）。
                ⚠️空档＝「不重试」，不是「跟随当前模型」——当前模型很可能就是刚被拒的那个，
                  跟着它重试等于白跑一趟还多烧一次额度。 */
@@ -34507,7 +34502,9 @@ body {
            于是「共读点评模型」整档去掉（她说「实际也是用默认」），
            点评从此一律跟随当前模型；'comment' 这个 kind 保留只为不动两处调用点。 */
         var _READING_MODEL_KEYS = {
-            qa:      'chat_reading_qa_model',
+            // ⚠️qa 于 2026-09-11 撤掉（她说提问用默认的就行）。这里**故意不留键**：
+            //   resolve('qa') 会落到下面那句 `if (!key) return null`，跟 'comment' 一样
+            //   表示「跟随当前模型」，调用点一个字都不用改。
             // ⚠️2026-09-02 她拍板合并：「把科社导读模型和背景标模型并合，不需要分开的」。
             //   两件事本来就是同一种活（把东西讲成人话），分开是汐上午想多了。
             //   两个 kind 都留着、都指向同一个键——这样 chatResolveReadingModel('guide')
@@ -34519,14 +34516,16 @@ body {
             var key = _READING_MODEL_KEYS[kind];
             if (!key) return null;              // 'comment' 落到这儿 → 跟随当前模型
             var cfg = _chatGetModelCfg(key);
-            // 导读/讲解没单独指定 → 沿用「提问模型」那档（见上面的注释，为了不悄悄改行为）
-            if (!cfg && (kind === 'guide' || kind === 'explain')) cfg = _chatGetModelCfg(_READING_MODEL_KEYS.qa);
+            // ⚠️原来「导读/讲解没指定就沿用提问模型那档」，09-11 提问档撤掉后这条也跟着去掉，
+            //   现在没指定＝跟随当前模型（_chatResolveModelCfg(null) 返回 null，调用点自己兜底）。
             return _chatResolveModelCfg(cfg);
         }
         function chatRenderReadingModelSelects() {
             // ⚠️「共读点评模型」和「生图模型/尺寸」2026-09-02 已按她的要求撤掉。
             //   顺手把存量键清掉——否则旧值还躺在 localStorage 里，界面上却没有开关能看见它。
-            ['chat_reading_comment_model', 'chat_image_model'].forEach(function (k) {
+            // ⚠️chat_reading_qa_model 是 09-11 撤档后加进来的：界面已经没有那个下拉了，
+            //   旧值留在 localStorage 里会继续生效，她会以为「明明去掉了怎么还在用那个模型」。
+            ['chat_reading_comment_model', 'chat_image_model', 'chat_reading_qa_model'].forEach(function (k) {
                 try { localStorage.removeItem(k); } catch (e) {}
             });
             /* ⚠️导读那档 09-02 并进了讲解。**先搬值再删键**——她可能已经在
