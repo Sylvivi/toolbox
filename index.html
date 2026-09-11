@@ -19145,7 +19145,78 @@ body {
             catch (e) { return s.length * 3; }
         }
 
+        /* ===== v2：按「消息条数」分块，只重传变了的那一块（2026-09-11）=====
+           起因同「阅读问答拆键」那次：她报手机发烫。对话原来是**整条重传**——
+           她最长那条已经 1.15MB，等于**每发一句话就上传 1.15MB**，聊 50 句 57MB。
+
+           存法：
+             chat_<id>        = { __v2:1, meta:{除 messages 外的全部字段}, n:总条数, chunks:块数 }
+             chat_<id>::m0..  = { c: '<那一段 messages 的 JSON>' }
+
+           ⚠️**为什么不沿用原来按字符串切的 `::p`**：那是把整条对话 `JSON.stringify` 之后按字符切，
+             只要前面任何一个字段长度变一点（标题、摘要、记忆表…），后面所有块**整体挤位**，
+             于是「只变了最后一句」也会导致每一块都不一样，省不到。
+             按消息条数切就没有这个问题：第 k 块永远是第 k 批消息。
+           ⚠️`_pushedChunks` 只是**省流量的记账**，不是真相来源。记账丢了（换设备/清缓存）
+             最坏就是多传一次，绝不会传错——所以不用同步它。
+           ⚠️三种格式都要能读：v2、旧的 `::p` 分块、更旧的整条。见 `cfGetConv`。 */
+        var CF_CONV_MSGS_PER_CHUNK = 30;     // 每块 30 条消息：追加一句话通常只重写最后一块
+        var CF_CONV_PUSHED = 'chat_pushed_chunks';   // { convId: [每块的指纹] }，按设备记
+
+        function _cfChunkSig(str) {           // 便宜的指纹：长度 + 逐字符滚动哈希
+            var h = 5381;
+            for (var i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0;
+            return str.length + ':' + h;
+        }
+        function _cfPushedAll() {
+            try { return JSON.parse(localStorage.getItem(CF_CONV_PUSHED) || '{}'); } catch (e) { return {}; }
+        }
+        function _cfPushedSet(id, sigs) {
+            var all = _cfPushedAll(); all[id] = sigs;
+            try { localStorage.setItem(CF_CONV_PUSHED, JSON.stringify(all)); } catch (e) {}
+        }
+
+        function cfPutConvV2(id, conv) {
+            var key = 'chat_' + id;
+            var msgs = conv.messages || [];
+            var meta = {};
+            Object.keys(conv).forEach(function (k) { if (k !== 'messages') meta[k] = conv[k]; });
+            var chunks = [];
+            for (var i = 0; i < msgs.length; i += CF_CONV_MSGS_PER_CHUNK) {
+                chunks.push(JSON.stringify(msgs.slice(i, i + CF_CONV_MSGS_PER_CHUNK)));
+            }
+            if (!chunks.length) chunks.push('[]');   // 空对话也留一块，读回来才是数组
+            var sigs = chunks.map(_cfChunkSig);
+            var prev = _cfPushedAll()[id] || [];
+            return cfReq('GET', key).catch(function () { return null; }).then(function (old) {
+                // 云端不是 v2（第一次搬家）→ 记账作废，整条重写一遍
+                var fresh = !(old && old.__v2);
+                var puts = [];
+                for (var i = 0; i < chunks.length; i++) {
+                    if (!fresh && prev[i] === sigs[i]) continue;      // ★省流量就在这一行
+                    puts.push(cfReq('PUT', key + '::m' + i, { c: chunks[i] }));
+                }
+                return Promise.all(puts).then(function () {
+                    return cfReq('PUT', key, { __v2: 1, meta: meta, n: msgs.length, chunks: chunks.length });
+                }).then(function (r) {
+                    _cfPushedSet(id, sigs);
+                    // 清掉多余的尾块 + 旧格式留下的 ::p 分块
+                    var dels = [];
+                    var oldChunks = (old && old.__v2) ? (old.chunks || 0) : 0;
+                    for (var j = chunks.length; j < oldChunks; j++) dels.push(cfReq('DELETE', key + '::m' + j).catch(function () {}));
+                    var oldParts = (old && old.__chunked) ? (old.parts || 0) : 0;
+                    for (var k2 = 0; k2 < oldParts; k2++) dels.push(cfReq('DELETE', key + '::p' + k2).catch(function () {}));
+                    return Promise.all(dels).then(function () { return r; });
+                });
+            });
+        }
+
+        /* ⚠️2026-09-11 起一律走 v2（上面那个）。下面这段按字符串切的老写法**只保留读的那一半**
+           （`cfGetConv` 仍认 `::p`），写不再用它——留着是为了万一要回退时有个对照。 */
         function cfPutConv(id, conv) {
+            return cfPutConvV2(id, conv);
+        }
+        function cfPutConvLegacy(id, conv) {
             var key = 'chat_' + id;
             var s;
             try { s = JSON.stringify(conv); } catch (e) { return Promise.reject(e); }
@@ -19179,6 +19250,20 @@ body {
             var key = 'chat_' + id;
             return cfReq('GET', key).then(function (data) {
                 if (!data) return null;
+                if (data.__v2) {                  // 新格式：元数据 + 按消息条数分的块
+                    var cn = data.chunks || 0, mgets = [];
+                    for (var mi = 0; mi < cn; mi++) mgets.push(cfReq('GET', key + '::m' + mi));
+                    return Promise.all(mgets).then(function (parts) {
+                        var msgs = [];
+                        for (var i2 = 0; i2 < parts.length; i2++) {
+                            if (!parts[i2] || typeof parts[i2].c !== 'string') throw new Error('分块缺失 m' + i2);
+                            msgs = msgs.concat(JSON.parse(parts[i2].c));
+                        }
+                        var conv = data.meta || {};
+                        conv.messages = msgs;
+                        return conv;
+                    });
+                }
                 if (!data.__chunked) return data; // 旧的单体对话
                 var n = data.parts || 0;
                 var gets = [];
@@ -19200,6 +19285,11 @@ body {
                 var dels = [cfReq('DELETE', key)];
                 var n = (old && old.__chunked) ? (old.parts || 0) : 0;
                 for (var i = 0; i < n; i++) dels.push(cfReq('DELETE', key + '::p' + i).catch(function () {}));
+                var cn = (old && old.__v2) ? (old.chunks || 0) : 0;
+                for (var j = 0; j < cn; j++) dels.push(cfReq('DELETE', key + '::m' + j).catch(function () {}));
+                // 记账也一起清，免得同 id 重建时跳过该传的块
+                var pa = _cfPushedAll(); delete pa[id];
+                try { localStorage.setItem(CF_CONV_PUSHED, JSON.stringify(pa)); } catch (e) {}
                 return Promise.all(dels);
             });
         }
