@@ -11999,7 +11999,9 @@ body {
                     fallback: localStorage.getItem('reading_font_fallback') || ''
                 },
                 readerPos: (function () { try { return JSON.parse(localStorage.getItem('reader_pos') || '{}'); } catch (e) { return {}; } })(),
-                readerQA: (function () { try { return JSON.parse(localStorage.getItem('reader_qa') || '{}'); } catch (e) { return {}; } })(),
+                // ⚠️2026-09-11 起 **readerQA 不再放进这一包**，改成一本书一个键（见 cfPushReaderQA）。
+                //   它原来占这包的 70%，而这包在阅读里每问一句就要全量 PUT 一次。
+                //   拉取那边仍然认旧包里的 readerQA（见 cfPullData），所以另一台设备还没更新也不会丢。
                 readerSummaries: (function () { try { return JSON.parse(localStorage.getItem('reader_summaries') || '{}'); } catch (e) { return {}; } })(),
                 cardTimestamps: cardTs,
                 lastModified: new Date().toISOString()
@@ -12387,6 +12389,8 @@ body {
                         }
                     } catch (e) {}
                 }
+                // 新格式：按书拆的问答键（旧包里的 readerQA 上面已经合过，两者是并集、不冲突）
+                if (typeof cfPullReaderQA === 'function') cfPullReaderQA();
                 if (manifest.readerSummaries) {
                     try {
                         var localSum = JSON.parse(localStorage.getItem('reader_summaries') || '{}');
@@ -12638,6 +12642,106 @@ body {
             });
         }
 
+        /* ===== 阅读问答：按「书」拆成独立的云端键（2026-09-11）=====
+           起因：她报手机发烫。查出来 `_manifest` 已经 2.85MB，其中 **readerQA 占 70%**，
+           而**在阅读里问一句问题就会把整包 2.85MB 全量 PUT 上去**（`syncPushData` → `cfPushData`）。
+           更糟的是它自我放大：问答越攒越多 → 包越大 → 下一问更贵。
+
+           改成一本书一个键 `rqa_<书的存储名>`，值形如 `{ ts: <全书最大章节时间戳>, q: {章号: {...}} }`。
+           她那 19 本书里最大的 699KB、最小的几十 KB，于是「在《爱你》里问一句」从 2.85MB 降到 69KB。
+
+           ⚠️**本地存储一个字节都没动**：`reader_qa` 还是原来那一个 localStorage 键、原来那个结构。
+             变的只是「往服务器传的时候怎么分包」，所以设备上的数据没有迁移风险。
+           ⚠️合并规则沿用 `readerMergeByChapter`：**按章比时间戳、只认更新的、从不删**。
+             最坏情况是「某本书这次没拉下来」，下次再拉就回来了，不会丢东西。
+           ⚠️**搬家必须跑在「停写旧格式」之前**：`_pushed` 记账表为空时这里会把 19 本全传一遍，
+             传完了 manifest 才第一次以「不带 readerQA」的样子上去。顺序反了会有一小段时间
+             云端两头都没有。 */
+        var RQA_PREFIX = 'rqa_';
+        var RQA_PUSHED = 'reader_qa_pushed';   // { 书: 上次推上去的 ts }，按设备记
+
+        function _rqaBookTs(book) {   // 一本书的时间戳 ＝ 各章 ts 的最大值
+            var mx = 0;
+            Object.keys(book || {}).forEach(function (ch) {
+                var t = (book[ch] && book[ch].ts) || 0;
+                if (t > mx) mx = t;
+            });
+            return mx;
+        }
+        function _rqaPushedMap() {
+            try { return JSON.parse(localStorage.getItem(RQA_PUSHED) || '{}'); } catch (e) { return {}; }
+        }
+
+        /* 只把「本地比上次推的新」的那几本书传上去。返回 Promise。 */
+        function cfPushReaderQA() {
+            var all;
+            try { all = JSON.parse(localStorage.getItem('reader_qa') || '{}'); } catch (e) { return Promise.resolve(); }
+            var pushed = _rqaPushedMap(), jobs = [], touched = false;
+            Object.keys(all).forEach(function (fk) {
+                var ts = _rqaBookTs(all[fk]);
+                if (!ts || (pushed[fk] || 0) >= ts) return;    // 没变就不传——这是省流量的关键那一行
+                touched = true;
+                jobs.push(cfReq('PUT', RQA_PREFIX + fk, { ts: ts, q: all[fk] }).then(function () {
+                    var m = _rqaPushedMap(); m[fk] = ts;
+                    try { localStorage.setItem(RQA_PUSHED, JSON.stringify(m)); } catch (e) {}
+                }));
+            });
+            if (!touched) return Promise.resolve();
+            return Promise.all(jobs);
+        }
+
+        /* 问答专用的轻量推送（防抖 2.5 秒，跟总闸 SYNC_PUSH_DEBOUNCE 同一个量级）。
+           ⚠️**故意不走 `syncPushData`**：那个总闸会连带把整包清单也 PUT 一遍。
+             清单现在虽然瘦到 0.85MB，但「问一句话传 0.85MB 元数据」仍然是白花。
+             这里只传当前这本书的那一个键。
+           ⚠️代价是：只改问答时 `_manifest.lastModified` **不再变**，
+             所以另一台设备不能靠「清单变没变」发现新问答 →
+             `autoSync` 每轮都要顺手调一次 `cfPullReaderQA()`（那是个几 KB 的小清单）。
+             这两处是一对，改一个必须想到另一个。 */
+        var _rqaPushTimer = null;
+        function readerQAPushSoon() {
+            if (activeSyncProvider !== 'cf') return;
+            if (_rqaPushTimer) clearTimeout(_rqaPushTimer);
+            _rqaPushTimer = setTimeout(function () {
+                _rqaPushTimer = null;
+                cfPushReaderQA().catch(function () {});
+            }, 2500);
+        }
+        // 切走/关页面时把欠的立刻还上（跟 syncPushData 的 flush 同一个道理）
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden && _rqaPushTimer) {
+                clearTimeout(_rqaPushTimer); _rqaPushTimer = null;
+                cfPushReaderQA().catch(function () {});
+            }
+        });
+
+        /* 拉：先问「云端每本书各是什么时间戳」（一个很小的清单），只下比本地新的那几本。 */
+        function cfPullReaderQA() {
+            return cfReq('GET', '', undefined, 'list=' + encodeURIComponent(RQA_PREFIX)).then(function (map) {
+                if (!map || typeof map !== 'object') return;
+                var local;
+                try { local = JSON.parse(localStorage.getItem('reader_qa') || '{}'); } catch (e) { local = {}; }
+                var want = [];
+                Object.keys(map).forEach(function (key) {
+                    var fk = key.slice(RQA_PREFIX.length);
+                    var cloudTs = map[key] || 0;
+                    if (cloudTs > _rqaBookTs(local[fk])) want.push(fk);
+                });
+                if (!want.length) return;
+                return Promise.all(want.map(function (fk) {
+                    return cfReq('GET', RQA_PREFIX + fk).catch(function () { return null; });
+                })).then(function (arr) {
+                    var cloudAll = {};
+                    arr.forEach(function (v, i) { if (v && v.q) cloudAll[want[i]] = v.q; });
+                    if (!Object.keys(cloudAll).length) return;
+                    if (readerMergeByChapter(local, cloudAll)) {
+                        localStorage.setItem('reader_qa', JSON.stringify(local));
+                        readerApplyPulledQA();   // 这本书可能正开着，屏幕上是旧快照，要重灌
+                    }
+                });
+            }).catch(function () {});   // 列不出来（旧服务器/断网）不算错，下次再说
+        }
+
         function cfPushAllCards() {
             var keyData = getKeyData(), snipData = getSnipData(), promises = [];
             keyData.forEach(function(c) {
@@ -12654,8 +12758,12 @@ body {
                     setSyncStatus(c.id, 'synced');
                 }).catch(function(e) { setSyncStatus(c.id, 'error'); throw e; }));
             });
-            promises.push(cfPutManifest(cfBuildManifest()));
-            return Promise.all(promises);
+            /* ⚠️顺序：**先**把阅读问答按书推上去，**再**推那包不带 readerQA 的清单。
+               反过来的话，中间会有一小段时间云端两边都查不到问答。 */
+            return cfPushReaderQA().then(function () {
+                promises.push(cfPutManifest(cfBuildManifest()));
+                return Promise.all(promises);
+            });
         }
 
         function cfPushData() {
@@ -24499,7 +24607,7 @@ body {
             list.sort(function (x, y) { return (x.p | 0) - (y.p | 0); });   // Array.sort 稳定，同段内保持原顺序
             all[fileKey][chap] = { list: list, ts: Date.now() }; // 即使空也写，靠新时间戳压过云端旧值
             readerQASaveAll(all);
-            if (activeSyncProvider === 'cf') syncPushData();
+            readerQAPushSoon();   // ⚠️只推这本书那一个键，别再走会带上整包清单的 syncPushData
         }
 
         /* ===== 阅读模式：整章「标背景」的存储 =====
@@ -24559,7 +24667,7 @@ body {
             if (!removed) return 0;
             cell.ts = Date.now();   // 盖新时间戳，免得云端旧值回灌把删掉的背景又拉回来
             readerQASaveAll(all);
-            if (activeSyncProvider === 'cf') syncPushData();
+            readerQAPushSoon();   // ⚠️只推这本书那一个键，别再走会带上整包清单的 syncPushData
             if (chatReaderMode && readerBookId === bookId) {
                 for (var i = 0; i < chatMessages.length; i++) {
                     if (chatMessages[i] && chatMessages[i].readerChapter === chap) {
@@ -35925,6 +36033,9 @@ body {
                     var lastSync = localStorage.getItem('toolbox_gist_last_sync');
                     var cloudTime = meta.lastModified ? new Date(meta.lastModified).getTime() : 0;
                     var localTime = lastSync ? new Date(lastSync).getTime() : 0;
+                    // ⚠️问答走的是自己的键，改它**不会**顶新清单的 lastModified，
+                    //   所以这一句要放在「变没变」判断**外面**，每轮都跑（几 KB 的小清单）。
+                    if (typeof cfPullReaderQA === 'function') cfPullReaderQA();
                     // 没变：只跑对话那条（`_chat_manifest` 才 3KB，便宜）
                     if (cloudTime <= localTime + 2000) { chatSyncPull().catch(function(){}).then(function(){ _syncing = false; }); return; }
                     // 真变了才把整包拉下来
