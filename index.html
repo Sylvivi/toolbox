@@ -10653,10 +10653,14 @@ body {
             }
             return out;
         }
-        /* 「多短算短」：≤40 字走花字体。阅读模式里长短分工的界是 16 字（`rq-wide`），
-           但那是**句子**，聊天是**整条消息**，16 字几乎每条都超。40 字大致是
-           「一句话交代完的事」和「一段需求」的分界。她觉得不合适就改这一个数。 */
-        var CHAT_ME_SHORT = 40;
+        /* 「什么算短」＝**没有分段**（整条消息里一个换行都没有）。
+           ⚠️2026-09-11 当天换过一次判据：先按字数（≤40），她看完真实发言的分布后说
+             「要不不分段的话好呢」——换成分段判据。理由是**这个界她自己看得见**：
+             按不按回车是她打字时的动作，不像字数得靠数。
+           ⚠️所以不要再叠一个字数上限回去：一长条不分段的话照样走花字体，那是她要的。 */
+        function _chatMeIsShort(t) {
+            return typeof t === 'string' && t.indexOf('```') < 0 && !/[\r\n]/.test(t.trim());
+        }
         var _fileCardSeq = 0;
         function _fileCards(html) {
             // ⚠️代码块外面还包着 <div class="code-wrap">（带「复制」按钮），
@@ -15798,17 +15802,13 @@ body {
                     bubble.innerHTML = _userTextWithFileCards(_displayText);
                     /* ⚠️2026-09-11 她要的：「我的发言如果不是很长的话，用青春那个字体，
                        这样比较好区分，也能把人和 AI 区分过来」。
-                       ⚠️只标**纯文字、不带文件卡片、≤ CHAT_ME_SHORT 字**的消息：
-                         长段落用花字体读起来累（她自己在阅读里也是「长短分工」那套路子），
+                       ⚠️只标**纯文字、不带文件卡片、且没有分段**的消息（见 `_chatMeIsShort`）：
+                         分了段的多半是一整段需求，用花字体读起来累；
                          带卡片的那条要靠右对齐、版式已经另有安排。
                        ⚠️字体本身在 CSS 变量 `--chat-me-font` 里，由 readingApplyFonts 现算：
                          **字体不在她字体库里就留空**，CSS 自动回落默认字体——
                          别的人用 toolbox 时不会因为没装这个字体而坏掉。 */
-                    if (typeof _displayText === 'string'
-                        && _displayText.indexOf('```') < 0
-                        && _displayText.trim().length <= CHAT_ME_SHORT) {
-                        bubble.classList.add('chat-me-short');
-                    }
+                    if (_chatMeIsShort(_displayText)) bubble.classList.add('chat-me-short');
                 }
             } else {
                 if (typeof text === 'string') text = chatStripTimeTag(text);
