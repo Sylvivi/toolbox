@@ -6505,6 +6505,16 @@ body {
                                     <div class="chat-model-dropdown preset-dd" id="presetDd_explain"></div>
                                 </div>
                             </div>
+                            <!-- 2026-09-11 她要的：谷歌对某些章节的内容会拒（实测同一章 Gemini 全拒、
+                                 Claude 照写），拒了就自动改用这里选的模型重做一次。她指定「让我自己去选」。 -->
+                            <div style="margin-top:0.75em">
+                                <span style="font-size:11px;color:var(--text-muted)">摘要被拒时改用</span>
+                                <div class="chat-model-wrap" style="position:relative;margin-top:0.35em">
+                                    <input type="text" class="preset-pick" id="presetPick_sumfb" readonly onclick="presetTogglePicker('sumfb')">
+                                    <span class="preset-caret">▾</span>
+                                    <div class="chat-model-dropdown preset-dd" id="presetDd_sumfb"></div>
+                                </div>
+                            </div>
                                                     </div>
                     </div>
                 </div>
@@ -24349,6 +24359,30 @@ body {
 
         function readerSummariesAll() { try { return JSON.parse(localStorage.getItem('reader_summaries') || '{}'); } catch (e) { return {}; } }
         function readerSummariesSaveAll(all) { try { localStorage.setItem('reader_summaries', JSON.stringify(all)); } catch (e) {} }
+        /* 开机清一遍「被当成摘要存进去的拒绝文案」（2026-09-11 加）。
+           起因：谷歌拒绝时会返回一段说明文字而不是报错，老代码当成摘要正常存了下来，
+           而摘要是「有了就跳过」，那一章从此永远不再生成（她在《爱你》番外四上撞到）。
+           ⚠️清掉之后那一章会自动重新摘要，并走新的「被拒改用」兜底。
+           ⚠️每次开机都扫，不设「只跑一次」标记——万一以后又有新的漏进来，照样能自愈。 */
+        function readerPurgeRefusedSummaries() {
+            try {
+                var all = readerSummariesAll(), n = 0;
+                Object.keys(all).forEach(function (fk) {
+                    var cell = all[fk];
+                    if (!cell || typeof cell !== 'object') return;
+                    Object.keys(cell).forEach(function (ch) {
+                        var v = cell[ch];
+                        var txt = (v && typeof v === 'object') ? (v.sum || v.text || '') : v;
+                        if (typeof txt === 'string' && txt && _sumLooksRefused(txt)) { delete cell[ch]; n++; }
+                    });
+                });
+                if (n) {
+                    readerSummariesSaveAll(all);
+                    if (typeof syncPushData === 'function' && activeSyncProvider === 'cf') syncPushData();
+                    console.log('[摘要] 清掉 ' + n + ' 条被内容政策挡下的假摘要，这些章会自动重做');
+                }
+            } catch (e) {}
+        }
         function readerSummaryGet(fileKey, chap) {
             var cell = readerSummariesAll()[fileKey];
             cell = cell && cell[chap];
@@ -24820,6 +24854,35 @@ body {
             readerShowSummaryModal();
         }
 
+        /* 摘要被拒后的兜底模型（2026-09-11 加，设置里「摘要被拒时改用」那一档）。
+           ⚠️跟 chatResolveCompressModel 的关键差别：**没配就返回 null，不回退当前模型**。
+             当前模型很可能就是刚被拒的那个，跟着它重试是白烧一次额度。 */
+        function chatResolveSumFallbackModel() {
+            var cfg = null;
+            try { cfg = JSON.parse(localStorage.getItem('chat_summary_fallback_model') || 'null'); } catch (e) {}
+            if (!cfg || !cfg.model) return null;
+            var item = null;
+            if (cfg.url) {
+                var allK = getKeyData();
+                for (var i = 0; i < allK.length; i++) { if (allK[i].url === cfg.url) { item = allK[i]; break; } }
+            }
+            if (!item && cfg.providerId) item = getKeyItemById(cfg.providerId);
+            if (!item) item = getKeyItemById(document.getElementById('chatProviderSelect').value);
+            if (!item) return null;
+            return { model: cfg.model, baseUrl: getBaseUrl(item.url), apiKey: getActiveKey(item) };
+        }
+
+        /* 这一笔是不是被内容政策挡了。⚠️**两种形态都要认**（2026-09-11 实测）：
+           ① 返回空——Gemini 拒的时候 `choices` 是空数组，一个字都没有；
+           ② 拒绝文案被当成正文返回——「The prompt could not be submitted… Prohibited Use policy」。
+              形态②最坑：代码以为生成成功、连章节标题前缀都套上存进去了，而摘要是
+              「有了就跳过」，那一章从此再也不会重试，等于被永久钉死（她就是这么发现的）。
+           ⚠️别把判据放宽成「含 sorry / 无法」之类，正常摘要里也可能有这些字。 */
+        function _sumLooksRefused(s) {
+            if (!s || !s.trim()) return true;
+            return /prompt could not be submitted|Prohibited Use policy|policies\.google\.com\/terms\/generative-ai/i.test(s);
+        }
+
         // 解析「便宜摘要模型」配置 → {model, baseUrl, apiKey}；没配就回退当前选中的模型，没有则 null
         function chatResolveCompressModel() {
             var cfg = (typeof chatGetCompressModel === 'function') ? chatGetCompressModel() : null;
@@ -24865,7 +24928,27 @@ body {
                     { role: 'user', content: '请概括这一章：\n\n' + body }
                 ]
             }).then(function (sum) {
-                if (sum && sum.trim()) {
+                /* 被内容政策挡了 → 改用「摘要被拒时改用」那一档的模型重做一次
+                   （2026-09-11 加。实测同一章 Gemini 两次全拒、Claude 两次全过，
+                     所以换模型是有效的；见 _sumLooksRefused 上面的注释）。
+                   ⚠️只重试一次，且兜底模型跟原模型相同时不重试——那是白烧额度。 */
+                if (!_sumLooksRefused(sum)) return sum;
+                var fb = chatResolveSumFallbackModel();
+                if (!fb || fb.model === mc.model) return '';
+                return chatStreamChat({
+                    baseUrl: fb.baseUrl, apiKey: fb.apiKey, model: fb.model,
+                    max_tokens: 1500, purpose: '阅读摘要',
+                    messages: [
+                        { role: 'system', content: _sumSocial
+                            ? '你是社科/学术书的前情摘要助手。把给到的章节正文浓缩成一段连贯客观的论点摘要：这一章提出的核心概念/术语、主要论点、支撑它的关键证据或实验、以及得出的结论不可省略；不要写「本章讲了」这类开场白。只输出纯摘要正文，不分小标题、不加粗，控制在 200 字以内。'
+                            : '你是小说前情摘要助手。把给到的章节正文浓缩成一段连贯客观的剧情摘要：登场人物姓名、关键情节进展、重要设定与伏笔不可省略。只输出纯摘要正文，不分小标题、不加粗、不写开场白，控制在 150 字以内。' },
+                        { role: 'user', content: '请概括这一章：\n\n' + body }
+                    ]
+                }).catch(function () { return ''; });
+            }).then(function (sum) {
+                /* ⚠️这里必须再判一次 _sumLooksRefused：兜底模型也可能被拒。
+                   **拒绝文案绝不能存**——存进去这一章就再也不会重试了（「有摘要就跳过」）。 */
+                if (sum && sum.trim() && !_sumLooksRefused(sum)) {
                     var _s = sum.trim();
                     if (_rChTitle) _s = '【' + _rChTitle + '】' + _s;
                     readerSummarySet(fileKey, idx, _s);
@@ -34323,7 +34406,11 @@ body {
             qa:       { key: 'chat_reading_qa_model',      empty: '跟随当前模型' },
             // ⚠️这两档的空档是「跟随提问模型」不是「跟随当前模型」，理由见 chatResolveReadingModel
             // ⚠️导读和讲解已合并成一档（她 09-02 定的），别再拆回去
-            explain:  { key: 'chat_reading_explain_model', empty: '跟随提问模型' }
+            explain:  { key: 'chat_reading_explain_model', empty: '跟随提问模型' },
+            /* 摘要被谷歌拒掉时改用的模型（2026-09-11 加）。
+               ⚠️空档＝「不重试」，不是「跟随当前模型」——当前模型很可能就是刚被拒的那个，
+                 跟着它重试等于白跑一趟还多烧一次额度。 */
+            sumfb:    { key: 'chat_summary_fallback_model', empty: '不重试' }
         };
         function presetSlotText(slot) {
             var c = _PRESET_SLOTS[slot];
@@ -35531,6 +35618,7 @@ body {
             migrateOldUrlBookmarks();
             migrateCheckinReciteName();
             readerMigrateAllMarksKeys();  // 开机把旧「设备专属键」下的读痕全搬到跨设备稳定键并重推（修跨设备不同步）
+            readerPurgeRefusedSummaries();  // 开机清掉「拒绝文案被当成摘要」的脏数据，让那些章能重做
 
             // 字体：idb 就绪后立刻注册本地字体 + 应用四/五位置选择（全局 CSS 变量），
             // 这样一进阅读界面就生效，不用先点开 clawd 设置面板才同步上。
