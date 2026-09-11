@@ -11861,7 +11861,10 @@ body {
         }
 
         // 通用 D1 请求
-        function cfReq(method, key, body) {
+        /* ⚠️`qs`＝附加查询参数（2026-09-11 加，为了 `?meta=1`）。
+           **不能把参数拼进 key**：下面 `encodeURIComponent(key)` 会把 `?` 编码成 `%3F`，
+           整串变成键名的一部分，服务器只会回 404。 */
+        function cfReq(method, key, body, qs) {
             var cfg = cfGetConfig();
             if (!cfg.url || !cfg.token) return Promise.reject('CF not configured');
             var opts = { method: method, headers: { 'Authorization': 'Bearer ' + cfg.token } };
@@ -11870,6 +11873,7 @@ body {
                 opts.body = JSON.stringify(body);
             }
             var url = cfg.url + '/' + encodeURIComponent(key);
+            if (qs) url += (url.indexOf('?') === -1 ? '?' : '&') + qs;
             if (method === 'GET') {
                 opts.cache = 'no-store';
                 url += (url.indexOf('?') === -1 ? '?' : '&') + '_t=' + Date.now();
@@ -35907,16 +35911,30 @@ body {
                 if (!cc.url || !cc.token) return;
                 _syncing = true;
                 _lastSync = Date.now();
-                cfGetManifest().then(function(manifest) {
-                    if (!manifest) { _syncing = false; return; }
+                /* ⚠️2026-09-11：**先问「变了没」，变了才下整包**。
+                   她报手机发烫。原来这里每 30 秒 `cfGetManifest()` 一次，而那是
+                   **把整包 `_manifest` 下载下来、只为读里面一个 lastModified**——
+                   那包已经 2.85MB（readerQA 占 70%，越读书越长），
+                   算下来 343MB/小时、8GB/天，外加手机每 30 秒解析一次 2.85MB 的 JSON。
+                   现在 `?meta=1` 只回 79 字节（服务器用 json_extract 在库里取，
+                   不是在 Python 里解析一遍——那只是把活从手机挪到服务器）。
+                   ⚠️旧版服务器不认识这个参数，会照旧回整包，而整包里也有 lastModified，
+                     所以**两边都不会坏**，只是省不到。 */
+                cfReq('GET', '_manifest', undefined, 'meta=1').then(function(meta) {
+                    if (!meta) { _syncing = false; return; }
                     var lastSync = localStorage.getItem('toolbox_gist_last_sync');
-                    var cloudTime = manifest.lastModified ? new Date(manifest.lastModified).getTime() : 0;
+                    var cloudTime = meta.lastModified ? new Date(meta.lastModified).getTime() : 0;
                     var localTime = lastSync ? new Date(lastSync).getTime() : 0;
+                    // 没变：只跑对话那条（`_chat_manifest` 才 3KB，便宜）
                     if (cloudTime <= localTime + 2000) { chatSyncPull().catch(function(){}).then(function(){ _syncing = false; }); return; }
-                    return cfPullData(false, manifest).then(function() {
-                        return chatSyncPull();
-                    }).then(function() {
-                        _syncing = false;
+                    // 真变了才把整包拉下来
+                    return cfGetManifest().then(function(manifest) {
+                        if (!manifest) { _syncing = false; return; }
+                        return cfPullData(false, manifest).then(function() {
+                            return chatSyncPull();
+                        }).then(function() {
+                            _syncing = false;
+                        });
                     });
                 }).catch(function() {
                     _syncing = false;
