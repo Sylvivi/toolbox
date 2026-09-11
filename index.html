@@ -4419,6 +4419,15 @@ body {
         .chat-filecard .fc-main { min-width: 0; display: flex; flex-direction: column; }
         .chat-filecard .fc-name { font-size: .92em; color: var(--text); word-break: break-all; }
         .chat-filecard .fc-sub { font-size: .78em; color: var(--text-muted); margin-top: .1em; }
+        /* ⚠️2026-09-11 她截图指出来的：「那个字体我觉得应该靠右」。
+           病根：`.chat-msg.user` 本来就是 `align-items: flex-end`（整条消息靠右），
+           但文件卡片是块级、会把气泡**撑到满宽的 80%**，于是跟卡片一起发的那句话
+           就被落在这个宽盒子的左边，看着像是别人发的。
+           → 只给「跟卡片同一条消息里的文字」靠右；卡片自己不动（它是 flex，
+             图标+文件名必须还在左边，QQ 也是这样）。
+           ⚠️没有文件卡片的普通消息**不走这里**（`_userTextWithFileCards` 的早退分支
+             不加 `fc-txt` 类），观感照旧。 */
+        .chat-bubble .fc-txt { text-align: right; }
         /* AI 回复里的段落定位「§56」。⚠️别做成实心色块按钮——她的口味是提亮字色 + 淡底线。 */
         .rd-pref { color: var(--accent); font-size: .88em; cursor: pointer; white-space: nowrap;
                    border-bottom: 1px dotted var(--accent-mid); padding-bottom: 1px; }
@@ -10606,7 +10615,7 @@ body {
             while ((m = re.exec(t))) {
                 if (m.index > last) {
                     var _pre = _trimEdge(t.slice(last, m.index), 'before');
-                    if (_pre) out += '<div style="white-space:pre-wrap;word-break:break-word">' + esc(_pre) + '</div>';
+                    if (_pre) out += '<div class="fc-txt" style="white-space:pre-wrap;word-break:break-word">' + esc(_pre) + '</div>';
                 }
                 var id = 'ufc' + (++_fileCardSeq);
                 var body = m[2] || '';
@@ -10623,7 +10632,7 @@ body {
             if (last < t.length) {
                 var _rest = _trimEdge(t.slice(last), 'after');
                 // ⚠️只剩换行时整个 div 都不要输出，否则又是一块空白
-                if (_rest) out += '<div style="white-space:pre-wrap;word-break:break-word">' + esc(_rest) + '</div>';
+                if (_rest) out += '<div class="fc-txt" style="white-space:pre-wrap;word-break:break-word">' + esc(_rest) + '</div>';
             }
             return out;
         }
