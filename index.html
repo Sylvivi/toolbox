@@ -6617,7 +6617,7 @@ body {
                             <!-- 2026-09-11 她要的：谷歌对某些章节的内容会拒（实测同一章 Gemini 全拒、
                                  Claude 照写），拒了就自动改用这里选的模型重做一次。她指定「让我自己去选」。 -->
                             <div style="margin-top:0.75em">
-                                <span style="font-size:11px;color:var(--text-muted)">摘要被拒时改用</span>
+                                <span style="font-size:11px;color:var(--text-muted)">被拒时改用</span>
                                 <div class="chat-model-wrap" style="position:relative;margin-top:0.35em">
                                     <input type="text" class="preset-pick" id="presetPick_sumfb" readonly onclick="presetTogglePicker('sumfb')">
                                     <span class="preset-caret">▾</span>
@@ -29983,6 +29983,17 @@ body {
                 var out;
                 try {
                     out = await _ask(mdl);
+                    /* ⚠️找点这一遍被拒的样子最迷惑：拒绝文案里没有「P数字 术语」那种行，
+                       解析下来是 0 条 → 提示成「这一章没有新的背景要补」，她完全看不出是被挡了
+                       （2026-09-11 她问起才发现）。所以这里显式认一次，认出来就换模型重做。 */
+                    if (_sumLooksRefused(out)) {
+                        var _sfb = chatResolveSumFallbackModel();
+                        if (_sfb && _sfb.model !== mdl.model) {
+                            _rdBgBarShow('通读被内容政策挡了，改用 ' + _rdMdlName(_sfb) + ' 重来…');
+                            out = await _ask(_sfb);
+                        }
+                        if (_sumLooksRefused(out)) throw new Error('这一章被内容政策挡了（通读这一遍）。去 clawd 设置里把「被拒时改用」挑一个别家的模型，或者换一下标背景用的模型。');
+                    }
                 } catch (eScan) {
                     // 摘要模型挂了不该让整个功能报废：它多半是另一个中转站（跟聊天那个不是一路，
                     // 所以「聊天好好的」和「标背景卡死」能同时成立），而这一遍主模型也做得了，
@@ -30054,6 +30065,11 @@ body {
                     ? ('模型只吐了思考过程（约 ' + _tk + ' 字）、正文一个字没给——这个模型把额度花在"想"上了，讲解模型换一个不思考的')
                     : '模型一个字都没回（中转站或模型本身的问题，不是额度不够）');
             }
+            /* ⚠️2026-09-11 她问「背景词能像摘要那样跳过谷歌拦截词吗」——原来不能，而且这里比摘要更险：
+               拒绝文案是**当成正文返回**的（形态②，见 _sumLooksRefused 上面那段），
+               所以它会被**原样插进她的正文里当背景注**，还跟着存进 reader_qa。
+               → 认出来就抛错，绝不返回。外层看到 REFUSED: 会换模型重试（同一个模型再试是白烧）。 */
+            if (_sumLooksRefused(txt)) throw new Error('REFUSED:这一条被内容政策挡了（' + _rdMdlName(mdl) + '）');
             return txt;
         }
 
@@ -30186,6 +30202,20 @@ body {
                         } catch (eOne) {
                             if (eOne && eOne.name === 'AbortError') throw eOne;
                             lastErr = (eOne && eOne.message) || String(eOne);
+                            /* 被内容政策挡了 → **换模型**再试，别拿同一个撞三次。
+                               实测同一章 Gemini 两次全拒、Claude 两次全过（见 _sumLooksRefused 的注释）。
+                               ⚠️用的是设置里「被拒时改用」那一档；没配或跟当前是同一个就不折腾了。
+                               ⚠️换完之后这一章剩下的条目都用新模型，不用每条重新试一遍被拒。 */
+                            if (/^REFUSED:/.test(lastErr)) {
+                                var _rfb = chatResolveSumFallbackModel();
+                                if (_rfb && _rfb.model !== explainM.model) {
+                                    explainM = _rfb;
+                                    _rdBgBarShow('被内容政策挡了，改用 ' + _rdMdlName(_rfb) + ' 重试…');
+                                } else {
+                                    lastErr = '这一条被内容政策挡了，而「被拒时改用」那一档没配（或跟当前是同一个模型）——去 clawd 设置里挑一个别家的模型';
+                                    break;   // 换不了模型，再撞两次也是白烧
+                                }
+                            }
                         }
                     }
                     if (!txt) { _rdBgPicksMark(k, 'fail'); failed++; continue; }
