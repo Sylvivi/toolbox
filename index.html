@@ -12836,7 +12836,7 @@ body {
 
         function cfWatchApply(keys) {
             if (keys === null || keys === undefined) {   // 服务器说不清（落后太多）→ 整体对一遍
-                if (typeof autoSync === 'function') autoSync();
+                if (typeof autoSync === 'function') autoSync(true);
                 return;
             }
             var now = Date.now();
@@ -12852,7 +12852,7 @@ body {
                 else if (k.indexOf('bm_') === 0 || k.indexOf('hl_') === 0 || k.indexOf('rsm_') === 0) needSplit = true;
                 else if (k === '_chat_manifest' || k.indexOf('chat_') === 0) needChat = true;
             });
-            if (needManifest && typeof autoSync === 'function') autoSync();
+            if (needManifest && typeof autoSync === 'function') autoSync(true);
             if (needQA && typeof cfPullReaderQA === 'function') cfPullReaderQA();
             if (needSplit && typeof cfSplitPullAll === 'function') cfSplitPullAll();
             if (needChat && typeof chatSyncPull === 'function') chatSyncPull().catch(function () {});
@@ -36420,10 +36420,31 @@ body {
             var _syncing = false;
             var _lastSync = Date.now();
 
-            function autoSync() {
+            /* ⚠️2026-09-11 傍晚补的一刀，起因是她问「每 30 秒那个必须开着吗，现在是微微热」。
+               一查：我当天早些时候把「拉问答」「拉书签/划线/摘要」塞进了这一趟，
+               于是每 30 秒会打**六个请求**（清单探头 + 问答清单 + 三个拆分清单 + 对话清单）。
+               字节都很小，但**手机费电的是「唤醒网络模块」这个动作本身，不是字节数**——
+               六次唤醒比原来一次还糟，等于我一边修一边又挖了个坑。
+
+               现在：**长轮询健康时这一趟直接空转**。它已经会精确告诉我们哪个键变了
+               （见 cfWatchApply），不需要再逐个去问。只有两种情况才真跑：
+                 ① 长轮询没在跑 / 正在重连（`_watchFails > 0`）／页面在后台；
+                 ② 距上次完整核对超过 10 分钟——纯粹的保险，防「长轮询看着活着、其实漏了」。
+               ⚠️**别把这个兜底删掉**，长轮询断的方式有很多种，有些断得很安静。 */
+            var _lastFullCheck = 0;
+            function _watchHealthy() {
+                return typeof _watchOn !== 'undefined' && _watchOn && _watchPrimed
+                       && _watchFails === 0 && !document.hidden;
+            }
+            /* ⚠️`force` 是给长轮询用的：它已经确认「云端真的变了」，
+               这一趟必须放行，不能被上面那个「健康就空转」的闸挡掉。
+               ⚠️但 10 秒节流对 force 也保留：防止某种回声把它打成死循环。 */
+            function autoSync(force) {
                 if (_syncing) return;
                 if (Date.now() - _lastSync < 10000) return;
                 if (activeSyncProvider !== 'cf') return;
+                if (!force && _watchHealthy() && Date.now() - _lastFullCheck < 600000) return;
+                _lastFullCheck = Date.now();
                 var cc = cfGetConfig();
                 if (!cc.url || !cc.token) return;
                 _syncing = true;
@@ -36469,6 +36490,11 @@ body {
             window.addEventListener('pageshow', function(e) {
                 if (e.persisted) autoSync();
             });
+            /* ⚠️挂到 window 上（2026-09-11 测出来的真 bug）：`autoSync` 定义在这个 IIFE 里，
+               而长轮询那几个函数写在闭包**外面**——它们那句 `typeof autoSync === 'function'`
+               永远是 false，于是「长轮询说清单变了 → 去拉」这一路**静默失效**，
+               不报错、不留痕，只是永远不生效。跑测试才抓到的。 */
+            window.autoSync = autoSync;
             setInterval(autoSync, 30 * 1000);   // ⚠️兜底，别删：长轮询断了要靠它
             // 长轮询：有变化立刻知道，且没有 30 秒一次的唤醒（见 cfWatchStart 那段注释）
             setTimeout(function () { if (typeof cfWatchStart === 'function') cfWatchStart(); }, 4000);
