@@ -11874,6 +11874,8 @@ body {
             }
             var url = cfg.url + '/' + encodeURIComponent(key);
             if (qs) url += (url.indexOf('?') === -1 ? '?' : '&') + qs;
+            // 记一笔「这是我自己写的」：长轮询会把它当变更播回来，别再去拉一遍自己刚写的东西
+            if ((method === 'PUT' || method === 'DELETE') && key) _watchSelf[key] = Date.now();
             if (method === 'GET') {
                 opts.cache = 'no-store';
                 url += (url.indexOf('?') === -1 ? '?' : '&') + '_t=' + Date.now();
@@ -12796,6 +12798,90 @@ body {
                 });
             }).catch(function () {});
         }
+
+        /* ===== 长轮询：服务器有变化就立刻告诉我（2026-09-11）=====
+           她问「为什么要每 30 秒查岗，别的软件都这样吗」。不是——别的软件多用长连接。
+           这里做的是**长轮询**：带上自己见过的版本号去问，服务器把请求挂住不回，
+           直到真有人写了东西（立刻回，并告诉你**具体哪几个键**变了），或者 45 秒到点回一句「没事」。
+
+           为什么它更省电：手机上费电的不是那点流量，是**每 30 秒把网络模块唤醒一次**。
+           挂着的连接是静默的，不唤醒。
+
+           ⚠️**30 秒轮询照旧留着当兜底**（现在一次才 79 字节）。长轮询会因为各种原因断
+             （手机休眠、切网、Cloudflare 抽风），断了就得有人兜着。**别把它删了**。
+           ⚠️服务器那边挂 45 秒是被 Cloudflare 逼的（免费版要求源站 100 秒内响应），
+             所以这里的 fetch 超时预期要比 45 秒宽。
+           ⚠️自己写的东西会被播回来（服务器不认识是谁写的）。靠 `_watchSelf` 记一笔跳过，
+             不跳的话每次推送都会紧跟一次没必要的拉取。 */
+        var _watchVer = 0, _watchCtl = null, _watchOn = false, _watchFails = 0, _watchPrimed = false;
+        var _watchSelf = {};
+
+        function cfWatchApply(keys) {
+            if (keys === null || keys === undefined) {   // 服务器说不清（落后太多）→ 整体对一遍
+                if (typeof autoSync === 'function') autoSync();
+                return;
+            }
+            var now = Date.now();
+            var fresh = keys.filter(function (k) {
+                var t = _watchSelf[k];
+                return !(t && now - t < 15000);
+            });
+            if (!fresh.length) return;
+            var needManifest = false, needQA = false, needSplit = false, needChat = false;
+            fresh.forEach(function (k) {
+                if (k === '_manifest') needManifest = true;
+                else if (k.indexOf('rqa_') === 0) needQA = true;
+                else if (k.indexOf('bm_') === 0 || k.indexOf('hl_') === 0 || k.indexOf('rsm_') === 0) needSplit = true;
+                else if (k === '_chat_manifest' || k.indexOf('chat_') === 0) needChat = true;
+            });
+            if (needManifest && typeof autoSync === 'function') autoSync();
+            if (needQA && typeof cfPullReaderQA === 'function') cfPullReaderQA();
+            if (needSplit && typeof cfSplitPullAll === 'function') cfSplitPullAll();
+            if (needChat && typeof chatSyncPull === 'function') chatSyncPull().catch(function () {});
+        }
+
+        function cfWatchLoop() {
+            if (!_watchOn || activeSyncProvider !== 'cf') return;
+            var cfg = cfGetConfig();
+            if (!cfg.url || !cfg.token) { _watchOn = false; return; }
+            _watchCtl = (typeof AbortController === 'function') ? new AbortController() : null;
+            fetch(cfg.url + '/?watch=' + _watchVer + '&_t=' + Date.now(), {
+                headers: { 'Authorization': 'Bearer ' + cfg.token },
+                cache: 'no-store',
+                signal: _watchCtl ? _watchCtl.signal : undefined
+            }).then(function (r) {
+                if (!r.ok) throw new Error('watch ' + r.status);
+                return r.json();
+            }).then(function (d) {
+                _watchFails = 0;
+                _watchVer = (d && d.ver) || 0;
+                // 第一次连上只记版本号、不拉：开机那趟同步已经对过一遍了
+                if (_watchPrimed) cfWatchApply(d ? d.keys : null);
+                _watchPrimed = true;
+                if (_watchOn) setTimeout(cfWatchLoop, 0);
+            }).catch(function (e) {
+                if (!_watchOn) return;                       // 自己 abort 的，不算失败
+                _watchFails++;
+                var wait = Math.min(30000, 1000 * Math.pow(2, _watchFails));
+                setTimeout(cfWatchLoop, wait);
+            });
+        }
+
+        function cfWatchStart() {
+            if (_watchOn || activeSyncProvider !== 'cf') return;
+            var cfg = cfGetConfig();
+            if (!cfg.url || !cfg.token) return;
+            _watchOn = true; _watchFails = 0;
+            cfWatchLoop();
+        }
+        function cfWatchStop() {
+            _watchOn = false;
+            if (_watchCtl) { try { _watchCtl.abort(); } catch (e) {} _watchCtl = null; }
+        }
+        // 看得见就挂着、切走就断开（省得后台白占一条连接；手机休眠本来也会断）
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden) cfWatchStop(); else cfWatchStart();
+        });
 
         function cfSplitPushAll() {
             return Promise.all(Object.keys(CF_SPLIT_SPECS).map(cfSplitPush));
@@ -36262,7 +36348,9 @@ body {
             window.addEventListener('pageshow', function(e) {
                 if (e.persisted) autoSync();
             });
-            setInterval(autoSync, 30 * 1000);
+            setInterval(autoSync, 30 * 1000);   // ⚠️兜底，别删：长轮询断了要靠它
+            // 长轮询：有变化立刻知道，且没有 30 秒一次的唤醒（见 cfWatchStart 那段注释）
+            setTimeout(function () { if (typeof cfWatchStart === 'function') cfWatchStart(); }, 4000);
         })();
 
         /* =========================================================================
