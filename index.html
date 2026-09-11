@@ -11948,9 +11948,11 @@ body {
                 checkin: getCheckinData(),
                 checkinTasks: getCheckinTasks(),
                 checkinTasksTs: getCheckinTasksTs(),
-                bookmarks: readingGetAllBookmarks(),
+                // ⚠️2026-09-11 起 bookmarks 不在这一包里，改成按会话键拆（见 CF_SPLIT_SPECS）
+
                 bookmarksTs: readingGetBookmarksTs(),
-                highlights: readingGetAllHl(),
+                // ⚠️2026-09-11 起 highlights（划线+小注）同上，按会话键拆
+
                 highlightsTs: readingGetHlTs(),
                 /* 划线/读痕的删除墓碑。⚠️**必须挂进 manifest**——不同步的话，另一台设备
                    （它没有这块碑）会把它本地还留着的那条又推上来，删除等于没删。
@@ -12002,7 +12004,8 @@ body {
                 // ⚠️2026-09-11 起 **readerQA 不再放进这一包**，改成一本书一个键（见 cfPushReaderQA）。
                 //   它原来占这包的 70%，而这包在阅读里每问一句就要全量 PUT 一次。
                 //   拉取那边仍然认旧包里的 readerQA（见 cfPullData），所以另一台设备还没更新也不会丢。
-                readerSummaries: (function () { try { return JSON.parse(localStorage.getItem('reader_summaries') || '{}'); } catch (e) { return {}; } })(),
+                // ⚠️2026-09-11 起 readerSummaries 同上，按书拆
+
                 cardTimestamps: cardTs,
                 lastModified: new Date().toISOString()
             };
@@ -12389,8 +12392,9 @@ body {
                         }
                     } catch (e) {}
                 }
-                // 新格式：按书拆的问答键（旧包里的 readerQA 上面已经合过，两者是并集、不冲突）
+                // 新格式：按书/会话拆的那些键（旧包里的同名字段上面已经合过，两者是并集、不冲突）
                 if (typeof cfPullReaderQA === 'function') cfPullReaderQA();
+                if (typeof cfSplitPullAll === 'function') cfSplitPullAll();
                 if (manifest.readerSummaries) {
                     try {
                         var localSum = JSON.parse(localStorage.getItem('reader_summaries') || '{}');
@@ -12715,6 +12719,109 @@ body {
             }
         });
 
+        /* ===== 通用拆分器：把「一个大对象」按顶层键拆成独立云端键（2026-09-11）=====
+           跟上面阅读问答那次是同一件事，只是这三样也一起拆了。改之前那包大清单里：
+             书签 327KB（37%）· 章节摘要 220KB（25%）· 划线+小注 169KB（19%）。
+           她划一条线、改一个书名，都要把这整包 PUT 上去一次。
+
+           ⚠️判「变没变」用**内容指纹**不用时间戳：书签和划线的条目里没有统一的 ts
+             （划线条目只有 id、没有 ts），拿不出「内容时间」；而 kv 表的 ts 是**服务器写入时间**，
+             两台设备各写各的，拿它比会误判。指纹是本地算的，只用来决定「这一份要不要传」，
+             传丢了最坏就是多传一次，不会传错。
+           ⚠️拉那边用 `seen` 记「云端这个键我看到的是哪一版」。合并本身是**并集**、幂等，
+             所以 seen 丢了也只是多下一次。
+           ⚠️合并函数一个都不能换：摘要走 `readerMergeByChapter`（按章比时间戳），
+             书签/划线走 `_mergeMarksBlobs`（按会话键取并集 + 墓碑剔除）。
+             这两套语义是踩过坑定下来的（「删掉的划线自己回来」那个），别图省事统一。
+           ⚠️合并出新内容后要**回推一次**：本地现在是并集，推上去云端才也变成并集，
+             否则被覆盖过的那台设备永远补不回来（原来 `marksDirty` 干的就是这件事）。 */
+        var CF_SPLIT_SPECS = {
+            rsm: { prefix: 'rsm_', store: 'reader_summaries',   merge: 'chapters' },
+            bm:  { prefix: 'bm_',  store: 'reading_bookmarks',  merge: 'marks', tsKey: 'reading_bookmarks_ts' },
+            hl:  { prefix: 'hl_',  store: 'reading_highlights', merge: 'marks', tsKey: 'reading_highlights_ts' }
+        };
+        var CF_SPLIT_PUSHED = 'cf_split_pushed';   // { '前缀+键': 上次推上去的内容指纹 }
+        var CF_SPLIT_SEEN   = 'cf_split_seen';     // { '前缀+键': 已经并进来的那一版的云端 ts }
+
+        function _cfJson(k) { try { return JSON.parse(localStorage.getItem(k) || '{}'); } catch (e) { return {}; } }
+        function _cfJsonSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
+        function cfSplitPush(name) {
+            var sp = CF_SPLIT_SPECS[name];
+            if (!sp || activeSyncProvider !== 'cf') return Promise.resolve();
+            var obj = _cfJson(sp.store), jobs = [], pushed = _cfJson(CF_SPLIT_PUSHED);
+            Object.keys(obj).forEach(function (k) {
+                if (obj[k] == null) return;
+                var sig = _cfChunkSig(JSON.stringify(obj[k]));
+                var full = sp.prefix + k;
+                if (pushed[full] === sig) return;              // ★省流量就在这一行
+                jobs.push(cfReq('PUT', full, { ts: Date.now(), sig: sig, v: obj[k] }).then(function () {
+                    var m = _cfJson(CF_SPLIT_PUSHED); m[full] = sig; _cfJsonSet(CF_SPLIT_PUSHED, m);
+                }));
+            });
+            return jobs.length ? Promise.all(jobs) : Promise.resolve();
+        }
+
+        function cfSplitPull(name) {
+            var sp = CF_SPLIT_SPECS[name];
+            if (!sp || activeSyncProvider !== 'cf') return Promise.resolve();
+            return cfReq('GET', '', undefined, 'list=' + encodeURIComponent(sp.prefix)).then(function (map) {
+                if (!map || typeof map !== 'object') return;
+                var seen = _cfJson(CF_SPLIT_SEEN), want = [];
+                Object.keys(map).forEach(function (full) {
+                    if ((map[full] || 0) > (seen[full] || 0)) want.push(full);
+                });
+                if (!want.length) return;
+                return Promise.all(want.map(function (f) {
+                    return cfReq('GET', f).catch(function () { return null; });
+                })).then(function (arr) {
+                    var local = _cfJson(sp.store), cloudObj = {};
+                    arr.forEach(function (v, i) {
+                        if (v && v.v !== undefined) cloudObj[want[i].slice(sp.prefix.length)] = v.v;
+                    });
+                    var changed = false;
+                    if (Object.keys(cloudObj).length) {
+                        changed = (sp.merge === 'chapters')
+                            ? readerMergeByChapter(local, cloudObj)
+                            : _mergeMarksBlobs(local, cloudObj);
+                        if (changed) {
+                            localStorage.setItem(sp.store, JSON.stringify(local));
+                            if (sp.tsKey) localStorage.setItem(sp.tsKey, new Date().toISOString());
+                        }
+                    }
+                    var sm = _cfJson(CF_SPLIT_SEEN);
+                    want.forEach(function (f, i) { if (arr[i]) sm[f] = map[f] || 0; });
+                    _cfJsonSet(CF_SPLIT_SEEN, sm);
+                    if (changed) cfSplitPush(name);   // 本地成了并集 → 回推，别的设备才补得回来
+                });
+            }).catch(function () {});
+        }
+
+        function cfSplitPushAll() {
+            return Promise.all(Object.keys(CF_SPLIT_SPECS).map(cfSplitPush));
+        }
+        function cfSplitPullAll() {
+            Object.keys(CF_SPLIT_SPECS).forEach(function (n) { cfSplitPull(n); });
+        }
+        // 防抖的轻量推送：只推这一类，不碰那包大清单
+        var _cfSplitTimers = {};
+        function cfSplitPushSoon(name) {
+            if (activeSyncProvider !== 'cf') return;
+            if (_cfSplitTimers[name]) clearTimeout(_cfSplitTimers[name]);
+            _cfSplitTimers[name] = setTimeout(function () {
+                _cfSplitTimers[name] = null;
+                cfSplitPush(name).catch(function () {});
+            }, 2500);
+        }
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) return;
+            Object.keys(_cfSplitTimers).forEach(function (n) {
+                if (!_cfSplitTimers[n]) return;
+                clearTimeout(_cfSplitTimers[n]); _cfSplitTimers[n] = null;
+                cfSplitPush(n).catch(function () {});
+            });
+        });
+
         /* 拉：先问「云端每本书各是什么时间戳」（一个很小的清单），只下比本地新的那几本。 */
         function cfPullReaderQA() {
             return cfReq('GET', '', undefined, 'list=' + encodeURIComponent(RQA_PREFIX)).then(function (map) {
@@ -12760,7 +12867,7 @@ body {
             });
             /* ⚠️顺序：**先**把阅读问答按书推上去，**再**推那包不带 readerQA 的清单。
                反过来的话，中间会有一小段时间云端两边都查不到问答。 */
-            return cfPushReaderQA().then(function () {
+            return Promise.all([cfPushReaderQA(), cfSplitPushAll()]).then(function () {
                 promises.push(cfPutManifest(cfBuildManifest()));
                 return Promise.all(promises);
             });
@@ -24772,7 +24879,12 @@ body {
         }
 
         function readerSummariesAll() { try { return JSON.parse(localStorage.getItem('reader_summaries') || '{}'); } catch (e) { return {}; } }
-        function readerSummariesSaveAll(all) { try { localStorage.setItem('reader_summaries', JSON.stringify(all)); } catch (e) {} }
+        function readerSummariesSaveAll(all) {
+            try { localStorage.setItem('reader_summaries', JSON.stringify(all)); } catch (e) {}
+            // ⚠️推送挂在这里（不是各个调用点）：全项目有 5 处保存摘要，逐个改必漏。
+            //   轻量推送只传变了的那本书，不碰大清单。
+            if (typeof cfSplitPushSoon === 'function') cfSplitPushSoon('rsm');
+        }
         /* 开机清一遍「被当成摘要存进去的拒绝文案」（2026-09-11 加）。
            起因：谷歌拒绝时会返回一段说明文字而不是报错，老代码当成摘要正常存了下来，
            而摘要是「有了就跳过」，那一章从此永远不再生成（她在《爱你》番外四上撞到）。
@@ -30407,7 +30519,7 @@ body {
             localStorage.setItem('reading_bookmarks_ts', new Date().toISOString());
             if (activeSyncProvider === 'cf') {
                 if (_bookmarkPushTimer) clearTimeout(_bookmarkPushTimer);
-                _bookmarkPushTimer = setTimeout(syncPushData, 3000);
+                _bookmarkPushTimer = setTimeout(function () { cfSplitPush('bm'); }, 3000);
             }
         }
         function readingGetBookmarksTs() {
@@ -30441,7 +30553,7 @@ body {
             localStorage.setItem('reading_highlights_ts', new Date().toISOString());
             if (activeSyncProvider === 'cf') {
                 if (_rdHlPushTimer) clearTimeout(_rdHlPushTimer);
-                _rdHlPushTimer = setTimeout(syncPushData, 3000);
+                _rdHlPushTimer = setTimeout(function () { cfSplitPush('hl'); }, 3000);
             }
         }
 
@@ -36126,6 +36238,7 @@ body {
                     // ⚠️问答走的是自己的键，改它**不会**顶新清单的 lastModified，
                     //   所以这一句要放在「变没变」判断**外面**，每轮都跑（几 KB 的小清单）。
                     if (typeof cfPullReaderQA === 'function') cfPullReaderQA();
+                    if (typeof cfSplitPullAll === 'function') cfSplitPullAll();
                     // 没变：只跑对话那条（`_chat_manifest` 才 3KB，便宜）
                     if (cloudTime <= localTime + 2000) { chatSyncPull().catch(function(){}).then(function(){ _syncing = false; }); return; }
                     // 真变了才把整包拉下来
