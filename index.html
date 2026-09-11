@@ -4344,6 +4344,11 @@ body {
             background: var(--accent);
         }
         .reading-actbar .rp-lv[data-lv="2"] { background: var(--accent); border-color: var(--accent); }
+        /* 数学公式：不做花哨底色，只让上下标看得清（她的口味：别加实心零件） */
+        .math-inline { font-family: "Times New Roman", "Songti SC", serif; font-style: italic; }
+        .math-inline sub, .math-inline sup, .math-block sub, .math-block sup { font-style: normal; }
+        .math-block { font-family: "Times New Roman", "Songti SC", serif; text-align: center;
+            margin: .5em 0; font-size: 1.05em; }
         /* 拖文件进来时给输入框一圈提示（2026-09-11）。⚠️只提亮描边 + 淡底，不加实心块。 */
         .chat-input-box.drag-over { outline: 2px dashed var(--accent-mid); outline-offset: 3px;
             background: var(--accent-light); }
@@ -10583,9 +10588,48 @@ body {
                         + '</div><div id="' + id + '" style="display:none">' + pre + '</div>';
                 });
         }
+        /* ===== 轻量数学公式（2026-09-11 加）=====
+         * 她截图问「这些怪符号是 gemini 出问题还是 toolbox 不支持」——是后者：
+         * 模型聊专业内容时会用 LaTeX，`$A^2/O$`、`$SV_{30}$`、`$SVI = SV_{30}/MLSS$`，
+         * 而 Toolbox 不认识，就把原始标记直接显示出来了。
+         * ⚠️**不引 KaTeX**（几百 KB）：她的场景是环境工程，用到的基本就是上下标，
+         *   几十行就能覆盖。复杂公式（分式/积分）会显示得朴素，但至少不再有 $ 和 {} 的噪音。
+         * ⚠️必须**跳过代码块**——代码里 `$` 和 `_` 太常见，动了就会把代码改坏。
+         *   做法是按 <pre>/<code> 切段，只处理段与段之间的部分。 */
+        function _mathSubSup(t) {
+            return String(t)
+                // ^{...} / _{...}：带花括号的整组
+                .replace(/\^\{([^{}<>]{1,24})\}/g, '<sup>$1</sup>')
+                .replace(/_\{([^{}<>]{1,24})\}/g, '<sub>$1</sub>')
+                // ^x / _x：单个字符或数字串（A^2、SV_30）
+                .replace(/\^([0-9A-Za-z+\-]{1,4})\b/g, '<sup>$1</sup>')
+                .replace(/_([0-9A-Za-z+\-]{1,4})\b/g, '<sub>$1</sub>')
+                .replace(/\\times/g, '×').replace(/\\cdot/g, '·')
+                .replace(/\\le\b/g, '≤').replace(/\\ge\b/g, '≥')
+                .replace(/\\approx/g, '≈').replace(/\\pm/g, '±')
+                .replace(/\\%/g, '%').replace(/\\,/g, ' ');
+        }
+        function _mathLite(html) {
+            var str = String(html || '');
+            if (str.indexOf('$') < 0 && str.indexOf('\\(') < 0) return str;
+            // 按代码块切开，偶数段是正文（可处理），奇数段是代码（原样保留）
+            var parts = str.split(/(<pre[\s\S]*?<\/pre>|<code[\s\S]*?<\/code>)/);
+            for (var i = 0; i < parts.length; i += 2) {
+                parts[i] = parts[i]
+                    // $$...$$ 独立成行的公式
+                    .replace(/\$\$([^$<>]{1,300}?)\$\$/g, function (m, x) { return '<div class="math-block">' + _mathSubSup(x.trim()) + '</div>'; })
+                    // \( ... \) 也是行内公式的常见写法
+                    .replace(/\\\(([^<>]{1,200}?)\\\)/g, function (m, x) { return '<span class="math-inline">' + _mathSubSup(x.trim()) + '</span>'; })
+                    // $...$ 行内公式。⚠️两边不能贴着数字，免得把「$5 到 $10」这种价格误伤
+                    .replace(/(^|[^\d$])\$([^$<>\n]{1,200}?)\$(?![\d])/g, function (m, pre, x) {
+                        return pre + '<span class="math-inline">' + _mathSubSup(x.trim()) + '</span>';
+                    });
+            }
+            return parts.join('');
+        }
         function renderText(text) {
             if (!text) return '';
-            return _fileCards(_rdPRefChips(parseMd(text)));
+            return _mathLite(_fileCards(_rdPRefChips(parseMd(text))));
         }
 
         // 把 §56 渲染成可点的小标记。⚠️放在 parseMd 出口统一做，别在各个调用点各写一遍
