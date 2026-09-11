@@ -4428,6 +4428,23 @@ body {
            ⚠️没有文件卡片的普通消息**不走这里**（`_userTextWithFileCards` 的早退分支
              不加 `fc-txt` 类），观感照旧。 */
         .chat-bubble .fc-txt { text-align: right; }
+        /* 她自己发的短消息：换成花字体，一眼分得出人和 AI（2026-09-11 她要的）。
+           ⚠️`font-weight: 400` 是**必须的**：花字体只有一个字重，我们给对话正文定的 500
+             会让浏览器**合成假粗**，中文笔画多、撑出来糊成一团
+             （这是她 07-28 / 07-30 两次定过的规矩：能换花字体的地方别加粗）。
+           ⚠️字号乘 `--chat-me-scale`：花字体的字面天生比宋体小一号，
+             青春这一款她定过是 **107%**，这里直接复用那个值，不另设一套。
+           ⚠️三个变量没定义时（＝花字体不在她字体库里）必须**完全回到原样**。
+             ⚠️兜底值**不能写 `inherit`**：`inherit` 取的是**父元素**的值，
+               而宋体那条规则挂在**同一个元素**上，于是会被整个跳过、掉回系统黑体。
+               2026-09-11 headless 测出来的，写 inherit 看着最自然、恰恰是错的。
+               所以这里把宋体那串原样重复一遍当兜底；字重同理走 `--chat-me-fw`，
+               不能写死 400，否则字体没生效时短消息会比别的字淡一档。 */
+        body.chat-plain-user .chat-msg.user .chat-bubble.chat-me-short {
+            font-family: var(--chat-me-font, "Source Han Serif CN", "Songti SC", "Noto Serif CJK SC", serif);
+            font-weight: var(--chat-me-fw, 500);
+            font-size: calc(var(--chat-fs, 14px) * var(--chat-me-scale, 1));
+        }
         /* AI 回复里的段落定位「§56」。⚠️别做成实心色块按钮——她的口味是提亮字色 + 淡底线。 */
         .rd-pref { color: var(--accent); font-size: .88em; cursor: pointer; white-space: nowrap;
                    border-bottom: 1px dotted var(--accent-mid); padding-bottom: 1px; }
@@ -10636,6 +10653,10 @@ body {
             }
             return out;
         }
+        /* 「多短算短」：≤40 字走花字体。阅读模式里长短分工的界是 16 字（`rq-wide`），
+           但那是**句子**，聊天是**整条消息**，16 字几乎每条都超。40 字大致是
+           「一句话交代完的事」和「一段需求」的分界。她觉得不合适就改这一个数。 */
+        var CHAT_ME_SHORT = 40;
         var _fileCardSeq = 0;
         function _fileCards(html) {
             // ⚠️代码块外面还包着 <div class="code-wrap">（带「复制」按钮），
@@ -15775,6 +15796,19 @@ body {
                        被 Markdown 乱解释），所以第一版把 _fileCards 挂在 renderText 里
                        对她的消息完全不生效——她连试三次都「没有卡片」，我还以为是缓存。 */
                     bubble.innerHTML = _userTextWithFileCards(_displayText);
+                    /* ⚠️2026-09-11 她要的：「我的发言如果不是很长的话，用青春那个字体，
+                       这样比较好区分，也能把人和 AI 区分过来」。
+                       ⚠️只标**纯文字、不带文件卡片、≤ CHAT_ME_SHORT 字**的消息：
+                         长段落用花字体读起来累（她自己在阅读里也是「长短分工」那套路子），
+                         带卡片的那条要靠右对齐、版式已经另有安排。
+                       ⚠️字体本身在 CSS 变量 `--chat-me-font` 里，由 readingApplyFonts 现算：
+                         **字体不在她字体库里就留空**，CSS 自动回落默认字体——
+                         别的人用 toolbox 时不会因为没装这个字体而坏掉。 */
+                    if (typeof _displayText === 'string'
+                        && _displayText.indexOf('```') < 0
+                        && _displayText.trim().length <= CHAT_ME_SHORT) {
+                        bubble.classList.add('chat-me-short');
+                    }
                 }
             } else {
                 if (typeof text === 'string') text = chatStripTimeTag(text);
@@ -23007,6 +23041,22 @@ body {
             if (_glCn) rs.setProperty('--gl-font-cn', _glCn); else rs.removeProperty('--gl-font-cn');
             if (_glPy) rs.setProperty('--gl-font-py', _glPy); else rs.removeProperty('--gl-font-py');
             if (_glLab) rs.setProperty('--gl-font-lab', _glLab); else rs.removeProperty('--gl-font-lab');
+            /* 对话模式里「她自己发的短消息」用的花字体（2026-09-11 加）。
+               ⚠️复用 `_glFontStack`：它会顺带挂好在线字体的 link、把显示名翻成字族名、
+                 不在册就跳过。所以**字体不在字体库里时这两个变量根本不写**，
+                 CSS 那条自动回落成原样——别人用 toolbox 不会因此坏掉。
+               ⚠️后面接「缺字」兜底字体：青春只覆盖到 GB2312，GBK 扩展缺 79%，
+                 不接的话生僻字会逐字掉回系统黑体，一句话里两种笔迹。 */
+            var _meFont = _glFontStack(['青春例外你是偏爱', fb]);
+            if (_meFont) {
+                rs.setProperty('--chat-me-font', _meFont);
+                rs.setProperty('--chat-me-scale', String(readingFontScaleGet('青春例外你是偏爱')));
+                rs.setProperty('--chat-me-fw', '400');   // 花字体只有一个字重，给 500 会被合成假粗
+            } else {
+                rs.removeProperty('--chat-me-font');
+                rs.removeProperty('--chat-me-scale');
+                rs.removeProperty('--chat-me-fw');
+            }
             readingRenderFontUI();
             // 换正文字体会让每行的位置整体偏移 → 小注引线重量（同 readingApplyFontScale）
             if (typeof rdGlRelayoutSoon === 'function') rdGlRelayoutSoon();
