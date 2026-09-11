@@ -4344,6 +4344,9 @@ body {
             background: var(--accent);
         }
         .reading-actbar .rp-lv[data-lv="2"] { background: var(--accent); border-color: var(--accent); }
+        /* 拖文件进来时给输入框一圈提示（2026-09-11）。⚠️只提亮描边 + 淡底，不加实心块。 */
+        .chat-input-box.drag-over { outline: 2px dashed var(--accent-mid); outline-offset: 3px;
+            background: var(--accent-light); }
         /* 消息里的文件卡片（2026-09-10）。⚠️别做成实心色块，她一贯的口味是淡底 + 提亮字色。 */
         .chat-filecard { display: flex; align-items: center; gap: .6em; cursor: pointer;
             padding: .55em .7em; margin: .3em 0; border: 1px solid var(--card-border);
@@ -19524,8 +19527,17 @@ body {
         function chatOnFileSelect(input) {
             var files = input.files;
             if (!files || files.length === 0) return;
-            for (var i = 0; i < files.length; i++) {
-                (function(file) {
+            for (var i = 0; i < files.length; i++) chatIntakeFile(files[i]);
+            input.value = '';
+        }
+
+        /* 收一个文件：图片走压缩、docx/xlsx 当场解析、其余按文本读。
+           ⚠️抽成共用函数是为了**选文件和拖放共用一份**（2026-09-11 她要拖放：
+           「输入框没办法把要传的文件拖入，像图片箱那边是可以的」）。
+           分两份写必然长歪——她哪天说「拖进去的 Word 没解析」就是这么来的。 */
+        function chatIntakeFile(file) {
+            if (!file) return;
+            (function(file) {
                     if (file.type.startsWith('image/')) {
                         var reader = new FileReader();
                         reader.onload = function(e) { chatAddImage(e.target.result, file.type); };
@@ -19566,10 +19578,42 @@ body {
                         reader.onerror = function() { showToast('⚠️ 无法读取 ' + file.name); };
                         reader.readAsText(file);
                     }
-                })(files[i]);
-            }
-            input.value = '';
+                })(file);   // ⚠️抽成函数后这里不再有 files/i，传进来的那个 file 就是目标
         }
+
+        /* ===== 拖放收文件（2026-09-11 加）=====
+         * ⚠️必须在**整个对话区**上接，不能只在输入框那一小条上——她拖过来时手很难精准落在
+         *   那几十像素高的框里，落偏了浏览器就会**直接打开那个文件**，当前页面被顶掉。
+         * ⚠️所以 dragover 一律 preventDefault，等于把整个区域变成「安全接盘区」。 */
+        (function () {
+            var view = document.getElementById('chatView') || document.body;
+            var box = null, depth = 0;
+            function mark(on) {
+                box = box || document.querySelector('.chat-input-box');
+                if (box) box.classList.toggle('drag-over', !!on);
+            }
+            ['dragenter', 'dragover'].forEach(function (ev) {
+                view.addEventListener(ev, function (e) {
+                    if (!e.dataTransfer || Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') < 0) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'copy';
+                    if (ev === 'dragenter') depth++;
+                    mark(true);
+                }, false);
+            });
+            view.addEventListener('dragleave', function () {
+                depth = Math.max(0, depth - 1);
+                if (!depth) mark(false);
+            }, false);
+            view.addEventListener('drop', function (e) {
+                if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+                e.preventDefault();
+                depth = 0; mark(false);
+                var fs = e.dataTransfer.files;
+                for (var i = 0; i < fs.length; i++) chatIntakeFile(fs[i]);
+                showToast(fs.length > 1 ? ('收到 ' + fs.length + ' 个文件') : ('收到 ' + fs[0].name));
+            }, false);
+        })();
 
         function chatRenderAttachPreview() {
             var container = document.getElementById('chatImgPreview');
