@@ -12714,6 +12714,11 @@ body {
 
         /* 只把「本地比上次推的新」的那几本书传上去。返回 Promise。 */
         function cfPushReaderQA() {
+            /* ⚠️`activeSyncProvider` 的默认值就是 `'cf'`（见它的声明），所以「是不是 cf」
+               挡不住「有没有配」。没配地址/令牌时 cfReq 会 reject('CF not configured')，
+               而这里的 Promise 没人接 → 变成未处理拒绝（2026-09-11 跑 askcost 时抓到的）。 */
+            var _cfg = cfGetConfig();
+            if (activeSyncProvider !== 'cf' || !_cfg.url || !_cfg.token) return Promise.resolve();
             var all;
             try { all = JSON.parse(localStorage.getItem('reader_qa') || '{}'); } catch (e) { return Promise.resolve(); }
             var pushed = _rqaPushedMap(), jobs = [], touched = false;
@@ -12785,6 +12790,8 @@ body {
         function cfSplitPush(name) {
             var sp = CF_SPLIT_SPECS[name];
             if (!sp || activeSyncProvider !== 'cf') return Promise.resolve();
+            var _cfg = cfGetConfig();                       // 同 cfPushReaderQA：没配就别发
+            if (!_cfg.url || !_cfg.token) return Promise.resolve();
             var obj = _cfJson(sp.store), jobs = [], pushed = _cfJson(CF_SPLIT_PUSHED);
             Object.keys(obj).forEach(function (k) {
                 if (obj[k] == null) return;
@@ -12801,6 +12808,8 @@ body {
         function cfSplitPull(name) {
             var sp = CF_SPLIT_SPECS[name];
             if (!sp || activeSyncProvider !== 'cf') return Promise.resolve();
+            var _cfg = cfGetConfig();
+            if (!_cfg.url || !_cfg.token) return Promise.resolve();
             return cfReq('GET', '', undefined, 'list=' + encodeURIComponent(sp.prefix)).then(function (map) {
                 if (!map || typeof map !== 'object') return;
                 var seen = _cfJson(CF_SPLIT_SEEN), want = [];
@@ -12828,7 +12837,7 @@ body {
                     var sm = _cfJson(CF_SPLIT_SEEN);
                     want.forEach(function (f, i) { if (arr[i]) sm[f] = map[f] || 0; });
                     _cfJsonSet(CF_SPLIT_SEEN, sm);
-                    if (changed) cfSplitPush(name);   // 本地成了并集 → 回推，别的设备才补得回来
+                    if (changed) cfSplitPush(name).catch(function () {});   // 本地成了并集 → 回推，别的设备才补得回来
                 });
             }).catch(function () {});
         }
@@ -12944,6 +12953,8 @@ body {
 
         /* 拉：先问「云端每本书各是什么时间戳」（一个很小的清单），只下比本地新的那几本。 */
         function cfPullReaderQA() {
+            var _cfg = cfGetConfig();
+            if (activeSyncProvider !== 'cf' || !_cfg.url || !_cfg.token) return Promise.resolve();
             return cfReq('GET', '', undefined, 'list=' + encodeURIComponent(RQA_PREFIX)).then(function (map) {
                 if (!map || typeof map !== 'object') return;
                 var local;
