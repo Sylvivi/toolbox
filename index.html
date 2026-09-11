@@ -1878,7 +1878,7 @@ body {
         }
 
         .chat-bubble {
-            font-size: 14px; line-height: 1.6; word-break: break-word;
+            font-size: var(--chat-fs, 14px); line-height: 1.6; word-break: break-word;
             position: relative; color: var(--text);
         }
         .chat-msg.user .chat-bubble {
@@ -1988,7 +1988,7 @@ body {
         /* 对话模式：用户消息也变成 AI 那样的纯文字（无气泡底色/边框/圆角、左对齐），像一行字。
            只在对话模式(body.chat-plain-user)生效；共读/翻译不加此类，不受影响。 */
         body.chat-plain-user .chat-msg.user .chat-bubble {
-            max-width: 80%; font-size: 14px;
+            max-width: 80%; font-size: var(--chat-fs, 14px);
             background: none; border: none; border-radius: 0;
             padding: 0; box-shadow: none;
             backdrop-filter: none; -webkit-backdrop-filter: none;
@@ -2068,6 +2068,18 @@ body {
             font-family: "Source Han Serif CN", "Songti SC", "Noto Serif CJK SC", serif;
             font-weight: 500;
         }
+        /* ⚠️2026-09-11 她要的：对话正文字号 = **14px × 105% = 14.7px**，
+           跟她阅读那边的字号档（reading_font_scale 105%）对齐。
+           她当天核过的其余几处：段间距不动、行间距 1.6 本来就对得上、首行缩进不搬。
+           ⚠️**只在对话模式**才放大——`body.chat-plain-user` ＝「对话且非共读/翻译/阅读」，
+             由 readingSyncAutoScrollUI() 挂，不是她手动开的开关。
+           ⚠️**绝对不能把字号写在 `.chat-bubble` 上**：共读正文 `.reading-merged` 就住在气泡里，
+             它的字号是 `1em × --reading-fs`（em ＝ 相对父级），气泡一变大，
+             她的阅读正文会被连乘成 15.4px —— 等于悄悄改掉了她的阅读字号。
+           ⚠️所以走变量：气泡和「对话模式的用户消息」两处都读 `--chat-fs`，
+             共读/翻译时 body 上没有这个类、变量未定义 → 自动回落 14px。
+             用户消息那条选择器更具体，**漏改它就会一问一答两种字号**。 */
+        body.chat-plain-user { --chat-fs: 14.7px; }
 
         /* Markdown 内容样式 */
         .chat-bubble p { margin: 0 0 8px; }
