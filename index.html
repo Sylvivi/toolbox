@@ -4439,11 +4439,12 @@ body {
                而宋体那条规则挂在**同一个元素**上，于是会被整个跳过、掉回系统黑体。
                2026-09-11 headless 测出来的，写 inherit 看着最自然、恰恰是错的。
                所以这里把宋体那串原样重复一遍当兜底；字重同理走 `--chat-me-fw`，
-               不能写死 400，否则字体没生效时短消息会比别的字淡一档。 */
+               不能写死 400，否则字体没生效时短消息会比别的字淡一档；
+               字号兜底回 `--chat-fs`（＝跟别的字一样大）。 */
         body.chat-plain-user .chat-msg.user .chat-bubble.chat-me-short {
             font-family: var(--chat-me-font, "Source Han Serif CN", "Songti SC", "Noto Serif CJK SC", serif);
             font-weight: var(--chat-me-fw, 500);
-            font-size: calc(var(--chat-fs, 14px) * var(--chat-me-scale, 1));
+            font-size: var(--chat-me-fs, var(--chat-fs, 14px));
         }
         /* AI 回复里的段落定位「§56」。⚠️别做成实心色块按钮——她的口味是提亮字色 + 淡底线。 */
         .rd-pref { color: var(--accent); font-size: .88em; cursor: pointer; white-space: nowrap;
@@ -23050,11 +23051,23 @@ body {
             var _meFont = _glFontStack(['青春例外你是偏爱', fb]);
             if (_meFont) {
                 rs.setProperty('--chat-me-font', _meFont);
-                rs.setProperty('--chat-me-scale', String(readingFontScaleGet('青春例外你是偏爱')));
+                /* 字号：**直接对齐阅读模式里这个字体的实际大小**（2026-09-11 她说「字体有点小，
+                   可以应用阅读的那个，我记得我设定了固定的大小」）。
+                   阅读正文的实际字号 ＝ 气泡基准 14px × `reading_font_scale`（她调的百分比档）
+                   × 这个字体自己的比例（`reading_fscale_<字体名>`，青春默认 1.07）。
+                   ⚠️基准**写死 14px、不跟 `--chat-fs`**：对话在电脑上是 14.7px、手机 14px，
+                     跟着它算的话两台设备会得出两个大小，而阅读在两台上都是从 14px 起算的
+                     （`.reading-merged` 住在 AI 气泡里，那条 105% 只作用于对话模式的气泡）。
+                     要「跟阅读一样」，就得跟阅读同一个起点。
+                   ⚠️两个比例都是**按设备存的、不进云同步**，所以这里每台各算各的，正是想要的。 */
+                var _rBase = parseFloat(localStorage.getItem('reading_font_scale') || '1') || 1;
+                if (_rBase < 0.8) _rBase = 0.8; if (_rBase > 1.6) _rBase = 1.6;
+                rs.setProperty('--chat-me-fs',
+                    (14 * _rBase * readingFontScaleGet('青春例外你是偏爱')).toFixed(2) + 'px');
                 rs.setProperty('--chat-me-fw', '400');   // 花字体只有一个字重，给 500 会被合成假粗
             } else {
                 rs.removeProperty('--chat-me-font');
-                rs.removeProperty('--chat-me-scale');
+                rs.removeProperty('--chat-me-fs');
                 rs.removeProperty('--chat-me-fw');
             }
             readingRenderFontUI();
