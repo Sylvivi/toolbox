@@ -27311,8 +27311,23 @@ body {
         function rbChapterHasSections(b, i) {
             var body = b.chapters[i].body || '';
             if (body.length < 6000) return false;
+            var hs = rbChapterHeads(b, i);
+            if (hs.length < 2) return false;
+            /* ⚠️2026-09-12：**书自己标了记号（▍）的，不走中文占比这道闸。**
+               她报《故事的解剖》第 8 章「04結構與類型」一万八千字却没切出小节。
+               查出来是**差 0.005**：前 3000 字中文占比 0.495，门槛 0.5。
+               那一章讲电影类型，满篇「諧仿（Parody）」「情境喜劇（Sitcom）」
+               「神經喜劇（Screwball）」，英文把比例压下去了——而它有 7 个货真价实的 ▍小标题。
+               ⚠️这道闸的用意是**挡住「猜出来的」标题**（索引页、英文注释里的短行会被误当小标题），
+                 带记号的是书自己标的、根本不用猜——这跟 rbDetectHeads 里那条
+                 「一章只要有一个带记号的标题就只认记号、不再猜」是同一个原则。
+               ⚠️别改成「把门槛调低到 0.35」：那会让索引页那种真该挡的也漏过去。
+                 判据要的是「是不是书自己标的」，不是「中文够不够多」。 */
+            for (var k = 0; k < hs.length; k++) {
+                if (rbHeadMark(hs[k].title)) return true;
+            }
             if (rbCnRatio(body.slice(0, 3000)) < 0.5) return false;
-            return rbChapterHeads(b, i).length >= 2;
+            return true;
         }
         // 目录里点小节的 🏛：只标这一节的背景。必须先关目录——标背景是边标边插进正文的，
         // 目录盖在上面就全看不见了（跟 rbChapMenuAction 里整章那条走同样的规矩）。
