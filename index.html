@@ -12047,6 +12047,25 @@ body {
              （09-05 踩过：短链域名换成 xhslink.cn，只改一处就认不出链接了）。 */
         var XHS_URL_RE = /https?:\/\/(?:[\w-]+\.)*(?:xhslink|xiaohongshu)\.(?:com|cn)\/\S+/g;
 
+        /* 小红书 App 的「分享文案」＝标题 + 链接 + 一句固定套话，
+           正文既然已经抓进卡片了，这些留在消息里只是噪音（2026-09-12 她说
+           「把链接还有那段套话去掉呀，看着有点影响观感」）。
+           ⚠️**只在抓取成功时才清**：抓失败的话链接必须原样留着，
+             否则她那条消息就彻底没了线索、想重试都没得点。
+           ⚠️套话有好几种版本（"把这段复制好…"/"复制本条消息…"/"这篇笔记在【小红书】等你来读"），
+             认【小红书】三个字最稳；从标点或行首起删，别把她自己写的半句话也吃掉。 */
+        function xhsStripShareText(t, url) {
+            return String(t || '')
+                .split(url).join(' ')
+                .replace(/[^\n，。；！？!?]*【小红书】[^\n]*/g, '')
+                .replace(/把这段复制好[^\n]*/g, '')
+                .replace(/复制本条消息[^\n]*/g, '')
+                .replace(/点击链接[^\n]*?打开[^\n]*/g, '')
+                .replace(/[ \t]{2,}/g, ' ')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+        }
+
         function xhsFetchNote(u) {
             // 复用 cfReq：地址、令牌、鉴权全是现成的（key 传空串 → 打到 /?xhs=…）
             // 回 {ok,text,images,descLen}；images 只有「正文短」时才有（服务端判的，见 XHS_DESC_SHORT）
@@ -18761,6 +18780,7 @@ body {
                     for (var _xi = 0; _xi < Math.min(_xurls.length, 3); _xi++) {
                         var _xr = await xhsFetchNote(_xurls[_xi]);
                         if (_xr && _xr.text) {
+                            text = xhsStripShareText(text, _xurls[_xi]);   // 抓到了才清掉链接和套话
                             var _xt = (_xr.text.split('\n')[0] || '小红书').replace(/^\S*\s*/, '').slice(0, 30);
                             _xparts.push('[ 小红书·' + (_xt || '笔记') + ' ]\n```\n' + _xr.text + '\n```');
                             /* 图：服务端只在「正文短」时才回（重点在图里的那种帖子）。
@@ -18774,7 +18794,9 @@ body {
                         }
                     }
                     if (_xparts.length) {
-                        text = _xparts.join('\n\n') + '\n\n' + text;
+                        // ⚠️清掉套话后 text 可能整个变空（她只转发了分享文案、没写别的），
+                        //   这时别再拼两个换行上去，否则卡片底下挂着一截空白。
+                        text = _xparts.join('\n\n') + (text ? '\n\n' + text : '');
                         /* ⚠️hasImages 是函数开头就算好的，这里新塞了图必须重算，
                            否则下面 msgContent 还走纯文本那条分支，图等于白抓。 */
                         if (_xgotImg) hasImages = chatPendingImages.length > 0;
