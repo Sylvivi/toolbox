@@ -4583,6 +4583,10 @@ body {
         /* ⚠️2026-09-10 她拍板缩到 90（原来 220）：照 rikkahub 的观感，
            图小、紧贴文字，一屏能多装几条对话。她看过 220/140/90 三版预览指的这个。
            ⚠️配套的 margin 也要跟着收（原来 6px），不然图小了、空隙还杵在那儿。 */
+        /* ⚠️配套 loading="lazy" decoding="async"（2026-09-12 加）：图存的是 1280px 的大图、
+           这里只显示 90px，浏览器仍要把整张解码进内存（一张约 8MB），滚历史时反复解码
+           很吃 CPU、手机会热。异步解码让它别卡主线程，懒加载让看不见的先别解。
+           ⚠️她把手机发热当硬约束，见记忆 phone-heat-is-hard-constraint。 */
         .chat-bubble img.chat-user-img {
             max-width: 90px; max-height: 90px; border-radius: 8px;
             /* ⚠️margin-left:auto 不能省：用户消息容器虽然是 align-items:flex-end，
@@ -16456,7 +16460,7 @@ body {
                            ⚠️_userTextWithFileCards 内部已经 esc 过并包了 pre-wrap 的 div，
                              这里别再 esc 一遍，会把标签转义成可见字符。 */
                         if (_displayText[k].type === 'text') ihTxt += _userTextWithFileCards(_displayText[k].text);
-                        else if (_displayText[k].type === 'image_url') ih += '<img class="chat-user-img" src="' + _displayText[k].image_url.url + '">';
+                        else if (_displayText[k].type === 'image_url') ih += '<img class="chat-user-img" loading="lazy" decoding="async" src="' + _displayText[k].image_url.url + '">';
                     }
                     bubble.innerHTML = ih + ihTxt;
                     // 带图的消息同样吃花字体（判据见 _chatMeIsShort，图片不参与长短判断）
