@@ -12039,6 +12039,21 @@ body {
             });
         }
 
+        /* ===== 小红书链接：把正文抓回来一起交给 AI（2026-09-12 汐做的，她要的）=====
+           ⚠️为什么不走 MCP：通用抓网页工具对小红书基本无效（JS 渲染 + 反爬，拿回来是空壳），
+             得专门解析页面里那段 __INITIAL_STATE__。这套解析服务器上跑了几个月了
+             （就是那个读小红书的 TG 机器人），后端直接 import 复用，没有复制第二份。
+           ⚠️正则跟服务端 xhs_bot.URL_RE **保持一致**，改一边记得改另一边
+             （09-05 踩过：短链域名换成 xhslink.cn，只改一处就认不出链接了）。 */
+        var XHS_URL_RE = /https?:\/\/(?:[\w-]+\.)*(?:xhslink|xiaohongshu)\.(?:com|cn)\/\S+/g;
+
+        function xhsFetchNote(u) {
+            // 复用 cfReq：地址、令牌、鉴权全是现成的（key 传空串 → 打到 /?xhs=…）
+            return cfReq('GET', '', undefined, 'xhs=' + encodeURIComponent(u))
+                .then(function (r) { return (r && r.ok && r.text) ? r.text : ''; })
+                .catch(function () { return ''; });     // 抓不到就当没这回事，别挡住她发消息
+        }
+
         // 批量获取（Worker 需支持 POST /_batch，否则降级逐个 GET）
         function cfBatchGet(keys) {
             if (keys.length === 0) return Promise.resolve({});
@@ -18670,6 +18685,30 @@ body {
                 // ⚠️2026-09-10 补：图片那边清空后有重画预览，文件这边**漏了**，
                 //   于是发完消息附件卡片还杵在输入框上，她不知道到底发没发出去。
                 chatRenderAttachPreview();
+            }
+
+            /* 小红书链接 → 自动抓正文。拼成跟附件**一模一样**的格式，
+               于是显示时被 _userTextWithFileCards 折叠成一张可点开的卡片：
+               她看到的还是干净的一行链接 + 自己的话，AI 拿到的是全文。零新增 UI。
+               ⚠️最多抓 3 条，且抓不到就静默跳过——绝不能因为抓取失败卡住她发消息。
+               ⚠️只在配了云同步时才试（接口挂在 cc-sync 上，没配就没有地址和令牌）。 */
+            if (text && typeof cfGetConfig === 'function') {
+                var _xcfg = null;
+                try { _xcfg = cfGetConfig(); } catch (e) {}
+                var _xurls = (_xcfg && _xcfg.url && _xcfg.token) ? (text.match(XHS_URL_RE) || []) : [];
+                if (_xurls.length) {
+                    showToast('📕 正在读小红书…');
+                    var _xparts = [];
+                    for (var _xi = 0; _xi < Math.min(_xurls.length, 3); _xi++) {
+                        var _xtext = await xhsFetchNote(_xurls[_xi]);
+                        if (_xtext) {
+                            var _xt = (_xtext.split('\n')[0] || '小红书').replace(/^\S*\s*/, '').slice(0, 30);
+                            _xparts.push('[ 小红书·' + (_xt || '笔记') + ' ]\n```\n' + _xtext + '\n```');
+                        }
+                    }
+                    if (_xparts.length) text = _xparts.join('\n\n') + '\n\n' + text;
+                    else showToast('读不到这篇（可能要登录或已删除），照原样发出去了');
+                }
             }
 
             // 共读模式：给原文标段落号
