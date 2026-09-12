@@ -12049,9 +12049,10 @@ body {
 
         function xhsFetchNote(u) {
             // 复用 cfReq：地址、令牌、鉴权全是现成的（key 传空串 → 打到 /?xhs=…）
+            // 回 {ok,text,images,descLen}；images 只有「正文短」时才有（服务端判的，见 XHS_DESC_SHORT）
             return cfReq('GET', '', undefined, 'xhs=' + encodeURIComponent(u))
-                .then(function (r) { return (r && r.ok && r.text) ? r.text : ''; })
-                .catch(function () { return ''; });     // 抓不到就当没这回事，别挡住她发消息
+                .then(function (r) { return (r && r.ok && r.text) ? r : null; })
+                .catch(function () { return null; });   // 抓不到就当没这回事，别挡住她发消息
         }
 
         // 批量获取（Worker 需支持 POST /_batch，否则降级逐个 GET）
@@ -18698,16 +18699,30 @@ body {
                 var _xurls = (_xcfg && _xcfg.url && _xcfg.token) ? (text.match(XHS_URL_RE) || []) : [];
                 if (_xurls.length) {
                     showToast('📕 正在读小红书…');
-                    var _xparts = [];
+                    var _xparts = [], _xgotImg = 0;
                     for (var _xi = 0; _xi < Math.min(_xurls.length, 3); _xi++) {
-                        var _xtext = await xhsFetchNote(_xurls[_xi]);
-                        if (_xtext) {
-                            var _xt = (_xtext.split('\n')[0] || '小红书').replace(/^\S*\s*/, '').slice(0, 30);
-                            _xparts.push('[ 小红书·' + (_xt || '笔记') + ' ]\n```\n' + _xtext + '\n```');
+                        var _xr = await xhsFetchNote(_xurls[_xi]);
+                        if (_xr && _xr.text) {
+                            var _xt = (_xr.text.split('\n')[0] || '小红书').replace(/^\S*\s*/, '').slice(0, 30);
+                            _xparts.push('[ 小红书·' + (_xt || '笔记') + ' ]\n```\n' + _xr.text + '\n```');
+                            /* 图：服务端只在「正文短」时才回（重点在图里的那种帖子）。
+                               ⚠️打上 xhs 标记——将来按来源清理时要认得出哪些是自动抓的
+                                 （抓来的图删了还能重抓，她自己发的删了就没了，不能一视同仁）。 */
+                            var _xim = _xr.images || [];
+                            for (var _xj = 0; _xj < _xim.length; _xj++) {
+                                chatPendingImages.push({ base64: _xim[_xj], type: 'image/jpeg', xhs: 1 });
+                                _xgotImg++;
+                            }
                         }
                     }
-                    if (_xparts.length) text = _xparts.join('\n\n') + '\n\n' + text;
-                    else showToast('读不到这篇（可能要登录或已删除），照原样发出去了');
+                    if (_xparts.length) {
+                        text = _xparts.join('\n\n') + '\n\n' + text;
+                        /* ⚠️hasImages 是函数开头就算好的，这里新塞了图必须重算，
+                           否则下面 msgContent 还走纯文本那条分支，图等于白抓。 */
+                        if (_xgotImg) hasImages = chatPendingImages.length > 0;
+                    } else {
+                        showToast('读不到这篇（可能要登录或已删除），照原样发出去了');
+                    }
                 }
             }
 
