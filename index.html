@@ -6647,6 +6647,12 @@ body {
                     <div id="chatSpFold" style="display:none">
                         <textarea id="chatSysPrompt" placeholder="输入系统提示词（可选）…" rows="6" style="width:100%;padding:12px 14px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;color:var(--text);font-size:14px;outline:none;resize:none;font-family:inherit;line-height:1.6"></textarea>
                     </div>
+                    <!-- 2026-09-12 她要的：第四块「文风约束」能开能关。
+                         ⚠️样式照 09-09 定的那版（一行文字 + 开着/关着，靠提亮字色，别加色块）。 -->
+                    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:1em;margin-top:0.7em;font-size:12px;line-height:1.6;color:var(--text-muted)">
+                        <span title="阅读模式下附加的那段「怎么说话」的规矩：不许下结论、不许说正确的废话、不许排比金句、封杀一批句式和滥词。关掉之后 AI 说话会松一些，但也更容易冒出套话。">文风约束</span>
+                        <span id="readingGuardToggle" onclick="readingToggleStyleGuard()" style="flex-shrink:0;cursor:pointer;font-weight:600"></span>
+                    </div>
                 </div>
                 <div style="margin-top:4px;padding-top:14px;border-top:1px solid var(--card-border)">
                     <div id="presetModelFold">
@@ -14052,6 +14058,26 @@ body {
             '六、这些词是被用烂的，别用：形成鲜明对比、不容置疑、无法抗拒、前所未有、无法形容、如释重负、涟漪、心湖、深潭、一丝、一缕、一抹、那种。',
             '七、允许你没话说、允许你只说半句、允许你吐槽、允许你说「这个我没什么想法」。'
         ].join('\n');
+
+        /* 「文风约束」开关（2026-09-12 她要的）。**默认开**——这段是她自己一条条定出来的，
+           不是随手加的，默认关掉等于白写。
+           ⚠️只管阅读模式这两处（共读点评、阅读提问）。对话模式那份 CHAT_STYLE_GUARD 是
+             另一个开关的事，她这次没提，别顺手一起改。 */
+        function readingStyleGuardOn() {
+            return localStorage.getItem('reading_style_guard') !== '0';
+        }
+        function readingSyncGuardToggle() {
+            var el = document.getElementById('readingGuardToggle');
+            if (!el) return;
+            var on = readingStyleGuardOn();
+            el.textContent = on ? '开着' : '关着';
+            el.style.color = on ? 'var(--accent)' : 'var(--text-muted)';
+        }
+        function readingToggleStyleGuard() {
+            try { localStorage.setItem('reading_style_guard', readingStyleGuardOn() ? '0' : '1'); } catch (e) {}
+            readingSyncGuardToggle();
+            showToast(readingStyleGuardOn() ? '文风约束：开' : '文风约束：关（说话会松一些）');
+        }
 
         var READING_STYLE_GUARD = [
             '【怎么说话·这条最重要】',
@@ -29739,7 +29765,7 @@ body {
                     purpose: '共读点评',
                     signal: _pd.ctl.signal,
                     messages: [
-                        { role: 'system', content: _spOne + '\n\n' + READING_MODE_INSTRUCTION + '\n\n' + READING_STYLE_GUARD },
+                        { role: 'system', content: _spOne + '\n\n' + READING_MODE_INSTRUCTION + (readingStyleGuardOn() ? '\n\n' + READING_STYLE_GUARD : '') },
                         { role: 'user', content: userMsg }
                     ],
                     onDelta: function (full) {
@@ -29916,7 +29942,7 @@ body {
             var _umAsk = umText();
             if (_umAsk) sysPrompt += '\n\n' + _umAsk;
             // ⚠️必须**排在记忆后面**：这段的效力靠的就是「在最末尾」，见 READING_STYLE_GUARD 的注释
-            sysPrompt += '\n\n' + READING_STYLE_GUARD;
+            if (readingStyleGuardOn()) sysPrompt += '\n\n' + READING_STYLE_GUARD;
             // 同一段已经在生成 → 别重复发（pNum 这时才定下来：导读会把它改写成小标题段号）
             if (readingIsPending(msg, pNum)) { showToast('这一段正在生成'); readingClearActbar(); return; }
             /* 一条进行中记录。气泡（「思考中…」占位 → 流式答案 → 正式问答块）全部由
@@ -35854,6 +35880,7 @@ body {
                 localStorage.removeItem('chat_reading_guide_model');
             } catch (e) {}
             presetRenderPickers();
+            readingSyncGuardToggle();   // 「文风约束」那一行的开/关字样也在这儿刷新
         }
         function chatUpdateCompressLabel() {
             var t = parseInt(document.getElementById('compressThresholdInput').value) || 40;
