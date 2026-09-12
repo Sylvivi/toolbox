@@ -27803,13 +27803,19 @@ body {
             var b = rbGetBook(bookId); if (!b || !b.chapters[i]) return;
             var fk = readerBookKey(bookId);
             var n = fk ? readerBgOfChap(fk, i).length : 0;
+            /* ⚠️2026-09-12 她让把「🏛 标背景」和「✂️ 手动分章」都撤了：
+                 「我现在根本不会自己弄了，我都是让你来弄」——这两件事她都交给汐在服务器上做。
+               ⚠️`rbChapMenuAction` 里的 'bg' / 'split' 分支**故意留着**，
+                 跟 rbMarkBgSection 一样：只撤入口不动功能，要加回来接上就行。
+               ⚠️于是菜单可能一项都没有（这一章没标过背景时），下面会直接不弹，
+                 别让她点了「⋯」冒出个空框。 */
+            var items = '';
+            if (n) items += '<div class="danger" onclick="rbChapMenuAction(\'clearbg\')">🗑️ 清掉本章背景（' + n + ' 条）</div>';
+            if (!items) { showToast('这一章没有可操作的'); return; }
             var menu = document.createElement('div');
             menu.id = 'rbChapMenu';
             menu.className = 'chat-hist-menu';
             menu.style.display = 'block';
-            var items = '<div onclick="rbChapMenuAction(\'bg\')">🏛 ' + (n ? '接着标背景' : '标背景') + '</div>';
-            if ((b.chapters[i].body || '').length >= 6000) items += '<div onclick="rbChapMenuAction(\'split\')">✂️ 手动分章</div>';
-            if (n) items += '<div class="danger" onclick="rbChapMenuAction(\'clearbg\')">🗑️ 清掉本章背景（' + n + ' 条）</div>';
             menu.innerHTML = items;
             document.body.appendChild(menu);
             rbChapMenuBook = bookId; rbChapMenuIdx = i;
