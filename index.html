@@ -4587,6 +4587,9 @@ body {
            ⚠️max-width 卡在三列宽（3×90+2×4=278），第四张自然折到下一行；
              `margin-left:auto` 让整块靠右，跟用户消息一致。
            ⚠️单张图时容器只有 90px 宽，不会被撑开。 */
+        /* ⚠️见上面 has-imgs 那段注释：不放宽的话三列放不下，会掉成两列。
+           96% 而不是 100%：留一点边距，别让图贴到屏幕边上。 */
+        .chat-msg.user .chat-bubble.has-imgs { max-width: 96%; }
         .chat-user-imgs {
             display: flex; flex-wrap: wrap; gap: 4px;
             justify-content: flex-end;
@@ -16510,6 +16513,10 @@ body {
                         else if (_displayText[k].type === 'image_url') ih += '<img class="chat-user-img" loading="lazy" decoding="async" src="' + _displayText[k].image_url.url + '">';
                     }
                     bubble.innerHTML = (ih ? '<div class="chat-user-imgs">' + ih + '</div>' : '') + ihTxt;
+                    /* ⚠️带图的气泡要放宽：默认 max-width:80%，在 360px 的屏上约 265px，
+                       而三张图需要 278px（3×90+2×4）——**就差这十几个像素**，
+                       第三张被挤到下一行，她报「变成一行两张图片了」。 */
+                    if (ih) bubble.classList.add('has-imgs');
                     // 带图的消息同样吃花字体（判据见 _chatMeIsShort，图片不参与长短判断）
                     if (_chatMeIsShort(_displayText)) bubble.classList.add('chat-me-short');
                 } else {
