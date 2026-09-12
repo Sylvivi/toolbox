@@ -23747,7 +23747,9 @@ body {
                    所以这里查一次映射：有 family 就用 family，没有就退回 name（本地字体、
                    她自己填的在线字体都是名字即字族名，行为不变）。 */
                 var useFb = fb && fb !== name && s.slot !== 'body';
-                var chain = '"' + _rdFontFamilyOf(name) + '"' + (useFb ? ', "' + _rdFontFamilyOf(fb) + '"' : '');
+                // 拉丁伙伴排最前（见 RD_LATIN_PARTNER 那段注释）；没配对的字体返回空串、行为不变
+                var chain = _glLatinPrefix(name)
+                    + '"' + _rdFontFamilyOf(name) + '"' + (useFb ? ', "' + _rdFontFamilyOf(fb) + '"' : '');
                 // font-family 值里不能放 inherit（会让整条声明失效），只放字体名 + 通用兜底 serif
                 document.documentElement.style.setProperty(s.varName, chain + ', serif');
             });
@@ -23773,7 +23775,13 @@ body {
                     var fam = '"' + _rdFontFamilyOf(n) + '"';
                     if (out.indexOf(fam) < 0) out.push(fam);
                 });
-                return out.length ? out.join(', ') + ', cursive' : '';
+                // ⚠️拉丁伙伴要排在**第一位**才接管得了英文（浏览器是逐字按顺序挑的）
+                if (!out.length) return '';
+                var _lead = '';
+                for (var _li = 0; _li < names.length; _li++) {
+                    if (names[_li]) { _lead = _glLatinPrefix(names[_li]); break; }
+                }
+                return _lead + out.join(', ') + ', cursive';
             }
             var _glCn = _glFontStack(['青春例外你是偏爱', fb, '溪涧山雪璞玉浑金']);
             var _glPy = _glFontStack(['溪涧山雪璞玉浑金']);
@@ -23949,6 +23957,36 @@ body {
            合并成一份 CSS。浏览器就能按 font-weight 自己挑出真正的那一档。
            ⚠️所以**别再拆回一个字重一个条目**，也别给它们改成带后缀的名字（cn-font-split
              默认会给非标准字重加后缀，合并时要把后缀去掉）。 */
+        /* ⚠️2026-09-12 她要的：「英文用朝吧」——青春的拉丁字母是方头粗笔画，她嫌难看。
+           做法：给朝时体单独生成了一份**只含拉丁字母**的 CSS（`hz-chaoshi/latin.css`，
+           48 片、12KB，由 `bin/make_latin_css.py` 从整份切片里筛出来），
+           注册成另一个字族 `Eleyang Spring Latin`，**排在花字体前面**。
+           浏览器逐字挑字体：英文走朝时，汉字因为那份 CSS 里根本没有汉字，自动落回花字体。
+           ⚠️**不能直接把整个朝时体排前面**——它自己有 6763 个汉字，会把中文一起抢走
+             （当天拿思源宋体试过，正是这个下场）。
+           ⚠️生成时**排掉了含中文标点的那一片**（、。「」和弯引号 “ ”）：
+             那些字在中文里天天用，跟正文不是同一套字体会很扎眼。
+           ⚠️`size-adjust: 118%` 是她挑的档（100/106/112/118 截图比过）。
+             朝时的字面天生比青春小一圈，不放大的话英文会矮一截。
+           ⚠️只给**青春**配：她只嫌青春的英文难看，溪涧和山茶没提。以后要加就往这张表里加一行。 */
+        var RD_LATIN_PARTNER = {
+            '青春例外你是偏爱': { family: 'Eleyang Spring Latin',
+                            url: 'https://tool.masterofmydomain.top/wfonts/hz-chaoshi/latin.css' }
+        };
+        function _glLatinPrefix(name) {
+            var lp = RD_LATIN_PARTNER[name];
+            if (!lp) return '';
+            if (!_readingFontLinks[lp.family]) {
+                try {
+                    var lk = document.createElement('link');
+                    lk.rel = 'stylesheet'; lk.href = lp.url; lk.setAttribute('data-rfont', lp.family);
+                    document.head.appendChild(lk);
+                    _readingFontLinks[lp.family] = lk;
+                } catch (e) {}
+            }
+            return '"' + lp.family + '", ';
+        }
+
         var RD_PRESET_FONTS = [
             { name: 'Source Han Serif CN', url: 'https://tool.masterofmydomain.top/wfonts/shs/result.css', mw: true },   // mw=多字重(400/500/600/700)，字重开关只对它这类生效
             /* 她的三个花字体（2026-09-06 一起做了镜像）。原来是整份 ttf 存在书库服务器上、
