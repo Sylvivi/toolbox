@@ -2106,16 +2106,17 @@ body {
         /* ⚠️2026-09-12 她拍板：**引号和加粗用同一套样式**（原话「别整那么复杂了，
            引号和加粗应用同样的样式」）。之前引号走的是「光带」（搬自阅读模式的名词柔光），
            当天来回调过一轮浓淡宽窄，最后她说不要了——**光带那一整段已删，别再加回来。**
-           ⚠️`palt`：加粗/引号里带着 「」“” 时，虚线会划过全角标点右半边的空白
-             （她说「符号占位很小，线却多延伸了很多，强迫症发作」）。palt＝比例替代，
-             让全角标点缩到实际该有的宽度，线就贴着墨迹走了。思源宋体带这个特性。
+           ⚠️**别再加 `font-feature-settings:"palt"`**（2026-09-12 加过又撤）。
+             当时是为了解决「虚线划过全角标点右半边空白」——中文标点墨迹窄、却占一整格。
+             palt 能让标点缩到实际宽度，但她最后选了**另一条路**：
+             **干脆不给标点上色、不划线**（见 `_quoteMarks` 和 `_trimStrongPunct`）。
+             两条路只能选一条，同时上会让标点既缩了又不带装饰，看着更怪。
            ⚠️线色用 `currentColor` 不再写一遍 `--accent-read`：字色已经是它了，
              以后改字色不用记得回来改线色。
            ⚠️这套虚线是抄阅读模式的（引号划线/人名划线/精句划线都用它），
              别另起一种线，否则同一个 app 里两种下划线比不加还怪。 */
         .chat-bubble strong, .chat-bubble b,
         body.chat-plain-user .chat-bubble .chat-quote {
-            font-feature-settings: "palt" 1;
             color: var(--accent-read);
             font-weight: 700;
             text-decoration: underline dashed currentColor;
@@ -10806,23 +10807,44 @@ body {
             var parts = str.split(/(<pre[\s\S]*?<\/pre>|<code[\s\S]*?<\/code>)/);
             for (var i = 0; i < parts.length; i += 2) {
                 parts[i] = parts[i].replace(/(^|>)([^<]+)/g, function (m, lead, txt) {
-                    /* ⚠️2026-09-12 当天来回过一趟，结论记清楚：**连引号符号一起罩**。
-                       她先说「引号别在光带覆盖范围了，看起来好宽」→ 我把符号挪出去了 →
-                       她又说「我还是想让符号被覆盖的，我讨厌的是覆盖后变得很宽」。
-                       **真正的毛病是留白太宽（5px），不是覆盖范围。** 留白已收到 2px，别再改覆盖范围。 */
+                    /* ⚠️**只罩引号里的字**，`“`「『 这些符号留在外面、不着色也不划线。
+                       2026-09-12 这条来回过三轮，最终结论记在这儿，别再翻烧饼：
+                         ① 罩整对符号（光带时代）→ 她说「好宽」
+                         ② 挪出符号 → 她说「我还是想让符号被覆盖的，讨厌的是变宽」
+                         ③ 改用 palt 把标点缩窄 → 她最后说「不缩了，标点就不着色，下划线也不覆盖」
+                       ＝回到 ②，但这次配套的是「加粗首尾标点也不覆盖」（`_trimStrongPunct`），
+                       两处口径一致：**装饰只落在字上，不落在标点上**。 */
                     return lead + txt.replace(
-                        /[“「『][^”」』<>\n]{1,200}?[”」』]/g,
-                        function (q) { return '<span class="chat-quote">' + q + '</span>'; });
+                        /([“「『])([^”」』<>\n]{1,200}?)([”」』])/g,
+                        function (m2, l, inner, r) { return l + '<span class="chat-quote">' + inner + '</span>' + r; });
                 });
             }
             return parts.join('');
         }
-        /* ⚠️2026-09-12 这里**曾经**有个 `_trimStrongPunct`，把加粗首尾的标点挪到 <strong> 外面，
-           好让那条虚线下划线不划到标点上。当天就撤了——她说「我还是想让符号被覆盖的，
-           我讨厌的是覆盖后变得很宽」。**别再加回来**：嫌宽就调留白，不是改覆盖范围。 */
+        /* 把加粗**首尾**的标点挪到 `<strong>` 外面，让字色和虚线都不落在标点上。
+           ⚠️2026-09-12 加过、撤过、又加回来——最终口径是她定的：
+             「标点符号就不着色了，下划线也不覆盖」。跟 `_quoteMarks` 只罩引号内文字是一套的。
+           ⚠️只动**最外层的首尾**，中间的标点一律不碰（「不是A，而是B」整句加粗时那个逗号该划就划，
+             不然线会断成两截更难看）。
+           ⚠️首尾都可能连着好几个（`**（注）**`），所以两个正则各用 `+` 一次吃掉一串。
+           ⚠️整块都是标点时**把加粗壳去掉**，别留空的 `<strong></strong>`——
+             空壳带着下划线样式会在行里留一小截线头。 */
+        var _PUNCT_EDGE = '「」『』“”‘’（）()《》〈〉【】〔〕\\[\\]—…、，。！？；：·~\\-\\s';
+        function _trimStrongPunct(html) {
+            var str = String(html || '');
+            if (str.indexOf('<strong>') < 0) return str;
+            var reL = new RegExp('^[' + _PUNCT_EDGE + ']+'), reT = new RegExp('[' + _PUNCT_EDGE + ']+$');
+            return str.replace(/<strong>([\s\S]*?)<\/strong>/g, function (m, inner) {
+                var lead = '', tail = '';
+                var mL = inner.match(reL); if (mL) { lead = mL[0]; inner = inner.slice(lead.length); }
+                var mT = inner.match(reT); if (mT) { tail = mT[0]; inner = inner.slice(0, inner.length - tail.length); }
+                if (!inner) return lead + tail;
+                return lead + '<strong>' + inner + '</strong>' + tail;
+            });
+        }
         function renderText(text) {
             if (!text) return '';
-            return _quoteMarks(_mathLite(_fileCards(_rdPRefChips(parseMd(text)))));
+            return _quoteMarks(_trimStrongPunct(_mathLite(_fileCards(_rdPRefChips(parseMd(text))))));
         }
 
         // 把 §56 渲染成可点的小标记。⚠️放在 parseMd 出口统一做，别在各个调用点各写一遍
