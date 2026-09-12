@@ -12134,7 +12134,23 @@ body {
         /* ----- 同步状态追踪（每张卡片独立记录 pending/synced/error） ----- */
         // status: 'synced' | 'pending' | 'error' | 'conflict'
         var _cardSyncStatus = {};
-        var _cardCloudHash = {}; // id → 上次拉取时的 JSON hash
+        /* id → 上次**推上去/拉下来**的 JSON 指纹。
+           ⚠️2026-09-12 起**持久化**（`cf_card_hash`）：原来只在内存里，一刷新就空，
+             于是每次重开 app 都要把所有卡片全量重传一遍。
+           ⚠️它只是**省流量的记账**，不是真相来源：丢了最坏就是多传一次，绝不会传错。 */
+        var CF_CARD_HASH_KEY = 'cf_card_hash';
+        var _cardCloudHash = (function () {
+            try { return JSON.parse(localStorage.getItem(CF_CARD_HASH_KEY) || '{}') || {}; }
+            catch (e) { return {}; }
+        })();
+        var _cardHashSaveT = null;
+        function _cardHashPersist() {
+            if (_cardHashSaveT) clearTimeout(_cardHashSaveT);
+            _cardHashSaveT = setTimeout(function () {
+                _cardHashSaveT = null;
+                try { localStorage.setItem(CF_CARD_HASH_KEY, JSON.stringify(_cardCloudHash)); } catch (e) {}
+            }, 800);
+        }
 
         function setSyncStatus(id, status) {
             _cardSyncStatus[id] = status;
@@ -12164,7 +12180,7 @@ body {
             cards.forEach(function(c) {
                 if (c && c.id) {
                     _cardSyncStatus[c.id] = 'synced';
-                    _cardCloudHash[c.id] = computeCardHash(c);
+                    _cardCloudHash[c.id] = computeCardHash(c); _cardHashPersist();
                 }
             });
         }
@@ -12251,7 +12267,7 @@ body {
                 }
                 return cfReq('PUT', key, card);
             }).then(function() {
-                _cardCloudHash[card.id] = computeCardHash(card);
+                _cardCloudHash[card.id] = computeCardHash(card); _cardHashPersist();
                 setSyncStatus(card.id, 'synced');
             }).catch(function(e) {
                 console.warn('Push failed for', card.id, e);
@@ -12284,7 +12300,7 @@ body {
                     setSyncStatus(d.id, 'pending');
                     promises.push(cfReq('DELETE', prefix + d.id).then(function() {
                         delete _cardSyncStatus[d.id];
-                        delete _cardCloudHash[d.id];
+                        delete _cardCloudHash[d.id]; _cardHashPersist();
                     }).catch(function(e) {
                         setSyncStatus(d.id, 'error');
                         throw e;
@@ -12604,12 +12620,12 @@ body {
                     var pushPromises = [];
                     mergedKeys.toPush.forEach(function(card) {
                         pushPromises.push(cfReq('PUT', 'k_' + card.id, card).then(function() {
-                            _cardCloudHash[card.id] = computeCardHash(card);
+                            _cardCloudHash[card.id] = computeCardHash(card); _cardHashPersist();
                         }));
                     });
                     mergedSnips.toPush.forEach(function(card) {
                         pushPromises.push(cfReq('PUT', 's_' + card.id, card).then(function() {
-                            _cardCloudHash[card.id] = computeCardHash(card);
+                            _cardCloudHash[card.id] = computeCardHash(card); _cardHashPersist();
                         }));
                     });
 
@@ -13064,22 +13080,34 @@ body {
             }).catch(function () {});   // 列不出来（旧服务器/断网）不算错，下次再说
         }
 
+        /* ⚠️2026-09-12：**只推变了的卡片**。
+           起因：她说还有点发烫。查日志——今天 2991 次请求、上行 26.7MB，而最近三小时内
+           被写过的键有 109 个、合计 1.1MB。病根就是这个函数**每次同步都把所有钥匙卡片和
+           片段全量重传一遍**，不管变没变（她那些片段里有 161KB、135KB 的大块）。
+           一趟 1.1MB / 109 个请求 × 约 24 趟 ≈ 26MB / 2600 次，跟实测几乎完全对上。
+           ⚠️判「变没变」的机器**本来就写好了**（`computeCardHash` + `_cardCloudHash`），
+             只是从来没拿来挡过推送——推完才记一笔。这次把它用在推之前。
+           ⚠️没变的也要把状态点标成 synced，否则界面上会一直停在「同步中…」。
+           ⚠️这是同一类病的第三次：清单全量下（已修）、问答全量推（已修）、现在是卡片全量推。
+             **凡是「每次都把整份传一遍」的地方都要问一句：它变了吗。** */
+        function _cfPushCardsChanged(list, prefix, promises) {
+            var skipped = 0;
+            list.forEach(function (c) {
+                var h = computeCardHash(c);
+                if (_cardCloudHash[c.id] === h) { setSyncStatus(c.id, 'synced'); skipped++; return; }
+                setSyncStatus(c.id, 'pending');
+                promises.push(cfReq('PUT', prefix + c.id, c).then(function () {
+                    _cardCloudHash[c.id] = h;
+                    _cardHashPersist();
+                    setSyncStatus(c.id, 'synced');
+                }).catch(function (e) { setSyncStatus(c.id, 'error'); throw e; }));
+            });
+            return skipped;
+        }
         function cfPushAllCards() {
             var keyData = getKeyData(), snipData = getSnipData(), promises = [];
-            keyData.forEach(function(c) {
-                setSyncStatus(c.id, 'pending');
-                promises.push(cfReq('PUT', 'k_' + c.id, c).then(function() {
-                    _cardCloudHash[c.id] = computeCardHash(c);
-                    setSyncStatus(c.id, 'synced');
-                }).catch(function(e) { setSyncStatus(c.id, 'error'); throw e; }));
-            });
-            snipData.forEach(function(c) {
-                setSyncStatus(c.id, 'pending');
-                promises.push(cfReq('PUT', 's_' + c.id, c).then(function() {
-                    _cardCloudHash[c.id] = computeCardHash(c);
-                    setSyncStatus(c.id, 'synced');
-                }).catch(function(e) { setSyncStatus(c.id, 'error'); throw e; }));
-            });
+            _cfPushCardsChanged(keyData, 'k_', promises);
+            _cfPushCardsChanged(snipData, 's_', promises);
             /* ⚠️顺序：**先**把阅读问答按书推上去，**再**推那包不带 readerQA 的清单。
                反过来的话，中间会有一小段时间云端两边都查不到问答。 */
             return Promise.all([cfPushReaderQA(), cfSplitPushAll()]).then(function () {
