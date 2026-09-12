@@ -36708,6 +36708,27 @@ body {
                 if (Date.now() - _lastSync < 10000) return;
                 if (activeSyncProvider !== 'cf') return;
                 if (!force && _watchHealthy() && Date.now() - _lastFullCheck < 600000) return;
+                /* ★ 便宜的一发（2026-09-12 加）：长轮询断着的时候，先只问一句
+                   「从我见过的版本到现在变了哪些键」。
+                   原来这一趟固定要打 **6 个请求**（清单探头 + 问答清单 + 三个拆分清单 + 对话清单），
+                   断线期间每 30 秒来一轮，就成了新的唤醒源——而手机费电的正是唤醒次数。
+                   现在没变化时**一个请求收工**，而且跟长轮询共用同一套版本号（服务器 `?since=`）。
+                   ⚠️`keys === null` ＝服务器说不清（第一次连／落后太多／**服务重启过**），
+                     这时必须退回下面那条全量核对的路。
+                   ⚠️退回时要把 `_lastSync` 清零绕开 10 秒节流，否则这一轮就白问了、
+                     真有变化也要再等 10 秒才拉得到。 */
+                if (!force && _watchVer > 0 && Date.now() - _lastFullCheck < 600000) {
+                    _syncing = true;
+                    _lastSync = Date.now();
+                    return cfReq('GET', '', undefined, 'since=' + _watchVer).then(function (d) {
+                        _syncing = false;
+                        if (!d) return;
+                        _watchVer = d.ver || _watchVer;
+                        if (d.keys && d.keys.length === 0) return;      // 什么都没变 → 就这一个请求
+                        if (!d.keys) { _lastSync = 0; autoSync(true); return; }   // 说不清 → 整体核对
+                        cfWatchApply(d.keys);
+                    }).catch(function () { _syncing = false; });
+                }
                 _lastFullCheck = Date.now();
                 var cc = cfGetConfig();
                 if (!cc.url || !cc.token) return;
