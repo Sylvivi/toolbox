@@ -6647,12 +6647,6 @@ body {
                     <div id="chatSpFold" style="display:none">
                         <textarea id="chatSysPrompt" placeholder="输入系统提示词（可选）…" rows="6" style="width:100%;padding:12px 14px;background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;color:var(--text);font-size:14px;outline:none;resize:none;font-family:inherit;line-height:1.6"></textarea>
                     </div>
-                    <!-- 2026-09-12 她要的：第四块「文风约束」能开能关。
-                         ⚠️样式照 09-09 定的那版（一行文字 + 开着/关着，靠提亮字色，别加色块）。 -->
-                    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:1em;margin-top:0.7em;font-size:12px;line-height:1.6;color:var(--text-muted)">
-                        <span title="阅读模式下附加的那段「怎么说话」的规矩：不许下结论、不许说正确的废话、不许排比金句、封杀一批句式和滥词。关掉之后 AI 说话会松一些，但也更容易冒出套话。">文风约束</span>
-                        <span id="readingGuardToggle" onclick="readingToggleStyleGuard()" style="flex-shrink:0;cursor:pointer;font-weight:600"></span>
-                    </div>
                 </div>
                 <div style="margin-top:4px;padding-top:14px;border-top:1px solid var(--card-border)">
                     <div id="presetModelFold">
@@ -6727,6 +6721,20 @@ body {
                                 <input type="range" id="compressKeepInput" min="4" max="100" step="2" oninput="chatUpdateCompressLabel()" style="background: linear-gradient(to right, var(--accent) 0%, var(--accent) 2.083333333333333%, var(--card-border) 2.083333333333333%, var(--card-border) 100%); border-radius: 3px;">
                                 <span class="ctx-label" id="compressKeepLabel" style="font-size:11px">5 条</span>
                             </div>
+                        </div>
+                        <!-- 2026-09-12 她要的「文风约束」开关。**位置是她指定的**：
+                             「可以把它也放到那个折叠里面去，就上下文那边」——原本放在系统提示词底下，
+                             她说跟周围格格不入（那块全是 13px 折叠标题，没有开关类控件）。
+                             ⚠️样式照搬紧挨着的「超长自动摘要」，两个滑块结构要保持一致：
+                               readingSyncGuardToggle 跟 syncCompressToggleStyle 一样靠
+                               nextElementSibling 两跳取轨道和滑块，改 DOM 时两处一起看。 -->
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
+                            <span style="font-size:12px;color:var(--text-muted)" title="阅读模式下附加的那段「怎么说话」的规矩：不许下结论、不许说正确的废话、不许排比金句、封杀一批句式和滥词。关掉之后 AI 说话会松一些，但也更容易冒出套话。">文风约束</span>
+                            <label style="position:relative;width:40px;height:22px;cursor:pointer">
+                                <input type="checkbox" id="readingGuardToggle" onchange="readingToggleStyleGuard(this.checked)" style="display:none">
+                                <span style="position:absolute;inset:0;background:var(--accent);border-radius:11px;transition:background 0.3s cubic-bezier(0.4,0,0.2,1)"></span>
+                                <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);box-shadow:0 1px 3px rgba(0,0,0,0.2)"></span>
+                            </label>
                         </div>
                         <div id="compressLockNote" style="display:none;font-size:11px;color:var(--text-muted);line-height:1.6;padding-top:0.4em">已按「发送最近」接管，本对话不做摘要。压缩开关不用去关，别的对话照旧。</div>
                         </div>
@@ -14066,17 +14074,23 @@ body {
         function readingStyleGuardOn() {
             return localStorage.getItem('reading_style_guard') !== '0';
         }
+        // ⚠️轨道/滑块的取法跟 syncCompressToggleStyle 一致（nextElementSibling 两跳），
+        //   改结构时两处一起看。
         function readingSyncGuardToggle() {
-            var el = document.getElementById('readingGuardToggle');
-            if (!el) return;
+            var cb = document.getElementById('readingGuardToggle');
+            if (!cb) return;
             var on = readingStyleGuardOn();
-            el.textContent = on ? '开着' : '关着';
-            el.style.color = on ? 'var(--accent)' : 'var(--text-muted)';
+            cb.checked = on;
+            var track = cb.nextElementSibling, thumb = track && track.nextElementSibling;
+            if (!track || !thumb) return;
+            track.style.background = on ? 'var(--accent)' : 'var(--input-border)';
+            thumb.style.transform = on ? 'translateX(18px)' : 'translateX(0)';
         }
-        function readingToggleStyleGuard() {
-            try { localStorage.setItem('reading_style_guard', readingStyleGuardOn() ? '0' : '1'); } catch (e) {}
+        function readingToggleStyleGuard(checked) {
+            var on = (checked === undefined) ? !readingStyleGuardOn() : !!checked;
+            try { localStorage.setItem('reading_style_guard', on ? '1' : '0'); } catch (e) {}
             readingSyncGuardToggle();
-            showToast(readingStyleGuardOn() ? '文风约束：开' : '文风约束：关（说话会松一些）');
+            showToast(on ? '文风约束：开' : '文风约束：关（说话会松一些）');
         }
 
         var READING_STYLE_GUARD = [
