@@ -4583,17 +4583,28 @@ body {
         /* ⚠️2026-09-10 她拍板缩到 90（原来 220）：照 rikkahub 的观感，
            图小、紧贴文字，一屏能多装几条对话。她看过 220/140/90 三版预览指的这个。
            ⚠️配套的 margin 也要跟着收（原来 6px），不然图小了、空隙还杵在那儿。 */
+        /* 多图排成九宫格（2026-09-12 她要的：「别这样一张叠着一张，类似九宫格那种比较好」）。
+           ⚠️max-width 卡在三列宽（3×90+2×4=278），第四张自然折到下一行；
+             `margin-left:auto` 让整块靠右，跟用户消息一致。
+           ⚠️单张图时容器只有 90px 宽，不会被撑开。 */
+        .chat-user-imgs {
+            display: flex; flex-wrap: wrap; gap: 4px;
+            justify-content: flex-end;
+            max-width: 278px; margin: 3px 0 3px auto;
+        }
         /* ⚠️配套 loading="lazy" decoding="async"（2026-09-12 加）：图存的是 1280px 的大图、
            这里只显示 90px，浏览器仍要把整张解码进内存（一张约 8MB），滚历史时反复解码
            很吃 CPU、手机会热。异步解码让它别卡主线程，懒加载让看不见的先别解。
-           ⚠️她把手机发热当硬约束，见记忆 phone-heat-is-hard-constraint。 */
+           ⚠️她把手机发热当硬约束，见记忆 phone-heat-is-hard-constraint。
+           ⚠️固定 90×90 + object-fit:cover 才是「九宫格」那个观感（长图会裁中间一段）——
+             裁了不要紧，**点一下能看全图**（下面那个全局委托）。 */
         .chat-bubble img.chat-user-img {
-            max-width: 90px; max-height: 90px; border-radius: 8px;
-            /* ⚠️margin-left:auto 不能省：用户消息容器虽然是 align-items:flex-end，
-               但气泡的宽度是被**文字**撑开的，图片作为 display:block 仍然贴气泡左边。
-               图大的时候（原来 220px）宽度接近文字、看不出来；缩到 90px 就明显偏左了
-               （她原话「图片怎么在最左边靠左」）。auto 把它推到跟文字右缘对齐。 */
-            margin: 3px 0 3px auto;
+            width: 90px; height: 90px; object-fit: cover; cursor: pointer;
+            border-radius: 8px;
+            /* ⚠️靠右对齐现在归容器 .chat-user-imgs 管（它是 flex + justify-content:flex-end
+               + margin-left:auto）。这里别再写 margin:auto，否则 flex 里每张图各自推开、
+               间距就乱了。历史原因见 09-12 那条「图片怎么在最左边靠左」。 */
+            margin: 0;
             display: block;
         }
         /* 生图气泡 */
@@ -14782,6 +14793,17 @@ body {
                 })(imgs[i]);
             }
         }
+        /* 聊天里的图点一下看大图（2026-09-12 加）。
+           ⚠️**全局委托**而不是逐张绑 onclick：图是拼 HTML 渲染的，逐张绑要在每个渲染
+             出口都补一遍（对话/阅读/窗口化重渲…），必漏。委托只绑一次，对以后渲染的也有效。
+           ⚠️复用 genImgLightbox，别另写一个——它本来就是「点开看原图」这件事。 */
+        document.addEventListener('click', function (e) {
+            var t = e.target;
+            if (t && t.tagName === 'IMG' && t.classList && t.classList.contains('chat-user-img') && t.src) {
+                genImgLightbox(t.src);
+            }
+        });
+
         // 生图大图查看
         function genImgLightbox(dataURL) {
             var mask = document.createElement('div');
@@ -16475,7 +16497,7 @@ body {
                         if (_displayText[k].type === 'text') ihTxt += _userTextWithFileCards(_displayText[k].text);
                         else if (_displayText[k].type === 'image_url') ih += '<img class="chat-user-img" loading="lazy" decoding="async" src="' + _displayText[k].image_url.url + '">';
                     }
-                    bubble.innerHTML = ih + ihTxt;
+                    bubble.innerHTML = (ih ? '<div class="chat-user-imgs">' + ih + '</div>' : '') + ihTxt;
                     // 带图的消息同样吃花字体（判据见 _chatMeIsShort，图片不参与长短判断）
                     if (_chatMeIsShort(_displayText)) bubble.classList.add('chat-me-short');
                 } else {
