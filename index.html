@@ -14160,6 +14160,58 @@ body {
             _chatHistCache = idbGet(CHAT_STORE) || [];
             return _chatHistCache;
         }
+        /* ===== 两天前的图片自动清掉（2026-09-12 她要的：「图占空间确实需要解决，可以两天一删」）=====
+           她拍板**不分来源全清**（自动抓的和自己发的一样对待）。
+           清掉的地方留一个「[N张图片]」的字样，文字照旧保留，所以对话读起来不断片。
+           ⚠️**必须清完立刻推云端**：消息签名 `_chatMsgSig` 是 role+JSON.stringify(content)，
+             删了图签名就变了 → 合并时被判成「分叉」，而条数又没变 →
+             走「按时间戳取舍」，云端那份带图的很可能赢回来，表现成「删了又长回来」。
+             推上去让两边一致，这个分叉就不存在了。
+           ⚠️只动**已经保存在历史里**的对话；当前正开着的那条留到下次启动再清，
+             免得把她眼前正在看的消息改掉、还要重渲染。
+           ⚠️幂等：清过的消息 content 已经是字符串，第二次扫直接跳过。 */
+        var CHAT_IMG_KEEP_DAYS = 2;
+
+        function chatPurgeOldImages() {
+            try {
+                var cut = Date.now() - CHAT_IMG_KEEP_DAYS * 86400000;
+                var list = chatGetHistory();
+                var nMsg = 0, nImg = 0, freed = 0, touched = false;
+                for (var i = 0; i < list.length; i++) {
+                    var conv = list[i];
+                    if (!conv || !Array.isArray(conv.messages)) continue;
+                    if (conv.id && conv.id === chatCurrentConvId) continue;   // 正开着的那条不动
+                    var hit = false;
+                    for (var j = 0; j < conv.messages.length; j++) {
+                        var m = conv.messages[j];
+                        if (!m || !Array.isArray(m.content)) continue;        // 字符串＝没图或已清过
+                        if (!(m.ts && m.ts < cut)) continue;
+                        var imgs = [], texts = [];
+                        for (var k = 0; k < m.content.length; k++) {
+                            var c = m.content[k];
+                            if (c && c.type === 'image_url') {
+                                imgs.push(c);
+                                freed += ((c.image_url && c.image_url.url) || '').length;
+                            } else if (c && c.type === 'text' && c.text) {
+                                texts.push(c.text);
+                            }
+                        }
+                        if (!imgs.length) continue;
+                        var tag = imgs.length > 1 ? ('[' + imgs.length + '张图片]') : '[图片]';
+                        m.content = texts.length ? (tag + '\n' + texts.join('\n')) : tag;
+                        nMsg++; nImg += imgs.length; hit = true;
+                    }
+                    if (hit) { conv._dirty = 1; touched = true; }
+                }
+                if (touched) {
+                    chatSetHistory(list);
+                    if (typeof chatSyncPush === 'function') chatSyncPush();   // ⚠️见上面，必须推
+                    console.log('[图片清理] 清掉 ' + nImg + ' 张（' + nMsg + ' 条消息），约 '
+                                + (freed / 1048576).toFixed(1) + 'MB');
+                }
+            } catch (e) {}
+        }
+
         function chatSetHistory(list) {
             // 超出上限时，从最旧的开始淘汰未置顶对话（置顶对话永不淘汰）
             if (list.length > CHAT_MAX) {
@@ -16357,7 +16409,13 @@ body {
                        同样两条消息长得不一样。所以这里**分两趟**：图片先、文字后。 */
                     var ih = '', ihTxt = '';
                     for (var k = 0; k < _displayText.length; k++) {
-                        if (_displayText[k].type === 'text') ihTxt += '<div style="white-space:pre-wrap;word-break:break-word">' + esc(_displayText[k].text) + '</div>';
+                        /* ⚠️2026-09-12 修：这里原来只做 esc，**不走 _userTextWithFileCards**，
+                           于是「带图的消息」里的附件/小红书正文不会折叠成卡片、整篇摊开
+                           （她原话「抓取的正文突然不被收起来了」）。
+                           老毛病——带图再发文件也一样摊开，只是以前没撞上。
+                           ⚠️_userTextWithFileCards 内部已经 esc 过并包了 pre-wrap 的 div，
+                             这里别再 esc 一遍，会把标签转义成可见字符。 */
+                        if (_displayText[k].type === 'text') ihTxt += _userTextWithFileCards(_displayText[k].text);
                         else if (_displayText[k].type === 'image_url') ih += '<img class="chat-user-img" src="' + _displayText[k].image_url.url + '">';
                     }
                     bubble.innerHTML = ih + ihTxt;
@@ -36759,6 +36817,7 @@ body {
             migrateCheckinReciteName();
             readerMigrateAllMarksKeys();  // 开机把旧「设备专属键」下的读痕全搬到跨设备稳定键并重推（修跨设备不同步）
             readerPurgeRefusedSummaries();  // 开机清掉「拒绝文案被当成摘要」的脏数据，让那些章能重做
+            chatPurgeOldImages();           // 开机清掉两天前的图片（她定的），只留「[N张图片]」字样
 
             // 字体：idb 就绪后立刻注册本地字体 + 应用四/五位置选择（全局 CSS 变量），
             // 这样一进阅读界面就生效，不用先点开 clawd 设置面板才同步上。
