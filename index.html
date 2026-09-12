@@ -4442,6 +4442,38 @@ body {
            ⚠️没有文件卡片的普通消息**不走这里**（`_userTextWithFileCards` 的早退分支
              不加 `fc-txt` 类），观感照旧。 */
         .chat-bubble .fc-txt { text-align: right; }
+        /* 引号内的淡底（2026-09-12）。⚠️只在对话模式：阅读模式有自己那套引号样式。
+           ⚠️用 `box-decoration-break: clone`，换行时两截都各自带圆角，
+             不然折行处会缺一块、看着像没画完。
+           ⚠️`padding` 用 em 且上下给很小的值：行内元素的上下 padding **不撑行高**，
+             给大了会糊到上一行。 */
+        /* ⚠️2026-09-12 她看完对比图后定的：用**光带**，就是阅读模式里名词柔光那一款
+           （`rn-glow-band`，见上面那段注释）——左右淡出的强调色色带 + 一圈内发光，像马克笔轻扫。
+           ⚠️**照搬那边的数值**，别自己另调一套：她在阅读里已经把浓度调到满意了，
+             这里换个数就成了「同一个效果两种浓淡」，比不统一还怪。
+           ⚠️夜间要单独一档：暗底上 95% 透明度的色带几乎看不见，那边也是分开写的。
+           ⚠️`padding: 0 5px` 是左右让出淡出区；`box-decoration-break: clone` 保证换行时
+             两截各自带完整的色带，不然折行处会断。 */
+        body.chat-plain-user .chat-bubble .chat-quote {
+            background-image: linear-gradient(to right,
+                transparent 0%,
+                color-mix(in srgb, var(--accent), transparent 95%) 20%,
+                color-mix(in srgb, var(--accent), transparent 95%) 80%,
+                transparent 100%);
+            background-repeat: no-repeat;
+            box-shadow: inset 0 0 10px color-mix(in srgb, var(--accent), transparent 84%);
+            padding: 0 5px;
+            -webkit-box-decoration-break: clone;
+            box-decoration-break: clone;
+        }
+        body.dark.chat-plain-user .chat-bubble .chat-quote {
+            background-image: linear-gradient(to right,
+                transparent 0%,
+                color-mix(in srgb, var(--accent), transparent 82%) 20%,
+                color-mix(in srgb, var(--accent), transparent 82%) 80%,
+                transparent 100%);
+            box-shadow: inset 0 0 10px color-mix(in srgb, var(--accent), transparent 72%);
+        }
         /* 她自己发的短消息：换成花字体，一眼分得出人和 AI（2026-09-11 她要的）。
            ⚠️`font-weight: 400` 是**必须的**：花字体只有一个字重，我们给对话正文定的 500
              会让浏览器**合成假粗**，中文笔画多、撑出来糊成一团
@@ -10654,7 +10686,8 @@ body {
         function _userTextWithFileCards(text) {
             var t = String(text == null ? '' : text);
             if (t.indexOf('```') < 0) {
-                return '<div style="white-space:pre-wrap;word-break:break-word">' + esc(t) + '</div>';
+                // ⚠️先 esc 再套引号底：顺序反了会把 `&quot;` 之类的转义串拆坏
+                return '<div style="white-space:pre-wrap;word-break:break-word">' + _quoteMarks(esc(t)) + '</div>';
             }
             var out = '', re = /\[\s*([^\]\n]+?)\s*\]\n```\n([\s\S]*?)\n```/g, last = 0, m;
             // ⚠️2026-09-10 汐修：紧贴卡片的那些换行必须削掉再输出。
@@ -10763,9 +10796,32 @@ body {
             }
             return parts.join('');
         }
+        /* 引号内套一层淡底（2026-09-12 她要的：「对话模式下的引号内再帮我加个效果」）。
+           ⚠️为什么是**淡底**不是变字色：加粗已经占了「强调色字 + 虚线下划线」，
+             引号再用字色就跟它撞、两种强调分不出来。她定过的口味是
+             「要显眼靠提亮字色＋淡底，别加实心色块零件」——底和线各管一维，叠一起也不乱。
+           ⚠️**只认中文引号**（“”「」『』），**绝不碰英文的 " '**：
+             代码、缩写、属性值里全是它们，动了必出事。
+           ⚠️跳过代码块（同 _mathLite 的切法），并且**只处理标签之间的文字**——
+             `>` 和 `<` 之间那一段——否则会把属性值里的引号也包进去，把 HTML 弄坏。
+           ⚠️样式挂在 `body.chat-plain-user .chat-bubble` 下，所以**只在对话模式生效**；
+             阅读模式有它自己那一整套引号系统（着色/划线/换字体/长短分工），不许互相干扰。 */
+        function _quoteMarks(html) {
+            var str = String(html || '');
+            if (!/[“「『]/.test(str)) return str;
+            var parts = str.split(/(<pre[\s\S]*?<\/pre>|<code[\s\S]*?<\/code>)/);
+            for (var i = 0; i < parts.length; i += 2) {
+                parts[i] = parts[i].replace(/(^|>)([^<]+)/g, function (m, lead, txt) {
+                    return lead + txt.replace(
+                        /[“「『][^”」』<>\n]{1,200}?[”」』]/g,
+                        function (q) { return '<span class="chat-quote">' + q + '</span>'; });
+                });
+            }
+            return parts.join('');
+        }
         function renderText(text) {
             if (!text) return '';
-            return _mathLite(_fileCards(_rdPRefChips(parseMd(text))));
+            return _quoteMarks(_mathLite(_fileCards(_rdPRefChips(parseMd(text)))));
         }
 
         // 把 §56 渲染成可点的小标记。⚠️放在 parseMd 出口统一做，别在各个调用点各写一遍
