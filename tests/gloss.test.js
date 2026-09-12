@@ -503,13 +503,26 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             const t = 'gǎo sù·穿白色丧服', d = t.indexOf('·');
             lab.innerHTML = '<span class="rd-gl-py">' + t.slice(0, d) + '</span>·<span class="rd-gl-cn">' + t.slice(d + 1) + '</span>';
             document.body.appendChild(lab);
-            const f = el => getComputedStyle(el).fontFamily.split(',')[0].replace(/["']/g, '').trim();
+            /* ⚠️2026-09-12 起字体链最前面可能挂着「拉丁伙伴」（只含拉丁字母的那一份，
+               见 index.html 里 RD_LATIN_PARTNER）——它没有汉字，抢不走中文，
+               所以判「中文用哪个字体」时要跳过它，否则每次都读到它、误判成字体错了。 */
+            const LATIN_PARTNERS = ['Eleyang Spring Latin'];
+            const f = el => getComputedStyle(el).fontFamily.split(',')
+                .map(x => x.replace(/["']/g, '').trim())
+                .filter(x => LATIN_PARTNERS.indexOf(x) < 0)[0];
             const py = lab.querySelector('.rd-gl-py'), cn = lab.querySelector('.rd-gl-cn');
             out.P_拼音用溪涧 = f(py) === 'XJSX PYHJ';          // 溪涧的字族名
             out.P_中文用青春 = f(cn) === 'QingCLWNSPA';        // 青春的字族名
             out.P_两半不同字体 = f(py) !== f(cn);
             // 中文那半要有回退（青春只到 GB2312，缺字得接得住）：兜底字体山茶接在后面
             out.P_中文有回退 = getComputedStyle(cn).fontFamily.indexOf('WeiDLMSKSC') >= 0;
+            /* ⚠️2026-09-12：英文换成朝时体的拉丁部分（她说青春的英文难看）。
+               判两件事：① 它必须排在**最前**，不然接管不了英文（浏览器逐字按顺序挑）；
+               ② 它后面**必须还有青春**——它只含拉丁、没有汉字，中文得落回去。
+               哪天有人图省事把整个朝时体排前面，第二条就会挂：中文会被朝时接管，
+               青春的位置虽然还在、但永远轮不到。 */
+            var _ffCn = getComputedStyle(cn).fontFamily.split(',').map(function (x) { return x.replace(/["']/g, '').trim(); });
+            out.P_拉丁伙伴在最前 = _ffCn[0] === 'Eleyang Spring Latin' && _ffCn.indexOf('QingCLWNSPA') > 0;
             /* ⚠️这条是那次故障的正身：变量里**一个中文显示名都不许有**。
                只要有，就说明又有人把「她看到的名字」当字族名写进了 font-family。 */
             out.P_不含中文显示名 = !/[\u4e00-\u9fa5]/.test(
@@ -527,7 +540,13 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             lab.className = 'rd-gl-label';
             lab.innerHTML = '<span class="rd-gl-cn">河东河内河南三郡</span>';
             document.body.appendChild(lab);
-            const f = el => getComputedStyle(el).fontFamily.split(',')[0].replace(/["']/g, '').trim();
+            /* ⚠️2026-09-12 起字体链最前面可能挂着「拉丁伙伴」（只含拉丁字母的那一份，
+               见 index.html 里 RD_LATIN_PARTNER）——它没有汉字，抢不走中文，
+               所以判「中文用哪个字体」时要跳过它，否则每次都读到它、误判成字体错了。 */
+            const LATIN_PARTNERS = ['Eleyang Spring Latin'];
+            const f = el => getComputedStyle(el).fontFamily.split(',')
+                .map(x => x.replace(/["']/g, '').trim())
+                .filter(x => LATIN_PARTNERS.indexOf(x) < 0)[0];
             out.Q_无拼音走中文字体 = f(lab.querySelector('.rd-gl-cn')) === 'QingCLWNSPA';
             lab.remove();
             // 截断：无拼音时按「意思」的额度，不是整行的额度
@@ -844,6 +863,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('P1 拼音用溪涧山雪（声调齐全）', R.P_拼音用溪涧);
     ok('P2 中文用青春例外（她偏爱的）', R.P_中文用青春);
     ok('⚠️P5 字体变量里不许出现中文显示名（显示名≠字族名，写错就整块掉回默认字体）', R.P_不含中文显示名);
+    ok('⚠️P6 拉丁伙伴排在链首、且它不许有汉字（不然会把中文一起抢走）', R.P_拉丁伙伴在最前);
     ok('P3 两半确实是不同字体', R.P_两半不同字体);
     ok('P4 中文那半有缺字回退', R.P_中文有回退);
     ok('P5 拆开后文字一个不少', R.P_文字没丢);
