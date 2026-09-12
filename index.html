@@ -12066,6 +12066,27 @@ body {
                 .trim();
         }
 
+        /* ===== 「搜一下」触发联网搜索（2026-09-12 汐做的，Tavily，她自己的 key）=====
+           ⚠️她拍板**只在明说时才搜**，不做自动判断：Tavily 按次计费（免费额度每月 1000 次），
+             猜错两头不讨好。所以必须命中触发词才走。
+           ⚠️触发词后面得真有内容（≥2 字）才算，否则「我搜一下再说」这种会白搜一次。
+           ⚠️别再想着抓 Bing/Google 省这笔钱：当天实测裸抓会被识破、返回一屏广告，
+             DuckDuckGo 是挑战页、Google 直接跳走。 */
+        var SEARCH_TRIGGER_RE = /(?:帮我)?(?:搜一下|搜搜|搜索一下|查一下|搜索|检索)\s*[:：]?\s*(\S[\s\S]{1,120})/;
+
+        function searchPickQuery(t) {
+            var m = SEARCH_TRIGGER_RE.exec(String(t || ''));
+            if (!m) return '';
+            // 只取触发词后面那一段，去掉尾巴上的礼貌用语/连接句，别把整段话都当关键词
+            return m[1].replace(/[，,。.；;！!？?].*$/, '').trim().slice(0, 80);
+        }
+
+        function searchFetch(q) {
+            return cfReq('GET', '', undefined, 'search=' + encodeURIComponent(q))
+                .then(function (r) { return (r && r.ok && r.text) ? r : null; })
+                .catch(function () { return null; });
+        }
+
         function xhsFetchNote(u) {
             // 复用 cfReq：地址、令牌、鉴权全是现成的（key 传空串 → 打到 /?xhs=…）
             // 回 {ok,text,images,descLen}；images 只有「正文短」时才有（服务端判的，见 XHS_DESC_SHORT）
@@ -18802,6 +18823,24 @@ body {
                         if (_xgotImg) hasImages = chatPendingImages.length > 0;
                     } else {
                         showToast('读不到这篇（可能要登录或已删除），照原样发出去了');
+                    }
+                }
+            }
+
+            /* 「搜一下 xxx」→ 去搜，把资料拼成附件卡片一起发（跟小红书同一套显示，零新增 UI）。
+               ⚠️放在小红书之后：她可能一条消息里既发链接又让搜东西。
+               ⚠️搜不到就照原样发，只提示一句，绝不挡住她说话。 */
+            if (text && typeof cfGetConfig === 'function') {
+                var _scfg = null;
+                try { _scfg = cfGetConfig(); } catch (e) {}
+                var _sq = (_scfg && _scfg.url && _scfg.token) ? searchPickQuery(text) : '';
+                if (_sq) {
+                    showToast('🔍 正在搜「' + _sq.slice(0, 14) + '」…');
+                    var _sr = await searchFetch(_sq);
+                    if (_sr && _sr.text) {
+                        text = '[ 搜索·' + _sq.slice(0, 24) + ' ]\n```\n' + _sr.text + '\n```\n\n' + text;
+                    } else {
+                        showToast('没搜到，照原样发出去了');
                     }
                 }
             }
