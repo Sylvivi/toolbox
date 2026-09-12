@@ -4592,6 +4592,18 @@ body {
             justify-content: flex-end;
             max-width: 278px; margin: 3px 0 3px auto;
         }
+        /* ⚠️2026-09-12：加了九宫格之后她报「请翻译那三个字又靠左了」。
+           根子是气泡的宽度原本就等于文字宽度（所以看着贴右），现在被 278px 的图片容器
+           撑宽了，文字待在宽气泡里自然就显左。
+           ⚠️**不能用 text-align:right 了事**——那样多行文字每一行都右对齐，读起来别扭。
+             正确做法是让**文字块本身收缩后靠右**（fit-content + margin-left:auto），
+             块内部照旧左对齐。没有图的消息不受影响：那时气泡宽度本来就等于文字宽度。 */
+        /* ⚠️两个 class 都要：无卡片时文字是 .ut-text，有卡片时（附件/小红书/搜索）
+           卡片前后的文字是 .fc-txt。漏一个就会出现「有卡片的消息文字靠左」。 */
+        .chat-msg.user .chat-bubble .ut-text,
+        .chat-msg.user .chat-bubble .fc-txt {
+            width: fit-content; max-width: 100%; margin-left: auto;
+        }
         /* ⚠️配套 loading="lazy" decoding="async"（2026-09-12 加）：图存的是 1280px 的大图、
            这里只显示 90px，浏览器仍要把整张解码进内存（一张约 8MB），滚历史时反复解码
            很吃 CPU、手机会热。异步解码让它别卡主线程，懒加载让看不见的先别解。
@@ -10703,7 +10715,7 @@ body {
             var t = String(text == null ? '' : text);
             if (t.indexOf('```') < 0) {
                 // ⚠️先 esc 再套引号底：顺序反了会把 `&quot;` 之类的转义串拆坏
-                return '<div style="white-space:pre-wrap;word-break:break-word">' + _quoteMarks(esc(t)) + '</div>';
+                return '<div class="ut-text" style="white-space:pre-wrap;word-break:break-word">' + _quoteMarks(esc(t)) + '</div>';
             }
             var out = '', re = /\[\s*([^\]\n]+?)\s*\]\n```\n([\s\S]*?)\n```/g, last = 0, m;
             // ⚠️2026-09-10 汐修：紧贴卡片的那些换行必须削掉再输出。
