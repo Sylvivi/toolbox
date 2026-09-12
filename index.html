@@ -4462,7 +4462,10 @@ body {
                 transparent 100%);
             background-repeat: no-repeat;
             box-shadow: inset 0 0 10px color-mix(in srgb, var(--accent), transparent 84%);
-            padding: 0 5px;
+            /* ⚠️`5px` 是阅读模式名词光带那边的值，但那边罩的是**整个引号**、宽一点正好；
+               这里只罩里面的字，同样的留白就显得肥了（她 2026-09-12 说「看起来感觉好宽」）。
+               收到 2px：还留得住渐变两端的淡出，又不至于让首尾两个字掉进淡出区里发白。 */
+            padding: 0 2px;
             -webkit-box-decoration-break: clone;
             box-decoration-break: clone;
         }
@@ -10812,9 +10815,12 @@ body {
             var parts = str.split(/(<pre[\s\S]*?<\/pre>|<code[\s\S]*?<\/code>)/);
             for (var i = 0; i < parts.length; i += 2) {
                 parts[i] = parts[i].replace(/(^|>)([^<]+)/g, function (m, lead, txt) {
+                    /* ⚠️2026-09-12 她说「引号就别在光带覆盖范围了」——**只罩引号里的字**，
+                       `“`「『 这些符号留在色带外面。阅读模式那边也是这个分法
+                       （`.reading-quote` 外层管字体、`.reading-quote-inner` 内层管装饰）。 */
                     return lead + txt.replace(
-                        /[“「『][^”」』<>\n]{1,200}?[”」』]/g,
-                        function (q) { return '<span class="chat-quote">' + q + '</span>'; });
+                        /([“「『])([^”」』<>\n]{1,200}?)([”」』])/g,
+                        function (m2, l, inner, r) { return l + '<span class="chat-quote">' + inner + '</span>' + r; });
                 });
             }
             return parts.join('');
