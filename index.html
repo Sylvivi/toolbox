@@ -2103,14 +2103,32 @@ body {
              这里跟着走，不另起一种线，否则同一个 app 里两种下划线比不加还怪。
            ⚠️线色用 `currentColor` 而不是再写一遍 `--accent-read`：字色已经是它了，
              跟着走的话以后改字色不用记得回来改线色（人名那条也是这么写的）。 */
-        .chat-bubble strong, .chat-bubble b {
-            /* 同 `.chat-quote`：加粗里若带着 「」“”（例如 **「反差」**），
-               虚线下划线同样会划过全角标点右半边的空白。`palt` 把它收窄。 */
+        /* ⚠️2026-09-12 她拍板：**引号和加粗用同一套样式**（原话「别整那么复杂了，
+           引号和加粗应用同样的样式」）。之前引号走的是「光带」（搬自阅读模式的名词柔光），
+           当天来回调过一轮浓淡宽窄，最后她说不要了——**光带那一整段已删，别再加回来。**
+           ⚠️`palt`：加粗/引号里带着 「」“” 时，虚线会划过全角标点右半边的空白
+             （她说「符号占位很小，线却多延伸了很多，强迫症发作」）。palt＝比例替代，
+             让全角标点缩到实际该有的宽度，线就贴着墨迹走了。思源宋体带这个特性。
+           ⚠️线色用 `currentColor` 不再写一遍 `--accent-read`：字色已经是它了，
+             以后改字色不用记得回来改线色。
+           ⚠️这套虚线是抄阅读模式的（引号划线/人名划线/精句划线都用它），
+             别另起一种线，否则同一个 app 里两种下划线比不加还怪。 */
+        .chat-bubble strong, .chat-bubble b,
+        body.chat-plain-user .chat-bubble .chat-quote {
             font-feature-settings: "palt" 1;
             color: var(--accent-read);
+            font-weight: 700;
             text-decoration: underline dashed currentColor;
             text-decoration-thickness: 1px;
             text-underline-offset: 3px;
+        }
+        /* ⚠️**花字体那档一律不加粗**（她 2026-09-12 特地提醒：「花体字不要去弄加粗的效果，
+           很不好看」）。她自己发的短消息走青春字体，**只有一个字重**，给 700 会被浏览器
+           合成假粗、中文笔画多会糊成一团——这是她 07-28 / 07-30 两次定过的规矩。
+           ⚠️`inherit` 取的是 `.chat-me-short` 上的 `--chat-me-fw`（＝400），不是写死，
+             所以哪天那个值变了这里自动跟上。字色和虚线照留，那两样跟字重无关。 */
+        body.chat-plain-user .chat-bubble.chat-me-short .chat-quote {
+            font-weight: inherit;
         }
 
         /* Markdown 内容样式 */
@@ -4450,62 +4468,6 @@ body {
              不然折行处会缺一块、看着像没画完。
            ⚠️`padding` 用 em 且上下给很小的值：行内元素的上下 padding **不撑行高**，
              给大了会糊到上一行。 */
-        /* ⚠️2026-09-12 她看完对比图后定的：用**光带**，就是阅读模式里名词柔光那一款
-           （`rn-glow-band`，见上面那段注释）——左右淡出的强调色色带 + 一圈内发光，像马克笔轻扫。
-           ⚠️**照搬那边的数值**，别自己另调一套：她在阅读里已经把浓度调到满意了，
-             这里换个数就成了「同一个效果两种浓淡」，比不统一还怪。
-           ⚠️夜间要单独一档：暗底上 95% 透明度的色带几乎看不见，那边也是分开写的。
-           ⚠️`padding: 0 5px` 是左右让出淡出区；`box-decoration-break: clone` 保证换行时
-             两截各自带完整的色带，不然折行处会断。 */
-        body.chat-plain-user .chat-bubble .chat-quote {
-            background-image: linear-gradient(to right,
-                transparent 0%,
-                color-mix(in srgb, var(--accent), transparent 95%) 20%,
-                color-mix(in srgb, var(--accent), transparent 95%) 80%,
-                transparent 100%);
-            background-repeat: no-repeat;
-            box-shadow: inset 0 0 10px color-mix(in srgb, var(--accent), transparent 84%);
-            /* ⚠️留白 2px（阅读模式名词光带那边是 5px，这里故意窄）。
-               ⚠️**真正的病根是 `palt`**：她说「符号占位很小，但光带和下划线却多延伸了很多，
-                 强迫症发作」。中文标点 “ ” 「 」 **墨迹很窄却占一整个全角格子**，右半边是空的，
-                 而装饰是按格子画的，于是在那片空白上多伸出去一截。
-                 `font-feature-settings:"palt"`＝比例替代，让全角标点缩到它实际该有的宽度，
-                 装饰就贴着墨迹走了。思源宋体带这个特性。
-               ⚠️没收到 0：渐变两端要淡出，贴死的话首尾那个字会显白。 */
-            font-feature-settings: "palt" 1;
-            padding: 0 2px;
-            -webkit-box-decoration-break: clone;
-            box-decoration-break: clone;
-            /* ⚠️2026-09-12 她加的：引号也着色。跟加粗**同一个强调色**，不冲突——
-               两者靠**装饰形状**分工：光带＝引号，虚线下划线＝加粗。
-               ⚠️**着色必须配字重 600**：她当场说「感觉字体都变细了」——同一个字，
-                 浅色比黑色显瘦，这是视觉上的事、不是真变细了。
-                 阅读模式里的引号着色早就是这么解的（`body.reading-quote-on … font-weight:600`），
-                 这里照搬，别自己另挑一个数。600 在思源宋体里是**真字重**，不是合成的。 */
-            color: var(--accent-read);
-            font-weight: 600;
-        }
-        /* ⚠️加粗里的引号**不给光带**（她 2026-09-12 指定）。不然「字色 + 虚线 + 光带」
-           三种效果叠在同一串字上，又吵又分不出主次。加粗那条虚线已经够说明问题了。
-           ⚠️反过来不成立：引号**里面**的加粗（“**这样**”）光带照旧留着，
-             那是「引号是主、加粗是次」，跟这条正好相反。 */
-        body.chat-plain-user .chat-bubble strong .chat-quote,
-        body.chat-plain-user .chat-bubble b .chat-quote {
-            background-image: none;
-            box-shadow: none;
-            padding: 0;
-            /* ⚠️字重要跟着加粗走（700），别被上面那条 600 拉回来——
-               同一串加粗里出现「两种粗细」比不加粗还难看。 */
-            font-weight: inherit;
-        }
-        body.dark.chat-plain-user .chat-bubble .chat-quote {
-            background-image: linear-gradient(to right,
-                transparent 0%,
-                color-mix(in srgb, var(--accent), transparent 82%) 20%,
-                color-mix(in srgb, var(--accent), transparent 82%) 80%,
-                transparent 100%);
-            box-shadow: inset 0 0 10px color-mix(in srgb, var(--accent), transparent 72%);
-        }
         /* 她自己发的短消息：换成花字体，一眼分得出人和 AI（2026-09-11 她要的）。
            ⚠️`font-weight: 400` 是**必须的**：花字体只有一个字重，我们给对话正文定的 500
              会让浏览器**合成假粗**，中文笔画多、撑出来糊成一团
