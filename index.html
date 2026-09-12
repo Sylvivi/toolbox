@@ -10736,8 +10736,17 @@ body {
              58 字那种一整句需求、和 170 字那条，都回宋体。改这一个数就能调松紧。 */
         var CHAT_ME_MAX = 50;
         function _chatMeIsShort(t) {
+            /* ⚠️2026-09-12 她截图报的：**带图片的消息不走花字体**。
+               病根是带图时 `content` 不是字符串而是**数组**（`[{type:'image_url'},{type:'text'}]`），
+               原来第一句 `typeof t !== 'string'` 就把它挡回去了。
+               → 数组也要认：把里面的文字块拼起来按同一套规矩判，图片不参与。 */
+            if (Array.isArray(t)) {
+                t = t.filter(function (x) { return x && x.type === 'text'; })
+                     .map(function (x) { return x.text || ''; }).join('\n');
+            }
             if (typeof t !== 'string' || t.indexOf('```') >= 0) return false;
             var v = t.trim();
+            if (!v) return false;                       // 只发了图、没打字：没内容可换字体
             return !/[\r\n]/.test(v) && v.length <= CHAT_ME_MAX;
         }
         var _fileCardSeq = 0;
@@ -16336,6 +16345,8 @@ body {
                         else if (_displayText[k].type === 'image_url') ih += '<img class="chat-user-img" src="' + _displayText[k].image_url.url + '">';
                     }
                     bubble.innerHTML = ih + ihTxt;
+                    // 带图的消息同样吃花字体（判据见 _chatMeIsShort，图片不参与长短判断）
+                    if (_chatMeIsShort(_displayText)) bubble.classList.add('chat-me-short');
                 } else {
                     /* ⚠️2026-09-10：卡片必须挂在**这条分支**上。
                        用户自己发的消息**不走 Markdown 渲染**（`esc()` 原样显示，免得她打的字
