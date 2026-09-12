@@ -10825,9 +10825,30 @@ body {
             }
             return parts.join('');
         }
+        /* 把加粗开头/结尾的标点挪到 `<strong>` 外面（2026-09-12 她要的：
+           「下划线也不要把符号覆盖进去」，跟引号光带那次是同一个诉求）。
+           起因：模型写 `**「反差」**` 或 `**很重要。**` 时，加粗自带的虚线下划线会连着
+           `「` `」` `。` 一起划过去，看着像把标点也强调了。
+           ⚠️只动**最外层的首尾**，中间的标点一律不碰（「不是A，而是B」里的逗号该划就划）。
+           ⚠️首尾都可能有好几个（`**（注）**`），所以两个正则各自用 `+` 一次吃掉一串。
+           ⚠️空的 `<strong></strong>` 要删掉——整块都是标点时会剩一个空壳，
+             空壳带着 padding/下划线样式会在行里留一小截线头。 */
+        var _PUNCT_EDGE = '「」『』“”‘’（）()《》〈〉【】〔〕\\[\\]—…、，。！？；：·~\\-\\s';
+        function _trimStrongPunct(html) {
+            var str = String(html || '');
+            if (str.indexOf('<strong>') < 0) return str;
+            return str.replace(/<strong>([\s\S]*?)<\/strong>/g, function (m, inner) {
+                var lead = '', tail = '';
+                var reL = new RegExp('^[' + _PUNCT_EDGE + ']+'), reT = new RegExp('[' + _PUNCT_EDGE + ']+$');
+                var mL = inner.match(reL); if (mL) { lead = mL[0]; inner = inner.slice(lead.length); }
+                var mT = inner.match(reT); if (mT) { tail = mT[0]; inner = inner.slice(0, inner.length - tail.length); }
+                if (!inner) return lead + tail;          // 整块都是标点：不留空壳
+                return lead + '<strong>' + inner + '</strong>' + tail;
+            });
+        }
         function renderText(text) {
             if (!text) return '';
-            return _quoteMarks(_mathLite(_fileCards(_rdPRefChips(parseMd(text)))));
+            return _quoteMarks(_trimStrongPunct(_mathLite(_fileCards(_rdPRefChips(parseMd(text))))));
         }
 
         // 把 §56 渲染成可点的小标记。⚠️放在 parseMd 出口统一做，别在各个调用点各写一遍
