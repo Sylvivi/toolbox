@@ -27737,7 +27737,12 @@ body {
                            算作一节，rbSectionOf 对无小标题的章返回 headP:1 的整章一节，所以那个
                            数字永远是 1、一点信息都不带，纯占标题的地方。 */
                         + (_gdMap[i] ? ' · 📖' + (_gdMap[i] > 1 ? ' ' + _gdMap[i] : '') : '') + '</div></div>'
-                        + '<button class="rb-chap-append" onclick="event.stopPropagation();rbChapMenuOpen(\'' + b.id + '\',' + i + ',event)" title="更多">⋯</button></div>';
+                        /* ⚠️2026-09-12：「⋯」只在**这一章真有背景**时才画。
+                           撤掉「标背景」「手动分章」之后，菜单里就只剩「清掉本章背景」一项，
+                           没背景的章点开是空的——她说「既然没有可操作的，那三个点也能直接去掉」。
+                           ⚠️`_bgMap[i]` 是该章的背景条数，上面标题那行已经在用它了，直接复用。 */
+                        + (_bgMap[i] ? '<button class="rb-chap-append" onclick="event.stopPropagation();rbChapMenuOpen(\'' + b.id + '\',' + i + ',event)" title="更多">⋯</button>' : '')
+                        + '</div>';
                     if (_subs && rbChapterHasSections(b, i)) {
                         var _hs = rbSectionRanges(b, i);
                         // 这一章每段各标了几条背景 / 哪几段有导读，按小节范围分摊
