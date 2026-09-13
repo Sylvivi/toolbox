@@ -23258,7 +23258,12 @@ body {
             var panel = document.getElementById('readingBgPanel');
             if (!panel) return;
             var open = panel.style.display !== 'none';
-            panel.style.display = open ? 'none' : 'flex';
+            /* ⚠️2026-09-13：这里必须是 'grid'。面板是**两列网格**（她攒到 6 张后要的），
+               写成 'flex' 的话内联的 grid-template-columns 完全失效，
+               七个格子挤成横排、名字全被压没（她原话「天呐很乱」）。
+               ⚠️汐上一轮只替换了 `= 'flex'` 这种直白写法，**漏掉了这个三元表达式**——
+                 改显示方式时要把这一处一起看。 */
+            panel.style.display = open ? 'none' : 'grid';
             if (!open) readingRenderBgPanel();
         }
         function readingPickBg(id) {
