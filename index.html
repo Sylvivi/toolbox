@@ -15006,12 +15006,18 @@ body {
                 body = s.code || '';
             }
             if (!body.trim()) { showToast('这一条是空的'); return; }
-            var block = '[ ' + name + ' ]\n```\n' + body + '\n```';
-            inp.value = block + (inp.value ? '\n\n' + inp.value : '\n\n');
-            if (typeof chatAutoGrow === 'function') chatAutoGrow(inp);
+            /* ⚠️2026-09-13 改：**挂成附件，别往输入框里灌文字**（她：「不希望它直接进入对话框，
+               我希望它是一个文件插入的感觉」）。
+               走 chatPendingFiles 就跟她平时传文件完全一致：输入框保持干净、上方出现一张
+               可取消的附件卡片、发送时由 chatSend 统一拼进正文。
+               ⚠️别再改 inp.value——那样一大段文字糊在输入框里，想取消还得手动删。 */
+            chatPendingFiles.push({ name: name, content: body, size: body.length });
+            if (typeof chatRenderAttachPreview === 'function') chatRenderAttachPreview();
             if (typeof chatUpdateTokenHint === 'function') chatUpdateTokenHint();
-            try { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) {}
-            showToast('已放进这条消息：' + name);
+            // ⚠️附件加完要调一次 chatAutoGrow：发送按钮的「能不能点」是在它里面算的
+            //   （看 el.value + chatPendingImages + chatPendingFiles），不调的话按钮还是灰的。
+            if (typeof chatAutoGrow === 'function') chatAutoGrow(inp);
+            showToast('已附上：' + name);
         }
 
         // 生图大图查看
