@@ -3266,15 +3266,6 @@ body {
             font-size: 15px; line-height: 1; padding: 5px 4px; cursor: pointer; border-radius: 7px;
             opacity: 0.55; transition: opacity 0.15s, color 0.15s; -webkit-tap-highlight-color: transparent; }
         .rb-head-icon:hover, .rb-head-icon.on { opacity: 1; color: var(--accent); }
-        /* 目录顶上的「摘要 / 读痕」：照 .rb-head-back 那套无边框文字按钮，
-           不做实心色块、不加药丸标签（她的一贯口味）。间距用 em 跟着字号走。 */
-        .rb-head-links { display: flex; gap: 1.2em; margin: 0 0 0.65em; }
-        .rb-head-links button {
-            border: none; background: transparent; color: var(--accent);
-            font-size: 13px; padding: 0.15em 0; cursor: pointer; white-space: nowrap;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .rb-head-links button:active { opacity: 0.6; }
         .rb-search-full { display: block; width: 100%; box-sizing: border-box; }
         .rb-split-tools { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
         .rb-split-tools .rb-select { flex: 1; min-width: 0; }
@@ -6519,17 +6510,17 @@ body {
                     <button class="rb-btn rb-btn-primary" id="rbNextBtn" onclick="rbSendNext()">发下一章 ›</button>
                     <!-- 2026-08-14：⚙ emoji → 线条齿轮。svg 要 display:block，否则按行内元素排会带一截基线空隙、看着偏下。
                          ⚠️别自作聪明画「圆心+8根放射线」的简化齿轮——那个渲染出来是个太阳，试过了。用标准齿轮轮廓。 -->
+                    <!-- 2026-09-14 她要的：「摘要」「读痕」从小螃蟹菜单挪到目录顶上，**放在齿轮左边**，
+                         而且「图标最好也做 SVG 的，Emoji 放在这上面不太好看」。
+                         ⚠️所以跟齿轮同一套 `.rb-head-icon`：24 viewBox、stroke=currentColor、
+                           `display:block`（不加会按行内元素排，带一截基线空隙、看着偏下）。
+                         ⚠️描边取 **1.9**，比齿轮的 2 细一点点——这两个图形内部有横线，
+                           17px 下 2.0 会把线之间的空隙糊掉。
+                         ⚠️点了要先关目录再开面板（见 rbHeadAct）：这两个面板各自 new 一层 mask，
+                           目录还铺在底下的话，返回手势和滚动会打架。 -->
+                    <button class="rb-head-icon" onclick="rbHeadAct('summary')" title="摘要"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8z"></path><path d="M14 3v5h5"></path><path d="M8.5 12.5h7"></path><path d="M8.5 16.5h4.5"></path></svg></button>
+                    <button class="rb-head-icon" onclick="rbHeadAct('bookmark')" title="读痕"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="M18 21l-6-4.5L6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"></path></svg></button>
                     <button class="rb-head-icon" id="rbSplitToggle" onclick="rbToggleSplitTools()" title="分章设置（导书时才用）"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
-                </div>
-                <!-- 2026-09-14 她要的：「把摘要和读痕这两个入口放到目录窗口的上方，符合我的使用习惯」，
-                     并且**从小螃蟹菜单里去掉**（她当场追加的第二句）。
-                     ⚠️放在书名行和搜索框之间，不进 .rb-head-row——那一行已经有
-                       返回/书名/发下一章/齿轮四件，手机上再塞会把书名挤没。
-                     ⚠️点了要先关目录再开面板：这两个面板都是自己 new 一层 mask 浮上来的，
-                       不关的话目录还铺在底下，返回手势和滚动会打架。 -->
-                <div class="rb-head-links">
-                    <button onclick="rbHeadAct('summary')">📋 摘要</button>
-                    <button onclick="rbHeadAct('bookmark')">🔖 读痕</button>
                 </div>
                 <input type="text" id="rbChapterSearch" class="rb-search rb-search-full" placeholder="搜索章节 / 小节…" oninput="rbChapterSearchInput()">
                 <!-- 分章工具：一本书导进来时才用一次，平时收起来不占地方 -->
@@ -26091,12 +26082,14 @@ body {
             document.getElementById('rbModal').classList.add('show');
         }
         /* 目录窗口顶上的「摘要 / 读痕」。2026-09-14 从小螃蟹菜单搬过来的。
-           ⚠️必须**先关目录**：这两个面板各自 new 一层 mask 浮上来，目录还开着的话
-             两层弹窗叠着，返回手势和滚动都会打架。
+           ⚠️**故意不关目录**——她当天就纠正过：「关掉的时候应该还是回到目录，
+             他们是一个覆盖的关系，不应该关掉之后直接回到阅读界面」。
+             盖得住是因为这两个面板的 mask 是 `z-index:10001`，而目录弹窗才 997，
+             天然浮在上面；关掉它，底下的目录原样还在。
+           ⚠️所以**别在这儿加 rbCloseShelf()**（我第一版就是这么写的，被她退回来了）。
            ⚠️动作本身复用 clawdMenuAct 的同一条路（摘要要分阅读/对话两种），
              别在这儿另写一份，否则以后改一处漏一处。 */
         function rbHeadAct(what) {
-            rbCloseShelf();
             if (what === 'summary') { if (chatReaderMode) readerShowSummaryModal(); else chatShowSummaryModal(); return; }
             if (what === 'bookmark') { rdTraceShowPanel(); return; }
         }
