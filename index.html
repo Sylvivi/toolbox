@@ -1527,8 +1527,9 @@ body {
 
         /* 底图面板里的一行 */
         .rdbg-item {
-            display: flex; align-items: center; gap: 6px;
-            padding: 6px 8px; border-radius: 8px; cursor: pointer;
+            display: flex; align-items: center; gap: 2px;
+            padding: 6px 6px; border-radius: 8px; cursor: pointer;
+            min-width: 0;
             border: 1px solid var(--card-border); background: var(--card-bg);
             font-size: 12px; color: var(--text-sub);
         }
@@ -1537,10 +1538,15 @@ body {
         /* 行内的小按钮：她的口味是「要显眼靠提亮字色＋淡底」，所以不给实心色块 */
         .rdbg-item .rdbg-op {
             flex: 0 0 auto; border: none; background: none; cursor: pointer;
-            font-size: 12px; padding: 2px 4px; color: var(--text-muted); border-radius: 6px;
+            font-size: 12px; padding: 2px 2px; color: var(--text-muted); border-radius: 6px;
         }
         .rdbg-item .rdbg-op:hover { color: var(--accent); }
+        /* ⚠️2026-09-13 改成一行两个（她攒到 6 张之后说「变得有点多了」）。
+           面板容器是 grid 两列，所以这里要管两件事：
+           ① 名字允许缩到很窄（min-width:0 + 省略号），否则它会把右边的按钮顶出去；
+           ② 「＋ 添加底图」横跨两列，单独占一行——它不是一张图，混在网格里像第七张。 */
         .rdbg-add {
+            grid-column: 1 / -1;
             padding: 6px 8px; border-radius: 8px; cursor: pointer; text-align: center;
             border: 1px dashed var(--card-border); background: none;
             font-size: 12px; color: var(--text-muted);
@@ -6454,7 +6460,7 @@ body {
                 <!-- 底图面板（2026-09-05）：她要的是「加一个 chip，然后可以让我填底图链接就行，
                      我还能给命名啥的」。做成展开式而不是浮层——它挂在「背景」那排下面，
                      跟旁边的「间距」分组一个手感，不用再学一套浮层的开合规则。 -->
-                <div id="readingBgPanel" style="display:none;flex-direction:column;gap:6px;margin-top:8px"></div>
+                <div id="readingBgPanel" style="display:none;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px"></div>
                 <div id="readingTuneRow">
                     <div onclick="chatToggleTuneSection()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none">
                         <span style="font-size:12px;font-weight:600;color:var(--text-muted)">微调</span>
@@ -31127,7 +31133,7 @@ body {
             if (!el || !panel) return;
             el.addEventListener('click', function (e) {
                 e.stopPropagation();
-                if (panel.style.display === 'none') { panel.innerHTML = translateCtxPanelInner(); panel.style.display = 'flex'; }
+                if (panel.style.display === 'none') { panel.innerHTML = translateCtxPanelInner(); panel.style.display = 'grid'; }
                 else { panel.style.display = 'none'; }
                 try { navigator.vibrate && navigator.vibrate(8); } catch (x) {}
             });
