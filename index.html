@@ -2323,6 +2323,17 @@ body {
             font-size: 11px; color: var(--text-muted); white-space: nowrap; opacity: 0.6;
         }
 
+        /* 玻璃的底色（2026-09-13 她问的：「这个玻璃只有白色这一种吗，不会掺一点主题的色调进去吗」）。
+           ⚠️别再写死 `rgba(255,255,255,…)`——那样八套主题的玻璃长得一模一样。
+             掺一成当前主题的强调色进去，每套主题的玻璃就带上自己的味道，
+             而且**不用给每个主题各写一条**（加新主题自动跟上）。
+           ⚠️浓度别贪：超过 15% 玻璃就开始像有色塑料片、字也压不住。
+           ⚠️夜间掺得多一点：深底上一成看不出来。
+           改浓度只改这两行，下面所有用到玻璃的地方都跟着走。 */
+        :root { --glass-tint: #fff; }                                         /* 兜底，老浏览器不认 color-mix 时是白玻璃 */
+        body   { --glass-tint: color-mix(in srgb, var(--accent) 10%, #fff); }
+        body.dark { --glass-tint: color-mix(in srgb, var(--accent) 18%, #fff); }
+
         /* ===== 输入区 — 悬浮玻璃条 =====
            2026-09-13 她要的：「人家的输入框是一个独立的东西，字能从它背后穿过；
            我的那个就像一个抽屉，会把字收进去」，点名要 Telegram 那种。
@@ -2627,7 +2638,9 @@ body {
             border: 1px solid rgba(255,255,255,0.46);
             /* ⚠️底色的两个 alpha 跟预览页（pv-input.html）保持一致：她是在 0.86/0.72 上
                拨的滑块、定的 6px。线上如果更透，同一个 6px 会比她看到的透出更多字。 */
-            background: linear-gradient(180deg, rgba(255,255,255,0.86), rgba(255,255,255,0.72));
+            background: linear-gradient(180deg,
+                        color-mix(in srgb, var(--glass-tint) 86%, transparent),
+                        color-mix(in srgb, var(--glass-tint) 72%, transparent));
             box-shadow: 0 0 0 1px rgba(255,255,255,0.75),
                         0 8px 28px rgba(0,0,0,0.08),
                         inset 0 1px 0 rgba(255,255,255,0.72);
@@ -2645,7 +2658,9 @@ body {
         }
         .dark .chat-input-box {
             border-color: rgba(255,255,255,0.14);
-            background: linear-gradient(180deg, rgba(255,255,255,0.13), rgba(255,255,255,0.07));
+            background: linear-gradient(180deg,
+                        color-mix(in srgb, var(--glass-tint) 13%, transparent),
+                        color-mix(in srgb, var(--glass-tint) 7%, transparent));
             box-shadow: 0 0 0 1px rgba(255,255,255,0.10),
                         0 8px 28px rgba(0,0,0,0.28),
                         inset 0 1px 0 rgba(255,255,255,0.12);
@@ -2698,9 +2713,9 @@ body {
                直接压上去会糊成一片 → 自己带一小片淡底（只包住文字，不做成整条横杠）。
                这里**故意不用 backdrop-filter**：10px 的一行字不值得再开一个合成层。 */
             padding: 3px 8px; margin: 0 6px 2px; border-radius: 8px;
-            background: rgba(255,255,255,0.55);
+            background: color-mix(in srgb, var(--glass-tint) 55%, transparent);
         }
-        .dark .chat-token-hint { background: rgba(255,255,255,0.10); }
+        .dark .chat-token-hint { background: color-mix(in srgb, var(--glass-tint) 10%, transparent); }
         /* 「资料」面板里那个常驻开关。⚠️它是**按钮里套不下的东西**——
            行本身是 <button>，HTML 不许 button 套 button，所以外面包一层相对定位的 div，
            开关绝对定位压在右边，行的 padding-right 给它让出位置。 */
@@ -3193,7 +3208,9 @@ body {
                我觉得比那个要高级」）。⚠️原来是 `background: transparent` + `blur(28px)`——
                纯雾、没有玻璃身子。高级感来自**渐变底 + 内外两道高光 + saturate**这三件套，
                不是来自模糊值。⚠️只搬到「从小螃蟹弹出来的这两类面板」，别的窗不碰。 */
-            background: linear-gradient(180deg, rgba(255,255,255,0.86), rgba(255,255,255,0.74));
+            background: linear-gradient(180deg,
+                        color-mix(in srgb, var(--glass-tint) 86%, transparent),
+                        color-mix(in srgb, var(--glass-tint) 74%, transparent));
             backdrop-filter: blur(6px) saturate(132%);
             -webkit-backdrop-filter: blur(6px) saturate(132%);
             border-radius: 20px 20px 0 0; border-top: 1px solid rgba(255,255,255,0.55);
@@ -3446,7 +3463,9 @@ body {
                我觉得比那个要高级」）。⚠️原来是 `background: transparent` + `blur(28px)`——
                纯雾、没有玻璃身子。高级感来自**渐变底 + 内外两道高光 + saturate**这三件套，
                不是来自模糊值。⚠️只搬到「从小螃蟹弹出来的这两类面板」，别的窗不碰。 */
-            background: linear-gradient(180deg, rgba(255,255,255,0.86), rgba(255,255,255,0.74));
+            background: linear-gradient(180deg,
+                        color-mix(in srgb, var(--glass-tint) 86%, transparent),
+                        color-mix(in srgb, var(--glass-tint) 74%, transparent));
             backdrop-filter: blur(6px) saturate(132%);
             -webkit-backdrop-filter: blur(6px) saturate(132%);
             border-top: 1px solid rgba(255,255,255,0.55); border-radius: 18px 18px 0 0;
@@ -3458,7 +3477,9 @@ body {
         .chat-action-sheet.show { transform: translateY(0); }
         /* 夜间：同样照输入框那套（深色半透明 + 淡高光），别退回实心深灰。 */
         .dark .chat-settings-modal, .dark .chat-action-sheet {
-            background: linear-gradient(180deg, rgba(255,255,255,0.13), rgba(255,255,255,0.07));
+            background: linear-gradient(180deg,
+                        color-mix(in srgb, var(--glass-tint) 13%, transparent),
+                        color-mix(in srgb, var(--glass-tint) 7%, transparent));
             border-top-color: rgba(255,255,255,0.14);
         }
         .dark .chat-settings-modal { box-shadow: 0 -8px 40px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.12); }
@@ -4679,14 +4700,18 @@ body {
         /* 待发文件那张小卡片：跟输入框同一套玻璃。⚠️不能用半透明的 --card-inner——
            输入框悬浮之后它底下是滚动的正文，字会透上来（2026-09-13 截图看出来的）。 */
         .chat-file-chip {
-            background: linear-gradient(180deg, rgba(255,255,255,0.86), rgba(255,255,255,0.74));
+            background: linear-gradient(180deg,
+                        color-mix(in srgb, var(--glass-tint) 86%, transparent),
+                        color-mix(in srgb, var(--glass-tint) 74%, transparent));
             border: 1px solid rgba(255,255,255,0.5);
             box-shadow: 0 4px 16px rgba(0,0,0,0.06);
             backdrop-filter: blur(6px) saturate(128%);
             -webkit-backdrop-filter: blur(6px) saturate(128%);
         }
         .dark .chat-file-chip {
-            background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.08));
+            background: linear-gradient(180deg,
+                        color-mix(in srgb, var(--glass-tint) 14%, transparent),
+                        color-mix(in srgb, var(--glass-tint) 8%, transparent));
             border-color: rgba(255,255,255,0.14);
             box-shadow: 0 4px 16px rgba(0,0,0,0.3);
         }
@@ -30823,25 +30848,55 @@ body {
                         '我的问题': question.length
                     };
                 }
-                var answer = (await chatStreamChat({
-                    baseUrl: baseUrl, apiKey: apiKey, model: _qaMdl, markUsed: true,
-                    // 分开记账：背景追问该比普通提问便宜一大截，记成同一个环节就看不出来省没省
-                    purpose: _guide ? '社科导读' : (_bgCi != null ? '背景追问' : '共读提问'),
-                    messages: _askMsgs,
-                    parts: _parts,
-                    signal: _pd.ctl.signal,
-                    onDelta: function (full) {
-                        _pd.partial = full;                 // 存一份，并发重渲时不会被占位冲掉
-                        var now = Date.now();
-                        if (now - _askLast < 60) return;    // 节流：最多约每 60ms 渲一次；最终文本下面会整体重渲，漏掉末段无妨
-                        _askLast = now;
+                /* 抽成一小步是为了「被拒→换模型重来一次」（2026-09-13 她问的：
+                   点正文提问被谷歌拒了，会不会用兜底模型？答案原来是**不会**——
+                   「摘要被拒时改用」那一档只接在摘要、通读、标背景三条路上，提问这条没接。
+                   而这条路更险：拒绝文案是**当成正文返回**的，于是被当成答案写进她的问答块、
+                   跟着存进 reader_qa（她的截图就是这么来的）。 */
+                var _askOnce = async function (_bu, _ak, _md) {
+                    _pd.partial = '';    // 重试前把流式预览清掉，别让两次答案接在一起
+                    var a = (await chatStreamChat({
+                        baseUrl: _bu, apiKey: _ak, model: _md, markUsed: true,
+                        // 分开记账：背景追问该比普通提问便宜一大截，记成同一个环节就看不出来省没省
+                        purpose: _guide ? '社科导读' : (_bgCi != null ? '背景追问' : '共读提问'),
+                        messages: _askMsgs,
+                        parts: _parts,
+                        signal: _pd.ctl.signal,
+                        onDelta: function (full) {
+                            _pd.partial = full;                 // 存一份，并发重渲时不会被占位冲掉
+                            var now = Date.now();
+                            if (now - _askLast < 60) return;    // 节流：最多约每 60ms 渲一次；最终文本下面会整体重渲，漏掉末段无妨
+                            _askLast = now;
+                            readingRenderStream(_pd);
+                        }
+                    })).trim();
+                    // 去掉段落标记，并把答案内部的空行折叠为单换行——
+                    // 否则空行会被 readingModeParseComments 当作该段评论的结束，
+                    // 导致答案被丢到整条消息末尾的 trailing 区而非贴在本段下方。
+                    return rdKeepPRef(a, true).replace(/\n\s*\n+/g, '\n').trim();   // 追问：行首段号是引用，保留成 §N
+                };
+
+                var answer = await _askOnce(baseUrl, apiKey, _qaMdl);
+                if (_sumLooksRefused(answer)) {
+                    /* ⚠️同一个模型再问一遍是白烧——实测被拒是**这段文本**触发的，不是随机的，
+                       所以只有换一家才有意义（见 _sumLooksRefused 上面那段）。 */
+                    var _afb = chatResolveSumFallbackModel();
+                    if (_afb && _afb.model !== _qaMdl) {
+                        _pd.partial = '';
                         readingRenderStream(_pd);
+                        showToast('被内容政策挡了，改用 ' + _rdMdlName(_afb) + ' 重问…');
+                        answer = await _askOnce(_afb.baseUrl, _afb.apiKey, _afb.model);
+                        // ⚠️把真正用上的这一档记下来：下面落盘的「哪个模型答的」要用它
+                        baseUrl = _afb.baseUrl; apiKey = _afb.apiKey; _qaMdl = _afb.model;
                     }
-                })).trim();
-                // 去掉段落标记，并把答案内部的空行折叠为单换行——
-                // 否则空行会被 readingModeParseComments 当作该段评论的结束，
-                // 导致答案被丢到整条消息末尾的 trailing 区而非贴在本段下方。
-                answer = rdKeepPRef(answer, true).replace(/\n\s*\n+/g, '\n').trim();   // 追问：行首段号是引用，保留成 §N
+                    /* ⚠️还是被拒 → **抛错，绝不落盘**。原来会把拒绝文案当答案存进正文，
+                       而问答块是「有了就在那儿」，她得手动长按删掉才能重问。 */
+                    if (_sumLooksRefused(answer)) {
+                        throw new Error(_afb
+                            ? '这一段被内容政策挡了（两家都拒了），换个模型再问'
+                            : '这一段被内容政策挡了。去 clawd 设置里把「被拒时改用」挑一个别家的模型，它会自动换一家重问');
+                    }
+                }
                 if (!answer) throw new Error('空回复');
                 // 以「汐：问题 / 答案」形式接在该段下方（与评论共用渲染）。
                 // 问题与答案之间只用单换行，确保它们仍属于同一个 [Pn] 评论块。
