@@ -14889,6 +14889,7 @@ body {
            ⚠️列表里要标出**字数**：她有 162KB 的提示词片段，整段塞进对话很贵，
              得让她点之前看得见代价。 */
         var _snipPickTag = '';
+        function _snipSize(n) { return n < 1000 ? (n + ' 字') : ((n / 1000).toFixed(1) + 'K 字'); }
 
         function chatOpenSnipPicker() {
             if (typeof chatHideAttachMenu === 'function') chatHideAttachMenu();
@@ -14946,18 +14947,38 @@ body {
             } else {
                 h += '<div style="max-height:52vh;overflow-y:auto;-webkit-overflow-scrolling:touch">';
                 list.forEach(function (x) {
-                    var n = (x.code || '').length;
-                    var size = n < 1000 ? (n + ' 字') : ((n / 1000).toFixed(1) + 'K 字');
-                    h += '<button class="chat-action-item" onclick="chatInsertSnip(' + JSON.stringify(x.id).replace(/"/g, '&quot;') + ')" style="display:flex;align-items:baseline;gap:8px">'
-                       + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (x.pinned ? '📌 ' : '') + esc(x.title || '无题') + '</span>'
-                       + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + size + '</span></button>';
+                    /* ⚠️2026-09-13 修：收藏里有三种 type，**collection 的正文不在 code 里、在 items 里**
+                       （她有 48 条是这种，「一个卡片下面有很多条目」）。第一版只读 code，
+                       于是那类全显示成干巴巴一条、点了还插进去一个空字符串。
+                       现在展开：**点组名＝整张卡片全塞进去，点某一条＝只要那一条。** */
+                    var items = (x.type === 'collection' && Array.isArray(x.items)) ? x.items : null;
+                    if (items && items.length) {
+                        var tot = items.reduce(function (a, it) { return a + ((it && it.content || '').length); }, 0);
+                        h += '<button class="chat-action-item" onclick="chatInsertSnip(' + JSON.stringify(x.id).replace(/"/g, '&quot;') + ')"'
+                           + ' style="display:flex;align-items:baseline;gap:8px;font-weight:600">'
+                           + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+                           + (x.pinned ? '📌 ' : '') + esc(x.title || '无题')
+                           + '<span style="font-weight:400;color:var(--text-muted)"> · 全部 ' + items.length + ' 条</span></span>'
+                           + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + _snipSize(tot) + '</span></button>';
+                        items.forEach(function (it) {
+                            if (!it) return;
+                            h += '<button class="chat-action-item" onclick="chatInsertSnip(' + JSON.stringify(x.id).replace(/"/g, '&quot;') + ',' + JSON.stringify(it.id).replace(/"/g, '&quot;') + ')"'
+                               + ' style="display:flex;align-items:baseline;gap:8px;padding-left:28px">'
+                               + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-sub)">↳ ' + esc(it.title || '无题') + '</span>'
+                               + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + _snipSize((it.content || '').length) + '</span></button>';
+                        });
+                    } else {
+                        h += '<button class="chat-action-item" onclick="chatInsertSnip(' + JSON.stringify(x.id).replace(/"/g, '&quot;') + ')" style="display:flex;align-items:baseline;gap:8px">'
+                           + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (x.pinned ? '📌 ' : '') + esc(x.title || '无题') + '</span>'
+                           + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + _snipSize((x.code || '').length) + '</span></button>';
+                    }
                 });
                 h += '</div>';
             }
             sh.innerHTML = h;
         }
 
-        function chatInsertSnip(id) {
+        function chatInsertSnip(id, subId) {
             var all = (typeof getSnipData === 'function' ? getSnipData() : []) || [];
             var s = null;
             for (var i = 0; i < all.length; i++) if (all[i].id === id) { s = all[i]; break; }
@@ -14965,12 +14986,32 @@ body {
             if (!s) return;
             var inp = document.getElementById('chatInput');
             if (!inp) return;
-            var block = '[ ' + (s.title || '资料') + ' ]\n```\n' + (s.code || '') + '\n```';
+            /* 三种情况：某一条 / 整张 collection（所有条目拼起来）/ 普通片段。
+               ⚠️整张塞进去时**每条前面留小标题**，不然几千字糊成一团、AI 分不清哪句归哪条。 */
+            var name = s.title || '资料', body = '';
+            var items = (s.type === 'collection' && Array.isArray(s.items)) ? s.items : null;
+            if (subId && items) {
+                for (var j = 0; j < items.length; j++) {
+                    if (items[j] && items[j].id === subId) {
+                        name = (s.title || '资料') + ' · ' + (items[j].title || '');
+                        body = items[j].content || '';
+                        break;
+                    }
+                }
+            } else if (items) {
+                body = items.map(function (it) {
+                    return '【' + ((it && it.title) || '无题') + '】\n' + ((it && it.content) || '');
+                }).join('\n\n');
+            } else {
+                body = s.code || '';
+            }
+            if (!body.trim()) { showToast('这一条是空的'); return; }
+            var block = '[ ' + name + ' ]\n```\n' + body + '\n```';
             inp.value = block + (inp.value ? '\n\n' + inp.value : '\n\n');
             if (typeof chatAutoGrow === 'function') chatAutoGrow(inp);
             if (typeof chatUpdateTokenHint === 'function') chatUpdateTokenHint();
             try { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) {}
-            showToast('已放进这条消息：' + (s.title || '资料'));
+            showToast('已放进这条消息：' + name);
         }
 
         // 生图大图查看
