@@ -14889,6 +14889,7 @@ body {
            ⚠️列表里要标出**字数**：她有 162KB 的提示词片段，整段塞进对话很贵，
              得让她点之前看得见代价。 */
         var _snipPickTag = '';
+        var _snipPickQ = '';
         function _snipSize(n) { return n < 1000 ? (n + ' 字') : ((n / 1000).toFixed(1) + 'K 字'); }
 
         function chatOpenSnipPicker() {
@@ -14906,7 +14907,7 @@ body {
                 sh.onclick = function (e) { e.stopPropagation(); };
                 document.body.appendChild(sh);
             }
-            _snipPickTag = '';
+            _snipPickTag = ''; _snipPickQ = '';
             chatSnipPickerRender();
             document.getElementById('snipPickBg').classList.add('show');
             document.getElementById('snipPickSheet').classList.add('show');
@@ -14922,8 +14923,18 @@ body {
             var sh = document.getElementById('snipPickSheet');
             if (!sh) return;
             var all = (typeof getSnipData === 'function' ? getSnipData() : []) || [];
-            // 只列真有正文的；置顶的排前面，其余按最近改动
-            all = all.filter(function (x) { return x && (x.code || '').trim(); });
+            /* 只列真有内容的。⚠️**判「有没有内容」不能只看 code**：
+               collection 类型的正文在 `items` 里、code 恒为空，她 80 条里有 48 条是这种——
+               照只看 code 的老写法，那 48 条在进列表之前就被筛掉了，
+               后面写的展开逻辑根本执行不到（2026-09-13 她报「资料点开好多东西都没有」，
+               就是这条造成的：列表只剩 32 条）。 */
+            all = all.filter(function (x) {
+                if (!x) return false;
+                if (x.type === 'collection' && Array.isArray(x.items)) {
+                    return x.items.some(function (it) { return it && (it.content || '').trim(); });
+                }
+                return (x.code || '').trim();
+            });
             all.sort(function (a, b) {
                 if (!!b.pinned !== !!a.pinned) return b.pinned ? 1 : -1;
                 return (b.updatedAt || 0) > (a.updatedAt || 0) ? 1 : -1;
@@ -14932,6 +14943,14 @@ body {
             all.forEach(function (x) { if (x.tag) tags[x.tag] = (tags[x.tag] || 0) + 1; });
             var h = '<div class="sheet-handle"></div>';
             h += '<div style="font-size:13px;font-weight:600;color:var(--text);padding:0 14px 8px">选一份资料放进这条消息</div>';
+            /* ⚠️2026-09-13 加搜索：她 80 张卡片展开后有 275 行，标签又帮不上忙
+               （72 条没标签），不给搜索等于让她滚到天荒地老。
+               ⚠️`oninput` 里重渲整个面板会让输入框失焦，所以**只重渲列表那一块**，
+                 搜索框本身不动（见 chatSnipPickerRenderList）。 */
+            h += '<div style="padding:0 14px 10px"><input id="snipPickSearch" type="text" placeholder="搜标题或内容…" '
+               + 'value="' + esc(_snipPickQ) + '" oninput="_snipPickQ=this.value;chatSnipPickerRenderList()" '
+               + 'style="width:100%;box-sizing:border-box;padding:7px 11px;background:var(--input-bg);'
+               + 'border:1px solid var(--card-border);border-radius:9px;color:var(--text);font-size:13px;outline:none"></div>';
             var tagKeys = Object.keys(tags);
             if (tagKeys.length) {
                 h += '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 10px">';
@@ -14941,9 +14960,46 @@ body {
                 });
                 h += '</div>';
             }
+            h += '<div id="snipPickList"></div>';
+            sh.innerHTML = h;
+            chatSnipPickerRenderList();
+        }
+
+        /* 只重渲列表那一块。⚠️**不能整个面板重渲**——搜索框跟着被重建，
+           每打一个字就失焦，等于没法打字（2026-09-13 加搜索时想到的）。 */
+        function chatSnipPickerRenderList() {
+            var box = document.getElementById('snipPickList');
+            if (!box) return;
+            var all = (typeof getSnipData === 'function' ? getSnipData() : []) || [];
+            all = all.filter(function (x) {
+                if (!x) return false;
+                if (x.type === 'collection' && Array.isArray(x.items)) {
+                    return x.items.some(function (it) { return it && (it.content || '').trim(); });
+                }
+                return (x.code || '').trim();
+            });
+            all.sort(function (a, b) {
+                if (!!b.pinned !== !!a.pinned) return b.pinned ? 1 : -1;
+                return (b.updatedAt || 0) > (a.updatedAt || 0) ? 1 : -1;
+            });
+            var h = '';
             var list = _snipPickTag ? all.filter(function (x) { return x.tag === _snipPickTag; }) : all;
+            /* 搜索：标题、子条目标题、正文都搜。⚠️正文也搜——她多半记得内容里的词
+               而不是自己当初起的标题（好些标题就是内容开头截的）。 */
+            var q = (_snipPickQ || '').trim().toLowerCase();
+            if (q) {
+                list = list.filter(function (x) {
+                    if (((x.title || '') + ' ' + (x.tag || '')).toLowerCase().indexOf(q) >= 0) return true;
+                    if ((x.code || '').toLowerCase().indexOf(q) >= 0) return true;
+                    return (x.items || []).some(function (it) {
+                        return it && (((it.title || '') + ' ' + (it.content || '')).toLowerCase().indexOf(q) >= 0);
+                    });
+                });
+            }
             if (!list.length) {
-                h += '<div style="padding:10px 14px 18px;font-size:12px;color:var(--text-muted)">这里还没有东西。去「收藏」那一页存几条，就能在这儿点出来了。</div>';
+                h += '<div style="padding:10px 14px 18px;font-size:12px;color:var(--text-muted)">'
+                   + (q ? ('没搜到「' + esc(q) + '」') : '这里还没有东西。去「收藏」那一页存几条，就能在这儿点出来了。')
+                   + '</div>';
             } else {
                 h += '<div style="max-height:52vh;overflow-y:auto;-webkit-overflow-scrolling:touch">';
                 list.forEach(function (x) {
@@ -14975,7 +15031,7 @@ body {
                 });
                 h += '</div>';
             }
-            sh.innerHTML = h;
+            box.innerHTML = h;
         }
 
         function chatInsertSnip(id, subId) {
