@@ -14890,6 +14890,7 @@ body {
              得让她点之前看得见代价。 */
         var _snipPickTag = '';
         var _snipPickQ = '';
+        var _snipPickOpen = {};   // 卡片 id → 是否展开子条目（2026-09-13 她要默认折叠）
         function _snipSize(n) { return n < 1000 ? (n + ' 字') : ((n / 1000).toFixed(1) + 'K 字'); }
 
         function chatOpenSnipPicker() {
@@ -14907,7 +14908,7 @@ body {
                 sh.onclick = function (e) { e.stopPropagation(); };
                 document.body.appendChild(sh);
             }
-            _snipPickTag = ''; _snipPickQ = '';
+            _snipPickTag = ''; _snipPickQ = ''; _snipPickOpen = {};
             chatSnipPickerRender();
             document.getElementById('snipPickBg').classList.add('show');
             document.getElementById('snipPickSheet').classList.add('show');
@@ -15009,20 +15010,33 @@ body {
                        现在展开：**点组名＝整张卡片全塞进去，点某一条＝只要那一条。** */
                     var items = (x.type === 'collection' && Array.isArray(x.items)) ? x.items : null;
                     if (items && items.length) {
+                        /* ⚠️2026-09-13 她要**默认折叠**（67 条卡片全展开是 246 行，滚不完）。
+                           分工：**点组名＝开合**，展开后第一行「全部 N 条」才是「整张塞进去」。
+                           不做成「点名字插入、点小箭头展开」——手机上箭头太小，必然误触。
+                           ⚠️搜索时**自动展开**：不然搜到的是子条目、你却只看见一个组名，
+                             会以为没搜着。 */
+                        var _open = !!_snipPickOpen[x.id] || !!q;
                         var tot = items.reduce(function (a, it) { return a + ((it && it.content || '').length); }, 0);
-                        h += '<button class="chat-action-item" onclick="chatInsertSnip(' + JSON.stringify(x.id).replace(/"/g, '&quot;') + ')"'
+                        h += '<button class="chat-action-item" onclick="chatSnipPickToggle(' + JSON.stringify(x.id).replace(/"/g, '&quot;') + ')"'
                            + ' style="display:flex;align-items:baseline;gap:8px;font-weight:600">'
+                           + '<span style="flex-shrink:0;font-size:10px;color:var(--text-muted);display:inline-block;width:10px">' + (_open ? '▾' : '▸') + '</span>'
                            + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
                            + (x.pinned ? '📌 ' : '') + esc(x.title || '无题')
-                           + '<span style="font-weight:400;color:var(--text-muted)"> · 全部 ' + items.length + ' 条</span></span>'
+                           + '<span style="font-weight:400;color:var(--text-muted)"> · ' + items.length + ' 条</span></span>'
                            + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + _snipSize(tot) + '</span></button>';
-                        items.forEach(function (it) {
-                            if (!it) return;
-                            h += '<button class="chat-action-item" onclick="chatInsertSnip(' + JSON.stringify(x.id).replace(/"/g, '&quot;') + ',' + JSON.stringify(it.id).replace(/"/g, '&quot;') + ')"'
-                               + ' style="display:flex;align-items:baseline;gap:8px;padding-left:28px">'
-                               + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-sub)">↳ ' + esc(it.title || '无题') + '</span>'
-                               + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + _snipSize((it.content || '').length) + '</span></button>';
-                        });
+                        if (_open) {
+                            h += '<button class="chat-action-item" onclick="chatInsertSnip(' + JSON.stringify(x.id).replace(/"/g, '&quot;') + ')"'
+                               + ' style="display:flex;align-items:baseline;gap:8px;padding-left:28px;color:var(--accent)">'
+                               + '<span style="flex:1;min-width:0">↳ 全部 ' + items.length + ' 条</span>'
+                               + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + _snipSize(tot) + '</span></button>';
+                            items.forEach(function (it) {
+                                if (!it) return;
+                                h += '<button class="chat-action-item" onclick="chatInsertSnip(' + JSON.stringify(x.id).replace(/"/g, '&quot;') + ',' + JSON.stringify(it.id).replace(/"/g, '&quot;') + ')"'
+                                   + ' style="display:flex;align-items:baseline;gap:8px;padding-left:28px">'
+                                   + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-sub)">↳ ' + esc(it.title || '无题') + '</span>'
+                                   + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + _snipSize((it.content || '').length) + '</span></button>';
+                            });
+                        }
                     } else {
                         h += '<button class="chat-action-item" onclick="chatInsertSnip(' + JSON.stringify(x.id).replace(/"/g, '&quot;') + ')" style="display:flex;align-items:baseline;gap:8px">'
                            + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (x.pinned ? '📌 ' : '') + esc(x.title || '无题') + '</span>'
@@ -15032,6 +15046,11 @@ body {
                 h += '</div>';
             }
             box.innerHTML = h;
+        }
+
+        function chatSnipPickToggle(id) {
+            _snipPickOpen[id] = !_snipPickOpen[id];
+            chatSnipPickerRenderList();
         }
 
         function chatInsertSnip(id, subId) {
