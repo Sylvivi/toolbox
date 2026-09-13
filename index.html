@@ -29323,11 +29323,24 @@ body {
         // 共读：点击翻到下一屏，并按「行」对齐——把本页「最后一行完整露出的字」滚到新页顶部。
         // 新页顶行 = 上页读过的最后一整行（保留一行接头，衔接不生硬），且永远是完整一行、不被切半截。
         // 行的位置用 Range.getClientRects() 取真实行框，不靠 line-height 估算，换字体/字号/行距都不受影响。
+        /* 底边被悬浮输入条挡掉多少（2026-09-13）。
+           ⚠️输入框改成悬浮之后，#chatMessages 的 rect.bottom 一直到模态框最底下，
+             而最底下那 50~100px 是**盖在玻璃条底下的**——那里有字，她看不见。
+             翻页却按 rect.bottom 当"屏底"来对齐 → 被挡住的那几行会被整屏跳过去
+             （她原话：「底下那块是被挡住的，我其实没看到，点翻页之后那个字就翻上去了」）。
+           所以翻页的"屏底/一屏高"一律要减掉这一截。 */
+        function readingBottomInset() {
+            var v = getComputedStyle(document.documentElement).getPropertyValue('--chat-ih');
+            var n = parseFloat(v);
+            return (isFinite(n) && n > 0) ? n : 0;
+        }
+
         function readingPageDown() {
             var el = document.getElementById('chatMessages');
             if (!el) return;
             var rect = el.getBoundingClientRect();
-            var bottomY = rect.bottom;
+            var _inset = readingBottomInset();
+            var bottomY = rect.bottom - _inset;   // ⚠️不是 rect.bottom：见 readingBottomInset
             // 取一段里所有行框
             function lineRects(p) {
                 var range = document.createRange();
@@ -29370,7 +29383,7 @@ body {
             if (target !== null && target - rect.top > 60) {
                 el.scrollTop = el.scrollTop + (target - rect.top) - _pageGap;
             } else {
-                el.scrollTop = el.scrollTop + Math.max(100, el.clientHeight - 48);
+                el.scrollTop = el.scrollTop + Math.max(100, el.clientHeight - _inset - 48);
             }
         }
 
@@ -29393,10 +29406,12 @@ body {
             if (el.scrollTop <= 0) return;   // 已在最顶：交给「上滑到顶自动补上一章」那套，这里不抢
             var rect = el.getBoundingClientRect();
             var topY = rect.top;
+            var _inset = readingBottomInset();          // 见 readingBottomInset
+            var _viewH = el.clientHeight - _inset;      // 真正看得见的一屏有多高
             var ps = el.querySelectorAll('.reading-merged p[data-p], .reading-merged blockquote');
             // ⚠️只量「当前屏顶往上一屏多一点」这条带子里的段落。整章几千段全去 getClientRects
             // 会卡住手指——下翻那边靠 break 天然只量到屏底，这边得自己划范围。
-            var bandTop = topY - el.clientHeight - 200;
+            var bandTop = topY - _viewH - 200;
             var tops = [], lineH = 0;
             for (var i = 0; i < ps.length; i++) {
                 var r = ps[i].getBoundingClientRect();
@@ -29414,7 +29429,7 @@ body {
             var _pageGap = 4;
             if (tops.length) {
                 if (!lineH) lineH = 24;
-                var desired = topY - (el.clientHeight - lineH);   // 让现在的屏顶那行翻完落到屏底＝接头一行
+                var desired = topY - (_viewH - lineH);   // 让现在的屏顶那行翻完落到屏底＝接头一行
                 var target = null;
                 for (var k = 0; k < tops.length; k++) {
                     if (tops[k] >= desired - 1 && (target === null || tops[k] < target)) target = tops[k];
@@ -29425,7 +29440,7 @@ body {
                     return;
                 }
             }
-            el.scrollTop = Math.max(0, el.scrollTop - Math.max(100, el.clientHeight - 48));
+            el.scrollTop = Math.max(0, el.scrollTop - Math.max(100, _viewH - 48));
         }
 
         /* 点击落点决定往哪翻：**上 20% 往回、下 80% 往下**（2026-08-09 用户要的「下半屏占主要的」，
