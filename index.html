@@ -2323,16 +2323,18 @@ body {
             font-size: 11px; color: var(--text-muted); white-space: nowrap; opacity: 0.6;
         }
 
-        /* 玻璃的底色（2026-09-13 她问的：「这个玻璃只有白色这一种吗，不会掺一点主题的色调进去吗」）。
-           ⚠️别再写死 `rgba(255,255,255,…)`——那样八套主题的玻璃长得一模一样。
-             掺一成当前主题的强调色进去，每套主题的玻璃就带上自己的味道，
-             而且**不用给每个主题各写一条**（加新主题自动跟上）。
+        /* 玻璃的底色，**两套**（2026-09-13）。
+           她先问「玻璃只有白色这一种吗，不会掺点主题色吗」，掺完看了真机又拍板分开：
+           「输入框保持白色其实挺好的，包括下面的折叠条；主要是**设置那些弹出来的窗**
+             带点颜色更合逻辑」。所以：
+             · --glass-white  → 输入框 / 折叠条 / 附件卡片 / 字数条（贴着正文，白的最不抢戏）
+             · --glass-themed → 设置面板 / 底部弹出面板（是"另一层东西"，该有自己的颜色）
+           ⚠️别再把两者合成一个——合了就得二选一，而她两边要的不一样。
            ⚠️浓度别贪：超过 15% 玻璃就开始像有色塑料片、字也压不住。
-           ⚠️夜间掺得多一点：深底上一成看不出来。
-           改浓度只改这两行，下面所有用到玻璃的地方都跟着走。 */
-        :root { --glass-tint: #fff; }                                         /* 兜底，老浏览器不认 color-mix 时是白玻璃 */
-        body   { --glass-tint: color-mix(in srgb, var(--accent) 10%, #fff); }
-        body.dark { --glass-tint: color-mix(in srgb, var(--accent) 18%, #fff); }
+           ⚠️夜间掺得多一点：深底上一成看不出来。 */
+        :root { --glass-white: #fff; --glass-themed: #fff; }                  /* 兜底，老浏览器不认 color-mix 时全是白玻璃 */
+        body      { --glass-themed: color-mix(in srgb, var(--accent) 10%, #fff); }
+        body.dark { --glass-themed: color-mix(in srgb, var(--accent) 18%, #fff); }
 
         /* ===== 输入区 — 悬浮玻璃条 =====
            2026-09-13 她要的：「人家的输入框是一个独立的东西，字能从它背后穿过；
@@ -2637,15 +2639,15 @@ body {
             position: relative; overflow: visible;
             /* ⚠️边和高光**必须跟底色掺同一个色**（2026-09-13 她报「周围怎么有一道白边」）：
                底色掺了主题色、描边还留纯白，就会围出明显的一圈白。 */
-            border: 1px solid color-mix(in srgb, var(--glass-tint) 46%, transparent);
+            border: 1px solid color-mix(in srgb, var(--glass-white) 46%, transparent);
             /* ⚠️底色的两个 alpha 跟预览页（pv-input.html）保持一致：她是在 0.86/0.72 上
                拨的滑块、定的 6px。线上如果更透，同一个 6px 会比她看到的透出更多字。 */
             background: linear-gradient(180deg,
-                        color-mix(in srgb, var(--glass-tint) 86%, transparent),
-                        color-mix(in srgb, var(--glass-tint) 72%, transparent));
-            box-shadow: 0 0 0 1px color-mix(in srgb, var(--glass-tint) 40%, transparent),
+                        color-mix(in srgb, var(--glass-white) 86%, transparent),
+                        color-mix(in srgb, var(--glass-white) 72%, transparent));
+            box-shadow: 0 0 0 1px color-mix(in srgb, var(--glass-white) 40%, transparent),
                         0 8px 28px rgba(0,0,0,0.08),
-                        inset 0 1px 0 color-mix(in srgb, var(--glass-tint) 65%, transparent);
+                        inset 0 1px 0 color-mix(in srgb, var(--glass-white) 65%, transparent);
             /* ⚠️模糊度 6px 是她 2026-09-13 在预览页上拨滑块定的（从 22 调下来）。
                改这个数字前先在 pv-input.html 上给她看，别凭感觉调。 */
             backdrop-filter: blur(6px) saturate(132%);
@@ -2656,13 +2658,13 @@ body {
             border-color: var(--accent-mid);
             box-shadow: 0 0 0 3px var(--accent-light),
                         0 8px 28px rgba(0,0,0,0.08),
-                        inset 0 1px 0 color-mix(in srgb, var(--glass-tint) 65%, transparent);
+                        inset 0 1px 0 color-mix(in srgb, var(--glass-white) 65%, transparent);
         }
         .dark .chat-input-box {
             border-color: rgba(255,255,255,0.14);
             background: linear-gradient(180deg,
-                        color-mix(in srgb, var(--glass-tint) 13%, transparent),
-                        color-mix(in srgb, var(--glass-tint) 7%, transparent));
+                        color-mix(in srgb, var(--glass-white) 13%, transparent),
+                        color-mix(in srgb, var(--glass-white) 7%, transparent));
             box-shadow: 0 0 0 1px rgba(255,255,255,0.10),
                         0 8px 28px rgba(0,0,0,0.28),
                         inset 0 1px 0 rgba(255,255,255,0.12);
@@ -2715,9 +2717,9 @@ body {
                直接压上去会糊成一片 → 自己带一小片淡底（只包住文字，不做成整条横杠）。
                这里**故意不用 backdrop-filter**：10px 的一行字不值得再开一个合成层。 */
             padding: 3px 8px; margin: 0 6px 2px; border-radius: 8px;
-            background: color-mix(in srgb, var(--glass-tint) 55%, transparent);
+            background: color-mix(in srgb, var(--glass-white) 55%, transparent);
         }
-        .dark .chat-token-hint { background: color-mix(in srgb, var(--glass-tint) 10%, transparent); }
+        .dark .chat-token-hint { background: color-mix(in srgb, var(--glass-white) 10%, transparent); }
         /* 「资料」面板里那个常驻开关。⚠️它是**按钮里套不下的东西**——
            行本身是 <button>，HTML 不许 button 套 button，所以外面包一层相对定位的 div，
            开关绝对定位压在右边，行的 padding-right 给它让出位置。 */
@@ -3211,14 +3213,14 @@ body {
                纯雾、没有玻璃身子。高级感来自**渐变底 + 内外两道高光 + saturate**这三件套，
                不是来自模糊值。⚠️只搬到「从小螃蟹弹出来的这两类面板」，别的窗不碰。 */
             background: linear-gradient(180deg,
-                        color-mix(in srgb, var(--glass-tint) 86%, transparent),
-                        color-mix(in srgb, var(--glass-tint) 74%, transparent));
+                        color-mix(in srgb, var(--glass-themed) 86%, transparent),
+                        color-mix(in srgb, var(--glass-themed) 74%, transparent));
             backdrop-filter: blur(6px) saturate(132%);
             -webkit-backdrop-filter: blur(6px) saturate(132%);
             border-radius: 20px 20px 0 0;
-            border-top: 1px solid color-mix(in srgb, var(--glass-tint) 45%, transparent);
+            border-top: 1px solid color-mix(in srgb, var(--glass-themed) 45%, transparent);
             box-shadow: 0 -8px 40px rgba(0,0,0,0.12),
-                        inset 0 1px 0 color-mix(in srgb, var(--glass-tint) 65%, transparent);
+                        inset 0 1px 0 color-mix(in srgb, var(--glass-themed) 65%, transparent);
             transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
             max-height: 70vh; display: flex; flex-direction: column;
             padding-bottom: max(16px, env(safe-area-inset-bottom));
@@ -3468,14 +3470,14 @@ body {
                纯雾、没有玻璃身子。高级感来自**渐变底 + 内外两道高光 + saturate**这三件套，
                不是来自模糊值。⚠️只搬到「从小螃蟹弹出来的这两类面板」，别的窗不碰。 */
             background: linear-gradient(180deg,
-                        color-mix(in srgb, var(--glass-tint) 86%, transparent),
-                        color-mix(in srgb, var(--glass-tint) 74%, transparent));
+                        color-mix(in srgb, var(--glass-themed) 86%, transparent),
+                        color-mix(in srgb, var(--glass-themed) 74%, transparent));
             backdrop-filter: blur(6px) saturate(132%);
             -webkit-backdrop-filter: blur(6px) saturate(132%);
-            border-top: 1px solid color-mix(in srgb, var(--glass-tint) 45%, transparent);
+            border-top: 1px solid color-mix(in srgb, var(--glass-themed) 45%, transparent);
             border-radius: 18px 18px 0 0;
             box-shadow: 0 -8px 32px rgba(0,0,0,0.1),
-                        inset 0 1px 0 color-mix(in srgb, var(--glass-tint) 65%, transparent);
+                        inset 0 1px 0 color-mix(in srgb, var(--glass-themed) 65%, transparent);
             transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
             padding-bottom: max(16px, env(safe-area-inset-bottom));
             max-height: 70vh; display: flex; flex-direction: column;
@@ -3484,8 +3486,8 @@ body {
         /* 夜间：同样照输入框那套（深色半透明 + 淡高光），别退回实心深灰。 */
         .dark .chat-settings-modal, .dark .chat-action-sheet {
             background: linear-gradient(180deg,
-                        color-mix(in srgb, var(--glass-tint) 13%, transparent),
-                        color-mix(in srgb, var(--glass-tint) 7%, transparent));
+                        color-mix(in srgb, var(--glass-themed) 13%, transparent),
+                        color-mix(in srgb, var(--glass-themed) 7%, transparent));
             border-top-color: rgba(255,255,255,0.14);
         }
         .dark .chat-settings-modal { box-shadow: 0 -8px 40px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.12); }
@@ -4707,17 +4709,17 @@ body {
            输入框悬浮之后它底下是滚动的正文，字会透上来（2026-09-13 截图看出来的）。 */
         .chat-file-chip {
             background: linear-gradient(180deg,
-                        color-mix(in srgb, var(--glass-tint) 86%, transparent),
-                        color-mix(in srgb, var(--glass-tint) 74%, transparent));
-            border: 1px solid color-mix(in srgb, var(--glass-tint) 42%, transparent);
+                        color-mix(in srgb, var(--glass-white) 86%, transparent),
+                        color-mix(in srgb, var(--glass-white) 74%, transparent));
+            border: 1px solid color-mix(in srgb, var(--glass-white) 42%, transparent);
             box-shadow: 0 4px 16px rgba(0,0,0,0.06);
             backdrop-filter: blur(6px) saturate(128%);
             -webkit-backdrop-filter: blur(6px) saturate(128%);
         }
         .dark .chat-file-chip {
             background: linear-gradient(180deg,
-                        color-mix(in srgb, var(--glass-tint) 14%, transparent),
-                        color-mix(in srgb, var(--glass-tint) 8%, transparent));
+                        color-mix(in srgb, var(--glass-white) 14%, transparent),
+                        color-mix(in srgb, var(--glass-white) 8%, transparent));
             border-color: rgba(255,255,255,0.14);
             box-shadow: 0 4px 16px rgba(0,0,0,0.3);
         }
