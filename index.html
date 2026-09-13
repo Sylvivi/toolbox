@@ -6291,6 +6291,13 @@ body {
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
                                     <span>文件</span>
                                 </button>
+                                <!-- 2026-09-13 她要的：「想在里面弄一个类似存文件的库，开对话时点一下它就进入这个对话」。
+                                     ⚠️**不新建存储**，直接用「收藏」（片段）那套——她已经有 79 条，
+                                       带标签、带搜索、跟着云同步，缺的只是对话里的入口。 -->
+                                <button class="chat-attach-item" onclick="chatOpenSnipPicker()">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                                    <span>资料</span>
+                                </button>
                                 <button class="chat-attach-item" onclick="document.getElementById('chatAttachCamera').click();chatHideAttachMenu()">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
                                     <span>拍照</span>
@@ -14872,6 +14879,99 @@ body {
                 genImgLightbox(t.src);
             }
         });
+
+        /* ===== 「资料」：把收藏里的片段一点塞进当前对话（2026-09-13 她要的）=====
+           她的原话：「想在里面弄一个类似存文件的库，开对话的时候点一下，它就进入这个对话」。
+           ⚠️**不新建存储**：直接读「收藏」（片段）那套数据，她已经有 79 条、带标签、跟着云同步。
+             新做一个库等于让她以后两个地方各存一半、哪边都找不全。
+           ⚠️插入格式跟附件/小红书**完全一致**（`[ 名字 ]` + 三引号包正文），
+             于是自动折叠成一张卡片——她屏幕上还是干净一行，AI 那边拿到全文。
+           ⚠️列表里要标出**字数**：她有 162KB 的提示词片段，整段塞进对话很贵，
+             得让她点之前看得见代价。 */
+        var _snipPickTag = '';
+
+        function chatOpenSnipPicker() {
+            if (typeof chatHideAttachMenu === 'function') chatHideAttachMenu();
+            var bg = document.getElementById('snipPickBg');
+            if (!bg) {
+                bg = document.createElement('div');
+                bg.id = 'snipPickBg';
+                bg.className = 'chat-action-sheet-bg';
+                bg.onclick = chatCloseSnipPicker;
+                document.body.appendChild(bg);
+                var sh = document.createElement('div');
+                sh.id = 'snipPickSheet';
+                sh.className = 'chat-action-sheet';
+                sh.onclick = function (e) { e.stopPropagation(); };
+                document.body.appendChild(sh);
+            }
+            _snipPickTag = '';
+            chatSnipPickerRender();
+            document.getElementById('snipPickBg').classList.add('show');
+            document.getElementById('snipPickSheet').classList.add('show');
+        }
+
+        function chatCloseSnipPicker() {
+            var bg = document.getElementById('snipPickBg'), sh = document.getElementById('snipPickSheet');
+            if (bg) bg.classList.remove('show');
+            if (sh) sh.classList.remove('show');
+        }
+
+        function chatSnipPickerRender() {
+            var sh = document.getElementById('snipPickSheet');
+            if (!sh) return;
+            var all = (typeof getSnipData === 'function' ? getSnipData() : []) || [];
+            // 只列真有正文的；置顶的排前面，其余按最近改动
+            all = all.filter(function (x) { return x && (x.code || '').trim(); });
+            all.sort(function (a, b) {
+                if (!!b.pinned !== !!a.pinned) return b.pinned ? 1 : -1;
+                return (b.updatedAt || 0) > (a.updatedAt || 0) ? 1 : -1;
+            });
+            var tags = {};
+            all.forEach(function (x) { if (x.tag) tags[x.tag] = (tags[x.tag] || 0) + 1; });
+            var h = '<div class="sheet-handle"></div>';
+            h += '<div style="font-size:13px;font-weight:600;color:var(--text);padding:0 14px 8px">选一份资料放进这条消息</div>';
+            var tagKeys = Object.keys(tags);
+            if (tagKeys.length) {
+                h += '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 10px">';
+                h += '<button class="chip-btn' + (_snipPickTag ? '' : ' active') + '" onclick="_snipPickTag=\'\';chatSnipPickerRender()">全部</button>';
+                tagKeys.forEach(function (t) {
+                    h += '<button class="chip-btn' + (_snipPickTag === t ? ' active' : '') + '" onclick="_snipPickTag=' + JSON.stringify(t).replace(/"/g, '&quot;') + ';chatSnipPickerRender()">' + esc(t) + '</button>';
+                });
+                h += '</div>';
+            }
+            var list = _snipPickTag ? all.filter(function (x) { return x.tag === _snipPickTag; }) : all;
+            if (!list.length) {
+                h += '<div style="padding:10px 14px 18px;font-size:12px;color:var(--text-muted)">这里还没有东西。去「收藏」那一页存几条，就能在这儿点出来了。</div>';
+            } else {
+                h += '<div style="max-height:52vh;overflow-y:auto;-webkit-overflow-scrolling:touch">';
+                list.forEach(function (x) {
+                    var n = (x.code || '').length;
+                    var size = n < 1000 ? (n + ' 字') : ((n / 1000).toFixed(1) + 'K 字');
+                    h += '<button class="chat-action-item" onclick="chatInsertSnip(' + JSON.stringify(x.id).replace(/"/g, '&quot;') + ')" style="display:flex;align-items:baseline;gap:8px">'
+                       + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (x.pinned ? '📌 ' : '') + esc(x.title || '无题') + '</span>'
+                       + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + size + '</span></button>';
+                });
+                h += '</div>';
+            }
+            sh.innerHTML = h;
+        }
+
+        function chatInsertSnip(id) {
+            var all = (typeof getSnipData === 'function' ? getSnipData() : []) || [];
+            var s = null;
+            for (var i = 0; i < all.length; i++) if (all[i].id === id) { s = all[i]; break; }
+            chatCloseSnipPicker();
+            if (!s) return;
+            var inp = document.getElementById('chatInput');
+            if (!inp) return;
+            var block = '[ ' + (s.title || '资料') + ' ]\n```\n' + (s.code || '') + '\n```';
+            inp.value = block + (inp.value ? '\n\n' + inp.value : '\n\n');
+            if (typeof chatAutoGrow === 'function') chatAutoGrow(inp);
+            if (typeof chatUpdateTokenHint === 'function') chatUpdateTokenHint();
+            try { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) {}
+            showToast('已放进这条消息：' + (s.title || '资料'));
+        }
 
         // 生图大图查看
         function genImgLightbox(dataURL) {
