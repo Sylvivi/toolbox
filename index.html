@@ -1536,6 +1536,14 @@ body {
         .rdbg-item.active { border-color: var(--accent-mid); color: var(--text); background: var(--accent-light); }
         .rdbg-item .rdbg-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         /* 行内的小按钮：她的口味是「要显眼靠提亮字色＋淡底」，所以不给实心色块 */
+        /* 「参与随机」的小圆点：灭＝不参与，亮＝参与。
+           ⚠️不做成实心色块按钮——她的口味是靠提亮字色，别加零件（见 user-taste-minimal-no-badges）。 */
+        .rdbg-item .rdbg-dot {
+            flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%;
+            border: 1px solid var(--text-muted); background: none; margin-right: 3px;
+            cursor: pointer; opacity: 0.45;
+        }
+        .rdbg-item .rdbg-dot.on { background: var(--accent); border-color: var(--accent); opacity: 1; }
         .rdbg-item .rdbg-op {
             flex: 0 0 auto; border: none; background: none; cursor: pointer;
             font-size: 12px; padding: 2px 2px; color: var(--text-muted); border-radius: 6px;
@@ -23161,20 +23169,54 @@ body {
             setTimeout(readingLockBgHeight, 250);  // 等系统把新尺寸报准
         });
         // 阅读底图：读当前选的那张（没设过、或那条自定义已被删＝关）
+        /* ===== 底图随机（2026-09-13 她要的：蓝/橙/粉三张轮着来）=====
+           ⚠️她选的时机是「**每次进阅读模式换一张**」——开书时掷一次，这次阅读期间不再变
+             （翻章、回目录再进来都不换），免得读着读着底色跳。
+           ⚠️参与随机的图靠每张自己的 `rnd` 标记（面板里名字左边那个小圆点），
+             存在 bgList 里，跟着云同步走，不额外占存储键。
+           ⚠️`_rdRandomPick` 只在内存里：重开 app 自然重掷，正合「每次进阅读模式换」。 */
+        var _rdRandomPick = null;
+
+        function readingBgRandomPool() {
+            return readingBgList().filter(function (c) { return c && c.rnd; });
+        }
+        function readingBgRoll() {
+            var pool = readingBgRandomPool();
+            if (!pool.length) { _rdRandomPick = null; return; }
+            var prev = _rdRandomPick;
+            var pick = pool[Math.floor(Math.random() * pool.length)];
+            // 池里不止一张时，尽量别连着抽到同一张（抽中就顺延一张，比重摇简单也不会死循环）
+            if (pool.length > 1 && prev && pick.id === prev) {
+                pick = pool[(pool.indexOf(pick) + 1) % pool.length];
+            }
+            _rdRandomPick = pick.id;
+        }
+        // 把 'random' 解析成这次真正要用的那张
+        function readingBgResolve(id) {
+            if (id !== 'random') return id;
+            if (!_rdRandomPick) readingBgRoll();
+            return _rdRandomPick || 'off';
+        }
+
         function readingGetBg() {
             var t = localStorage.getItem('reading_bg');
+            if (t === 'random') return 'random';        // 随机档，真正用哪张由 readingBgResolve 决定
             if (RD_BG_INFO[t]) return t;
             return readingBgFind(t) ? t : 'off';
         }
         // 当前这张的展示名（chip 上显示它）
         function readingBgLabel(id) {
             if (id === 'off') return '底图';
+            if (id === 'random') {
+                var _p = _rdRandomPick ? readingBgFind(_rdRandomPick) : null;
+                return _p ? ('🎲 ' + (_p.name || '随机')) : '🎲 随机';
+            }
             if (RD_BG_INFO[id]) return RD_BG_INFO[id].label;
             var c = readingBgFind(id);
             return c ? (c.name || '自定义') : '底图';
         }
         function readingApplyBg() {
-            var cur = readingGetBg();
+            var cur = readingBgResolve(readingGetBg());
             // 先摘掉所有底图类再挂当前这张，免得切换时两张图的变量互相盖
             Object.keys(RD_BG_INFO).forEach(function(k) { document.body.classList.remove(RD_BG_INFO[k].cls); });
             document.body.classList.remove('rdbg-custom');
@@ -23253,6 +23295,20 @@ body {
             readingBgSaveList(list);
             readingApplyBg();
         }
+        /* 点名字左边那个圆点：把这张图加入/移出随机池（2026-09-13）。
+           ⚠️写回 bgList 用现成的 readingBgSaveList，它会盖时间戳并触发同步——
+             别自己写 localStorage，那样别的设备拉不到。 */
+        function readingBgToggleRnd(id) {
+            var list = readingBgList();
+            for (var i = 0; i < list.length; i++) {
+                if (list[i].id === id) { list[i].rnd = list[i].rnd ? 0 : 1; break; }
+            }
+            readingBgSaveList(list);
+            // 池子变了，这次抽到的那张可能已经不在池里了 → 重掷，并立刻把界面刷新
+            if (readingGetBg() === 'random') { readingBgRoll(); readingApplyBg(); }
+            readingRenderBgPanel();
+        }
+
         // 点 chip ＝ 开合面板（不再循环切换：自定义会越攒越多，循环点二十下不现实）
         function readingToggleBgPanel() {
             var panel = document.getElementById('readingBgPanel');
@@ -23279,21 +23335,32 @@ body {
             if (!panel || panel.style.display === 'none') return;
             var cur = readingGetBg();
             var h = '';
-            function row(id, name, ops) {
+            function row(id, name, ops, dot) {
                 return '<div class="rdbg-item' + (cur === id ? ' active' : '') + '" onclick="readingPickBg(\'' + id + '\')">'
-                     + '<span class="rdbg-name">' + name + '</span>' + (ops || '') + '</div>';
+                     + (dot || '') + '<span class="rdbg-name">' + name + '</span>' + (ops || '') + '</div>';
             }
             h += row('off', '关（用主题底色）', '');
             var list = readingBgList();
+            /* 「🎲 随机」档（2026-09-13）：只在**至少勾了一张**时才出现——
+               一张没勾就摆在那儿点了也没反应，不如不显示。 */
+            var _pool = readingBgRandomPool();
+            if (_pool.length) {
+                h += '<div class="rdbg-item' + (cur === 'random' ? ' active' : '') + '" onclick="readingPickBg(\'random\')">'
+                   + '<span class="rdbg-name">🎲 随机（' + _pool.length + '）</span></div>';
+            }
             for (var i = 0; i < list.length; i++) {
                 var c = list[i];
                 var esc = (c.name || '未命名').replace(/</g, '&lt;');
                 var _pair = c.pair ? readingBgFind(c.pair) : null;
+                /* ⚠️名字左边这个小圆点＝「参与随机」。做成圆点而不是第 5 个按钮，
+                   是因为两列布局下按钮已经挤到贴边了（09-13 她说过一次「很乱」）。 */
+                var _dot = '<span class="rdbg-dot' + (c.rnd ? ' on' : '') + '" title="点亮＝加入随机"'
+                         + ' onclick="event.stopPropagation();readingBgToggleRnd(\'' + c.id + '\')"></span>';
                 var ops = '<button class="rdbg-op" title="这张是深色图吗？决定选它时切夜间还是白天" onclick="event.stopPropagation();readingBgToggleDark(\'' + c.id + '\')">' + (c.dark ? '🌙' : '☀️') + '</button>'
                         + '<button class="rdbg-op" title="' + (_pair ? ('日夜搭档：' + (_pair.name || '未命名').replace(/"/g, '') + '（切日夜时自动换成它）') : '给它挑一张日夜搭档') + '" onclick="event.stopPropagation();readingBgPair(\'' + c.id + '\')">' + (_pair ? '🔗' : '⛓') + '</button>'
                         + '<button class="rdbg-op" title="改名字和地址" onclick="event.stopPropagation();readingBgEdit(\'' + c.id + '\')">✎</button>'
                         + '<button class="rdbg-op" title="删掉这张" onclick="event.stopPropagation();readingBgDelete(\'' + c.id + '\')">✕</button>';
-                h += row(c.id, esc, ops);
+                h += row(c.id, esc, ops, _dot);
             }
             h += '<div class="rdbg-add" onclick="readingBgAdd()">＋ 添加底图</div>';
             panel.innerHTML = h;
@@ -26890,6 +26957,10 @@ body {
         // 「阅读」入口：记得上次在读的书就直接打开它的目录，否则才回书架列表
         function readerEnter() {
             chatReaderMode = true;
+            /* ⚠️2026-09-13：随机底图在**进阅读模式这一刻**掷，之后整场阅读不再变
+               （她选的档：「每次进阅读模式换」）。放在这里而不是 readingApplyBg 里，
+                 是因为后者翻章、调边距都会被调到，放那儿底色会一直跳。 */
+            if (readingGetBg() === 'random') { readingBgRoll(); readingApplyBg(); }
             rbPickForReader = true;
             if (typeof chatSyncModeButtons === 'function') chatSyncModeButtons();
             if (typeof chatCloseModelSheet === 'function') chatCloseModelSheet();
