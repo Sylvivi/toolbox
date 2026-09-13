@@ -23256,11 +23256,10 @@ body {
            ⚠️2026-09-13 重写（她要「底图模式下夜间默认是船夜」）。原来只认**一对一配对**，
              满足不了她：她有 5 张浅色图、只有 1 张深色图，一张夜图配不了五张日图；
              而且随机档下压根不生效（readingBgFind('random') 找不到就直接 return）。
-           现在的规则，按优先级：
-             ① 先看这张自己配的「日夜搭档」——配了就照她的意思来；
-             ② 没配（或搭档已经被删了）→ **退回「随便找一张明暗对得上的」**。
-                她只有船夜一张深色图，所以效果就是「夜间一律船夜」。
-           ⚠️她那几条 pair 数据有指向已删图的（删底图时没清配对），所以 ② 这条兜底是必须的。
+           现在的规则很简单：**找一张明暗对得上的换上去**。
+             她只有「船夜」一张深色图，所以效果就是「夜间一律船夜」。
+           ⚠️一对一配对那套已于同日撤掉（按钮和判断都去了）——她那几条 pair 数据
+             本来就有指向已删图的（删底图时没清配对），维护成本高、又不解决她的需求。
            ⚠️随机档要先 resolve 成实际那张再判明暗，否则永远换不了。
            ⚠️**切回白天要恢复原来那个档**（可能是 'random'）：只记 id 的话，
              从随机档进夜间再回来，就变成钉死在某一张上了。 */
@@ -23285,21 +23284,24 @@ body {
             if (!c || c.dark == null) return;
             if (!!c.dark === !!nightMode) return;       // 已经对得上
 
-            var other = c.pair ? readingBgFind(c.pair) : null;
-            if (other && other.dark != null && !!other.dark !== !!nightMode) other = null;  // 搭档也不对
-            if (!other) {
-                var fit = readingBgList().filter(function (x) {
-                    return x && x.dark != null && !!x.dark === !!nightMode;
-                });
-                other = fit[0] || null;
-            }
+            /* ⚠️2026-09-13：**不再看一对一配对**（她说「那个链接感觉可以去掉了，
+               现在不再搞一对一了」），直接找一张明暗对得上的。
+               她只有「船夜」一张深色图，所以效果就是「夜间一律船夜」。
+               ⚠️老数据里残留的 `pair` 字段不管它——代码不读就等于没有，
+                 犯不着为清几个字段去处理跟她手机的同步冲突。 */
+            var fit = readingBgList().filter(function (x) {
+                return x && x.dark != null && !!x.dark === !!nightMode;
+            });
+            var other = fit[0] || null;
             if (!other) return;
 
             if (nightMode) localStorage.setItem('reading_bg_daybak', raw);   // 记住白天用的档
             localStorage.setItem('reading_bg', other.id);
             readingApplyBg();
         }
-        /* 给一张底图挑「另一半」。⚠️两边都写：配对是双向的，
+        /* ⚠️2026-09-13：这个功能的**入口已经撤掉**（面板上那个 🔗 按钮没了），
+           函数留着只是没删干净；日夜换图现在不看 pair 了，见 readingSwapBgForMode。
+           给一张底图挑「另一半」。⚠️两边都写：配对是双向的，
            只写一边的话从另一张切回来时又不认识对方了。 */
         function readingBgPair(id) {
             var list = readingBgList();
@@ -23392,7 +23394,6 @@ body {
                 var _dot = '<span class="rdbg-dot' + (c.rnd ? ' on' : '') + '" title="点亮＝加入随机"'
                          + ' onclick="event.stopPropagation();readingBgToggleRnd(\'' + c.id + '\')"></span>';
                 var ops = '<button class="rdbg-op" title="这张是深色图吗？决定选它时切夜间还是白天" onclick="event.stopPropagation();readingBgToggleDark(\'' + c.id + '\')">' + (c.dark ? '🌙' : '☀️') + '</button>'
-                        + '<button class="rdbg-op" title="' + (_pair ? ('日夜搭档：' + (_pair.name || '未命名').replace(/"/g, '') + '（切日夜时自动换成它）') : '给它挑一张日夜搭档') + '" onclick="event.stopPropagation();readingBgPair(\'' + c.id + '\')">' + (_pair ? '🔗' : '⛓') + '</button>'
                         + '<button class="rdbg-op" title="改名字和地址" onclick="event.stopPropagation();readingBgEdit(\'' + c.id + '\')">✎</button>'
                         + '<button class="rdbg-op" title="删掉这张" onclick="event.stopPropagation();readingBgDelete(\'' + c.id + '\')">✕</button>';
                 h += row(c.id, esc, ops, _dot);
