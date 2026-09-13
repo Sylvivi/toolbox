@@ -23252,15 +23252,50 @@ body {
              ① 没开底图 / 开的是预置图 → 不管；
              ② 当前这张没标明暗、或没配对 → 不管（宁可不换也别猜）；
              ③ 当前这张的明暗**已经跟新模式一致** → 不用换（避免来回跳）。 */
+        /* 切日夜时把底图也换成明暗对得上的那张。
+           ⚠️2026-09-13 重写（她要「底图模式下夜间默认是船夜」）。原来只认**一对一配对**，
+             满足不了她：她有 5 张浅色图、只有 1 张深色图，一张夜图配不了五张日图；
+             而且随机档下压根不生效（readingBgFind('random') 找不到就直接 return）。
+           现在的规则，按优先级：
+             ① 先看这张自己配的「日夜搭档」——配了就照她的意思来；
+             ② 没配（或搭档已经被删了）→ **退回「随便找一张明暗对得上的」**。
+                她只有船夜一张深色图，所以效果就是「夜间一律船夜」。
+           ⚠️她那几条 pair 数据有指向已删图的（删底图时没清配对），所以 ② 这条兜底是必须的。
+           ⚠️随机档要先 resolve 成实际那张再判明暗，否则永远换不了。
+           ⚠️**切回白天要恢复原来那个档**（可能是 'random'）：只记 id 的话，
+             从随机档进夜间再回来，就变成钉死在某一张上了。 */
         function readingSwapBgForMode() {
-            var cur = readingGetBg();
-            if (cur === 'off' || RD_BG_INFO[cur]) return;
-            var c = readingBgFind(cur);
-            if (!c || c.dark == null || !c.pair) return;
+            var raw = readingGetBg();
+            if (raw === 'off' || RD_BG_INFO[raw]) return;
+
+            // 切回白天：优先恢复进夜间之前的那个档
+            if (!nightMode) {
+                var bak = localStorage.getItem('reading_bg_daybak');
+                if (bak) {
+                    localStorage.removeItem('reading_bg_daybak');
+                    localStorage.setItem('reading_bg', bak);
+                    if (bak === 'random') readingBgRoll();   // 回到随机档就重掷一张
+                    readingApplyBg();
+                    return;
+                }
+            }
+
+            var curId = readingBgResolve(raw);
+            var c = readingBgFind(curId);
+            if (!c || c.dark == null) return;
             if (!!c.dark === !!nightMode) return;       // 已经对得上
-            var other = readingBgFind(c.pair);
+
+            var other = c.pair ? readingBgFind(c.pair) : null;
+            if (other && other.dark != null && !!other.dark !== !!nightMode) other = null;  // 搭档也不对
+            if (!other) {
+                var fit = readingBgList().filter(function (x) {
+                    return x && x.dark != null && !!x.dark === !!nightMode;
+                });
+                other = fit[0] || null;
+            }
             if (!other) return;
-            if (other.dark != null && !!other.dark !== !!nightMode) return;  // 搭档也不对就别换
+
+            if (nightMode) localStorage.setItem('reading_bg_daybak', raw);   // 记住白天用的档
             localStorage.setItem('reading_bg', other.id);
             readingApplyBg();
         }
