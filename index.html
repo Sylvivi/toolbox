@@ -1834,7 +1834,10 @@ body {
 
         /* ===== 消息区 ===== */
         .chat-messages {
-            flex: 1; overflow-y: auto; padding: 20px 0 6px;
+            /* ⚠️底部留白＝输入框的真实高度（--chat-ih，由 ResizeObserver 现量，见 chatSyncInputH）。
+               2026-09-13 输入框改成悬浮之后，这个留白是**最后一条消息不被压住**的唯一保障。
+               打字变高、挂附件变高、阅读模式缩成一条——高度一直在变，所以只能量不能写死。 */
+            flex: 1; overflow-y: auto; padding: 20px 0 calc(6px + var(--chat-ih, 84px));
             -webkit-overflow-scrolling: touch;
             display: flex; flex-direction: column; gap: 0;
             scrollbar-width: thin; scrollbar-color: var(--card-border) transparent;
@@ -1974,12 +1977,9 @@ body {
                 backdrop-filter: none; -webkit-backdrop-filter: none;
                 background: rgba(255,255,255,0.1);
             }
-            .chat-input-box {
-                background: rgba(255,255,255,0.78);
-            }
-            .dark .chat-input-box {
-                background: rgba(255,255,255,0.12);
-            }
+            /* ⚠️2026-09-13：输入框改成毛玻璃之后，这两条被下面的玻璃配方整条压住了，
+               留着只会误导人以为移动端还是平底。真要回到"移动端不糊"，
+               改的是玻璃那块的 backdrop-filter，不是这里。 */
             .toast {
                 backdrop-filter: none; -webkit-backdrop-filter: none;
                 background: var(--accent);
@@ -2323,10 +2323,17 @@ body {
             font-size: 11px; color: var(--text-muted); white-space: nowrap; opacity: 0.6;
         }
 
-        /* ===== 输入区 — 一体化卡片 ===== */
+        /* ===== 输入区 — 悬浮玻璃条 =====
+           2026-09-13 她要的：「人家的输入框是一个独立的东西，字能从它背后穿过；
+           我的那个就像一个抽屉，会把字收进去」，点名要 Telegram 那种。
+           ⚠️改动就两处：① 这里从「流里的一格」变成**绝对定位浮在消息上面**
+           （定位基准是 .modal.chat-modal，它本身 position:fixed）；
+           ② .chat-messages 垫一段等高的底部留白（--chat-ih），否则最后一条永远被压着。
+           ⚠️别把它改回 flex-shrink:0 的流内元素——那就退回抽屉了。 */
         .chat-input-area {
             display: flex; flex-direction: column;
-            padding: 10px 14px; flex-shrink: 0;
+            position: absolute; left: 0; right: 0; bottom: 0; z-index: 12;
+            padding: 10px 14px;
             background: transparent;
             padding-bottom: max(10px, env(safe-area-inset-bottom));
             max-width: 768px; width: 100%; margin: 0 auto;
@@ -2596,17 +2603,54 @@ body {
             13px 2px 0 #555, 14px 2px 0 #555, 15px 2px 0 #555,
             12px 3px 0 #777, 13px 3px 0 #777, 14px 3px 0 #777, 15px 3px 0 #777, 16px 3px 0 #777;
         }
+        /* 玻璃输入框（2026-09-13）。视觉配方照她发来的那份《小克Cat 玻璃材质代码摘要》：
+           **半透明渐变底 + 内外两道描边高光（`0 0 0 1px` 外圈 + `inset 0 1px 0` 内圈）
+           + `blur() saturate()`**。⚠️saturate 取 116%~145%，不加会让透过玻璃看到的底色发灰。
+
+           ⚠️那份 PDF 还有一条「玻璃画在独立的 ::before 层、容器 isolation:isolate」，
+             **这里没照抄，是实测走不通**：
+               · `isolation: isolate` 会建立 backdrop root，`backdrop-filter` 的"背景"
+                 被限制在盒子内部（里面什么都没有）→ 玻璃一点都不糊；
+               · 换成 `position:relative; z-index:0` 想只兜住 z-index:-1 的玻璃层、
+                 不建 backdrop root——Chrome 里照样不糊（截图验过两轮）。
+             所以 blur 直接落在盒子上。PDF 那条的本意是躲一个 iOS 的坑
+             （真实内容和 backdrop-filter 共用合成层时，**键盘换帧期间光标会沿用旧坐标、漂移**），
+             ⚠️**如果哪天她在 iPad 上报「光标位置不对」，病根多半在这儿**，回来再想办法分层。
+
+           ⚠️`background` 写在盒子上必须压得住上面那条移动端「去掉 backdrop-filter」的
+             @media 里的 .chat-input-box 底色——靠的是**这条在源码里更靠后**。别把这块挪上去。
+           ⚠️`overflow: visible` 不能改：小螃蟹按钮是 top:-29px 探出盒子外面的。 */
         .chat-input-box {
             display: flex; flex-direction: column;
-            background: var(--card-bg); border: 1px solid var(--card-border);
             border-radius: 22px; padding: 12px 14px 8px;
-            box-shadow: 0 1px 6px rgba(0,0,0,0.04);
-            transition: border-color 0.3s, box-shadow 0.3s;
             position: relative; overflow: visible;
+            border: 1px solid rgba(255,255,255,0.46);
+            background: linear-gradient(180deg, rgba(255,255,255,0.80), rgba(255,255,255,0.62));
+            box-shadow: 0 0 0 1px rgba(255,255,255,0.75),
+                        0 8px 28px rgba(0,0,0,0.08),
+                        inset 0 1px 0 rgba(255,255,255,0.72);
+            backdrop-filter: blur(22px) saturate(132%);
+            -webkit-backdrop-filter: blur(22px) saturate(132%);
+            transition: border-color 0.3s, box-shadow 0.3s;
         }
         .chat-input-box:focus-within {
             border-color: var(--accent-mid);
-            box-shadow: 0 0 0 3px var(--accent-light), 0 1px 6px rgba(0,0,0,0.04);
+            box-shadow: 0 0 0 3px var(--accent-light),
+                        0 8px 28px rgba(0,0,0,0.08),
+                        inset 0 1px 0 rgba(255,255,255,0.72);
+        }
+        .dark .chat-input-box {
+            border-color: rgba(255,255,255,0.14);
+            background: linear-gradient(180deg, rgba(255,255,255,0.13), rgba(255,255,255,0.07));
+            box-shadow: 0 0 0 1px rgba(255,255,255,0.10),
+                        0 8px 28px rgba(0,0,0,0.28),
+                        inset 0 1px 0 rgba(255,255,255,0.12);
+        }
+        .dark .chat-input-box:focus-within {
+            border-color: var(--accent-mid);
+            box-shadow: 0 0 0 3px var(--accent-light),
+                        0 8px 28px rgba(0,0,0,0.28),
+                        inset 0 1px 0 rgba(255,255,255,0.12);
         }
         .chat-input-box textarea {
             width: 100%; min-height: 24px; max-height: 120px; padding: 0;
@@ -2640,10 +2684,19 @@ body {
             margin-left: auto; padding-right: 6px;
             display: none; position: relative; cursor: pointer;
         }
+        /* ⚠️2026-09-13 输入框悬浮之后，这行小字也浮在正文上了。
+           原来它底下是页面背景，现在底下是滚动的聊天内容 → 直接压上去会糊成一片。
+           给它一小截同款玻璃垫着（只包住文字本身，不做成整条横杠）。 */
         .chat-token-hint {
-            font-size: 10px; color: var(--text-muted); padding: 2px 14px;
-            display: none; line-height: 1; opacity: 0.7;
+            font-size: 10px; color: var(--text-muted); line-height: 1; opacity: 0.7;
+            display: none; align-self: flex-start;
+            /* ⚠️2026-09-13 输入框悬浮之后，这行小字底下不再是页面背景、而是滚动的正文。
+               直接压上去会糊成一片 → 自己带一小片淡底（只包住文字，不做成整条横杠）。
+               这里**故意不用 backdrop-filter**：10px 的一行字不值得再开一个合成层。 */
+            padding: 3px 8px; margin: 0 6px 2px; border-radius: 8px;
+            background: rgba(255,255,255,0.55);
         }
+        .dark .chat-token-hint { background: rgba(255,255,255,0.10); }
         /* 「资料」面板里那个常驻开关。⚠️它是**按钮里套不下的东西**——
            行本身是 <button>，HTML 不许 button 套 button，所以外面包一层相对定位的 div，
            开关绝对定位压在右边，行的 padding-right 给它让出位置。 */
@@ -3413,7 +3466,8 @@ body {
 
         /* ===== 回到底部按钮 ===== */
         .chat-scroll-bottom {
-            position: absolute; right: 16px; bottom: 12px; z-index: 15;
+            /* ⚠️跟着输入框抬：不加 --chat-ih 的话它会藏到悬浮输入框底下（2026-09-13） */
+            position: absolute; right: 16px; bottom: calc(12px + var(--chat-ih, 84px)); z-index: 15;
             width: 36px; height: 36px; border: none; border-radius: 50%;
             /* ⚠️2026-09-06 调轻（她：「那个向下到底的也是，比较塑料」）：
                原来是 card-bg 实底 + 1px 硬边框 + 一圈死黑投影，三样叠在一起像贴上去的塑料片。
@@ -4598,6 +4652,20 @@ body {
         .chat-img-preview-item {
             position: relative; width: 64px; height: 64px; border-radius: 10px;
             overflow: hidden; border: 1px solid var(--card-border);
+        }
+        /* 待发文件那张小卡片：跟输入框同一套玻璃。⚠️不能用半透明的 --card-inner——
+           输入框悬浮之后它底下是滚动的正文，字会透上来（2026-09-13 截图看出来的）。 */
+        .chat-file-chip {
+            background: linear-gradient(180deg, rgba(255,255,255,0.86), rgba(255,255,255,0.74));
+            border: 1px solid rgba(255,255,255,0.5);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            backdrop-filter: blur(18px) saturate(128%);
+            -webkit-backdrop-filter: blur(18px) saturate(128%);
+        }
+        .dark .chat-file-chip {
+            background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.08));
+            border-color: rgba(255,255,255,0.14);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
         }
         .chat-img-preview-item img { width: 100%; height: 100%; object-fit: cover; }
         .chat-img-preview-item .img-remove {
@@ -21196,7 +21264,10 @@ body {
                     var sizeStr = f.size < 1024 ? f.size + 'B' : (f.size / 1024).toFixed(1) + 'KB';
                     var wrap = document.createElement('div');
                     wrap.className = 'chat-img-preview-item';
-                    wrap.style.cssText = 'width:auto;height:auto;min-width:80px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;background:var(--card-inner);border-radius:10px;position:relative';
+                    /* ⚠️底色交给 CSS 的 .chat-file-chip（2026-09-13）：输入框悬浮之后，
+                       卡片底下是滚动的正文，原来那个半透明的 --card-inner 会把字透出来、糊成一片。 */
+                    wrap.classList.add('chat-file-chip');
+                    wrap.style.cssText = 'width:auto;height:auto;min-width:80px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;border-radius:10px;position:relative';
                     /* 「常驻」（2026-09-13 她要的）：点一下，这份就从「这条消息的附件」
                        变成「这个对话一直带着」。⚠️是**挪走**不是复制——留在待发区的话
                        这一轮会发两遍（附件一遍、常驻一遍）。 */
@@ -21209,6 +21280,29 @@ body {
             }
             if (chatSelectedModel) document.getElementById('chatSendBtn').disabled = false;
         }
+
+        /* 输入框的真实高度 → --chat-ih（2026-09-13 悬浮化之后的配套）。
+           消息区的底部留白和「回到底部」小圆钮都读它。
+           ⚠️**只能量不能写死**：打字会变高、挂附件会变高、阅读模式缩成一条、
+             安全区还会再加一截。写死的后果是「最后一条被压住」或者「底下空一大块」。
+           ⚠️ResizeObserver 挂在 #chatInputArea 上，附件/常驻/折叠都会自然触发，
+             不需要在每个改高度的地方手动调一遍（那种写法必漏）。 */
+        function chatSyncInputH() {
+            var el = document.getElementById('chatInputArea');
+            if (!el) return;
+            var h = el.offsetHeight;
+            if (h > 0) document.documentElement.style.setProperty('--chat-ih', h + 'px');
+        }
+        (function () {
+            var el = document.getElementById('chatInputArea');
+            if (!el) return;
+            chatSyncInputH();
+            if (typeof ResizeObserver === 'function') {
+                new ResizeObserver(chatSyncInputH).observe(el);
+            } else {
+                window.addEventListener('resize', chatSyncInputH);   // 老浏览器兜底
+            }
+        })();
 
         function chatRemoveImg(idx) {
             chatPendingImages.splice(idx, 1);

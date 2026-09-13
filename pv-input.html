@@ -1,0 +1,151 @@
+<!doctype html><html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>输入框三档对比</title>
+<style>
+:root{
+  --bg1:#f3f6f8; --bg2:#f7f1f3; --text:#2c3338; --sub:#79838c;
+  --card:#ffffff; --border:rgba(0,0,0,.07); --accent:#5b7fa6;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  font:14px/1.75 -apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK SC",sans-serif;
+  color:var(--text);
+  background:linear-gradient(160deg,var(--bg1),var(--bg2));
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{position:relative;height:100%;display:flex;flex-direction:column;overflow:hidden}
+
+/* 顶上的切换条 */
+.bar{
+  flex-shrink:0;display:flex;gap:6px;padding:10px 12px;
+  background:rgba(255,255,255,.55);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--border);z-index:30;
+}
+.bar button{
+  flex:1;font:inherit;font-size:12px;padding:7px 4px;border-radius:9px;
+  border:1px solid var(--border);background:var(--card);color:var(--sub);
+  -webkit-tap-highlight-color:transparent;cursor:pointer;
+}
+.bar button.on{color:var(--accent);border-color:var(--accent);font-weight:600}
+
+/* 消息区 */
+.msgs{flex:1;overflow-y:auto;padding:16px 16px 8px;-webkit-overflow-scrolling:touch}
+.msgs::-webkit-scrollbar{display:none}
+.m{margin-bottom:18px}
+.m.u{text-align:right;color:var(--accent)}
+.m .t{font-size:10px;color:var(--sub);opacity:.6;display:block;margin-bottom:2px}
+
+/* 输入区：默认＝现在这样（抽屉） */
+.inp{flex-shrink:0;padding:10px 14px;padding-bottom:max(10px,env(safe-area-inset-bottom));}
+.box{
+  background:var(--card);border:1px solid var(--border);border-radius:22px;
+  padding:12px 14px 8px;box-shadow:0 1px 6px rgba(0,0,0,.04);
+}
+.box .ph{color:var(--sub);opacity:.8}
+.box .tools{display:flex;align-items:center;gap:10px;margin-top:8px;color:var(--accent);font-size:18px}
+.box .tools .sp{flex:1}
+
+/* ===== 档 B / C：浮起来 ===== */
+body.float .inp{
+  position:absolute;left:0;right:0;bottom:0;
+  max-width:768px;margin:0 auto;z-index:20;
+  background:transparent;
+}
+body.float .msgs{padding-bottom:var(--ih,96px)}
+
+/* 档 B：照她发来的那份「小克Cat 玻璃材质摘要」的写法做。
+   ⚠️三个要点，一个都不能省：
+     ① 玻璃画在独立的 ::before 背景层上，**不直接加在装着 textarea 的那层**。
+        容器 isolation:isolate 另开合成层——真实内容和 backdrop-filter 共用合成层时，
+        iOS 在键盘换帧期间光标会沿用旧坐标、漂移。这是人家踩过的真坑。
+     ② 视觉是三件套：半透明**渐变**底 + 内外两道描边高光 + blur() saturate()。
+     ③ saturate 116%~145%，不加的话透过玻璃看到的底色会发灰。 */
+body.b .box{
+  background:transparent;border-color:transparent;box-shadow:none;
+  position:relative;isolation:isolate;
+}
+body.b .box::before{
+  content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;
+  border:1px solid rgba(255,255,255,.46);
+  background:linear-gradient(180deg,rgba(255,255,255,.86),rgba(255,255,255,.72));
+  box-shadow:0 0 0 1px rgba(255,255,255,.80),
+             0 8px 28px rgba(0,0,0,.08),
+             inset 0 1px 0 rgba(255,255,255,.72);
+  backdrop-filter:blur(16px) saturate(132%);
+  -webkit-backdrop-filter:blur(16px) saturate(132%);
+}
+body.c .box{
+  background:rgba(255,255,255,.72);
+}
+
+.tip{
+  position:absolute;left:0;right:0;bottom:calc(var(--ih,96px) + 4px);
+  text-align:center;font-size:10px;color:var(--sub);opacity:.65;z-index:19;pointer-events:none;
+}
+</style></head><body class="a">
+<div class="wrap">
+  <div class="bar">
+    <button data-v="a" class="on">现在这样</button>
+    <button data-v="b">毛玻璃</button>
+    <button data-v="c">半透明</button>
+  </div>
+  <div class="msgs" id="msgs"></div>
+  <div class="tip" id="tip"></div>
+  <div class="inp" id="inp">
+    <div class="box">
+      <div class="ph">输入消息…</div>
+      <div class="tools"><span>＋</span><span class="sp"></span><span>↑</span></div>
+    </div>
+  </div>
+</div>
+<script>
+var LINES = [
+ ['ai','第一季一共五集，最后一集叫 The Stock Tip。'],
+ ['u','那第二季呢'],
+ ['ai','第二季十二集。The Ex-Girlfriend、The Pony Remark、The Jacket、The Phone Message、The Apartment、The Statue、The Revenge、The Heart Attack、The Deal、The Baby Shower、The Chinese Restaurant、The Busboy。'],
+ ['u','The Chinese Restaurant 我记得'],
+ ['ai','那集全程就在餐厅门口等位，一个场景演到底，没有任何场景切换——这在当时的情景喜剧里是很反常的做法。'],
+ ['u','难怪印象深'],
+ ['ai','第三季二十三集，是它开始放开手脚的一季。'],
+ ['u','你把标题念一遍我对一下'],
+ ['ai','The Note、The Truth、The Pen、The Dog、The Library、The Parking Garage、The Cafe、The Tape、The Nose Job、The Stranded、The Alternate Side、The Red Dot、The Subway、The Pez Dispenser、The Suicide、The Fix-Up、The Boyfriend（上下）、The Limo、The Good Samaritan、The Letter、The Parking Space、The Keys。'],
+ ['u','The Parking Garage 和 The Parking Space 是两集？'],
+ ['ai','是两集，隔了一整季。前一集是在停车场里找不到车，后一集是停车位争夺战。'],
+ ['u','好，往下滑试试这个输入框'],
+ ['ai','往上滑也可以——你看字是从框背后过去，还是走到框跟前就没了。这就是这次要改的东西。'],
+ ['u','明白了'],
+ ['ai','三个档随时点上面切换，同一段字可以来回比。'],
+];
+var box = document.getElementById('msgs'), h='';
+for (var r=0;r<3;r++) LINES.forEach(function(x){
+  h += '<div class="m '+(x[0]==='u'?'u':'')+'">'+x[1]+'</div>';
+});
+box.innerHTML = h;
+box.scrollTop = box.scrollHeight;
+
+var inp = document.getElementById('inp'), tip = document.getElementById('tip');
+function sync(){
+  document.documentElement.style.setProperty('--ih', inp.offsetHeight + 'px');
+}
+sync(); addEventListener('resize', sync);
+
+var TIPS = {
+  a:'现在这样：输入框占一格，字走到这儿就停住了',
+  b:'毛玻璃：字从背后过去、糊成一片（照你发的那份 PDF 的写法做的）',
+  c:'半透明：字从背后过去、能看见轮廓（不糊，基本不额外耗电）'
+};
+document.querySelectorAll('.bar button').forEach(function(b){
+  b.onclick = function(){
+    document.querySelectorAll('.bar button').forEach(function(x){x.classList.remove('on')});
+    b.classList.add('on');
+    var v = b.dataset.v;
+    document.body.className = v + (v==='a' ? '' : ' float');
+    tip.textContent = TIPS[v];
+    sync();
+    box.scrollTop = box.scrollHeight;
+  };
+});
+tip.textContent = TIPS.a;
+</script></body></html>
