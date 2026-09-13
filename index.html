@@ -3266,6 +3266,15 @@ body {
             font-size: 15px; line-height: 1; padding: 5px 4px; cursor: pointer; border-radius: 7px;
             opacity: 0.55; transition: opacity 0.15s, color 0.15s; -webkit-tap-highlight-color: transparent; }
         .rb-head-icon:hover, .rb-head-icon.on { opacity: 1; color: var(--accent); }
+        /* 目录顶上的「摘要 / 读痕」：照 .rb-head-back 那套无边框文字按钮，
+           不做实心色块、不加药丸标签（她的一贯口味）。间距用 em 跟着字号走。 */
+        .rb-head-links { display: flex; gap: 1.2em; margin: 0 0 0.65em; }
+        .rb-head-links button {
+            border: none; background: transparent; color: var(--accent);
+            font-size: 13px; padding: 0.15em 0; cursor: pointer; white-space: nowrap;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .rb-head-links button:active { opacity: 0.6; }
         .rb-search-full { display: block; width: 100%; box-sizing: border-box; }
         .rb-split-tools { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
         .rb-split-tools .rb-select { flex: 1; min-width: 0; }
@@ -3491,6 +3500,17 @@ body {
             border-top-color: rgba(255,255,255,0.14);
         }
         .dark .chat-settings-modal { box-shadow: 0 -8px 40px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.12); }
+        /* ⚠️2026-09-14 她报的：「夜间模式换了玻璃之后，有些字体的颜色太暗了，几乎看不清，
+             只有那些被选中的才能看清」。实测（headless 量对比度，能看清的底线是 4.5）：
+               · `--text-muted` 夜间是 #63636c，对比度只有 **3.22** —— 字数、段号都用它；
+               · 齿轮 `.rb-head-icon` 在这个色上还叠了 `opacity:.55`，等效对比度 **1.78**，基本隐形；
+               · 「被选中的」用的是 `--accent`（11.7），所以只有它看得清 —— 跟她的描述完全对上。
+           ⚠️病根不是玻璃把字压暗了，是**玻璃夜间只有 13%→7% 浓度、近乎全透**，
+             底下正文透上来变成花背景，本来就贴着及格线的灰字直接糊掉了。
+           ⚠️**只在这两个玻璃面板里抬**，不动全局 `--text-muted`——她的规矩是「哪处不好看只改哪处」。 */
+        .dark .chat-settings-modal, .dark .chat-action-sheet { --text-muted: #8b8b95; }   /* 3.22 → 5.67 */
+        .dark .chat-settings-modal .rb-head-icon,
+        .dark .chat-action-sheet .rb-head-icon { opacity: 0.8; }                          /* 1.78 → 4.02 */
         .dark .chat-action-sheet   { box-shadow: 0 -8px 32px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.12); }
         /* 底部弹出面板收起时(滑出屏幕外)不要让向上的投影漏到页面底边形成暗带 */
         .chat-action-sheet:not(.show), .chat-settings-modal:not(.show) { box-shadow: none; }
@@ -6401,7 +6421,10 @@ body {
                         <!-- 2026-08-23 她要求把「跳转」「目录」挪到「读痕」前面 -->
                         <button onclick="clawdMenuAct('nav')">🧭 跳转</button>
                         <button id="clawdShelfBtn" onclick="clawdMenuAct('shelf')">📚 目录</button>
-                        <button onclick="clawdMenuAct('summary')">📋 摘要</button>
+                        <!-- 2026-09-14：这两个的主入口已挪到**目录窗口顶上**（见 .rb-head-links）。
+                             ⚠️但这里**不能整个删掉**——她当场提醒「对话模式下不要变动哦，因为那里没有目录」。
+                               所以改成按场景显隐，判据在 clawdToggleMenu 里，跟「📚 目录」是同一条、反着用。 -->
+                        <button id="clawdSummaryBtn" onclick="clawdMenuAct('summary')">📋 摘要</button>
                         <button id="clawdBookmarkBtn" onclick="clawdMenuAct('bookmark')">🔖 读痕</button>
                         <button onclick="clawdMenuAct('usage')">💰 用量</button>
                         <!-- 常驻资料（2026-09-13）。⚠️她原本要的是输入框上方一条横条，
@@ -6497,6 +6520,16 @@ body {
                     <!-- 2026-08-14：⚙ emoji → 线条齿轮。svg 要 display:block，否则按行内元素排会带一截基线空隙、看着偏下。
                          ⚠️别自作聪明画「圆心+8根放射线」的简化齿轮——那个渲染出来是个太阳，试过了。用标准齿轮轮廓。 -->
                     <button class="rb-head-icon" id="rbSplitToggle" onclick="rbToggleSplitTools()" title="分章设置（导书时才用）"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
+                </div>
+                <!-- 2026-09-14 她要的：「把摘要和读痕这两个入口放到目录窗口的上方，符合我的使用习惯」，
+                     并且**从小螃蟹菜单里去掉**（她当场追加的第二句）。
+                     ⚠️放在书名行和搜索框之间，不进 .rb-head-row——那一行已经有
+                       返回/书名/发下一章/齿轮四件，手机上再塞会把书名挤没。
+                     ⚠️点了要先关目录再开面板：这两个面板都是自己 new 一层 mask 浮上来的，
+                       不关的话目录还铺在底下，返回手势和滚动会打架。 -->
+                <div class="rb-head-links">
+                    <button onclick="rbHeadAct('summary')">📋 摘要</button>
+                    <button onclick="rbHeadAct('bookmark')">🔖 读痕</button>
                 </div>
                 <input type="text" id="rbChapterSearch" class="rb-search rb-search-full" placeholder="搜索章节 / 小节…" oninput="rbChapterSearchInput()">
                 <!-- 分章工具：一本书导进来时才用一次，平时收起来不占地方 -->
@@ -21400,6 +21433,30 @@ body {
             if (e) e.stopPropagation();
             clawdToggleMenu();
         }
+        /* 小螃蟹菜单里「按场景显隐」的那几个按钮，统一在这儿算。
+           ⚠️**两个地方都要调**：开菜单那一刻（状态最新）、以及 readingSyncAutoScrollUI
+             切模式那一刻（菜单还没开过时状态也得是对的——2026-09-14 clawdmenu 那条测试
+             就是这么抓出来的：只在开菜单时算，没开过的时候按钮状态是错的）。 */
+        function clawdSyncMenuBtns() {
+            var inBook = (typeof chatReadingMode !== 'undefined' && chatReadingMode);
+            /* 「📚 目录」只在读书时有意义，纯对话没书可翻（2026-09-10 她要的）。
+               ⚠️这里**故意用 chatReadingMode**（阅读和共读都为真），
+                 跟「重答」那条用 chatReaderMode 不是笔误：共读也是在读书、照样要翻目录。 */
+            var shb = document.getElementById('clawdShelfBtn');
+            if (shb) shb.style.display = inBook ? '' : 'none';
+            /* 「📋 摘要」「🔖 读痕」跟「📚 目录」**互斥**（2026-09-14 她要的）：
+               主入口搬到了目录窗口顶上（.rb-head-links），所以**有目录可开时这里就不重复出现**；
+               而对话/翻译模式没有目录（她当场提醒「对话模式下不要变动哦，因为那里没有目录呢」），
+               这里必须留着。
+               ⚠️读痕**在对话模式下本来就是藏的**（判据原先在 readingSyncAutoScrollUI 里），
+                 搬过来时这个行为要原样保留，别顺手放开——净效果是它只在翻译模式露面。 */
+            var sub = document.getElementById('clawdSummaryBtn');
+            if (sub) sub.style.display = inBook ? 'none' : '';
+            var bmb = document.getElementById('clawdBookmarkBtn');
+            var pureChat = !inBook && !(typeof chatTranslateMode !== 'undefined' && chatTranslateMode);
+            if (bmb) bmb.style.display = (inBook || pureChat) ? 'none' : '';
+        }
+
         function clawdToggleMenu() {
             var m = document.getElementById('clawdReadingMenu');
             if (!m) return;
@@ -21413,11 +21470,7 @@ body {
                  那个函数只在模式切换时跑，菜单打开时状态未必刷新过。 */
             var rb = document.getElementById('clawdRegenBtn');
             if (rb) rb.style.display = (typeof chatReaderMode !== 'undefined' && chatReaderMode) ? 'none' : '';
-            /* 「📚 目录」反过来：只在读书时有意义，纯对话没书可翻（2026-09-10 她要的）。
-               ⚠️这里**故意用 chatReadingMode**（阅读和共读都为真），跟上面那条不是笔误：
-                 共读也是在读一本书、照样要翻目录，只有纯对话才藏。 */
-            var shb = document.getElementById('clawdShelfBtn');
-            if (shb) shb.style.display = (typeof chatReadingMode !== 'undefined' && chatReadingMode) ? '' : 'none';
+            clawdSyncMenuBtns();   // 目录 / 摘要 / 读痕 三个按场景显隐，判据见该函数
             // 「📎 常驻」：钉了东西才露面，顺手把份数写上（见 chatRenderPinBar）
             if (typeof chatRenderPinBar === 'function') chatRenderPinBar();
             m.classList.toggle('show');
@@ -23390,9 +23443,9 @@ body {
             //   tg 那边已经完全打通了」）。两个「🎨 生图」按钮和预设里的模型/尺寸都撤了，
             //   但 genImageOpenDialog / genImageDialogRun 那套函数**故意留着**，
             //   想回来只要把按钮加回去 + 恢复预设里那两个下拉。
-            // 「读痕」反过来：对话模式里去掉，共读/翻译/阅读都留着
-            var clawdBmBtn = document.getElementById('clawdBookmarkBtn');
-            if (clawdBmBtn) clawdBmBtn.style.display = usageShow ? 'none' : '';
+            // 「读痕」原来在这儿单独算。2026-09-14 判据并进 clawdSyncMenuBtns()，
+            // 跟「目录」「摘要」三条放在一起好对照——切模式和开菜单两个时机都调它。
+            clawdSyncMenuBtns();
             /* 「下一章」**只留给共读模式**（2026-08-10 用户分两次要求收窄）：
                · 对话模式——没有书可接；
                · 阅读模式（纯看书）——滚到底会自动续章（readerAppendNextChapter），
@@ -26037,6 +26090,17 @@ body {
             document.getElementById('rbBg').classList.add('show');
             document.getElementById('rbModal').classList.add('show');
         }
+        /* 目录窗口顶上的「摘要 / 读痕」。2026-09-14 从小螃蟹菜单搬过来的。
+           ⚠️必须**先关目录**：这两个面板各自 new 一层 mask 浮上来，目录还开着的话
+             两层弹窗叠着，返回手势和滚动都会打架。
+           ⚠️动作本身复用 clawdMenuAct 的同一条路（摘要要分阅读/对话两种），
+             别在这儿另写一份，否则以后改一处漏一处。 */
+        function rbHeadAct(what) {
+            rbCloseShelf();
+            if (what === 'summary') { if (chatReaderMode) readerShowSummaryModal(); else chatShowSummaryModal(); return; }
+            if (what === 'bookmark') { rdTraceShowPanel(); return; }
+        }
+
         function rbCloseShelf() {
             document.getElementById('rbBg').classList.remove('show');
             document.getElementById('rbModal').classList.remove('show');

@@ -50,9 +50,20 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         set(false, false, false);
         out.对话_有用量 = shown('chatUsageBtn');
         out.对话_没读痕 = !shown('clawdBookmarkBtn');
+        // ⚠️2026-09-14 起「读痕/摘要」的主入口搬到了**目录窗口顶上**（.rb-head-links），
+        //   小螃蟹菜单里跟「📚 目录」互斥：有目录可开的场景就不重复出现。
+        //   净效果——读痕只在**翻译模式**露面；对话模式照旧藏着（她点名不许动对话模式）。
         set(true, false, true);
-        out.阅读_有读痕 = shown('clawdBookmarkBtn');
+        out.阅读_没读痕 = !shown('clawdBookmarkBtn');
         out.阅读_没用量 = !shown('chatUsageBtn');
+        out.阅读_有目录 = shown('clawdShelfBtn');
+        out.阅读_没摘要 = !shown('clawdSummaryBtn');
+        set(false, true, false);
+        out.翻译_有读痕 = shown('clawdBookmarkBtn');
+        out.翻译_有摘要 = shown('clawdSummaryBtn');
+        set(false, false, false);
+        out.对话_有摘要 = shown('clawdSummaryBtn');
+        out.对话_没目录 = !shown('clawdShelfBtn');
 
         // 兜底那道闸还在（就算按钮被谁弄出来了，点下去也不会真去接下一章）
         out.兜底闸还在 = clawdNextChapter.toString().indexOf('chatReaderMode') > 0;
@@ -66,7 +77,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('翻译模式：没有「下一章」', R.翻译_没有下一章);
     ok('对话模式：没有「下一章」', R.对话_没有下一章);
     ok('对话模式：有「用量」、没「读痕」', R.对话_有用量 && R.对话_没读痕);
-    ok('阅读模式：有「读痕」、没「用量」', R.阅读_有读痕 && R.阅读_没用量);
+    ok('阅读模式：没「用量」，读痕和摘要都让位给目录', R.阅读_没用量 && R.阅读_没读痕 && R.阅读_没摘要 && R.阅读_有目录);
+    ok('翻译模式：没目录，所以读痕和摘要都留在菜单里', R.翻译_有读痕 && R.翻译_有摘要);
+    ok('对话模式：没目录，摘要留着（她点名不许动对话模式）', R.对话_有摘要 && R.对话_没目录);
     ok('clawdNextChapter 里的兜底闸还在', R.兜底闸还在);
     ok('无 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
 
