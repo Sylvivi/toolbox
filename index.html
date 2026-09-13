@@ -14961,7 +14961,10 @@ body {
                 });
                 h += '</div>';
             }
-            h += '<div id="snipPickList"></div>';
+            /* ⚠️滚动条挂在**这个不重建的容器**上（2026-09-13 修）：
+               原来滚动 div 写在列表内部、每次重渲跟着重建，scrollTop 当场归零——
+               她点一下展开，列表就跳回顶部、得重新找位置（她：「有点反人类常识」）。 */
+            h += '<div id="snipPickList" style="max-height:52vh;overflow-y:auto;-webkit-overflow-scrolling:touch"></div>';
             sh.innerHTML = h;
             chatSnipPickerRenderList();
         }
@@ -15002,7 +15005,7 @@ body {
                    + (q ? ('没搜到「' + esc(q) + '」') : '这里还没有东西。去「收藏」那一页存几条，就能在这儿点出来了。')
                    + '</div>';
             } else {
-                h += '<div style="max-height:52vh;overflow-y:auto;-webkit-overflow-scrolling:touch">';
+                h += '<div>';
                 list.forEach(function (x) {
                     /* ⚠️2026-09-13 修：收藏里有三种 type，**collection 的正文不在 code 里、在 items 里**
                        （她有 48 条是这种，「一个卡片下面有很多条目」）。第一版只读 code，
@@ -15017,7 +15020,7 @@ body {
                              会以为没搜着。 */
                         var _open = !!_snipPickOpen[x.id] || !!q;
                         var tot = items.reduce(function (a, it) { return a + ((it && it.content || '').length); }, 0);
-                        h += '<button class="chat-action-item" onclick="chatSnipPickToggle(' + JSON.stringify(x.id).replace(/"/g, '&quot;') + ')"'
+                        h += '<button class="chat-action-item" data-snipgrp="' + esc(x.id) + '" onclick="chatSnipPickToggle(' + JSON.stringify(x.id).replace(/"/g, '&quot;') + ')"'
                            + ' style="display:flex;align-items:baseline;gap:8px;font-weight:600">'
                            + '<span style="flex-shrink:0;font-size:10px;color:var(--text-muted);display:inline-block;width:10px">' + (_open ? '▾' : '▸') + '</span>'
                            + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
@@ -15048,9 +15051,26 @@ body {
             box.innerHTML = h;
         }
 
+        /* 展开/收起时**让被点的那一行待在原地**（2026-09-13 她报的）。
+           做法：记下它当前在屏幕上的 y，重渲后再量一次，差多少就把滚动条补多少。
+           ⚠️只恢复 scrollTop 是不够的——展开会把下面的内容顶下去，
+             行本身的位置照样会变，必须按「这一行」对齐，不是按滚动量对齐。 */
         function chatSnipPickToggle(id) {
+            var box = document.getElementById('snipPickList');
+            var before = null;
+            if (box) {
+                var el = box.querySelector('[data-snipgrp="' + id + '"]');
+                if (el) before = el.getBoundingClientRect().top;
+            }
             _snipPickOpen[id] = !_snipPickOpen[id];
             chatSnipPickerRenderList();
+            if (box && before != null) {
+                var el2 = box.querySelector('[data-snipgrp="' + id + '"]');
+                if (el2) {
+                    var after = el2.getBoundingClientRect().top;
+                    box.scrollTop += (after - before);
+                }
+            }
         }
 
         function chatInsertSnip(id, subId) {
