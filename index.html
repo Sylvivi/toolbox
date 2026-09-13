@@ -3189,9 +3189,15 @@ body {
         .chat-settings-bg.show { opacity: 1; pointer-events: auto; }
         .chat-settings-modal {
             position: fixed; bottom: 0; left: 0; right: 0; z-index: 997;
-            background: transparent; backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
-            border-radius: 20px 20px 0 0; border-top: 1px solid var(--card-border);
-            box-shadow: 0 -8px 40px rgba(0,0,0,0.12);
+            /* 玻璃：跟对话输入框同一套配方（2026-09-13 她要的：「学一下刚刚那个玻璃的写法，
+               我觉得比那个要高级」）。⚠️原来是 `background: transparent` + `blur(28px)`——
+               纯雾、没有玻璃身子。高级感来自**渐变底 + 内外两道高光 + saturate**这三件套，
+               不是来自模糊值。⚠️只搬到「从小螃蟹弹出来的这两类面板」，别的窗不碰。 */
+            background: linear-gradient(180deg, rgba(255,255,255,0.86), rgba(255,255,255,0.74));
+            backdrop-filter: blur(6px) saturate(132%);
+            -webkit-backdrop-filter: blur(6px) saturate(132%);
+            border-radius: 20px 20px 0 0; border-top: 1px solid rgba(255,255,255,0.55);
+            box-shadow: 0 -8px 40px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.72);
             transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
             max-height: 70vh; display: flex; flex-direction: column;
             padding-bottom: max(16px, env(safe-area-inset-bottom));
@@ -3436,14 +3442,27 @@ body {
 
         .chat-action-sheet {
             position: fixed; bottom: 0; left: 0; right: 0; z-index: 999;
-            background: transparent; backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
-            border-top: 1px solid var(--card-border); border-radius: 18px 18px 0 0;
-            box-shadow: 0 -8px 32px rgba(0,0,0,0.1);
+            /* 玻璃：跟对话输入框同一套配方（2026-09-13 她要的：「学一下刚刚那个玻璃的写法，
+               我觉得比那个要高级」）。⚠️原来是 `background: transparent` + `blur(28px)`——
+               纯雾、没有玻璃身子。高级感来自**渐变底 + 内外两道高光 + saturate**这三件套，
+               不是来自模糊值。⚠️只搬到「从小螃蟹弹出来的这两类面板」，别的窗不碰。 */
+            background: linear-gradient(180deg, rgba(255,255,255,0.86), rgba(255,255,255,0.74));
+            backdrop-filter: blur(6px) saturate(132%);
+            -webkit-backdrop-filter: blur(6px) saturate(132%);
+            border-top: 1px solid rgba(255,255,255,0.55); border-radius: 18px 18px 0 0;
+            box-shadow: 0 -8px 32px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.72);
             transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
             padding-bottom: max(16px, env(safe-area-inset-bottom));
             max-height: 70vh; display: flex; flex-direction: column;
         }
         .chat-action-sheet.show { transform: translateY(0); }
+        /* 夜间：同样照输入框那套（深色半透明 + 淡高光），别退回实心深灰。 */
+        .dark .chat-settings-modal, .dark .chat-action-sheet {
+            background: linear-gradient(180deg, rgba(255,255,255,0.13), rgba(255,255,255,0.07));
+            border-top-color: rgba(255,255,255,0.14);
+        }
+        .dark .chat-settings-modal { box-shadow: 0 -8px 40px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.12); }
+        .dark .chat-action-sheet   { box-shadow: 0 -8px 32px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.12); }
         /* 底部弹出面板收起时(滑出屏幕外)不要让向上的投影漏到页面底边形成暗带 */
         .chat-action-sheet:not(.show), .chat-settings-modal:not(.show) { box-shadow: none; }
         .chat-action-sheet-bg {
