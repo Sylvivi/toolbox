@@ -29330,9 +29330,30 @@ body {
              （她原话：「底下那块是被挡住的，我其实没看到，点翻页之后那个字就翻上去了」）。
            所以翻页的"屏底/一屏高"一律要减掉这一截。 */
         function readingBottomInset() {
-            var v = getComputedStyle(document.documentElement).getPropertyValue('--chat-ih');
-            var n = parseFloat(v);
-            return (isFinite(n) && n > 0) ? n : 0;
+            var el = document.getElementById('chatMessages');
+            var box = document.querySelector('#chatInputArea .chat-input-box');
+            var h = 0;
+            if (el && box) {
+                var er = el.getBoundingClientRect(), br = box.getBoundingClientRect();
+                /* ⚠️量的是**玻璃盒子**的上沿，不是整个 #chatInputArea：
+                   输入区上面还有 10px 纯透明的内边距，那一截的字是完全看得见的，
+                   一起减掉就会多留一行。 */
+                h = er.bottom - br.top;
+            }
+            if (!(h > 0)) {
+                var v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--chat-ih'));
+                h = isFinite(v) ? v : 0;
+            }
+            /* ⚠️再少减一行（2026-09-13 她第二次报的：「放在顶端的那行不符合我的预期，
+               感觉多留了」）。原因是玻璃只有 6px 模糊——**压在条子上沿的那一行她看得清**。
+               把它也算成"没看见"，翻完它就会重新出现在顶上，读起来像重复了一行多。
+               所以口径是：**顶上那行＝翻页前被条子压住一半的那行**，往下正好接上。 */
+            var lh = 0;
+            var p0 = el && el.querySelector('.reading-merged p[data-p]');
+            if (p0) lh = parseFloat(getComputedStyle(p0).lineHeight);
+            if (!isFinite(lh) || lh <= 0) lh = 28;
+            h -= lh;
+            return h > 0 ? h : 0;
         }
 
         function readingPageDown() {
