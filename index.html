@@ -2644,6 +2644,18 @@ body {
             font-size: 10px; color: var(--text-muted); padding: 2px 14px;
             display: none; line-height: 1; opacity: 0.7;
         }
+        /* 「资料」面板里那个常驻开关。⚠️它是**按钮里套不下的东西**——
+           行本身是 <button>，HTML 不许 button 套 button，所以外面包一层相对定位的 div，
+           开关绝对定位压在右边，行的 padding-right 给它让出位置。 */
+        .snip-row-wrap { position: relative; }
+        .snip-pin-tog {
+            position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+            font-size: 10px; line-height: 1.6; padding: 1px 7px; border-radius: 6px;
+            color: var(--text-muted); background: var(--card-inner); cursor: pointer;
+            -webkit-tap-highlight-color: transparent; user-select: none;
+        }
+        .snip-pin-tog.on { color: var(--accent); }
+        .snip-row-wrap > .chat-action-item { padding-right: 58px; }
         /* 2026-08-16：这行小字从「只读标签」变成「可点的切模型入口」。
            她原话：「我希望那个地方可以点击，然后切换收藏模型，这样我就不需要点clawd图标去设置里切换了」。
            ⚠️`pointer-events: none` 必须去掉——原来是它挡着点不到的。 */
@@ -6268,6 +6280,10 @@ body {
                         <button onclick="clawdMenuAct('summary')">📋 摘要</button>
                         <button id="clawdBookmarkBtn" onclick="clawdMenuAct('bookmark')">🔖 读痕</button>
                         <button onclick="clawdMenuAct('usage')">💰 用量</button>
+                        <!-- 常驻资料（2026-09-13）。⚠️她原本要的是输入框上方一条横条，
+                             当天就改主意了：「不要在输入框上面，最好是在小螃蟹菜单里面有个入口」。
+                             ⚠️**没钉东西时整条不露面**（照她一贯的规矩：没事干的按钮别占地方）。 -->
+                        <button id="clawdPinBtn" onclick="clawdMenuAct('pins')">📎 常驻</button>
                         
                         <!-- 2026-09-10 她要的：常用「重新生成」，原来得先用下面那个开关把
                              消息按钮显示出来、点完再关掉，来回折腾。这里直接一步到位。
@@ -14398,6 +14414,7 @@ body {
                     list[i].spPresetIdx = chatActivePresetIdx;
                     list[i].readingMode = chatReadingMode || false;
                     list[i].translateMode = chatTranslateMode || false;
+                    list[i].pinnedDocs = chatPinnedDocs.length ? chatPinnedDocs.slice() : [];
                     // 只在「内容真的变了」或强制标脏（如追加评论）时更新时间。
                     // ⚠️判据不能只看消息条数（2026-09-05 修）：「重新生成 / 重roll / 编辑后重发」这几条路
                     // 都是先把最后一条 AI 回复删掉、再补一条新的，条数一进一出正好回到原样。只看条数
@@ -14443,6 +14460,7 @@ body {
                     spPresetIdx: chatActivePresetIdx,
                     readingMode: chatReadingMode || false,
                     translateMode: chatTranslateMode || false,
+                    pinnedDocs: chatPinnedDocs.length ? chatPinnedDocs.slice() : [],
                     messages: chatMessages.slice(),
                     created: Date.now(),
                     updated: Date.now(),
@@ -14893,6 +14911,20 @@ body {
         var _snipPickOpen = {};   // 卡片 id → 是否展开子条目（2026-09-13 她要默认折叠）
         function _snipSize(n) { return n < 1000 ? (n + ' 字') : ((n / 1000).toFixed(1) + 'K 字'); }
 
+        /* 每行右边那个「常驻」开关（2026-09-13）。
+           ⚠️行本身是 <button>，HTML 不许 button 里套 button——所以外面包一层
+             .snip-row-wrap，开关用绝对定位压在右边，行的 padding-right 给它让位。
+           ⚠️`event.stopPropagation()` 不能少：不然点开关会连带触发整行的「插入这条」。
+           ⚠️这跟卡片自己的「📌 置顶」（x.pinned，管排序的）是两回事，别搞混。 */
+        function _snipPinTog(snipId, subId) {
+            var on = (typeof chatIsPinned === 'function') && chatIsPinned(snipId, subId);
+            return '<span class="snip-pin-tog' + (on ? ' on' : '') + '"'
+                 + ' onclick="event.stopPropagation();chatTogglePinSnip('
+                 + JSON.stringify(snipId).replace(/"/g, '&quot;') + ','
+                 + JSON.stringify(subId || '').replace(/"/g, '&quot;') + ')">'
+                 + (on ? '已常驻' : '常驻') + '</span>';
+        }
+
         function chatOpenSnipPicker() {
             if (typeof chatHideAttachMenu === 'function') chatHideAttachMenu();
             var bg = document.getElementById('snipPickBg');
@@ -15028,22 +15060,28 @@ body {
                            + '<span style="font-weight:400;color:var(--text-muted)"> · ' + items.length + ' 条</span></span>'
                            + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + _snipSize(tot) + '</span></button>';
                         if (_open) {
-                            h += '<button class="chat-action-item" onclick="chatInsertSnip(' + JSON.stringify(x.id).replace(/"/g, '&quot;') + ')"'
+                            h += '<div class="snip-row-wrap">'
+                               + '<button class="chat-action-item" onclick="chatInsertSnip(' + JSON.stringify(x.id).replace(/"/g, '&quot;') + ')"'
                                + ' style="display:flex;align-items:baseline;gap:8px;padding-left:28px;color:var(--accent)">'
                                + '<span style="flex:1;min-width:0">↳ 全部 ' + items.length + ' 条</span>'
-                               + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + _snipSize(tot) + '</span></button>';
+                               + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + _snipSize(tot) + '</span></button>'
+                               + _snipPinTog(x.id, '') + '</div>';
                             items.forEach(function (it) {
                                 if (!it) return;
-                                h += '<button class="chat-action-item" onclick="chatInsertSnip(' + JSON.stringify(x.id).replace(/"/g, '&quot;') + ',' + JSON.stringify(it.id).replace(/"/g, '&quot;') + ')"'
+                                h += '<div class="snip-row-wrap">'
+                                   + '<button class="chat-action-item" onclick="chatInsertSnip(' + JSON.stringify(x.id).replace(/"/g, '&quot;') + ',' + JSON.stringify(it.id).replace(/"/g, '&quot;') + ')"'
                                    + ' style="display:flex;align-items:baseline;gap:8px;padding-left:28px">'
                                    + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-sub)">↳ ' + esc(it.title || '无题') + '</span>'
-                                   + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + _snipSize((it.content || '').length) + '</span></button>';
+                                   + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + _snipSize((it.content || '').length) + '</span></button>'
+                                   + _snipPinTog(x.id, it.id) + '</div>';
                             });
                         }
                     } else {
-                        h += '<button class="chat-action-item" onclick="chatInsertSnip(' + JSON.stringify(x.id).replace(/"/g, '&quot;') + ')" style="display:flex;align-items:baseline;gap:8px">'
+                        h += '<div class="snip-row-wrap">'
+                           + '<button class="chat-action-item" onclick="chatInsertSnip(' + JSON.stringify(x.id).replace(/"/g, '&quot;') + ')" style="display:flex;align-items:baseline;gap:8px">'
                            + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (x.pinned ? '📌 ' : '') + esc(x.title || '无题') + '</span>'
-                           + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + _snipSize((x.code || '').length) + '</span></button>';
+                           + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + _snipSize((x.code || '').length) + '</span></button>'
+                           + _snipPinTog(x.id, '') + '</div>';
                     }
                 });
                 h += '</div>';
@@ -15073,16 +15111,15 @@ body {
             }
         }
 
-        function chatInsertSnip(id, subId) {
+        /* 从收藏里取出一条的正文。⚠️抽成公用函数是因为「插进这条消息」和「常驻」都要它，
+           抄两份的话 collection 的格式一改就得改两处。
+           三种情况：某一条 / 整张 collection（所有条目拼起来）/ 普通片段。
+           ⚠️整张塞进去时**每条前面留小标题**，不然几千字糊成一团、AI 分不清哪句归哪条。 */
+        function chatSnipResolve(id, subId) {
             var all = (typeof getSnipData === 'function' ? getSnipData() : []) || [];
             var s = null;
             for (var i = 0; i < all.length; i++) if (all[i].id === id) { s = all[i]; break; }
-            chatCloseSnipPicker();
-            if (!s) return;
-            var inp = document.getElementById('chatInput');
-            if (!inp) return;
-            /* 三种情况：某一条 / 整张 collection（所有条目拼起来）/ 普通片段。
-               ⚠️整张塞进去时**每条前面留小标题**，不然几千字糊成一团、AI 分不清哪句归哪条。 */
+            if (!s) return null;
             var name = s.title || '资料', body = '';
             var items = (s.type === 'collection' && Array.isArray(s.items)) ? s.items : null;
             if (subId && items) {
@@ -15100,6 +15137,16 @@ body {
             } else {
                 body = s.code || '';
             }
+            return { name: name, body: body };
+        }
+
+        function chatInsertSnip(id, subId) {
+            var _r = chatSnipResolve(id, subId);
+            chatCloseSnipPicker();
+            if (!_r) return;
+            var inp = document.getElementById('chatInput');
+            if (!inp) return;
+            var name = _r.name, body = _r.body;
             if (!body.trim()) { showToast('这一条是空的'); return; }
             /* ⚠️2026-09-13 改：**挂成附件，别往输入框里灌文字**（她：「不希望它直接进入对话框，
                我希望它是一个文件插入的感觉」）。
@@ -15113,6 +15160,177 @@ body {
             //   （看 el.value + chatPendingImages + chatPendingFiles），不调的话按钮还是灰的。
             if (typeof chatAutoGrow === 'function') chatAutoGrow(inp);
             showToast('已附上：' + name);
+        }
+
+        /* ===== 常驻资料（2026-09-13 她要的）=====
+           她的原话：「有些文件我希望它能够持续存在，钉在我们的对话上下文里面，
+           而不是随着轮数的增加就不再出现了或者被压缩住了……比如做联想任务的时候，
+           我需要把宋飞正传的剧集一直放在对话里面让他能看到」。
+
+           ⚠️病根有两个，都跟"发的是什么文件"无关：
+             ① 「发送最近 N 轮」把老消息挡在请求外面；
+             ② 自动压缩把旧消息折成摘要，原文不再发。
+           只要资料是以**一条消息**的身份待在历史里，早晚都会掉出去。
+
+           做法：常驻的东西**不走历史**，每轮请求单独拼成一条 system 消息发出去
+           （位置在系统提示词之后、摘要之前）。于是它不占轮数、不被压缩、不被摘要吃掉。
+
+           ⚠️两种来源，存法**故意不一样**：
+             · 来自收藏（资料库）→ 存**引用** {snipId, subId}，每次发之前现取。
+               她以后在收藏里改了剧集表，对话里带的自动跟着变（存快照就不会）。
+             · 来自对话里临时传的附件 → 存**快照**。那文件本来就不在任何库里，没得引用。
+           ⚠️引用取不到时（片段被删了）**退回快照**，别让对话里突然少一块东西。 */
+        var chatPinnedDocs = [];          // [{id, name, ref:{snipId,subId}|null, content}]
+        var CHAT_PIN_WARN_CHARS = 20000;  // 超过这么多字就提醒一句（每轮都要重发＝每轮都要付钱）
+
+        function _pinKey(snipId, subId) { return 'snip:' + snipId + (subId ? ('#' + subId) : ''); }
+
+        /* 发出去用的那一份：引用的现取、快照的照旧。⚠️请求那边只认这个函数。 */
+        function chatPinnedResolved() {
+            var out = [];
+            for (var i = 0; i < chatPinnedDocs.length; i++) {
+                var d = chatPinnedDocs[i], name = d.name, body = d.content || '';
+                if (d.ref && d.ref.snipId) {
+                    var r = chatSnipResolve(d.ref.snipId, d.ref.subId);
+                    if (r && (r.body || '').trim()) { name = r.name; body = r.body; }
+                }
+                if ((body || '').trim()) out.push({ name: name, body: body });
+            }
+            return out;
+        }
+
+        function chatIsPinned(snipId, subId) {
+            var k = _pinKey(snipId, subId);
+            for (var i = 0; i < chatPinnedDocs.length; i++) if (chatPinnedDocs[i].id === k) return true;
+            return false;
+        }
+
+        /* 小螃蟹菜单里那个入口的文字和存亡。⚠️**没钉东西就整条藏起来**——
+           她一贯的规矩是「没事干的按钮别占地方」（⋯按钮、目录、重答都是这么处理的）。
+           钉住的份数写在标题上，不用点进去就知道背着几份。 */
+        function chatRenderPinBar() {
+            var btn = document.getElementById('clawdPinBtn');
+            if (!btn) return;
+            var n = chatPinnedDocs.length;
+            /* ⚠️阅读模式（纯看书）一律不露（2026-09-13 她要的：「阅读模式下都没有输入框，
+               我也不会去对话什么的」）。判据跟「🔄 重答」同一条：**只能用 chatReaderMode**，
+               chatReadingMode 在共读下也为真、会误伤。 */
+            var _reading = (typeof chatReaderMode !== 'undefined' && chatReaderMode);
+            btn.style.display = (n && !_reading) ? '' : 'none';
+            btn.textContent = '📎 常驻 ' + (n || '');
+            var sh = document.getElementById('chatPinSheet');
+            if (sh && sh.classList.contains('show')) chatRenderPinPanel();
+        }
+
+        /* 常驻面板：看着背了什么、多大、随手取下。加东西不在这儿——
+           在「资料」面板每行右边那个开关，或者附件卡片上的「常驻」。 */
+        function chatOpenPinPanel() {
+            var bg = document.getElementById('chatPinBg');
+            if (!bg) {
+                bg = document.createElement('div');
+                bg.id = 'chatPinBg';
+                bg.className = 'chat-action-sheet-bg';
+                bg.onclick = chatClosePinPanel;
+                document.body.appendChild(bg);
+                var sh = document.createElement('div');
+                sh.id = 'chatPinSheet';
+                sh.className = 'chat-action-sheet';
+                sh.onclick = function (e) { e.stopPropagation(); };
+                document.body.appendChild(sh);
+            }
+            chatRenderPinPanel();
+            document.getElementById('chatPinBg').classList.add('show');
+            document.getElementById('chatPinSheet').classList.add('show');
+        }
+        function chatClosePinPanel() {
+            var bg = document.getElementById('chatPinBg'), sh = document.getElementById('chatPinSheet');
+            if (bg) bg.classList.remove('show');
+            if (sh) sh.classList.remove('show');
+        }
+        function chatRenderPinPanel() {
+            var sh = document.getElementById('chatPinSheet');
+            if (!sh) return;
+            var list = chatPinnedResolved();
+            var h = '<div class="sheet-handle"></div>';
+            h += '<div style="font-size:13px;font-weight:600;color:var(--text);padding:0 14px 4px">一直带着的资料</div>';
+            h += '<div style="font-size:11px;color:var(--text-muted);padding:0 14px 10px;line-height:1.6">'
+               + '这些每一轮都会发给 AI，不占「发送最近 N 轮」的名额，也不会被摘要压掉。<br>'
+               + '只对这个对话有效。</div>';
+            if (!list.length) {
+                h += '<div style="padding:6px 14px 18px;font-size:12px;color:var(--text-muted)">还没钉住什么。</div>';
+            } else {
+                var tot = 0;
+                for (var i = 0; i < chatPinnedDocs.length; i++) {
+                    var d = chatPinnedDocs[i];
+                    var r = list[i] || { name: d.name, body: d.content || '' };
+                    tot += (r.body || '').length;
+                    h += '<div class="snip-row-wrap">'
+                       + '<div class="chat-action-item" style="display:flex;align-items:baseline;gap:8px">'
+                       + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(r.name) + '</span>'
+                       + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + _snipSize((r.body || '').length) + '</span>'
+                       + '</div>'
+                       + '<span class="snip-pin-tog" onclick="chatUnpinDoc(' + JSON.stringify(d.id).replace(/"/g, '&quot;') + ')">取下</span>'
+                       + '</div>';
+                }
+                h += '<div style="padding:8px 14px 4px;font-size:11px;color:var(--text-muted)">合计 '
+                   + _snipSize(tot) + '，每轮都要重发一遍。</div>';
+            }
+            h += '<button class="chat-action-item" style="color:var(--accent)" onclick="chatClosePinPanel();chatOpenSnipPicker()">＋ 去资料里挑一份</button>';
+            sh.innerHTML = h;
+        }
+
+        function chatUnpinDoc(id) {
+            for (var i = 0; i < chatPinnedDocs.length; i++) {
+                if (chatPinnedDocs[i].id === id) {
+                    var nm = chatPinnedDocs[i].name;
+                    chatPinnedDocs.splice(i, 1);
+                    chatRenderPinBar();
+                    if (typeof chatSaveCurrentConv === 'function') chatSaveCurrentConv();
+                    showToast('已取下：' + nm);
+                    return;
+                }
+            }
+        }
+
+        /* 资料面板里那个「常驻」开关。已钉的再点一下＝取下。 */
+        function chatTogglePinSnip(snipId, subId) {
+            var k = _pinKey(snipId, subId);
+            if (chatIsPinned(snipId, subId)) {
+                chatUnpinDoc(k);
+                chatSnipPickerRenderList();
+                return;
+            }
+            var r = chatSnipResolve(snipId, subId);
+            if (!r || !(r.body || '').trim()) { showToast('这一条是空的'); return; }
+            /* ⚠️大块头要提醒：常驻＝**每一轮都重发一遍**。她库里最大的一张 15.5 万字，
+               钉上去每轮都在烧钱，得让她点之前知道代价（不拦，只问一句）。 */
+            if (r.body.length > CHAT_PIN_WARN_CHARS &&
+                !confirm('这份有 ' + _snipSize(r.body.length) + '，常驻的意思是**每一轮都重发一遍**，会一直花钱。确定要钉住吗？')) return;
+            chatPinnedDocs.push({ id: k, name: r.name, ref: { snipId: snipId, subId: subId || '' }, content: r.body });
+            chatRenderPinBar();
+            chatSnipPickerRenderList();
+            if (typeof chatSaveCurrentConv === 'function') chatSaveCurrentConv();
+            showToast('已常驻：' + r.name);
+        }
+
+        /* 把「这条消息的附件」变成「一直带着」。⚠️是**挪**不是复制——
+           留在待发区的话这一轮会发两遍（附件一遍、常驻一遍）。 */
+        function chatPinPendingFile(idx) {
+            var f = chatPendingFiles[idx];
+            if (!f) return;
+            var body = f.content || '';
+            if (!body.trim()) { showToast('这份是空的'); return; }
+            if (body.length > CHAT_PIN_WARN_CHARS &&
+                !confirm('这份有 ' + _snipSize(body.length) + '，常驻的意思是**每一轮都重发一遍**，会一直花钱。确定要钉住吗？')) return;
+            chatPinnedDocs.push({ id: 'file:' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                                  name: f.name || '文件', ref: null, content: body });
+            chatPendingFiles.splice(idx, 1);
+            chatRenderAttachPreview();
+            chatRenderPinBar();
+            if (typeof chatUpdateTokenHint === 'function') chatUpdateTokenHint();
+            if (typeof chatAutoGrow === 'function') chatAutoGrow(document.getElementById('chatInput'));
+            if (typeof chatSaveCurrentConv === 'function') chatSaveCurrentConv();
+            showToast('已常驻：' + (f.name || '文件'));
         }
 
         // 生图大图查看
@@ -16260,6 +16478,7 @@ body {
             chatCurrentConvId = null;
             chatPendingImages = [];
             chatPendingFiles = [];
+            chatPinnedDocs = [];
             chatContextMax = 0;
             document.getElementById('chatCtxRange').value = 0;
             document.getElementById('chatCtxLabel').textContent = '全部';
@@ -16348,6 +16567,7 @@ body {
             chatMemTableCount = (typeof conv.memTableCount === 'number') ? conv.memTableCount
                 : ((chatMemoryTables && ((chatMemoryTables.characters || []).length || (chatMemoryTables.plotlines || []).length)) ? chatCompressSummaries.length : 0);
             chatCompressedCount = conv.compressedCount || 0;
+            chatPinnedDocs = (conv.pinnedDocs && Array.isArray(conv.pinnedDocs)) ? conv.pinnedDocs.slice() : [];
             chatSelectedModel = conv.model || '';
             chatSelectedKeyStr = conv.keyStr || '';
             chatTranslateMode = conv.translateMode || false;
@@ -19333,6 +19553,21 @@ body {
                ⚠️挂在**最末尾**：位置就是这段的效力来源（见 READING_STYLE_GUARD 的注释）。 */
             if (!chatReadingMode && !chatTranslateMode && !sp) _spContent += '\n\n' + CHAT_STYLE_GUARD;
             reqMsgs.push({ role: 'system', content: _spContent });
+            /* 常驻资料（2026-09-13 她要的）：**不走历史**，每轮单独拼一条 system 发出去。
+               位置故意在系统提示词之后、摘要之前——模型把它当「手边摊着的参考资料」，
+               而不是「刚刚说过的话」。
+               ⚠️它不受「发送最近 N 轮」和自动压缩的管，这正是它存在的理由：
+                 历史里的附件早晚会掉出窗口或被折成摘要，她要的就是「一直看得见」。
+               ⚠️明说「不用复述」，否则模型每轮都会把剧集表念一遍当开场白。 */
+            var _pins = (typeof chatPinnedResolved === 'function') ? chatPinnedResolved() : [];
+            if (_pins.length) {
+                var _pinTxt = _pins.map(function (d) {
+                    return '【' + d.name + '】\n' + d.body;
+                }).join('\n\n');
+                reqMsgs.push({ role: 'system', content:
+                    '以下是本次对话一直带着的参考资料，随时可以查阅引用。'
+                  + '它会在每一轮都附上，**不需要复述、不需要确认收到**，正常回答就好。\n\n' + _pinTxt });
+            }
             // 插入压缩摘要（如果有）。「发送最近 N 轮」封顶时整块跳过——
             // 她要的是干净的一句一问，旧摘要塞进来就等于把记忆又带回来了。
             if (!chatCtxCapped()) {
@@ -20962,8 +21197,12 @@ body {
                     var wrap = document.createElement('div');
                     wrap.className = 'chat-img-preview-item';
                     wrap.style.cssText = 'width:auto;height:auto;min-width:80px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;background:var(--card-inner);border-radius:10px;position:relative';
+                    /* 「常驻」（2026-09-13 她要的）：点一下，这份就从「这条消息的附件」
+                       变成「这个对话一直带着」。⚠️是**挪走**不是复制——留在待发区的话
+                       这一轮会发两遍（附件一遍、常驻一遍）。 */
                     wrap.innerHTML = '<div style="font-size:11px;color:var(--text);font-weight:500;word-break:break-all;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(f.name) + '</div>' +
-                        '<div style="font-size:10px;color:var(--text-muted)">' + sizeStr + '</div>' +
+                        '<div style="font-size:10px;color:var(--text-muted)">' + sizeStr +
+                        ' · <span style="color:var(--accent);cursor:pointer;-webkit-tap-highlight-color:transparent" onclick="chatPinPendingFile(' + idx + ')">常驻</span></div>' +
                         '<button class="img-remove" onclick="chatRemoveFile(' + idx + ')">✕</button>';
                     container.appendChild(wrap);
                 })(j);
@@ -21029,6 +21268,8 @@ body {
                  共读也是在读一本书、照样要翻目录，只有纯对话才藏。 */
             var shb = document.getElementById('clawdShelfBtn');
             if (shb) shb.style.display = (typeof chatReadingMode !== 'undefined' && chatReadingMode) ? '' : 'none';
+            // 「📎 常驻」：钉了东西才露面，顺手把份数写上（见 chatRenderPinBar）
+            if (typeof chatRenderPinBar === 'function') chatRenderPinBar();
             m.classList.toggle('show');
         }
         function clawdCloseMenu() {
@@ -21084,6 +21325,7 @@ body {
             if (what === 'nextchap') { clawdNextChapter(); return; }
             if (what === 'usage') { apiLogShowPanel(); return; }
             if (what === 'regen') { clawdRegenLast(); return; }
+            if (what === 'pins') { chatOpenPinPanel(); return; }
             if (what === 'genimg') { genImageOpenDialog(); return; }
             if (what === 'msgtools') { clawdToggleMsgTools(); return; }
             if (what === 'model') { chatOpenModelSheet(); return; }
