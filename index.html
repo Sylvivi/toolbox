@@ -16573,9 +16573,19 @@ body {
              attachEdgeSwipe 里那两道闸——起手时有选区不认、划到一半冒出选区立刻收手——
              正是 2026-08-14 为 iPad 选字加的，这里原样复用。所以**这个手势必须走 attachEdgeSwipe，
              不许另写一份轻量版**，否则守卫会漏。 */
+        /* ⚠️2026-09-14 她要的：**对话模式下左滑＝召唤底下那个预设/模型面板**
+           （`chatOpenModelSheet`，就是小螃蟹菜单「🦀 clawd」那一项）。
+           原来左滑只在阅读模式有用（开目录），纯对话下划了没反应。
+           ⚠️两种模式**共用这一个手势**，按 chatReaderMode 分岔：
+             · 阅读（纯看书）→ 目录
+             · 对话/共读/翻译 → 预设模型面板
+           ⚠️别另外挂一个 attachEdgeSwipe：同一个元素上挂两个同向手势会互相抢起手。 */
         attachEdgeSwipe(document.querySelector('.chat-modal'), 'left',
-            function() { return chatReaderMode && chatView === 'conv' && !chatStreaming; },
-            function() { rbOpenShelf(); });
+            function() { return chatView === 'conv' && !chatStreaming; },
+            function() {
+                if (chatReaderMode) rbOpenShelf();
+                else chatOpenModelSheet();
+            });
 
         /* ===== 下滑收起手势（底部 sheet）=====
            她 2026-08-21 要的：「目录弹出来的时候从上往下滑他又会收回去」。
