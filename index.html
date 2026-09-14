@@ -2762,7 +2762,11 @@ body {
         /* 收藏模型的快选弹层。定位用 fixed + 按小字的位置算，因为输入区在不同模式下
            父容器的定位上下文不一样（共读折叠态会改布局），absolute 会飘。 */
         .fav-quick {
-            position: fixed; z-index: 60; display: none;
+            /* ⚠️z-index 从 60 抬到 1000（2026-09-14）：这两个弹层已经挪到 body 底下
+               （理由见 presetQuickOpen 上面那段注释），原来在输入框里面是借了它的层级，
+               挪出来之后 60 会被别的面板压住。1000 的位置：在设置/底部面板（996~999）之上、
+               在书架锁屏（100000）和吐司（100010）之下。 */
+            position: fixed; z-index: 1000; display: none;
             background: var(--modal-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
             border: 1px solid var(--card-border); border-radius: 12px;
             box-shadow: 0 8px 24px rgba(0,0,0,0.14); padding: 6px;
@@ -23319,6 +23323,22 @@ body {
 
             var pmeta = document.getElementById('chatInputPresetMeta');
             var ppop = document.getElementById('presetQuick');
+
+            /* ⚠️2026-09-14 修「电脑上两个弹层都偏到右边去」（她报的，两张整窗截图定的位）。
+               病根：这两个弹层是 `position: fixed`，本该按**窗口**定位；
+               但 2026-09-13 给 `.chat-input-box` 加了毛玻璃 `backdrop-filter`，
+               而**带 backdrop-filter / filter / transform 的元素会成为它内部 fixed 后代的定位基准**。
+               于是 `left` 从「离窗口左边多远」变成了「离**输入框**左边多远」，
+               白白多加一个输入框的左偏移。
+               实测对得上：弹层实际左边 = 输入框左边 + 锚点左边，两张图都只差 5px（我量边缘的误差）。
+               ⚠️**手机上看不出来**——输入框几乎贴着屏幕左边，偏移≈0；
+                 电脑上输入框居中，偏移 590px，一眼就歪了。
+               修法：把这两个弹层挪出输入框、挂到 body 上，fixed 就重新以窗口为准。
+               ⚠️别改成「减去输入框的 left 去抵消」——那是在跟规范较劲，
+                 以后谁再给某个祖先加个 filter/transform 就又错了。
+               ⚠️挪出来之后 z-index 要抬（见 .fav-quick）：原来在输入框里面借了它的层级。 */
+            if (pop && pop.parentNode !== document.body) document.body.appendChild(pop);
+            if (ppop && ppop.parentNode !== document.body) document.body.appendChild(ppop);
 
             inp.addEventListener('focus', function () {
                 chatUpdateInputModelMeta(); meta.style.display = 'block';
