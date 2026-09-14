@@ -28373,8 +28373,17 @@ body {
             var ps = document.getElementById('rbPresetSelect');
             if (ps) ps.value = (b.preset === 'custom' && !b.splitPattern) ? 'auto' : (b.preset || 'auto');
             var cs = document.getElementById('rbChapterSearch'); if (cs) cs.value = '';
-            // 阅读模式下「发下一章」是共读专用，隐藏掉
-            var nb = document.getElementById('rbNextBtn'); if (nb) nb.style.display = rbPickForReader ? 'none' : '';
+            /* 「发下一章」＝把下一章**填进输入框**，是「共读/翻译」那条路专用的。
+               ⚠️2026-09-14 她指出来：纯看书时它不该出现（「感觉不需要下一章」）。
+                 原来只挡了 `rbPickForReader`——那只在「从书架挑书进阅读器」的那一小段为真，
+                 真进了阅读、再从小螃蟹菜单开目录时它已经是 false 了，于是按钮照样冒出来。
+               ⚠️**不能整个删掉**：翻译模式还在用这条路（一章章填进去翻），
+                 所以判据是「纯看书就藏」，不是「有书就藏」。
+               ⚠️这里用 `chatReaderMode`（纯看书）而不是 `chatReadingMode`（阅读+共读都真），
+                 跟菜单里那几条是同一个坑，别写反。 */
+            var nb = document.getElementById('rbNextBtn');
+            var pureRead = (typeof chatReaderMode !== 'undefined' && chatReaderMode);
+            if (nb) nb.style.display = (rbPickForReader || pureRead) ? 'none' : '';
             // 分章工具每次开书都收回去（低频功能，不该占着顶部）
             var st = document.getElementById('rbSplitTools'); if (st) st.style.display = 'none';
             var stb = document.getElementById('rbSplitToggle'); if (stb) stb.classList.remove('on');
