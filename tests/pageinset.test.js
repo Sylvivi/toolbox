@@ -87,13 +87,15 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
 
     const visible = R.clientH - R.inset;
     ok('量得到「被压住的高度」', R.covered > 0, '量到 ' + R.covered);
-    ok('少减了一行（inset 明显小于被压住的高度）', R.inset < R.covered && R.inset >= 0,
+    /* ⚠️2026-09-14 口径改回「整条玻璃都算被挡住」：她第二次报「留的行数少了一行，
+       我想接着最上面那个看的，那一行已经被推到更上面去了」。
+       所以 inset 就该等于被压住的高度，不再少减一行。 */
+    ok('inset ＝ 被玻璃压住的高度', Math.abs(R.inset - R.covered) <= 1,
         'inset=' + R.inset + ' / 压住 ' + R.covered);
-    /* 上限：绝不许跳过看不见的那几行。多出来的一行是故意的——
-       玻璃只有 6px 模糊，压在上沿那行她看得清，所以允许把它翻上去。 */
-    ok('不跳字：一屏的步长 ≤ 可读区 + 一行',
-        R.moved > 0 && R.moved <= R.clientH - R.covered + R.lineH + 8,
-        '挪了 ' + R.moved + ' / 可读区 ' + (R.clientH - R.covered) + ' + 一行 ' + R.lineH);
+    /* 上限：绝不许跳过被玻璃挡住的那几行。 */
+    ok('不跳字：一屏的步长 ≤ 可读区',
+        R.moved > 0 && R.moved <= R.clientH - R.covered + 8,
+        '挪了 ' + R.moved + ' / 可读区 ' + (R.clientH - R.covered));
     /* 下限：也不许留太多。她 2026-09-13 报过「顶上那行不符合预期、感觉多留了」，
        就是步长比这个还小。留的余量不超过两行。 */
     ok('不多留：步长 ≥ 可读区 − 两行',
