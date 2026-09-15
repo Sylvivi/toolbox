@@ -2376,6 +2376,7 @@ body {
              不然贴左边时就成了背对着你往外爬。 */
         #fabWrap[data-side="r"] .fab-ball { transform: rotate(-15deg); }
         #fabWrap[data-side="l"] .fab-ball { transform: rotate(15deg) scaleX(-1); }
+
         #fabWrap.open[data-side="r"] .fab-ball { transform: rotate(-4deg); }
         #fabWrap.open[data-side="l"] .fab-ball { transform: rotate(4deg) scaleX(-1); }
         .fab-ball .clawd-px { left: 6px !important; top: 11px !important; }
@@ -19504,17 +19505,26 @@ body {
                     close();
                     ensureChatOpen();
                     if (typeof readerResumeLast === 'function') readerResumeLast();
-                /* ⚠️长按 350ms（原来 500）。她：「长按的时间可不可以再短一点点，我是个急性子」。
-                   ⚠️**别再往下压**：正常点一下大约 100~150ms，低于 300 就会出现
-                     "想点菜单、结果进了阅读"。350 比系统默认（iOS 约 500）跟手，又留着余量。
-                   ⚠️拖动不受影响：手指移出 6px 就把这个计时取消了。 */
-                }, 350);
+                /* ⚠️长按 300ms（500 → 350 → 300，两轮压下来的）。她：「我是个急性子」
+                   「现在确实等得有点久」。
+                   ⚠️**300 是下限，别再压**：正常点一下大约 100~150ms，再低就会出现
+                     "想点菜单、结果进了阅读"那种误触，比慢更烦人。
+                   ⚠️她真正卡住的其实**不是这个数**，是上面那个位移阈值（见 pointermove）——
+                     6px 太小，手指一抖长按就被取消了。两个一起改才有感觉。 */
+                }, 300);
             });
             ball.addEventListener('pointermove', function (e) {
                 if (!dragging) return;
                 if (longFired) return;
                 var dx = e.clientX - sx, dy = e.clientY - sy;
-                if (!moved && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) { moved = true; clearLong(); close(); }
+                /* ⚠️阈值 14px，**不是 6**（2026-09-15 傍晚改）。她报「偶尔还触发不了」——
+                   病根就在这儿：鼠标能做到 6px 内不动，**手指按在玻璃上做不到**，
+                   微微一抖就过线、长按当场被取消，她得再按一次。
+                   这也解释了"等得久"的体感：本来就要等，再时不时白等一次，感受直接翻倍。
+                   ⚠️**拖动和取消长按必须用同一个阈值**。设成两个数（比如 6 起拖、14 取消）
+                     会出现一段"已经在拖、长按还在倒计时"的区间，拖到一半阅读界面自己弹出来。
+                   ⚠️14px 对真正的拖动毫无影响——手指要挪动这个球，位移是几十上百像素。 */
+                if (!moved && (Math.abs(dx) > 14 || Math.abs(dy) > 14)) { moved = true; clearLong(); close(); }
                 if (!moved) return;
                 wrap.style.top = Math.round(st + dy) + 'px';
                 wrap.style.left = Math.round(e.clientX - 26) + 'px';
