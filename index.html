@@ -5131,6 +5131,24 @@ body {
              .fab-search 底边 88 + 高 56 = 顶边 144 → 原来贴的是它，144 + 12 = 156
            🔍 那个浮标当天撤掉了，156 就悬在了半空、底下空一大截。
            ⚠️**以后再动这两个浮标，这个数要跟着重算**，别只改浮标忘了小窗。 */
+        /* 主页背景图（2026-09-16）。
+           ⚠️**图上面必须压一层淡遮罩**：主页的卡片本来就是半透明的，
+             直接铺图会让卡片里的字糊在图案上。遮罩用平的 rgba，不用 var(--bg)——
+             那本身是个渐变，塞进 background-image 的多层语法里会打架。
+           ⚠️`background-attachment: fixed` 跟 body 原来那条一致，滚动时图不动。
+           ⚠️只作用在**主页**：对话/阅读那层是 .modal.chat-modal 自己的背景，互不干扰。 */
+        body.homebg {
+            background-image: linear-gradient(var(--home-wash), var(--home-wash)), var(--home-bg-url);
+            background-size: cover, cover;
+            background-position: center, center top;
+            background-repeat: no-repeat, no-repeat;
+            background-attachment: fixed, fixed;
+        }
+        /* ⚠️遮罩浓度：0.58 洗得太白、图基本没了（2026-09-16 实测四档对比）。
+           0.25 是"看得见图、字也还稳"的那一档。想调只改这两行。 */
+        body { --home-wash: rgba(255,255,255,0.25); }
+        body.dark { --home-wash: rgba(16,20,24,0.45); }
+
         .theme-picker {
             position: fixed; bottom: calc(156px + env(safe-area-inset-bottom, 0px)); right: 16px; z-index: 160;
             background: var(--modal-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
@@ -6299,6 +6317,12 @@ body {
         <div class="theme-picker-title">选择主题</div>
         <button class="theme-picker-item theme-picker-night" id="themePickerNight" onclick="themePickerToggleNight(event)"></button>
         <div class="theme-picker-sep"></div>
+        <!-- 主页背景（2026-09-16 她要的「主页能不能换背景」）。
+             ⚠️跟**阅读底图共用同一批图**（图片箱里传的那些），不另起一套上传口——
+               她已经有蓝/橙/粉/船夜/珠猫在那儿了，再来一份等于让她两个地方各传一次。 -->
+        <div class="theme-picker-sep"></div>
+        <div class="theme-picker-title" style="margin-top:2px">主页背景</div>
+        <div class="theme-picker-list" id="homeBgList"></div>
         <div class="theme-picker-list" id="themePickerList"><button class="theme-picker-item">蓝金</button><button class="theme-picker-item">青蓝</button><button class="theme-picker-item">蓝橙</button><button class="theme-picker-item">紫粉</button><button class="theme-picker-item">冰蓝</button><button class="theme-picker-item active">霞玫</button><button class="theme-picker-item">粘土</button></div>
     </div>
 
@@ -7716,6 +7740,7 @@ body {
             var picker = document.getElementById('themePicker');
             renderThemePickerList();
             syncThemePickerNight();
+            if (typeof renderHomeBgList === 'function') renderHomeBgList();   // 主页背景那一行
             picker.classList.add('show');
             setTimeout(function() {
                 document.addEventListener('pointerdown', closePickerOutside);
@@ -7769,6 +7794,57 @@ body {
                 })(i);
             }
         }
+
+        /* ===== 主页背景（2026-09-16 她要的）=====
+           ⚠️图直接复用**阅读底图那一批**（`readingBgList()`，也就是她在图片箱传的那些），
+             不另做一套上传口——她已经有蓝/橙/粉/船夜/珠猫了，两套等于让她传两遍。
+           ⚠️只存在**本机**（localStorage），不跟着云同步走：换个设备各挑各的壁纸
+             是合理的，而且加一个同步字段要两头都动，眼下不值。
+             ⚠️哪天她说「另一台怎么没跟着变」，那就是要同步了，去 `_manifest` 加个字段。
+           ⚠️遮罩强度在 CSS 的 `--home-wash`，不在这儿。 */
+        var HOME_BG_KEY = 'toolbox_home_bg';
+
+        function homeBgApply() {
+            var u = '';
+            try { u = localStorage.getItem(HOME_BG_KEY) || ''; } catch (e) {}
+            if (u) {
+                document.body.style.setProperty('--home-bg-url', 'url("' + u + '")');
+                document.body.classList.add('homebg');
+            } else {
+                document.body.classList.remove('homebg');
+                document.body.style.removeProperty('--home-bg-url');
+            }
+        }
+
+        function homeBgSet(u) {
+            try { localStorage.setItem(HOME_BG_KEY, u || ''); } catch (e) {}
+            homeBgApply();
+            renderHomeBgList();
+            showToast(u ? '主页背景换好了' : '主页背景关了');
+        }
+
+        function renderHomeBgList() {
+            var box = document.getElementById('homeBgList');
+            if (!box) return;
+            var cur = '';
+            try { cur = localStorage.getItem(HOME_BG_KEY) || ''; } catch (e) {}
+            var list = (typeof readingBgList === 'function') ? readingBgList() : [];
+            var h = '<button class="theme-picker-item' + (cur ? '' : ' active') +
+                    '" onclick="homeBgSet(\'\')">不用</button>';
+            list.forEach(function (c) {
+                if (!c || !c.url) return;
+                h += '<button class="theme-picker-item' + (cur === c.url ? ' active' : '') +
+                     '" onclick="homeBgSet(' + JSON.stringify(c.url).replace(/"/g, '&quot;') + ')">' +
+                     esc(c.name || '底图') + '</button>';
+            });
+            if (!list.length) {
+                h += '<span style="font-size:11px;color:var(--text-muted);padding:4px 6px">' +
+                     '还没传过底图——去图片箱的「阅读底图」传几张</span>';
+            }
+            box.innerHTML = h;
+        }
+
+        homeBgApply();
 
         function hideThemePicker() {
             document.getElementById('themePicker').classList.remove('show');
