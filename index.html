@@ -2336,6 +2336,58 @@ body {
         body      { --glass-themed: color-mix(in srgb, var(--accent) 10%, #fff); }
         body.dark { --glass-themed: color-mix(in srgb, var(--accent) 18%, #fff); }
 
+        /* ===== 悬浮球（2026-09-15 她要的）=====
+           她的原话：「有没有办法在 pwa 里弄个悬浮球呀…不然我其实还是要点进对话才能用的，
+           但是我也不希望悬浮球太明显」，以及「弄得好看一点行吗，你看看我的装饰、clawd 皮肤
+           就知道我的审美了」。
+           ⚠️**球身就是 clawd 本尊**，不另做素材：`.clawd-model-btn .clawd-px.clawd-<皮肤>`
+             那套 box-shadow 像素画是现成的，所以这里**故意给外壳也挂 `clawd-model-btn` 类**，
+             那些后代选择器才能命中。皮肤跟着她在设置里选的走（含 random）。
+           ⚠️GitHub 搜过了，没装库（plain-draggable 30KB 且只解决"拖"；assistive-touch-react
+             是 React；material-floating-button 是"点开炸出一圈"的 Material 风，跟她要的"别太明显"相反）。
+             真正抄来的是那份**行为清单**：吸边 / 记位置 / 闲置淡出 / 点击展开。
+           ⚠️层级 300：压得过 `.modal-overlay`(200) 所以在对话上面也看得见，
+             又在设置/底部面板(996~999)和两个下拉(1000)之下，不会挡住弹窗。 */
+        #fabWrap { position: fixed; z-index: 300; touch-action: none; -webkit-tap-highlight-color: transparent;
+                   transition: opacity .3s, left .22s cubic-bezier(.34,1.3,.64,1), right .22s cubic-bezier(.34,1.3,.64,1);
+                   opacity: .34; }
+        #fabWrap.act { opacity: 1; }
+        #fabWrap.drag { transition: none; }
+        /* ⚠️阅读时压到最淡：那是她待得最久的地方，翻页全靠点屏幕，
+           球太显眼既碍眼又容易误触。淡到几乎看不见、但位置还在，想用时摸得到。 */
+        body.chat-mask-on #fabWrap:not(.act) { opacity: .14; }
+        .fab-ball {
+            position: relative !important; right: auto !important; top: auto !important;
+            width: 52px !important; height: 52px !important; padding: 0 !important;
+            border-radius: 50%; display: flex !important; align-items: center; justify-content: center;
+            /* 跟输入框同一套玻璃配方，不用实心色块——她的口味是"显眼靠提亮字色，别加零件" */
+            background: linear-gradient(180deg,
+                        color-mix(in srgb, var(--glass-white) 84%, transparent),
+                        color-mix(in srgb, var(--glass-white) 70%, transparent));
+            backdrop-filter: blur(6px) saturate(132%);
+            -webkit-backdrop-filter: blur(6px) saturate(132%);
+            border: 1px solid color-mix(in srgb, var(--glass-white) 46%, transparent) !important;
+            box-shadow: 0 4px 14px rgba(0,0,0,.10), inset 0 1px 0 color-mix(in srgb, var(--glass-white) 60%, transparent);
+        }
+        .dark .fab-ball { box-shadow: 0 4px 14px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.12); }
+        /* clawd 在球里居中。⚠️那张像素画约 42×30，scale(3) 之后靠 left/top 摆正，
+           别去改 .clawd-model-btn .clawd-px 的原始值（输入框那只还在用）。 */
+        .fab-ball .clawd-px { left: 6px !important; top: 11px !important; }
+        /* 展开的一小排快捷：跟小螃蟹菜单同一套新粗野主义（黑描边 + 硬投影），
+           ⚠️球本身要"淡"，但**真正的按钮该显眼**——两者不是一回事。 */
+        #fabMenu { position: absolute; display: none; gap: 8px; align-items: center; }
+        #fabWrap.open #fabMenu { display: flex; }
+        .fab-act {
+            width: 42px; height: 42px; flex-shrink: 0; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            background: #fff; color: var(--text);
+            border: 2.5px solid var(--text); border-radius: 0;
+            box-shadow: 4px 4px 0 var(--text);
+            animation: fabIn .18s cubic-bezier(.34,1.3,.64,1) backwards;
+        }
+        .dark .fab-act { background: #1e2b25; }
+        .fab-act:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 var(--text); }
+        @keyframes fabIn { from { opacity: 0; transform: scale(.6) } to { opacity: 1; transform: none } }
         /* ===== 输入区 — 悬浮玻璃条 =====
            2026-09-13 她要的：「人家的输入框是一个独立的东西，字能从它背后穿过；
            我的那个就像一个抽屉，会把字收进去」，点名要 Telegram 那种。
@@ -5806,6 +5858,13 @@ body {
     </div>
 
     <!-- ===== 图床弹窗 ===== -->
+    <!-- 悬浮球（2026-09-15）。⚠️挂在 body 底下、不在任何弹窗里面：
+         `position:fixed` 一旦有带 filter/transform 的祖先就会改以那个祖先为基准
+         （09-14 两个下拉弹层就栽在这儿，见 css-fixed-hijacked-by-filter 那条记忆）。 -->
+    <div id="fabWrap" style="display:none">
+        <div id="fabMenu"></div>
+        <div id="fabBall" class="clawd-model-btn fab-ball"><span class="clawd-px clawd-normal" id="fabPx"></span></div>
+    </div>
     <div class="modal-overlay" id="imgBedModalOverlay" style="z-index:1100" onclick="if(event.target===this)closeImgBedModal()">
         <div class="modal" style="max-width:420px;width:100%">
             <h2>🖼️ 图床管理</h2>
@@ -19300,6 +19359,127 @@ body {
             if (bg) bg.classList.remove('show');
             if (modal) modal.classList.remove('show');
         }
+
+
+        /* ===== 悬浮球：拖动 / 吸边 / 记位置 / 闲置淡出 / 点开一小排快捷 =====
+           2026-09-15 她要的。GitHub 上搜过一圈没找到值得装的库（见 CSS 那段注释），
+           照 assistive-touch 那套**行为清单**自己写的，八十来行。
+
+           ⚠️四个动作全部 `typeof` 判活再调：这几个函数散在别处，
+             以后谁改了名字，球顶多少一个按钮，不会整个报错卡住。
+           ⚠️**拖和点要分开**：按下到松手位移超过 6px 算拖，否则算点。
+             不分的话每次想点都会因为手指微动变成拖，球还乱跑。 */
+        (function () {
+            var wrap = document.getElementById('fabWrap');
+            var ball = document.getElementById('fabBall');
+            var menu = document.getElementById('fabMenu');
+            if (!wrap || !ball || !menu) return;
+
+            var KEY = 'toolbox_fab_pos';
+            var ACTS = [
+                { t: '图片箱', svg: '<rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path>',
+                  go: function () { window.open('https://box.masterofmydomain.top/', '_blank'); } },
+                { t: '存小红书', svg: '<path d="M4 4h16v12H5.5L4 18z"></path><path d="M8 9h8"></path><path d="M8 12.5h5"></path>',
+                  go: function () { if (typeof xhsArchivePrompt === 'function') xhsArchivePrompt(); } },
+                { t: '继续阅读', svg: '<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5z"></path><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"></path>',
+                  go: function () { if (typeof readerResumeLast === 'function') readerResumeLast(); } },
+                { t: '新对话', svg: '<path d="M12 5v14"></path><path d="M5 12h14"></path>',
+                  go: function () { if (typeof chatNewConv === 'function') chatNewConv(); } }
+            ];
+
+            var pos = { side: 'r', y: 0.62 };
+            try { pos = JSON.parse(localStorage.getItem(KEY)) || pos; } catch (e) {}
+
+            function apply() {
+                var h = window.innerHeight, bh = 52;
+                var top = Math.min(Math.max(pos.y, 0.06), 0.92) * h;
+                top = Math.min(Math.max(top, 8), h - bh - 8);
+                wrap.style.top = Math.round(top) + 'px';
+                /* ⚠️贴边**缩进去一截**（露约三分之二），这是「不太明显」的关键：
+                   完全贴平看着像个误触点，探出一点反而像挂在边上的小挂件。 */
+                if (pos.side === 'l') { wrap.style.left = '-14px'; wrap.style.right = 'auto'; }
+                else { wrap.style.right = '-14px'; wrap.style.left = 'auto'; }
+                menu.style[pos.side === 'l' ? 'left' : 'right'] = '62px';
+                menu.style[pos.side === 'l' ? 'right' : 'left'] = 'auto';
+                menu.style.top = '5px';
+            }
+
+            function buildMenu() {
+                menu.innerHTML = '';
+                var list = pos.side === 'l' ? ACTS : ACTS.slice().reverse();
+                list.forEach(function (a, i) {
+                    var b = document.createElement('div');
+                    b.className = 'fab-act'; b.title = a.t;
+                    b.style.animationDelay = (i * 0.035) + 's';
+                    b.innerHTML = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+                                  'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + a.svg + '</svg>';
+                    b.addEventListener('click', function (e) {
+                        e.stopPropagation(); close(); a.go();
+                    });
+                    menu.appendChild(b);
+                });
+            }
+
+            var idleTimer = null;
+            function wake() {
+                wrap.classList.add('act');
+                clearTimeout(idleTimer);
+                idleTimer = setTimeout(function () {
+                    if (!wrap.classList.contains('open')) wrap.classList.remove('act');
+                }, 2600);
+            }
+            function close() { wrap.classList.remove('open'); wake(); }
+
+            var sx = 0, sy = 0, st = 0, moved = false, dragging = false;
+            ball.addEventListener('pointerdown', function (e) {
+                dragging = true; moved = false;
+                sx = e.clientX; sy = e.clientY; st = wrap.getBoundingClientRect().top;
+                wake(); wrap.classList.add('drag');
+                try { ball.setPointerCapture(e.pointerId); } catch (x) {}
+            });
+            ball.addEventListener('pointermove', function (e) {
+                if (!dragging) return;
+                var dx = e.clientX - sx, dy = e.clientY - sy;
+                if (!moved && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) { moved = true; close(); }
+                if (!moved) return;
+                wrap.style.top = Math.round(st + dy) + 'px';
+                wrap.style.left = Math.round(e.clientX - 26) + 'px';
+                wrap.style.right = 'auto';
+            });
+            ball.addEventListener('pointerup', function (e) {
+                if (!dragging) return;
+                dragging = false; wrap.classList.remove('drag');
+                if (!moved) {                       // 没挪动＝点击
+                    if (wrap.classList.contains('open')) close();
+                    else { buildMenu(); wrap.classList.add('open'); wake(); }
+                    return;
+                }
+                // 松手吸到最近的一边，并记住位置
+                pos.side = (e.clientX < window.innerWidth / 2) ? 'l' : 'r';
+                pos.y = (wrap.getBoundingClientRect().top) / window.innerHeight;
+                try { localStorage.setItem(KEY, JSON.stringify(pos)); } catch (x) {}
+                wrap.style.left = ''; wrap.style.right = '';
+                apply(); wake();
+            });
+
+            document.addEventListener('pointerdown', function (e) {
+                if (!wrap.contains(e.target) && wrap.classList.contains('open')) close();
+            }, true);
+            window.addEventListener('resize', apply);
+
+            /* 皮肤跟着她在设置里选的走（含 random）。⚠️读同一个 localStorage 键，
+               别另存一份，否则她换了皮肤球不跟着变。 */
+            try {
+                var sk = localStorage.getItem('clawd_skin') || 'random';
+                var act = (sk === 'random' && typeof _clawdPickRandom === 'function') ? _clawdPickRandom() : sk;
+                if (act === 'random') act = 'normal';
+                document.getElementById('fabPx').className = 'clawd-px clawd-' + act;
+            } catch (e) {}
+
+            apply();
+            wrap.style.display = 'block';
+            wake();
+        })();
 
         /* ----- SP 预设存档（用/管理两层） ----- */
         var CHAT_SP_KEY = 'chat_sp_presets';
