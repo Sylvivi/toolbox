@@ -5131,26 +5131,6 @@ body {
              .fab-search 底边 88 + 高 56 = 顶边 144 → 原来贴的是它，144 + 12 = 156
            🔍 那个浮标当天撤掉了，156 就悬在了半空、底下空一大截。
            ⚠️**以后再动这两个浮标，这个数要跟着重算**，别只改浮标忘了小窗。 */
-        /* 主页背景图（2026-09-16）。
-           ⚠️**图上面必须压一层淡遮罩**：主页的卡片本来就是半透明的，
-             直接铺图会让卡片里的字糊在图案上。遮罩用平的 rgba，不用 var(--bg)——
-             那本身是个渐变，塞进 background-image 的多层语法里会打架。
-           ⚠️`background-attachment: fixed` 跟 body 原来那条一致，滚动时图不动。
-           ⚠️只作用在**主页**：对话/阅读那层是 .modal.chat-modal 自己的背景，互不干扰。 */
-        body.homebg {
-            background-image: linear-gradient(var(--home-wash), var(--home-wash)), var(--home-bg-url);
-            background-size: cover, cover;
-            background-position: center, center top;
-            background-repeat: no-repeat, no-repeat;
-            background-attachment: fixed, fixed;
-        }
-        /* 遮罩浓度（2026-09-16）。⚠️别再写死：我先定 0.58 她说"图基本没了"，
-           改 0.25 她还是说"有点太淡了" —— **这个数只有她眼睛说了算**，
-           所以做成三档让她自己点（存 `toolbox_home_bg_wash`，见 homeBgWashSet）。
-           `--home-a` 是那三档给的透明度，默认走中间那档。 */
-        body { --home-a: 0.25; --home-wash: rgba(255,255,255,var(--home-a)); }
-        body.dark { --home-wash: rgba(16,20,24,calc(var(--home-a) + 0.2)); }
-
         .theme-picker {
             position: fixed; bottom: calc(156px + env(safe-area-inset-bottom, 0px)); right: 16px; z-index: 160;
             background: var(--modal-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
@@ -6319,12 +6299,6 @@ body {
         <div class="theme-picker-title">选择主题</div>
         <button class="theme-picker-item theme-picker-night" id="themePickerNight" onclick="themePickerToggleNight(event)"></button>
         <div class="theme-picker-sep"></div>
-        <!-- 主页背景（2026-09-16 她要的「主页能不能换背景」）。
-             ⚠️跟**阅读底图共用同一批图**（图片箱里传的那些），不另起一套上传口——
-               她已经有蓝/橙/粉/船夜/珠猫在那儿了，再来一份等于让她两个地方各传一次。 -->
-        <div class="theme-picker-sep"></div>
-        <div class="theme-picker-title" style="margin-top:2px">主页背景</div>
-        <div class="theme-picker-list" id="homeBgList"></div>
         <div class="theme-picker-list" id="themePickerList"><button class="theme-picker-item">蓝金</button><button class="theme-picker-item">青蓝</button><button class="theme-picker-item">蓝橙</button><button class="theme-picker-item">紫粉</button><button class="theme-picker-item">冰蓝</button><button class="theme-picker-item active">霞玫</button><button class="theme-picker-item">粘土</button></div>
     </div>
 
@@ -7742,7 +7716,6 @@ body {
             var picker = document.getElementById('themePicker');
             renderThemePickerList();
             syncThemePickerNight();
-            if (typeof renderHomeBgList === 'function') renderHomeBgList();   // 主页背景那一行
             picker.classList.add('show');
             setTimeout(function() {
                 document.addEventListener('pointerdown', closePickerOutside);
@@ -7796,125 +7769,6 @@ body {
                 })(i);
             }
         }
-
-        /* ===== 主页背景（2026-09-16 她要的）=====
-           ⚠️图直接复用**阅读底图那一批**（`readingBgList()`，也就是她在图片箱传的那些），
-             不另做一套上传口——她已经有蓝/橙/粉/船夜/珠猫了，两套等于让她传两遍。
-           ⚠️只存在**本机**（localStorage），不跟着云同步走：换个设备各挑各的壁纸
-             是合理的，而且加一个同步字段要两头都动，眼下不值。
-             ⚠️哪天她说「另一台怎么没跟着变」，那就是要同步了，去 `_manifest` 加个字段。
-           ⚠️遮罩强度在 CSS 的 `--home-wash`，不在这儿。 */
-        var HOME_BG_KEY = 'toolbox_home_bg';
-
-        var HOME_WASH_KEY = 'toolbox_home_bg_wash';
-        /* 三档遮罩。数字是「白纱有多厚」：**越小图越清楚**。
-           ⚠️名字按她的说法走——她说的是"图淡/浓"，不是"遮罩厚/薄"，
-             所以按钮上写「图淡/适中/图浓」，别写成遮罩多少。 */
-        var HOME_WASHES = [{ k: 'l', t: '图淡', v: 0.45 },
-                           { k: 'm', t: '适中', v: 0.25 },
-                           { k: 'h', t: '图浓', v: 0.08 }];
-
-        function homeWashCur() {
-            var k = '';
-            try { k = localStorage.getItem(HOME_WASH_KEY) || 'm'; } catch (e) { k = 'm'; }
-            for (var i = 0; i < HOME_WASHES.length; i++) if (HOME_WASHES[i].k === k) return HOME_WASHES[i];
-            return HOME_WASHES[1];
-        }
-        function homeBgWashSet(k) {
-            try { localStorage.setItem(HOME_WASH_KEY, k); } catch (e) {}
-            homeBgApply();
-            renderHomeBgList();
-        }
-
-        function homeBgApply() {
-            document.body.style.setProperty('--home-a', String(homeWashCur().v));
-            var u = '';
-            try { u = localStorage.getItem(HOME_BG_KEY) || ''; } catch (e) {}
-            if (u) {
-                document.body.style.setProperty('--home-bg-url', 'url("' + u + '")');
-                document.body.classList.add('homebg');
-            } else {
-                document.body.classList.remove('homebg');
-                document.body.style.removeProperty('--home-bg-url');
-            }
-        }
-
-        function homeBgSet(u) {
-            try { localStorage.setItem(HOME_BG_KEY, u || ''); } catch (e) {}
-            homeBgApply();
-            renderHomeBgList();
-            showToast(u ? '主页背景换好了' : '主页背景关了');
-        }
-
-        function renderHomeBgList() {
-            var box = document.getElementById('homeBgList');
-            if (!box) return;
-            var cur = '';
-            try { cur = localStorage.getItem(HOME_BG_KEY) || ''; } catch (e) {}
-            var list = (typeof readingBgList === 'function') ? readingBgList() : [];
-            var h = '<button class="theme-picker-item' + (cur ? '' : ' active') +
-                    '" onclick="homeBgSet(\'\')">不用</button>';
-            list.forEach(function (c) {
-                if (!c || !c.url) return;
-                h += '<button class="theme-picker-item' + (cur === c.url ? ' active' : '') +
-                     '" onclick="homeBgSet(' + JSON.stringify(c.url).replace(/"/g, '&quot;') + ')">' +
-                     esc(c.name || '底图') + '</button>';
-            });
-            /* 「贴链接」排在最后（2026-09-16 她要的：「可以在最下面有一个粘贴链接填背景的入口」）。
-               ⚠️她的用例是**网上随手看到的图**，不一定在图片箱里，所以不能只让她从自己传的那批挑。
-               ⚠️存进去之前**先真的把图加载一遍**：网图十有八九是死链、防盗链、或者
-                 根本不是图（imgur 那种会回一张 161×81 的"图没了"占位图，HTTP 还是 200）。
-                 不验的话她会看到一片空白，还以为是功能坏了。 */
-            h += '<button class="theme-picker-item" onclick="homeBgPrompt()">＋ 贴一个图片链接</button>';
-            /* ⚠️浓度那排**只在真的挂了图时才出现**：没图的时候它什么也调不了，
-               白占一行还让人以为哪儿没设置对。 */
-            if (cur) {
-                var w = homeWashCur();
-                h += '<div style="width:100%;height:1px;background:var(--card-border);margin:6px 0"></div>';
-                HOME_WASHES.forEach(function (x) {
-                    h += '<button class="theme-picker-item' + (w.k === x.k ? ' active' : '') +
-                         '" onclick="homeBgWashSet(\'' + x.k + '\')">' + x.t + '</button>';
-                });
-            }
-            if (!list.length) {
-                h += '<span style="font-size:11px;color:var(--text-muted);padding:4px 6px">' +
-                     '上面那些是图片箱里的阅读底图，还没传过就先用贴链接的</span>';
-            }
-            box.innerHTML = h;
-        }
-
-        function homeBgPrompt() {
-            var u = prompt('贴一个图片链接（http/https 开头）：', '');
-            if (u === null) return;
-            u = (u || '').trim();
-            if (!u) return;
-            if (!/^https?:\/\//i.test(u)) { alert('得是 http 或 https 开头的图片地址'); return; }
-            showToast('正在试着打开这张图…');
-            var im = new Image();
-            var done = false;
-            var timer = setTimeout(function () {
-                if (done) return; done = true;
-                alert('✗ 这张图打不开\n\n等了 12 秒没反应，可能是防盗链或者网络到不了。');
-            }, 12000);
-            im.onload = function () {
-                if (done) return; done = true; clearTimeout(timer);
-                /* ⚠️**小得离谱的就是占位图**：imgur 之类的站，图删了照样回 200，
-                   给你一张一百来像素的"图没了"小图。直接存进去她只会看到一片空白。 */
-                if (im.naturalWidth < 300 || im.naturalHeight < 300) {
-                    alert('✗ 这看着不像张能当背景的图\n\n只有 ' + im.naturalWidth + '×' + im.naturalHeight +
-                          '，多半是图站的「图没了」占位图。换个链接试试。');
-                    return;
-                }
-                homeBgSet(u);
-            };
-            im.onerror = function () {
-                if (done) return; done = true; clearTimeout(timer);
-                alert('✗ 这张图打不开\n\n可能是链接失效、或者那个站不让外部引用（防盗链）。');
-            };
-            im.src = u;
-        }
-
-        homeBgApply();
 
         function hideThemePicker() {
             document.getElementById('themePicker').classList.remove('show');
