@@ -47,6 +47,23 @@ const QS = ['这篇讲的方法靠谱吗？', '帮我总结成三条', '这个�
         // 问题写在链接**前面**也要留
         const before = '这篇靠谱吗 https://xhslink.cn/a/b8 复制本条信息，打开【小红书】App查看精彩内容！';
         out.extra.写在链接前面也要留 = xhsStripShareText(before, pick(before)).indexOf('这篇靠谱吗') >= 0;
+
+        /* 新版口令：「序号 + 标题 + 链接」，标题**不带书名号**。
+           2026-09-15 她报「每次解析总会带上标题，容易跟我的问题混淆」。
+           标题只能靠**抓回来的笔记标题**精确删，不能猜。 */
+        const T = '天啊汉娜😭😭😭';
+        const n1 = '41 ' + T + ' https://xhslink.cn/a/t1 复制本条信息，打开【小红书】App查看精彩内容！ 我在测试功能';
+        const r1 = xhsStripShareText(n1, pick(n1), [T]);
+        out.extra.标题要删掉 = r1.indexOf(T) < 0;
+        out.extra.标题删了但她的话要留 = r1.indexOf('我在测试功能') >= 0;
+        out.extra.开头的序号也要删 = !/^\s*41/.test(r1);
+        // 不传标题时**不许乱猜**：她写在链接前面的话必须原样留着
+        const n2 = '我觉得这篇写得好 https://xhslink.cn/a/t2 ';
+        out.extra.没传标题就别乱删 = xhsStripShareText(n2, pick(n2), []).indexOf('我觉得这篇写得好') >= 0;
+        // 标题跟她的话长得一样时，只删链接前面那一处
+        const n3 = '9 ' + T + ' https://xhslink.cn/a/t3 ' + T + ' 这句是我自己写的';
+        const r3 = xhsStripShareText(n3, pick(n3), [T]);
+        out.extra.链接后面的同名文字不删 = r3.indexOf(T) >= 0 && r3.indexOf('这句是我自己写的') >= 0;
         return out;
     }, { SHARES, QS });
 

@@ -12386,11 +12386,25 @@ body {
             /^\s*(?:复制本条(?:消息|信息)|把这段复制好|留住这段口令)[^\n]{0,40}?[！!。~～]/
         ];
 
-        function xhsStripShareText(t, url) {
+        function xhsStripShareText(t, url, titles) {
             var s = String(t || '');
             var i = url ? s.indexOf(url) : -1;
             var head = i >= 0 ? s.slice(0, i) : s;
             var tail = i >= 0 ? s.slice(i + url.length) : '';
+            /* ⚠️2026-09-15 她报：「每次解析小红书总会带上标题或者正文，容易跟我的问题混淆」。
+               截图里她的消息是「天啊汉娜😭😭😭 我在测试功能」——前半截是笔记标题。
+               病根：**新版分享口令是「序号 + 标题 + 链接」，标题不带书名号**，
+               上面那几条认「【小红书】」的规则一条都匹配不上。
+               ⚠️**别去猜哪一段是标题**（会误删她自己写在链接前面的话）。
+                 抓回来的笔记本身带着标题，把它当参数传进来**精确删**，这是唯一稳的办法。
+               ⚠️只在**链接之前**那段里删：标题在口令里就长在链接前面，
+                 而链接后面是她自己接着写的话，不能碰。 */
+            (titles || []).forEach(function (x) {
+                x = String(x || '').trim();
+                if (x.length >= 4) head = head.split(x).join(' ');
+            });
+            head = head.replace(/^\s*\d{1,3}(?=\s)/, '')        // 口令开头那个分享序号
+                       .replace(/😆\s*\S{4,20}\s*😆/g, ' ');    // 😆 包着的口令码
             XHS_JUNK_HEAD.forEach(function (re) { head = head.replace(re, ''); });
             XHS_JUNK_TAIL.forEach(function (re) { tail = tail.replace(re, ''); });
             return (head + ' ' + tail)
@@ -19625,8 +19639,12 @@ body {
                     for (var _xi = 0; _xi < Math.min(_xurls.length, 3); _xi++) {
                         var _xr = await xhsFetchNote(_xurls[_xi]);
                         if (_xr && _xr.text) {
-                            text = xhsStripShareText(text, _xurls[_xi]);   // 抓到了才清掉链接和套话
-                            var _xt = (_xr.text.split('\n')[0] || '小红书').replace(/^\S*\s*/, '').slice(0, 30);
+                            var _xline = (_xr.text.split('\n')[0] || '');
+                            var _xt = (_xline || '小红书').replace(/^\S*\s*/, '').slice(0, 30);
+                            /* ⚠️把标题一起传进去：口令里那截标题要拿它精确删掉，
+                               不然会留在她的消息里跟她自己的问题混在一起（09-15 她报的）。
+                               两个候选都给：`_xline` 是原始首行，`_xt` 是剥掉前缀、截到 30 字的显示名。 */
+                            text = xhsStripShareText(text, _xurls[_xi], [_xline, _xt]);
                             _xparts.push('[ 小红书·' + (_xt || '笔记') + ' ]\n```\n' + _xr.text + '\n```');
                             /* 图：服务端只在「正文短」时才回（重点在图里的那种帖子）。
                                ⚠️打上 xhs 标记——将来按来源清理时要认得出哪些是自动抓的
