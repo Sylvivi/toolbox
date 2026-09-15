@@ -5104,14 +5104,16 @@ body {
         .fab-add:hover { transform: scale(1.1); }
 
         /* ===== 主题选择面板 ===== */
-        /* ⚠️2026-09-15：底边从 156px 改到 88px（她：「皮肤选择框应该下来一些，不能放在原地」）。
+        /* ⚠️2026-09-15 这个数来回过一次：156 → 88 → **回到 156**。
+           先是 🔍 撤了、小窗悬在半空，改成 88 贴着加号；傍晚她说「养成习惯了」、
+           把 🔍 请了回来，于是又得贴回 🔍 的上沿。**它永远跟着"最上面那个浮标"走。**
            这个数**不是随便定的，是跟着下面的浮标算出来的**：
              .fab-add    底边 20 + 高 56 = 顶边 76 → 小窗贴它上沿，76 + 12 留白 = **88**
              .fab-search 底边 88 + 高 56 = 顶边 144 → 原来贴的是它，144 + 12 = 156
            🔍 那个浮标当天撤掉了，156 就悬在了半空、底下空一大截。
            ⚠️**以后再动这两个浮标，这个数要跟着重算**，别只改浮标忘了小窗。 */
         .theme-picker {
-            position: fixed; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); right: 16px; z-index: 160;
+            position: fixed; bottom: calc(156px + env(safe-area-inset-bottom, 0px)); right: 16px; z-index: 160;
             background: var(--modal-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
             border: 1px solid var(--card-border); border-radius: 14px;
             padding: 10px; min-width: 140px;
@@ -6264,12 +6266,13 @@ body {
     <!-- =======================================================================
       [2.3] 全局悬浮与提示层
     ========================================================================= -->
-    <!-- ⚠️2026-09-15 撤掉了右下角那个 🔍（她：「主页那个搜索键可以去掉了，因为现在有悬浮球了」）。
-         它原来身上挂着三个动作，各自的去向：
-           · 长按打开聊天 → **悬浮球**接了（而且分成"新对话"和"继续阅读"两个）
-           · 双击切页     → **搬到加号的双击**上（见 handleFabTap）
-           · 单击聚焦搜索 → 她说不需要；每页顶上本来就有搜索框，代价只是多滑一下
-         ⚠️切页**不止这一条路**：左右滑屏也能切（见 touchend 那段），所以不会卡在一页里。 -->
+    <!-- ⚠️这个 🔍 当天撤过又**原样请回来了**（2026-09-15 傍晚，她：「要不还是把那个搜索键
+         弄回来吧，连带着长按阅读的功能一起，我发现养成习惯了」）。
+         **别再撤第二次**——手已经记住了，没有哪个新入口能替掉肌肉记忆。
+         三个动作都在：单击聚焦搜索 · 双击切页 · 长按打开聊天/阅读。
+         ⚠️它的位置（bottom:88）是**主题小窗那个 156 的依据**，见 .theme-picker 那段算式；
+           哪天真要再动它，那个数必须跟着重算。 -->
+    <button class="fab-search" id="fabSearch" style="display: flex;" aria-label="搜索"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><circle cx="11" cy="11" r="7"></circle><path d="M20.2 20.2l-4.1-4.1"></path></svg></button>
     <button class="fab-add" id="fabAdd" style="display: flex;">+</button>
 
     <!-- 主题选择面板 -->
@@ -7525,6 +7528,7 @@ body {
 
         function updateFabPositions() {
             document.getElementById('fabAdd').style.display = 'flex';
+            document.getElementById('fabSearch').style.display = 'flex';
         }
 
         /* ===== 搜索辅助 ===== */
@@ -7639,6 +7643,55 @@ body {
                 }
             }, 350);
         }
+
+        /* 🔍 的三个动作（2026-09-15 撤过又请回来，她：「养成习惯了」）：
+             **单击**＝聚焦当前页的搜索框
+             **双击**＝切页（密钥 → 收藏 → 打卡）
+             **长按**＝打开聊天/阅读界面
+           ⚠️单击必须**延迟 250ms 再执行**：不等一下的话，双击会先触发一次单击，
+             搜索框抢到焦点、页面又被切走，两件事一起发生。
+           ⚠️加号那边的双击也还是切页（当天搬过去的），两条路并存不冲突，
+             她哪个顺手用哪个。换皮肤仍在「长按加号」的主题小窗里。 */
+        (function() {
+            var clickTimer = null;
+            var fab = document.getElementById('fabSearch');
+            if (!fab) return;
+            fab.addEventListener('click', function(e) {
+                if (_fabSearchLongFired) { _fabSearchLongFired = false; return; }   // 长按刚办完事，吃掉这一下
+                if (clickTimer) {
+                    clearTimeout(clickTimer); clickTimer = null;
+                    var next = currentTab === 'keys' ? 'snippets' : currentTab === 'snippets' ? 'checkin' : 'keys';
+                    switchTab(next);
+                    showToast(next === 'keys' ? '密钥' : next === 'snippets' ? '收藏' : '打卡');
+                } else {
+                    clickTimer = setTimeout(function() { clickTimer = null; focusSearch(); }, 250);
+                }
+            });
+        })();
+
+        /* 长按 🔍 打开聊天。⚠️用 pointer 事件统一处理鼠标和触摸，
+           并且**长按触发后要拦掉随之而来的 click**（靠 _fabSearchLongFired），
+           否则手一抬还会顺带执行一次"聚焦搜索"。 */
+        var _fabSearchLongFired = false;
+        (function() {
+            var fab = document.getElementById('fabSearch');
+            if (!fab) return;
+            var t = null;
+            function down(e) {
+                _fabSearchLongFired = false;
+                if (t) clearTimeout(t);
+                t = setTimeout(function() {
+                    t = null; _fabSearchLongFired = true;
+                    if (typeof openChatModal === 'function') openChatModal();
+                }, 500);
+            }
+            function up() { if (t) { clearTimeout(t); t = null; } }
+            fab.addEventListener('pointerdown', down);
+            fab.addEventListener('pointerup', up);
+            fab.addEventListener('pointerleave', up);
+            fab.addEventListener('pointercancel', up);
+            fab.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+        })();
 
         function showThemePicker() {
             var picker = document.getElementById('themePicker');
@@ -11368,6 +11421,7 @@ body {
             document.querySelectorAll('.card-list').forEach(function(l) { l.classList.add('select-mode-on'); });
             document.getElementById('batchBar').classList.add('show');
             document.getElementById('fabAdd').style.display = 'none';
+            document.getElementById('fabSearch').style.display = 'none';
             updateBatchCount();
         }
 
@@ -11377,6 +11431,7 @@ body {
             document.querySelectorAll('.card.selected').forEach(function(c) { c.classList.remove('selected'); });
             document.getElementById('batchBar').classList.remove('show');
             document.getElementById('fabAdd').style.display = 'flex';
+            if (currentTab === 'snippets') document.getElementById('fabSearch').style.display = 'flex';
         }
 
         function toggleCardSelect(circle) {
