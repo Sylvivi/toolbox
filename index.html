@@ -5881,6 +5881,21 @@ body {
                         <span id="booksSyncStatus" style="font-size:12px;color:var(--text-muted)"></span>
                     </div>
                 </div>
+
+                <!-- 手机通知（2026-09-16 她要的「慢活干完了叫我」）。
+                     ⚠️入口放在这儿是因为它跟云同步是一条链：订阅凭证也是存在同一台服务器上的。
+                     ⚠️**授权弹窗一辈子只弹一次**，点了"拒绝"就再也弹不出来、只能去
+                       Chrome 的站点设置里手动改。所以按钮上写清楚"会问你一次"。 -->
+                <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--card-border)">
+                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">
+                        手机通知　<span style="opacity:.75">服务器上的慢活（存小红书之类）跑完了弹通知栏叫你</span>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                        <button class="btn-cancel" onclick="pushSubscribe()" style="flex:none;padding:7px 16px">开启通知</button>
+                        <button class="btn-cancel" onclick="pushTest()" style="flex:none;padding:7px 16px">发一条试试</button>
+                        <span id="pushStatus" style="font-size:12px;color:var(--text-muted)"></span>
+                    </div>
+                </div>
             </div>
             <div class="modal-actions" style="flex-direction:column;gap:8px">
                 <div id="storageUsageInfo" style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 2px 0px;">💾 本地存储：23.13 MB / ~50 MB（46%）</div>
@@ -13946,6 +13961,76 @@ body {
             var t = localStorage.getItem('toolbox_gist_last_sync');
             if (!el) return;
             el.textContent = t ? '上次同步：' + fmtTime(t) : '';
+        }
+
+        /* ===== 手机通知（2026-09-16 她要的「慢活干完了叫我」）=====
+           安卓上装成桌面图标之后，toolbox 关着、手机锁屏也收得到；点一下跳回来。
+
+           ⚠️**授权弹窗一辈子只弹一次**：点了"拒绝"之后 `Notification.requestPermission()`
+             会直接返回 denied、连框都不弹，只能去 Chrome 的站点设置里手动改回来。
+             所以 denied 的时候必须**明说怎么救**，不能只说一句"没开权限"。
+           ⚠️订阅凭证存服务器的文件里（`push/subs.json`），**不进 data.db**：
+             那是设备凭证、不是她的数据，混进同步库会被推到别的设备上去。
+           ⚠️`applicationServerKey` 要的是 Uint8Array，不能直接丢 base64 字符串进去。 */
+        function _b64ToU8(b64) {
+            var pad = '='.repeat((4 - b64.length % 4) % 4);
+            var raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+            var u8 = new Uint8Array(raw.length);
+            for (var i = 0; i < raw.length; i++) u8[i] = raw.charCodeAt(i);
+            return u8;
+        }
+
+        function _pushSay(t) {
+            var el = document.getElementById('pushStatus');
+            if (el) el.textContent = t;
+        }
+
+        async function pushSubscribe() {
+            if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+                _pushSay('这个浏览器不支持推送'); return;
+            }
+            var cfg = null;
+            try { cfg = cfGetConfig(); } catch (e) {}
+            if (!cfg || !cfg.url || !cfg.token) { _pushSay('要先连上云同步'); return; }
+            try {
+                var perm = await Notification.requestPermission();
+                if (perm !== 'granted') {
+                    _pushSay(perm === 'denied'
+                        ? '被拒过一次，浏览器不会再问了 → 去 Chrome 的「站点设置 → 通知」里把本站改成允许'
+                        : '没答应');
+                    return;
+                }
+                _pushSay('正在订阅…');
+                var r = await cfReq('GET', '', undefined, 'vapid=1');
+                if (!r || !r.ok) { _pushSay('拿不到服务器的公钥'); return; }
+                var reg = await navigator.serviceWorker.ready;
+                var sub = await reg.pushManager.getSubscription();
+                if (!sub) {
+                    sub = await reg.pushManager.subscribe({
+                        userVisibleOnly: true,               // ⚠️Chrome 强制要求，不给就直接报错
+                        applicationServerKey: _b64ToU8(r.key)
+                    });
+                }
+                var res = await fetch(cfg.url.replace(/\/+$/, '') + '/_pushsub', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + cfg.token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(sub)
+                }).then(function (x) { return x.json(); });
+                _pushSay(res && res.ok ? ('✓ 开好了（已登记 ' + res.devices + ' 台设备）') : '登记失败');
+            } catch (e) {
+                _pushSay('出错了：' + (e && e.message || e));
+            }
+        }
+
+        async function pushTest() {
+            var cfg = null;
+            try { cfg = cfGetConfig(); } catch (e) {}
+            if (!cfg || !cfg.url || !cfg.token) { _pushSay('要先连上云同步'); return; }
+            _pushSay('发了，看通知栏…');
+            try {
+                var r = await cfReq('GET', '', undefined, 'pushtest=1');
+                _pushSay(r && r.ok ? ('✓ 发出去了（' + r.sent + ' 台）') : ('✗ ' + ((r && r.error) || '没发出去')));
+            } catch (e) { _pushSay('✗ ' + e); }
         }
 
         function openGistModal() {

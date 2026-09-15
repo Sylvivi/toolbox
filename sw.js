@@ -5,7 +5,7 @@
    改完之后：有缓存就瞬间出画面，新版在后台取、下次打开就是新的；
    取到新版时给页面发一条消息，弹「有新版本，点这里刷新」，免得她以为改动没生效。
    ⚠️版本号一定要跟着变（v8→v9），否则 activate 里那段清旧缓存不会跑。 */
-var CACHE = 'toolbox-v45';   // ⚠️2026-09-06 又 +1：外壳走「缓存优先」，而部署时 `cp -f` 写了一半的
+var CACHE = 'toolbox-v46';   // ⚠️2026-09-06 又 +1：外壳走「缓存优先」，而部署时 `cp -f` 写了一半的
                              //   index.html 是 HTTP 200，被当成好的存进了 v11 —— 她那边整页 JS 全死，
                              //   而且**回退部署也没用**，因为她压根不去服务器取。+1 让 activate 清掉毒缓存。
                              //   （部署已改成原子替换，见 deploy_toolbox_local.sh，根因不会再有）
@@ -130,4 +130,44 @@ self.addEventListener('fetch', function(e) {
       return r;
     }).catch(function() { return caches.match(e.request); })
   );
+});
+
+/* ===== 推送通知（2026-09-16 汐加的）=====
+   她要的是「慢活干完了叫我」——存小红书、整本书重处理这类要在服务器上跑一阵的事，
+   跑完直接弹通知栏，点一下跳回 toolbox，不用她干等着看弹窗。
+
+   ⚠️**必须有 `push` 这个监听**，否则安卓上会出现"幽灵通知"：
+     Chrome 收到推送但页面没处理，会自己弹一条「本站在后台更新了」的系统文案，
+     既难看又说不清是什么事。
+   ⚠️`waitUntil` 不能省——showNotification 是异步的，不等它 sw 就被系统睡掉了。
+   ⚠️点击后**优先聚焦已经开着的那个窗口**，而不是每次新开一个：
+     她常年开着 toolbox，每来一条通知就多开一个标签页会很烦。 */
+self.addEventListener('push', function (e) {
+  var d = { title: 'toolbox', body: '', url: '/' };
+  try { if (e.data) d = Object.assign(d, e.data.json()); } catch (err) {}
+  e.waitUntil(self.registration.showNotification(d.title, {
+    body: d.body,
+    icon: 'icon-192.png',
+    badge: 'icon-192.png',
+    data: { url: d.url },
+    // ⚠️同一个 tag 会**替换**上一条而不是叠一堆：连着存三篇小红书，
+    //   她看到的是一条「存好了」，不是三条挤满通知栏。
+    tag: d.tag || 'toolbox',
+    renotify: true
+  }));
+});
+
+self.addEventListener('notificationclick', function (e) {
+  e.notification.close();
+  var url = (e.notification.data && e.notification.data.url) || '/';
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (ws) {
+    for (var i = 0; i < ws.length; i++) {
+      if (ws[i].url.indexOf(self.registration.scope) === 0 && 'focus' in ws[i]) {
+        // 已经开着就聚焦它，顺便告诉页面「你是被这条通知叫醒的」
+        ws[i].postMessage({ type: 'notif-click', url: url });
+        return ws[i].focus();
+      }
+    }
+    return self.clients.openWindow(url);
+  }));
 });
