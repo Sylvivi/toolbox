@@ -19388,10 +19388,24 @@ body {
                 { t: '存小红书', svg: '<path d="M4 4h16v12H5.5L4 18z"></path><path d="M8 9h8"></path><path d="M8 12.5h5"></path>',
                   go: function () { if (typeof xhsArchivePrompt === 'function') xhsArchivePrompt(); } },
                 { t: '继续阅读', svg: '<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5z"></path><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"></path>',
-                  go: function () { if (typeof readerResumeLast === 'function') readerResumeLast(); } },
+                  go: function () { ensureChatOpen(); if (typeof readerResumeLast === 'function') readerResumeLast(); } },
                 { t: '新对话', svg: '<path d="M12 5v14"></path><path d="M5 12h14"></path>',
-                  go: function () { if (typeof chatNewConv === 'function') chatNewConv(); } }
+                  go: function () { ensureChatOpen(); if (typeof chatNewConv === 'function') chatNewConv(); } }
             ];
+
+            /* ⚠️2026-09-15 她报的：「那个加号，在对话列表和阅读界面才能直接生效，在主页不生效」。
+               病根：`chatNewConv()` / `readerResumeLast()` 都是「**在已经打开的对话界面里**做事」——
+               它们把内部状态改对了（chatView 变成 conv、chatReaderMode 变成 true），
+               但**那层界面在主页上压根没打开**，所以她看不到任何反应。
+               ⚠️不是「没生效」，是「生效了但没露面」——这种最容易查错方向。
+               ⚠️一查发现**「继续阅读」也是同一个毛病**，她还没撞上。
+                 排查时把四个动作在主页逐个点了一遍才看全，别只修她报的那一个。 */
+            function ensureChatOpen() {
+                var ov = document.getElementById('chatModalOverlay');
+                if (ov && !ov.classList.contains('show') && typeof openChatModal === 'function') {
+                    openChatModal();
+                }
+            }
 
             var pos = { side: 'r', y: 0.62 };
             try { pos = JSON.parse(localStorage.getItem(KEY)) || pos; } catch (e) {}
