@@ -7837,11 +7837,48 @@ body {
                      '" onclick="homeBgSet(' + JSON.stringify(c.url).replace(/"/g, '&quot;') + ')">' +
                      esc(c.name || '底图') + '</button>';
             });
+            /* 「贴链接」排在最后（2026-09-16 她要的：「可以在最下面有一个粘贴链接填背景的入口」）。
+               ⚠️她的用例是**网上随手看到的图**，不一定在图片箱里，所以不能只让她从自己传的那批挑。
+               ⚠️存进去之前**先真的把图加载一遍**：网图十有八九是死链、防盗链、或者
+                 根本不是图（imgur 那种会回一张 161×81 的"图没了"占位图，HTTP 还是 200）。
+                 不验的话她会看到一片空白，还以为是功能坏了。 */
+            h += '<button class="theme-picker-item" onclick="homeBgPrompt()">＋ 贴一个图片链接</button>';
             if (!list.length) {
                 h += '<span style="font-size:11px;color:var(--text-muted);padding:4px 6px">' +
-                     '还没传过底图——去图片箱的「阅读底图」传几张</span>';
+                     '上面那些是图片箱里的阅读底图，还没传过就先用贴链接的</span>';
             }
             box.innerHTML = h;
+        }
+
+        function homeBgPrompt() {
+            var u = prompt('贴一个图片链接（http/https 开头）：', '');
+            if (u === null) return;
+            u = (u || '').trim();
+            if (!u) return;
+            if (!/^https?:\/\//i.test(u)) { alert('得是 http 或 https 开头的图片地址'); return; }
+            showToast('正在试着打开这张图…');
+            var im = new Image();
+            var done = false;
+            var timer = setTimeout(function () {
+                if (done) return; done = true;
+                alert('✗ 这张图打不开\n\n等了 12 秒没反应，可能是防盗链或者网络到不了。');
+            }, 12000);
+            im.onload = function () {
+                if (done) return; done = true; clearTimeout(timer);
+                /* ⚠️**小得离谱的就是占位图**：imgur 之类的站，图删了照样回 200，
+                   给你一张一百来像素的"图没了"小图。直接存进去她只会看到一片空白。 */
+                if (im.naturalWidth < 300 || im.naturalHeight < 300) {
+                    alert('✗ 这看着不像张能当背景的图\n\n只有 ' + im.naturalWidth + '×' + im.naturalHeight +
+                          '，多半是图站的「图没了」占位图。换个链接试试。');
+                    return;
+                }
+                homeBgSet(u);
+            };
+            im.onerror = function () {
+                if (done) return; done = true; clearTimeout(timer);
+                alert('✗ 这张图打不开\n\n可能是链接失效、或者那个站不让外部引用（防盗链）。');
+            };
+            im.src = u;
         }
 
         homeBgApply();
