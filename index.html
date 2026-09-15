@@ -2397,6 +2397,25 @@ body {
         }
         .dark .fab-act { background: #1e2b25; }
         .fab-act:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 var(--text); }
+        /* 剪贴板那一条（2026-09-16 她要的「省掉粘贴那一步」）。
+           ⚠️**不塞进 2×2**：那个排布是她定的，硬加第五格就破了；
+             而且这一条**必须带字**——光一个图标说不清它要对什么东西干什么。
+           ⚠️横跨两列，压在 2×2 上面；剪贴板里没东西时整条不出现。 */
+        .fab-clip {
+            grid-column: 1 / -1; cursor: pointer;
+            display: flex; align-items: center; gap: 6px;
+            padding: 7px 9px; max-width: 216px;
+            background: #fff; color: var(--text);
+            border: 2.5px solid var(--text); border-radius: 0;
+            box-shadow: 4px 4px 0 var(--text);
+            font-size: 12px; line-height: 1.3;
+            animation: fabIn .18s cubic-bezier(.34,1.3,.64,1) backwards;
+        }
+        .dark .fab-clip { background: #1e2b25; }
+        .fab-clip:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 var(--text); }
+        .fab-clip b { font-weight: 700; flex-shrink: 0 }
+        .fab-clip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                         color: var(--text-muted); min-width: 0 }
         @keyframes fabIn { from { opacity: 0; transform: scale(.6) } to { opacity: 1; transform: none } }
         /* ===== 输入区 — 悬浮玻璃条 =====
            2026-09-13 她要的：「人家的输入框是一个独立的东西，字能从它背后穿过；
@@ -12595,15 +12614,40 @@ body {
              · 顺序是**正文 → 评论 → 图**。
            ⚠️评论只有**首屏那一批**（小红书只把首屏塞进 HTML），有多少拿多少，不是全部。
            ⚠️慢：抓图 + 排版 + 传网盘，一篇十几秒到半分钟，所以要给她一个"在跑"的提示。 */
+        /* 一句话直接进资料库（2026-09-16，给悬浮球的剪贴板那一条用）。
+           ⚠️标题取首行截 24 字：她的资料卡片列表是按标题认的，标题必须一眼能认出来。
+           ⚠️走 setSnipData（不是 Silent），云同步才会把它推上去。 */
+        function snipQuickSave(text) {
+            text = (text || '').trim();
+            if (!text) return;
+            var all = getSnipData() || [];
+            var title = (text.split('\n')[0] || '').slice(0, 24) || '随手存的';
+            all.unshift({
+                id: 'q' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                title: title, tag: '随手存', note: '', type: 'text', code: text,
+                updatedAt: Date.now(), createdAt: Date.now()
+            });
+            setSnipData(all);
+            if (typeof renderSnippets === 'function') { try { renderSnippets(); } catch (e) {} }
+            alert('✓ 存进资料了\n\n' + title);
+        }
+
         function xhsArchivePrompt() {
             if (typeof chatHideAttachMenu === 'function') chatHideAttachMenu();
-            var cfg = null;
-            try { cfg = cfGetConfig(); } catch (e) {}
-            if (!cfg || !cfg.url || !cfg.token) { alert('要先配好云同步才能用（接口挂在那上面）'); return; }
             var u = prompt('把小红书链接粘进来（整段分享文案也行）：', '');
             if (!u) return;
             var m = u.match(XHS_URL_RE);
             if (!m || !m.length) { showToast('这段里没找到小红书链接'); return; }
+            xhsArchiveUrl(m[0]);
+        }
+
+        /* 直接存一个已经拿到手的链接。⚠️拆出来是给**悬浮球的剪贴板那一条**用的
+           （2026-09-16）：那边链接是从剪贴板读来的，不该再弹一次输入框问她。 */
+        function xhsArchiveUrl(url) {
+            var cfg = null;
+            try { cfg = cfGetConfig(); } catch (e) {}
+            if (!cfg || !cfg.url || !cfg.token) { alert('要先配好云同步才能用（接口挂在那上面）'); return; }
+            var m = [url];
             /* ⚠️反馈必须是**要她点一下的弹窗**，不能用吐司（2026-09-15 她报
                「但是我不知道存没存成呢」）：这活要十几秒，中间界面毫无动静，
                完事再飘一个两秒就没的吐司，等于没反馈。 */
@@ -19504,6 +19548,56 @@ body {
                 menu.style.top = off + 'px';
             }
 
+            /* ===== 剪贴板分诊（2026-09-16 她要的）=====
+               她存一篇小红书原来要六步：小红书里复制 → 切回来 → 点球 → 点「存小红书」
+               → 长按粘贴 → 确定。而**链接本来就在剪贴板里**，让它自己看一眼就够了。
+               → 点开球的时候读一次剪贴板，认出来是什么就在 2×2 上面多一条对应的动作。
+
+               ⚠️`navigator.clipboard.readText()` 必须在**用户手势里**调，而且只在 https。
+                 安卓 Chrome 允许一次之后不再问（她用的就是这台）；iPad 上每次都会问，
+                 所以**读不到就当没有、整条不出现**，绝不弹错误、绝不挡住菜单。
+               ⚠️读剪贴板是异步的，而菜单要立刻弹出来 —— 所以**先画 2×2，条子回头再插**，
+                 不能 await 完再画（那样点一下要等半秒才有反应）。
+               ⚠️只认三类，其余一律不出现：小红书链接 / 别的网址 / 一段文字。
+                 认不出就别猜，宁可少一格也别给她一个莫名其妙的按钮。 */
+            function clipKind(t) {
+                t = (t || '').trim();
+                if (!t || t.length > 4000) return null;
+                var x = t.match(XHS_URL_RE);
+                if (x && x.length) return { k: 'xhs', url: x[0], label: '存这条', tip: t.replace(/https?:\/\/\S+/g, '').trim() || x[0] };
+                var u = t.match(/https?:\/\/\S+/);
+                if (u && t.length < 500) return { k: 'url', url: u[0], label: '让蘑菇读', tip: u[0] };
+                if (t.length >= 2) return { k: 'txt', text: t, label: '存成资料', tip: t };
+                return null;
+            }
+
+            function clipAct(info) {
+                if (info.k === 'xhs') {
+                    if (typeof xhsArchiveUrl === 'function') xhsArchiveUrl(info.url);
+                } else if (info.k === 'url') {
+                    ensureChatOpen();
+                    var el = document.getElementById('chatInput');
+                    if (el) { el.value = (el.value ? el.value + '\n' : '') + info.url; el.focus(); chatAutoGrow(el); }
+                } else {
+                    if (typeof snipQuickSave === 'function') snipQuickSave(info.text);
+                }
+            }
+
+            function addClipRow() {
+                if (!navigator.clipboard || !navigator.clipboard.readText) return;
+                navigator.clipboard.readText().then(function (t) {
+                    if (!wrap.classList.contains('open')) return;     // 已经收起来了就别插
+                    var info = clipKind(t);
+                    if (!info) return;
+                    if (menu.querySelector('.fab-clip')) return;
+                    var row = document.createElement('div');
+                    row.className = 'fab-clip';
+                    row.innerHTML = '<b>' + esc(info.label) + '</b><span>' + esc(info.tip.slice(0, 40)) + '</span>';
+                    row.addEventListener('click', function (e) { e.stopPropagation(); close(); clipAct(info); });
+                    menu.insertBefore(row, menu.firstChild);
+                }).catch(function () { /* 没给权限 / 不是 https：当没有，静默 */ });
+            }
+
             function buildMenu() {
                 menu.innerHTML = '';
                 /* 两排两个的排布（2026-09-15 她定的）：
@@ -19526,6 +19620,7 @@ body {
                     });
                     menu.appendChild(b);
                 });
+                addClipRow();      // 异步，认出来了才插；见上面那段
             }
 
             var idleTimer = null;
