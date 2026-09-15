@@ -36213,6 +36213,18 @@ body {
             var _pTapEl = null, _pTapCount = 0, _pTapTime = 0;   // 段落连击计数：1 翻页 / 2 提问
             // 多指手势（如三指截屏）会被系统误合成 click/dblclick，记下最近一次「≥2 指同时按下」的时刻，
             // 紧随其后的点击/双击一律忽略，避免截屏时误触翻页或段落提问；单指操作不受影响。
+            /* 点击翻页也用到**对话模式**（2026-09-15 她要的：「可以在对话界面也加上那个点一下翻页的功能吗」）。
+               她挑的是「跟阅读一样：整屏」——理由是两边手感一致、肌肉记忆不用切。
+               ⚠️只在**纯对话**开：阅读/共读走 chatReadingMode 那条，翻译模式有自己的长按追问，
+                 列表页更不该翻页。
+               ⚠️复用阅读那一整套守卫（多指截屏误合成的点击 / 刚进界面的幽灵点击 /
+                 选中文字时不翻 / 按钮链接图片让路），**别另写一份**——那些坑都是踩出来的。 */
+            function _chatTapPageOn() {
+                return (typeof chatView !== 'undefined' && chatView === 'conv')
+                    && !(typeof chatReadingMode !== 'undefined' && chatReadingMode)
+                    && !(typeof chatTranslateMode !== 'undefined' && chatTranslateMode)
+                    && !(typeof chatReaderMode !== 'undefined' && chatReaderMode);
+            }
             var _multiTouchAt = 0;
             el.addEventListener('touchstart', function(e) {
                 if (e.touches && e.touches.length > 1) _multiTouchAt = Date.now();
@@ -36233,7 +36245,7 @@ body {
                 if (tp) { translateOnParaClick(tp); return; }
                 // 共读模式：点屏幕任意一边都往下翻一屏（左手握机随便点都能继续读，
                 // 往回看用手指上滑滚动）。双击留给段落评价、拖选/已选中文字留给复制，故排除并延迟确认。
-                if (chatReadingMode) {
+                if (chatReadingMode || _chatTapPageOn()) {
                     if (_isMultiTouchEcho()) return;   // 多指手势（如三指截屏）误合成的点击，不翻页
                     // 刚从列表进入对话的极短时间内忽略翻页，避免「幽灵点击」把阅读位置翻走
                     if (Date.now() < _readingTapSuppressUntil) return;
@@ -36242,7 +36254,12 @@ body {
                     // 改错字的编辑框开着：点正文既不翻页也不提问（免得改到一半被翻走）。
                     // 故意**不自动关掉它**——手一抖就把打了一半的字弄没太亏，收起走「取消」。
                     if (document.getElementById('rdEditBox')) { clearTimeout(_readingTapTimer); _pTapCount = 0; _pTapEl = null; return; }
-                    if (e.target.closest('button, input, textarea, a, svg, img, .reading-actbar, .chat-thinking')) return;
+                    /* ⚠️2026-09-15 加了 `.rd-pref, .chat-filecard`（她要把点击翻页也用到对话界面）。
+                       对话里可点的东西比阅读多：`§56` 那种段落定位小chip、
+                       附件/小红书折叠成的文件卡片，都是 span/div 带 onclick，
+                       不排除的话点它们会**既执行动作又翻一页**。
+                       ⚠️`.rd-pref` 在阅读模式下本来也有这个毛病，一并治了。 */
+                    if (e.target.closest('button, input, textarea, a, svg, img, .reading-actbar, .chat-thinking, .rd-pref, .chat-filecard')) return;
                     var sel = window.getSelection && window.getSelection();
                     if (sel && String(sel).length > 0) return;
                     // 原文段落：单击翻页 / 双击提问，统一用「连击计数 + 停手后判定」。
