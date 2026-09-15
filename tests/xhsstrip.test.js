@@ -60,6 +60,22 @@ const QS = ['这篇讲的方法靠谱吗？', '帮我总结成三条', '这个�
         // 不传标题时**不许乱猜**：她写在链接前面的话必须原样留着
         const n2 = '我觉得这篇写得好 https://xhslink.cn/a/t2 ';
         out.extra.没传标题就别乱删 = xhsStripShareText(n2, pick(n2), []).indexOf('我觉得这篇写得好') >= 0;
+        /* 她追问的：「有些笔记没带标题怎么办呀」——精确匹配失效时的两条兜底。 */
+        // ① 口令里的标题被截断了，跟抓回来的首行对不上 → 靠最长公共前缀删
+        const full = '这姑娘拿到奖之后第一件事居然是替别人说话';
+        const cut  = '这姑娘拿到奖之后第一件事居然是';   // 口令里只有前半截
+        const c1 = '41 ' + cut + ' https://xhslink.cn/a/c1 我在测试功能';
+        const rc1 = xhsStripShareText(c1, pick(c1), [full]);
+        out.extra.标题被截断也能删 = rc1.indexOf(cut) < 0 && rc1.indexOf('我在测试功能') >= 0;
+        // ② 完全没标题（抓回来的首行跟口令毫无关系）→ 靠「序号+短内容+链接」这个结构删
+        const c2 = '7 随手记一笔 https://xhslink.cn/a/c2 帮我看看这个';
+        const rc2 = xhsStripShareText(c2, pick(c2), ['完全对不上的一行正文内容']);
+        out.extra.没标题也能靠结构删 = rc2.indexOf('随手记一笔') < 0 && rc2.indexOf('帮我看看这个') >= 0;
+        // ③ 但她自己打了一大段时，绝不能当口令整段删
+        const long = '我看了这篇之后有点想法，想问问你觉得里面讲的那个方法到底靠不靠谱，我们学校情况不太一样';
+        const c3 = '3 ' + long + ' https://xhslink.cn/a/c3 ';
+        out.extra.她打了一大段就别当口令 = xhsStripShareText(c3, pick(c3), []).indexOf(long) >= 0;
+
         // 标题跟她的话长得一样时，只删链接前面那一处
         const n3 = '9 ' + T + ' https://xhslink.cn/a/t3 ' + T + ' 这句是我自己写的';
         const r3 = xhsStripShareText(n3, pick(n3), [T]);
