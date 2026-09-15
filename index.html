@@ -2381,8 +2381,11 @@ body {
         .fab-ball .clawd-px { left: 6px !important; top: 11px !important; }
         /* 展开的一小排快捷：跟小螃蟹菜单同一套新粗野主义（黑描边 + 硬投影），
            ⚠️球本身要"淡"，但**真正的按钮该显眼**——两者不是一回事。 */
-        #fabMenu { position: absolute; display: none; gap: 8px; align-items: center; }
-        #fabWrap.open #fabMenu { display: flex; }
+        /* ⚠️2026-09-15 她要的：「别弄成一排展开，改成两排，一排两个的那种」。
+           一排四个横着铺出去有两个毛病：贴边时容易顶到屏幕另一头，
+           而且手指要横着划一长条。两排两个更像一小块面板，够得着。 */
+        #fabMenu { position: absolute; display: none; gap: 8px; }
+        #fabWrap.open #fabMenu { display: grid; grid-template-columns: repeat(2, 42px); }
         .fab-act {
             width: 42px; height: 42px; flex-shrink: 0; cursor: pointer;
             display: flex; align-items: center; justify-content: center;
@@ -19436,7 +19439,14 @@ body {
                 else { wrap.style.right = '-18px'; wrap.style.left = 'auto'; }
                 menu.style[pos.side === 'l' ? 'left' : 'right'] = '62px';
                 menu.style[pos.side === 'l' ? 'right' : 'left'] = 'auto';
-                menu.style.top = '5px';
+                /* 两排两个之后菜单有 92px 高（42×2 + 8），比球（52）高一截。
+                   ⚠️**要跟球对齐着居中，还要夹在屏幕里**：球拖到最上或最下时，
+                     不夹的话那一块会有一半跑到屏幕外，点不着。 */
+                var MH = 92, off = Math.round((bh - MH) / 2);
+                var absTop = top + off;
+                if (absTop < 8) off += (8 - absTop);
+                if (absTop + MH > h - 8) off -= (absTop + MH - (h - 8));
+                menu.style.top = off + 'px';
             }
 
             function buildMenu() {
