@@ -5130,6 +5130,8 @@ body {
         .theme-picker-night.active .tp-state, .theme-picker-random.active .tp-state { color: var(--accent); }
         .theme-picker-sep { height: 1px; background: var(--card-border); margin: 4px 6px 6px; }
 
+        /* ⚠️2026-09-15 起这条没人用了：🔍 浮标已撤（见页面里那段注释）。
+           先留着不删——`.fab-search` 在别处还有 closest() 判断引用到。 */
         .fab-search {
             -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
             position: fixed; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); right: 16px; z-index: 155;
@@ -6255,7 +6257,12 @@ body {
     <!-- =======================================================================
       [2.3] 全局悬浮与提示层
     ========================================================================= -->
-    <button class="fab-search" id="fabSearch" style="display: flex;">🔍</button>
+    <!-- ⚠️2026-09-15 撤掉了右下角那个 🔍（她：「主页那个搜索键可以去掉了，因为现在有悬浮球了」）。
+         它原来身上挂着三个动作，各自的去向：
+           · 长按打开聊天 → **悬浮球**接了（而且分成"新对话"和"继续阅读"两个）
+           · 双击切页     → **搬到加号的双击**上（见 handleFabTap）
+           · 单击聚焦搜索 → 她说不需要；每页顶上本来就有搜索框，代价只是多滑一下
+         ⚠️切页**不止这一条路**：左右滑屏也能切（见 touchend 那段），所以不会卡在一页里。 -->
     <button class="fab-add" id="fabAdd" style="display: flex;">+</button>
 
     <!-- 主题选择面板 -->
@@ -7511,7 +7518,6 @@ body {
 
         function updateFabPositions() {
             document.getElementById('fabAdd').style.display = 'flex';
-            document.getElementById('fabSearch').style.display = 'flex';
         }
 
         /* ===== 搜索辅助 ===== */
@@ -7522,26 +7528,6 @@ body {
             setTimeout(function() { if (input) input.focus(); }, 350);
         }
 
-        // 搜索键：单击聚焦搜索，双击切换页面（长按打开聊天/阅读界面，见后面「长按搜索浮标」）
-        (function() {
-            var clickTimer = null;
-            document.getElementById('fabSearch').addEventListener('click', function(e) {
-                if (clickTimer) {
-                    clearTimeout(clickTimer);
-                    clickTimer = null;
-                    // 双击：切换页面（密钥→收藏→打卡→密钥）
-                    var next = currentTab === 'keys' ? 'snippets' : currentTab === 'snippets' ? 'checkin' : 'keys';
-                    switchTab(next);
-                    showToast(next === 'keys' ? '密钥' : next === 'snippets' ? '收藏' : '打卡');
-                } else {
-                    clickTimer = setTimeout(function() {
-                        clickTimer = null;
-                        // 单击：聚焦搜索
-                        focusSearch();
-                    }, 250);
-                }
-            });
-        })();
 
         function toggleSearchClear(input) {
             var btn = input.parentElement.querySelector('.search-clear');
@@ -7632,7 +7618,17 @@ body {
                 if (count === 1) {
                     onFabAdd();
                 } else if (count === 2) {
-                    cycleTheme();
+                    /* ⚠️2026-09-15 她要的：双击从「换皮肤」改成「切页」
+                       （密钥 → 收藏 → 打卡 → 密钥）。
+                       原因：右下角那个 🔍 撤掉了（它的活被悬浮球接走），
+                       而**双击 🔍 曾经是切页唯一的按钮通路**；
+                       她说「双击切换放到加号去，把原有的那个皮肤切换替换掉，很少用」。
+                       ⚠️换皮肤没丢：**长按加号**弹的主题小窗里本来就能挑，而且挑得准，
+                         双击那种"一路循环过去"本来就不好用。 */
+                    var next = currentTab === 'keys' ? 'snippets'
+                             : currentTab === 'snippets' ? 'checkin' : 'keys';
+                    switchTab(next);
+                    showToast(next === 'keys' ? '密钥' : next === 'snippets' ? '收藏' : '打卡');
                 }
             }, 350);
         }
@@ -11365,7 +11361,6 @@ body {
             document.querySelectorAll('.card-list').forEach(function(l) { l.classList.add('select-mode-on'); });
             document.getElementById('batchBar').classList.add('show');
             document.getElementById('fabAdd').style.display = 'none';
-            document.getElementById('fabSearch').style.display = 'none';
             updateBatchCount();
         }
 
@@ -11375,7 +11370,6 @@ body {
             document.querySelectorAll('.card.selected').forEach(function(c) { c.classList.remove('selected'); });
             document.getElementById('batchBar').classList.remove('show');
             document.getElementById('fabAdd').style.display = 'flex';
-            if (currentTab === 'snippets') document.getElementById('fabSearch').style.display = 'flex';
         }
 
         function toggleCardSelect(circle) {
@@ -37486,40 +37480,6 @@ body {
             }
         })();
 
-        /* ----- 长按搜索浮标打开聊天 ----- */
-        (function() {
-            var fab = document.getElementById('fabSearch');
-            var longTimer = null;
-            var didLongPress = false;
-            function onDown(e) {
-                didLongPress = false;
-                longTimer = setTimeout(function() {
-                    didLongPress = true;
-                    longTimer = null;
-                    if (e.cancelable) e.preventDefault();
-                    openChatModal();
-                }, 500);
-            }
-            function onUp(e) {
-                if (longTimer) { clearTimeout(longTimer); longTimer = null; }
-                if (didLongPress) { didLongPress = false; }
-            }
-            function onCancel() {
-                if (longTimer) { clearTimeout(longTimer); longTimer = null; }
-                didLongPress = false;
-            }
-            fab.addEventListener('touchstart', onDown, { passive: false });
-            fab.addEventListener('touchend', onUp);
-            fab.addEventListener('touchcancel', onCancel);
-            fab.addEventListener('mousedown', onDown);
-            fab.addEventListener('mouseup', onUp);
-            fab.addEventListener('mouseleave', onCancel);
-            var origClick = fab.onclick;
-            fab.onclick = function(e) {
-                if (didLongPress) { didLongPress = false; return; }
-                if (origClick) origClick.call(this, e);
-            };
-        })();
 
         /* =========================================================================
          * [3.11] 应用启动流程
