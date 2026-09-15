@@ -12482,17 +12482,21 @@ body {
             if (!u) return;
             var m = u.match(XHS_URL_RE);
             if (!m || !m.length) { showToast('这段里没找到小红书链接'); return; }
-            showToast('📕 正在存…（抓图排版要十几秒）');
+            /* ⚠️反馈必须是**要她点一下的弹窗**，不能用吐司（2026-09-15 她报
+               「但是我不知道存没存成呢」）：这活要十几秒，中间界面毫无动静，
+               完事再飘一个两秒就没的吐司，等于没反馈。 */
+            showToast('📕 正在存…（抓图排版要十几秒，存完会弹窗告诉你）');
             cfReq('GET', '', undefined, 'xhsarc=' + encodeURIComponent(m[0]))
                 .then(function (r) {
                     if (r && r.ok) {
-                        showToast('✓ 已存进网盘：' + r.name +
-                                  '（' + r.imgs + ' 图 / ' + r.comments + ' 条评论）');
+                        alert('✓ 存好了\n\n' + r.name +
+                              '\n' + r.imgs + ' 张图 · ' + r.comments + ' 条评论' +
+                              '\n\n在谷歌网盘 →「小红书存档」里');
                     } else {
-                        showToast('存不了：' + ((r && r.error) || '不知道为什么'));
+                        alert('✗ 没存上\n\n' + ((r && r.error) || '不知道为什么'));
                     }
                 })
-                .catch(function (e) { showToast('存不了：' + e); });
+                .catch(function (e) { alert('✗ 没存上\n\n' + e); });
         }
 
         function xhsFetchNote(u) {
