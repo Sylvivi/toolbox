@@ -6497,6 +6497,13 @@ body {
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
                                     <span>拍照</span>
                                 </button>
+                                <!-- 存小红书（2026-09-15 她要的）：粘一条链接 → 服务器抓正文+首屏评论+
+                                     无水印原图 → 排成 PDF → 直接进谷歌网盘「小红书存档」。
+                                     ⚠️入口做在 toolbox 不是 TG：她原话「我用这个更多一些，飞机那边是用来收东西的」。 -->
+                                <button class="chat-attach-item" onclick="xhsArchivePrompt()">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"></path></svg>
+                                    <span>存小红书</span>
+                                </button>
                             </div>
                         </div>
                         <div class="chat-input-modelmeta" id="chatInputModelMeta" style="display:none"></div>
@@ -12457,6 +12464,35 @@ body {
             return cfReq('GET', '', undefined, 'search=' + encodeURIComponent(q))
                 .then(function (r) { return (r && r.ok && r.text) ? r : null; })
                 .catch(function () { return null; });
+        }
+
+        /* 存小红书（2026-09-15 她要的）：一条链接 → 服务器抓正文 + 首屏评论 + 无水印原图，
+           排成 PDF 直接进谷歌网盘的「小红书存档」文件夹。
+           ⚠️她拍板的两件事，别改：
+             · **一篇一个 PDF**，不建文件夹（她：「弄成文件夹会不会不太方便看…想要比较整体的感觉」）；
+             · 顺序是**正文 → 评论 → 图**。
+           ⚠️评论只有**首屏那一批**（小红书只把首屏塞进 HTML），有多少拿多少，不是全部。
+           ⚠️慢：抓图 + 排版 + 传网盘，一篇十几秒到半分钟，所以要给她一个"在跑"的提示。 */
+        function xhsArchivePrompt() {
+            if (typeof chatHideAttachMenu === 'function') chatHideAttachMenu();
+            var cfg = null;
+            try { cfg = cfGetConfig(); } catch (e) {}
+            if (!cfg || !cfg.url || !cfg.token) { alert('要先配好云同步才能用（接口挂在那上面）'); return; }
+            var u = prompt('把小红书链接粘进来（整段分享文案也行）：', '');
+            if (!u) return;
+            var m = u.match(XHS_URL_RE);
+            if (!m || !m.length) { showToast('这段里没找到小红书链接'); return; }
+            showToast('📕 正在存…（抓图排版要十几秒）');
+            cfReq('GET', '', undefined, 'xhsarc=' + encodeURIComponent(m[0]))
+                .then(function (r) {
+                    if (r && r.ok) {
+                        showToast('✓ 已存进网盘：' + r.name +
+                                  '（' + r.imgs + ' 图 / ' + r.comments + ' 条评论）');
+                    } else {
+                        showToast('存不了：' + ((r && r.error) || '不知道为什么'));
+                    }
+                })
+                .catch(function (e) { showToast('存不了：' + e); });
         }
 
         function xhsFetchNote(u) {
