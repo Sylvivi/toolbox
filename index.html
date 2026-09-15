@@ -2356,22 +2356,28 @@ body {
         /* ⚠️阅读时压到最淡：那是她待得最久的地方，翻页全靠点屏幕，
            球太显眼既碍眼又容易误触。淡到几乎看不见、但位置还在，想用时摸得到。 */
         body.chat-mask-on #fabWrap:not(.act) { opacity: .14; }
+        /* ⚠️2026-09-15 她看完第一版说：「不要那个圆圆的东西环绕，然后 clawd 可以弄成
+           那种斜着的，这样就好像攀在墙上探出头一样」。
+           → **去掉玻璃圆盘**，只剩 clawd 本身；**歪着身子**，配合贴边缩进，
+             看着就是趴在屏幕边沿往里探头。
+           ⚠️外壳还是 52×52 的透明方块：圆盘没了，但**手指要点的地方不能跟着没**。
+           ⚠️没有底盘托着，浅色底图上像素画容易糊掉 → 用 drop-shadow 描一层很淡的影子
+             （不是加零件，只是让它从背景里浮起来）。 */
         .fab-ball {
             position: relative !important; right: auto !important; top: auto !important;
             width: 52px !important; height: 52px !important; padding: 0 !important;
-            border-radius: 50%; display: flex !important; align-items: center; justify-content: center;
-            /* 跟输入框同一套玻璃配方，不用实心色块——她的口味是"显眼靠提亮字色，别加零件" */
-            background: linear-gradient(180deg,
-                        color-mix(in srgb, var(--glass-white) 84%, transparent),
-                        color-mix(in srgb, var(--glass-white) 70%, transparent));
-            backdrop-filter: blur(6px) saturate(132%);
-            -webkit-backdrop-filter: blur(6px) saturate(132%);
-            border: 1px solid color-mix(in srgb, var(--glass-white) 46%, transparent) !important;
-            box-shadow: 0 4px 14px rgba(0,0,0,.10), inset 0 1px 0 color-mix(in srgb, var(--glass-white) 60%, transparent);
+            background: none !important; border: none !important; box-shadow: none !important;
+            border-radius: 0; display: block !important;
+            filter: drop-shadow(0 2px 3px rgba(0,0,0,.28));
+            transition: transform .22s cubic-bezier(.34,1.3,.64,1);
         }
-        .dark .fab-ball { box-shadow: 0 4px 14px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.12); }
-        /* clawd 在球里居中。⚠️那张像素画约 42×30，scale(3) 之后靠 left/top 摆正，
-           别去改 .clawd-model-btn .clawd-px 的原始值（输入框那只还在用）。 */
+        /* 倾斜方向跟着它贴哪一边走：贴右边就往左歪、脸朝屏幕里；贴左边镜像过来。
+           ⚠️`scaleX(-1)` 是把 clawd 翻个面，让它**始终面朝屏幕内侧**，
+             不然贴左边时就成了背对着你往外爬。 */
+        #fabWrap[data-side="r"] .fab-ball { transform: rotate(-15deg); }
+        #fabWrap[data-side="l"] .fab-ball { transform: rotate(15deg) scaleX(-1); }
+        #fabWrap.open[data-side="r"] .fab-ball { transform: rotate(-4deg); }
+        #fabWrap.open[data-side="l"] .fab-ball { transform: rotate(4deg) scaleX(-1); }
         .fab-ball .clawd-px { left: 6px !important; top: 11px !important; }
         /* 展开的一小排快捷：跟小螃蟹菜单同一套新粗野主义（黑描边 + 硬投影），
            ⚠️球本身要"淡"，但**真正的按钮该显眼**——两者不是一回事。 */
@@ -19397,8 +19403,11 @@ body {
                 wrap.style.top = Math.round(top) + 'px';
                 /* ⚠️贴边**缩进去一截**（露约三分之二），这是「不太明显」的关键：
                    完全贴平看着像个误触点，探出一点反而像挂在边上的小挂件。 */
-                if (pos.side === 'l') { wrap.style.left = '-14px'; wrap.style.right = 'auto'; }
-                else { wrap.style.right = '-14px'; wrap.style.left = 'auto'; }
+                /* ⚠️缩进 18px（圆盘那版是 14）：没有底盘之后要露得更少，
+                   露太多就不像"探出头"、像一只贴在边上的贴纸了。 */
+                wrap.setAttribute('data-side', pos.side);
+                if (pos.side === 'l') { wrap.style.left = '-18px'; wrap.style.right = 'auto'; }
+                else { wrap.style.right = '-18px'; wrap.style.left = 'auto'; }
                 menu.style[pos.side === 'l' ? 'left' : 'right'] = '62px';
                 menu.style[pos.side === 'l' ? 'right' : 'left'] = 'auto';
                 menu.style.top = '5px';
