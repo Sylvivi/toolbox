@@ -19466,25 +19466,45 @@ body {
             }
             function close() { wrap.classList.remove('open'); wake(); }
 
+            /* 三种手势共用一次按下，判据必须互斥，否则会打架（2026-09-15）：
+                 **点**   ＝ 按下到松手位移 ≤6px、且没到长按时间 → 展开那 2×2
+                 **长按** ＝ 按住 500ms 没挪动 → 直接进阅读（她要的："长按小克就去阅读"）
+                 **拖**   ＝ 位移 >6px → 挪位置，同时**取消长按计时**
+               ⚠️长按触发之后要**吃掉这一次的松手**，不然手一抬又把菜单展开了。
+               ⚠️手机上长按会弹系统右键菜单，得 preventDefault + 拦 contextmenu。 */
             var sx = 0, sy = 0, st = 0, moved = false, dragging = false;
+            var longTimer = null, longFired = false;
+            function clearLong() { if (longTimer) { clearTimeout(longTimer); longTimer = null; } }
+            ball.addEventListener('contextmenu', function (e) { e.preventDefault(); });
             ball.addEventListener('pointerdown', function (e) {
-                dragging = true; moved = false;
+                dragging = true; moved = false; longFired = false;
                 sx = e.clientX; sy = e.clientY; st = wrap.getBoundingClientRect().top;
                 wake(); wrap.classList.add('drag');
                 try { ball.setPointerCapture(e.pointerId); } catch (x) {}
+                clearLong();
+                longTimer = setTimeout(function () {
+                    longFired = true; longTimer = null;
+                    wrap.classList.remove('drag');
+                    close();
+                    ensureChatOpen();
+                    if (typeof readerResumeLast === 'function') readerResumeLast();
+                }, 500);
             });
             ball.addEventListener('pointermove', function (e) {
                 if (!dragging) return;
+                if (longFired) return;
                 var dx = e.clientX - sx, dy = e.clientY - sy;
-                if (!moved && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) { moved = true; close(); }
+                if (!moved && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) { moved = true; clearLong(); close(); }
                 if (!moved) return;
                 wrap.style.top = Math.round(st + dy) + 'px';
                 wrap.style.left = Math.round(e.clientX - 26) + 'px';
                 wrap.style.right = 'auto';
             });
             ball.addEventListener('pointerup', function (e) {
+                clearLong();
                 if (!dragging) return;
                 dragging = false; wrap.classList.remove('drag');
+                if (longFired) { longFired = false; return; }   // 长按已经办完事了，这一下不算点击
                 if (!moved) {                       // 没挪动＝点击
                     if (wrap.classList.contains('open')) close();
                     else { buildMenu(); wrap.classList.add('open'); wake(); }
