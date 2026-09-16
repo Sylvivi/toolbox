@@ -11514,11 +11514,12 @@ body {
                 return '<ol>' + m.replace(/<o-li data-n="(\d+)">/g, '<li value="$1">').replace(/<\/o-li>/g, '</li>') + '</ol>';
             });
 
+
             // 表格
             html = html.replace(/^(\|.+\|)\n(\|[\-\|: ]+\|)\n((?:\|.+\|\n?)*)/gm, function(m, header, sep, body) {
-                var ths = header.split('|').filter(function(c){return c.trim();}).map(function(c){return '<th>'+c.trim()+'</th>';}).join('');
+                var ths = _mdRowCells(header).map(function(c){return '<th>'+c+'</th>';}).join('');
                 var rows = body.trim().split('\n').map(function(row) {
-                    var tds = row.split('|').filter(function(c){return c.trim();}).map(function(c){return '<td>'+c.trim()+'</td>';}).join('');
+                    var tds = _mdRowCells(row).map(function(c){return '<td>'+c+'</td>';}).join('');
                     return '<tr>' + tds + '</tr>';
                 }).join('');
                 return '<table><thead><tr>' + ths + '</tr></thead><tbody>' + rows + '</tbody></table>';
@@ -28328,11 +28329,26 @@ body {
             }
             return out;
         }
+        /* 拆一行 markdown 表格 → 单元格数组（2026-09-17 抽出来的）。
+           ⚠️**不许用 filter 把空串滤掉**。`| a |  | c |` 里中间那个空格子一滤，
+             后面的列就整体前移、整张表串位。
+             她 2026-09-17 报的正是这个：「配角的表格出现位置错乱」——
+             主角那行满满当当所以没事；配角的「本色/矛盾」按规矩看不出来就留空，
+             于是「关系」被挤进「本色」、「当前状态」被挤进「矛盾」。
+             这个 bug 一直都在，是加了那两列、空格子变多才撞明显的。
+           ⚠️该丢的只有首尾那两个空壳——它们是 `|` 开头和结尾切出来的，不是真格子。 */
+        function _mdRowCells(line) {
+            var cells = String(line).split('|').map(function (s) { return s.trim(); });
+            if (cells.length && cells[0] === '') cells.shift();
+            if (cells.length && cells[cells.length - 1] === '') cells.pop();
+            return cells;
+        }
+
         function _readerParseTableMd(md, cols) {
             var rows = [];
             var lines = md.split('\n').filter(function(l) { return l.indexOf('|') >= 0 && l.indexOf('---') < 0; });
             for (var i = 0; i < lines.length; i++) {
-                var cells = lines[i].split('|').map(function(s) { return s.trim(); }).filter(function(s) { return s !== ''; });
+                var cells = _mdRowCells(lines[i]);   // ⚠️别改回 filter 去空，会串位，见 _mdRowCells 注释
                 if (cells.length < 2) continue;
                 var isHeader = true;
                 for (var h = 0; h < cols.length; h++) { if (cells[h] !== cols[h]) { isHeader = false; break; } }
