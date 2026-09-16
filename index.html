@@ -3174,6 +3174,18 @@ body {
         .chat-input-area.reading-collapsed .chat-token-hint,
         .chat-input-area.reading-collapsed .chat-img-preview { display: none !important; }
         .chat-input-area.reading-collapsed .reading-collapse-hint { display: flex; }
+        /* 「掐尾」：双击提问/追问的答案里，最后那句总结性收尾在显示时收起来（2026-09-17 她要的）。
+           她的原话：「模型最后一句老要用一句话做结论…这样模型给我的那种套路感会降低很多」，
+           并且明确**不要走提示词**：「用一些话去限制他实际上会影响整体的生成效果」「堵不完的」，
+           她本人也不开文风约束（觉得那是雪上加霜）。所以这是**纯显示层**的处理。
+           ⚠️只收起、不删：存的内容一个字没动，点一下 ⋯ 就展开；关掉开关、换台设备都还是原文。
+             这一点不能改成真删——切错了的时候她得能一眼拿回来。 */
+        .rd-tail { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+        .rd-tail .rd-tail-dot { opacity: .3; padding: 0 .25em; }
+        .rd-tail .rd-tail-txt { display: none; opacity: .55; }
+        .rd-tail.on .rd-tail-dot { display: none; }
+        .rd-tail.on .rd-tail-txt { display: inline; }
+
         /* 收起时框内只剩这行字，把上下 padding 改对称，让文字垂直居中（默认 12/8 会偏下） */
         .chat-input-area.reading-collapsed .chat-input-box { padding-top: 8px; padding-bottom: 8px; }
         /* 收起成细条时，**日间也走「透」那套**（2026-09-17 她要的）。
@@ -6959,6 +6971,12 @@ body {
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
                     <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0" title="正文的笔画粗细。四档都是字体里真有的字重，不是浏览器硬撑出来的">字重</span>
                     <div id="readingFwChips" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end"></div>
+                </div>
+                <div id="readingTrimRow" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0" title="只管双击提问/追问的答案，点评和对话不受影响">提问答案</span>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
+                        <button class="chip-btn" id="chipTrimTail" onclick="readingToggleTrimTail()" title="把答案最后那句总结性收尾收起来；点 ⋯ 可以展开看，原文一个字没删">掐尾</button>
+                    </div>
                 </div>
                 <div id="chatGlassRow" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
                     <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0" title="输入框和它收起后那条细横条的底色">输入框</span>
@@ -24391,6 +24409,7 @@ body {
             readingApplyKeySentStyles();   // 精句样式独立一套，跟着一起初始化
             readingApplyT2S();             // 繁→简 chip 的高亮也在这儿恢复（⚠️按书存，换书要重新读）
             chatApplyGlassSoft();          // 输入框「半透」档
+            readingApplyTrimTail();        // 提问答案「掐尾」
             updateStatusBarColor();
         }
         /* 输入框「半透」开关（2026-09-17）：让输入框用上折叠横条那档玻璃。
@@ -27820,6 +27839,41 @@ body {
             if (activeSyncProvider === 'cf') syncPushData();
             showToast('已清空' + what.join('、'));
             readerShowSummaryModal();
+        }
+
+        /* 把一段答案切成「留下的」和「收尾那句」。切不动就回 null（调用方原样渲染）。
+           ⚠️两种形态都要认（实测模型这两种都会写）：
+             ① 收尾句跟正文同一段  → 段内切最后一句；
+             ② 收尾句自己单独成段  → 整段切掉。
+           ⚠️**只有一段又只有一句时绝不切**——那种答案的最后一句就是答案本身。
+           ⚠️句末标点后面可能跟着引号/括号（「…执念呢？」），要一起带走，
+             不然会留下个孤零零的右引号。 */
+        function rdSplitTail(t) {
+            t = String(t || '').replace(/\s+$/, '');
+            if (!t) return null;
+            var m = /(^|\n)([^\n]+)$/.exec(t);
+            if (!m) return null;
+            var lastStart = m.index + m[1].length, last = m[2];
+            var re = /[。！？!?…]+["'」』）)”’]*/g, e, ends = [];
+            while ((e = re.exec(last))) ends.push(re.lastIndex);
+            var cutAt;
+            if (ends.length >= 2) cutAt = lastStart + ends[ends.length - 2];
+            else if (lastStart > 0) cutAt = lastStart;
+            else return null;
+            var tail = t.slice(cutAt).trim();
+            var body = t.slice(0, cutAt).replace(/\s+$/, '');
+            if (!tail || !body) return null;
+            return { body: body, tail: tail };
+        }
+        function readingApplyTrimTail() {
+            var c = document.getElementById('chipTrimTail');
+            if (c) c.classList.toggle('active', localStorage.getItem('reading_trim_tail') === '1');
+        }
+        function readingToggleTrimTail() {
+            localStorage.setItem('reading_trim_tail',
+                localStorage.getItem('reading_trim_tail') === '1' ? '0' : '1');
+            readingApplyTrimTail();
+            if (typeof chatRenderAllMessages === 'function') chatRenderAllMessages(true);
         }
 
         function readerEditOutline(el) {
@@ -37507,7 +37561,20 @@ body {
                             var _qRep = _qHtml.replace(QA_TAG, '<span class="reading-q-hl"><span class="reading-q-name">' + esc(chatUserName()) + '</span>：');
                             _cmtRendered = '<div class="reading-q">' + (_qRep === _qHtml ? _qHtml : _qRep + '</span>') + '</div>';
                             if (_aLine.trim()) {
-                                _cmtRendered += '<div style="margin-top:0.4em">' + renderText(_aLine.replace(/^\n+/, '')) + '</div>';
+                                /* 「掐尾」只作用在这一支——这里是**双击提问/追问**的答案
+                                   （存储里以「汐：」开头）。点评走的是下面 else 那条，不受影响。 */
+                                var _aTxt = _aLine.replace(/^\n+/, '');
+                                var _sp = (localStorage.getItem('reading_trim_tail') === '1')
+                                        ? rdSplitTail(_aTxt) : null;
+                                var _aH = renderText(_sp ? _sp.body : _aTxt);
+                                if (_sp) {
+                                    var _mk = '<span class="rd-tail" onclick="this.classList.toggle(\'on\')" title="收起的那句收尾，点一下看">'
+                                            + '<span class="rd-tail-dot">⋯</span>'
+                                            + '<span class="rd-tail-txt">' + esc(_sp.tail) + '</span></span>';
+                                    // 尽量塞进最后那个段落里，别让 ⋯ 单独占一行更扎眼
+                                    _aH = /<\/p>\s*$/.test(_aH) ? _aH.replace(/<\/p>\s*$/, _mk + '</p>') : _aH + _mk;
+                                }
+                                _cmtRendered += '<div style="margin-top:0.4em">' + _aH + '</div>';
                             }
                         } else {
                             _cmtRendered = renderText(_cmtRaw);
