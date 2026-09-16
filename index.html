@@ -5808,13 +5808,9 @@ body {
             flex-basis: 100%; display: flex; gap: 0.5em; margin-top: 0.4em;
         }
         .reading-actbar .rp-guide-pick button {
-            flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.15em;
-            padding: 0.45em 0.3em; border: 1px solid var(--accent-mid); border-radius: 8px;
-            background: transparent; color: var(--accent-read); font-size: 0.86em; line-height: 1.25;
+            flex: 1; padding: 0.4em 0.3em; border: 1px solid var(--accent-mid); border-radius: 8px;
+            background: transparent; color: var(--accent-read); font-size: 0.88em; line-height: 1.3;
             cursor: pointer; -webkit-tap-highlight-color: transparent;
-        }
-        .reading-actbar .rp-guide-pick button em {
-            font-style: normal; font-size: 0.82em; color: var(--text-muted); opacity: 0.9;
         }
         .reading-actbar .rp-guide-pick button:active { background: var(--accent-light); }
     </style><link rel="stylesheet" id="readingFontLink" href="/wfonts/285/main/result.css"></head>
@@ -31049,9 +31045,9 @@ body {
             if (old) { old.remove(); return; }          // 已经开着＝再长按一次就收起
             var box = document.createElement('div');
             box.className = 'rp-guide-pick';
-            box.innerHTML =
-                '<button data-k="pre">读前 · 入场须知<em>不剧透</em></button>' +
-                '<button data-k="post">读完 · 回味<em>可聊结局</em></button>';
+            // ⚠️就两个字，别加副标题/说明（她 2026-09-16：「那两个选项太啰嗦了，简洁一点，
+            //   不要解释那么长的，我喜欢极简风」）。见 [[user-taste-minimal-no-badges]]。
+            box.innerHTML = '<button data-k="pre">读前</button><button data-k="post">读完</button>';
             bar.appendChild(box);
             box.addEventListener('click', function (e) {
                 var b = e.target.closest('button'); if (!b) return;
@@ -31570,6 +31566,13 @@ body {
                 var _cap = 8000, _tr = _whole.length > _cap;
                 _secText = { text: _tr ? (_gKind === 'pre' ? _whole.slice(0, _cap) : _whole.slice(-_cap)) : _whole,
                              truncated: _tr, cut: _gKind === 'pre' && _keep < _gLines.length };
+                /* 2026-09-16 她说「读前不就是还是要回到开头好吗，不要直接在中间就开始」——
+                   导读块原来挂在她手指点的那一段，一条「入场须知」卡在章节中段确实不对。
+                   改成按档位归位：**读前 → 章首第一段；读完 → 章末最后一段**。
+                   这样两块各自待在它该在的地方，翻上去就是须知、读到底就是回味。 */
+                var _lastP = lines.length;
+                while (_lastP > 1 && (lines[_lastP - 1] == null || !String(lines[_lastP - 1]).trim())) _lastP--;
+                pNum = _gKind === 'pre' ? 1 : _lastP;   // ⚠️章末要跳过空行，否则回味挂在一个空段上
                 _sec = { title: _chapTitle, headP: pNum };
                 question = '导读·' + (_gKind === 'pre' ? '读前' : '回味') + (_chapTitle ? '：《' + _chapTitle + '》' : '');
             } else if (_guide) {

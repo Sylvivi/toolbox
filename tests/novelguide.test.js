@@ -106,10 +106,18 @@ function bootSocial() {
             readingAskOne(mi, 3, '导读', bar, { guide: true, guideKind: kind });
             await new Promise(r => setTimeout(r, 900));
             const b = sent[0] || {};
+            // 导读块最后落在哪一段（读前该归章首、读完该归章末）——从存下来的问答里看
+            let 落点 = null;
+            try {
+                const qa = JSON.parse(localStorage.getItem('reader_qa') || '{}');
+                const cell = qa['测试小说.txt|1'] && qa['测试小说.txt|1'][0];
+                const hit = (cell && cell.list || []).filter(x => /^导读·/.test(x.q || ''));
+                落点 = hit.length ? hit[hit.length - 1].p : null;
+            } catch (e) { 落点 = 'err:' + e; }
             const msgs = b.messages || [];
             const sys = msgs.filter(m => m.role === 'system').map(m => m.content).join('\n');
             const usr = msgs.filter(m => m.role === 'user').map(m => m.content).join('\n');
-            return { sys, usr, 发了几次: sent.length };
+            return { sys, usr, 落点, 发了几次: sent.length };
         };
         const pre = await grab('pre');
         const post = await grab('post');
@@ -123,7 +131,9 @@ function bootSocial() {
         await new Promise(r => setTimeout(r, 30));
         const pick = bar.querySelector('.rp-guide-pick');
         readingClearActbar();
-        return { pre, post, 标签, 选单档位: pick ? [].map.call(pick.querySelectorAll('button'), b => b.getAttribute('data-k')) : [] };
+        return { pre, post, 标签,
+            选单档位: pick ? [].map.call(pick.querySelectorAll('button'), b => b.getAttribute('data-k')) : [],
+            选单文字: pick ? [].map.call(pick.querySelectorAll('button'), b => b.textContent.trim()) : [] };
     });
 
     // ── 防剧透：读前那档看不见最后一段 ───────────────────────────
@@ -149,6 +159,11 @@ function bootSocial() {
     // ── 入口 ────────────────────────────────────────────────────
     eq('小说空态按钮叫「导读」（跟社科书一样）', R.标签, '导读');
     eq('点一下先弹两档选单', R.选单档位, ['pre', 'post']);
+    // ⚠️她 2026-09-16 要的：读前别卡在她点的那一段中间
+    eq('读前挂在章首第 1 段（不是她点的第 3 段）', R.pre.落点, 1);
+    // 章节第 1 行是标题，所以正文 12 段对应到 P2…P13：读前落在标题底下、读完落在最后一段
+    eq('读完挂在章末最后一段（P13）', R.post.落点, 13);
+    eq('选单只剩两个字，不带副标题', R.选单文字, ['读前', '读完']);
 
     ok('页面没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
 
