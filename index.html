@@ -27613,6 +27613,11 @@ body {
                       + readerGapLabel(_bSum, _gap.list) + '</span>'
                     : '';
                 var _acts = '<span onclick="readerRebuildMemTables(this)" title="把已有摘要重新折一遍，清掉增量攒下的漂移；不重读正文" style="cursor:pointer;color:var(--accent);font-weight:600">重折</span>';
+                /* 「全清」：把这本书的摘要一次清干净，好换个更强的模型重生成（2026-09-17 她要的：
+                   「有没有办法把摘要清空呀，对我喜欢的文，我想用更好的模型」）。
+                   ⚠️放在最右边、用灰色不用强调色——它是破坏性操作，不该跟「重折/补齐」一样醒目。 */
+                _acts += '<span style="opacity:.35;margin:0 .5em">·</span>'
+                    + '<span onclick="readerClearAllSummaries(this)" title="清空本书全部摘要和大纲，之后可以换模型重新生成" style="cursor:pointer;color:var(--text-muted)">全清</span>';
                 if (_gap.list.length) {
                     _acts += '<span style="opacity:.35;margin:0 .5em">·</span>'
                         + '<span onclick="readerFillGaps(this)" title="' + readerGapLabel(_bSum, _gap.list).replace(/"/g, '') + ' 没有摘要，进不了记忆表。补齐要逐章调用摘要模型" style="cursor:pointer;color:var(--accent);font-weight:600">补齐</span>';
@@ -27771,6 +27776,37 @@ body {
             }
             readerShowSummaryModal(sc);
         }
+        /* 清空本书全部摘要（2026-09-17）。她的用法是「喜欢的文换个更好的模型重生成」，
+           所以清完不自动重生成——让她先去设置里换「摘要/记忆模型」，再回来点「补齐」。
+
+           ⚠️**必须写墓碑（空串 + 新时间戳），不能直接删键**。云同步的合并规则是
+             「本地没有就从云端补」，直接删等于没删：下次同步会原样被补回来。
+             这跟 [[google-refusal-kills-summary]] 那次「清脏数据要本地+云端一起」是同一个坑。
+           ⚠️大纲一起清、`upTo` 归 -1：大纲是从摘要折出来的，留着就是新旧混着。
+           ⚠️记忆表格**不在这儿清**——它存在会话上、不在书上。清完摘要去点「重折」，
+             那条路本来就认「摘要被删过 → 从头重折」（见 readerEnsureMemTables 里的水位判断）。 */
+        function readerClearAllSummaries(el) {
+            var fileKey = readerBookKey(readerBookId);
+            var all = readerSummariesAll();
+            var m = all[fileKey] || {};
+            var chs = Object.keys(m).filter(function (k) {
+                return /^\d+$/.test(k) && m[k] && m[k].sum;
+            });
+            if (!chs.length) { showToast('这本还没有摘要可清'); return; }
+            if (!confirm('清空本书全部 ' + chs.length + ' 条摘要？\n\n'
+                       + '大纲也会一起清掉（它是从摘要折出来的）。\n'
+                       + '清完可以去设置里换个更好的「摘要/记忆模型」，再回来点「补齐」重新生成。\n\n'
+                       + '⚠️这一步不可撤销。')) return;
+            var now = Date.now();
+            chs.forEach(function (k, i) { m[k] = { sum: '', ts: now + i }; });
+            all[fileKey] = m;
+            readerSummariesSaveAll(all);
+            readerOutlineSet(fileKey, '', -1);
+            if (activeSyncProvider === 'cf') syncPushData();
+            showToast('已清空 ' + chs.length + ' 条摘要');
+            readerShowSummaryModal();
+        }
+
         function readerEditOutline(el) {
             var fileKey = readerBookKey(readerBookId);
             var o = readerOutlineGet(fileKey);
