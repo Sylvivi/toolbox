@@ -502,7 +502,10 @@ function bootSocial() {
     ok('按钮 touch-action 是 manipulation（去掉双击缩放的等待）', /manipulation/.test(H3.touchAction), H3.touchAction);
     ok('系统抢先选中时，蓄力到位会就地清掉选区', H3.选区_长按前 > 0 && H3.选区_蓄力后 === 0, JSON.stringify(H3));
 
-    /* 小说没有导读，那个空状态本来点了什么都不会发生 → 让给背景，且不用长按 */
+    /* 2026-09-16 起小说也有导读了（两档：读前入场须知 / 读完回味），
+       于是**两种书的手势统一**：留空点一下＝导读、长按＝背景。
+       她的原话「跟社科一样吧，不然我容易违反过来」——手势按书的类型分叉，必然记反。
+       ⚠️这一组下面几条原来测的是老行为（小说空着＝背景），是**故意改掉的**，不是回归。 */
     const H2 = await page.evaluate(async () => {
         window._bootNovel();
         const calls = [];
@@ -516,10 +519,21 @@ function bootSocial() {
         const inp = bar.querySelector('.rp-ask');
         const out = { 空着的标签: send.textContent, 提示语: inp.placeholder };
 
-        // 空着点一下 → 直接标背景
+        // 空着点一下 → 不直接开跑，先长出「读前 / 读完」两档选单
         send.click();
         await new Promise(r => setTimeout(r, 30));
         out.空着点一下 = calls.slice();
+        const pick = bar.querySelector('.rp-guide-pick');
+        out.选单个数 = pick ? pick.querySelectorAll('button').length : 0;
+        out.选单档位 = pick ? [].map.call(pick.querySelectorAll('button'), b => b.getAttribute('data-k')) : [];
+        // 点「读前」→ 走导读，且带上 guideKind
+        window.readingAskOne = (mi2, p2, q2, bar2, opts2) => { calls.push(['guide', (opts2 || {}).guideKind]); };
+        calls.length = 0;
+        if (pick) pick.querySelector('button[data-k="pre"]').click();
+        await new Promise(r => setTimeout(r, 30));
+        out.点读前 = calls.slice();
+        out.选完收起 = !bar.querySelector('.rp-guide-pick');
+        window.readingAskOne = (mi2, p2, q2) => { calls.push(['ask', q2]); };
 
         // 打字 → 变讨论，走原来的逐段问答
         readingClearActbar();
@@ -533,26 +547,34 @@ function bootSocial() {
         await new Promise(r => setTimeout(r, 30));
         out.打字后点 = calls.slice();
 
-        // 清空又变回「背景」
+        // 清空又变回「导读」
         inp2.value = ''; inp2.dispatchEvent(new Event('input'));
         out.清空后的标签 = send2.textContent;
 
-        // 小说不需要长按（留空点一下就是背景），长按不该再蓄力
+        // 小说长按＝标背景（跟社科书同一套）：蓄力到位标签变「背景」，松手才真开跑
         calls.length = 0;
         send2.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 100, clientY: 100 }));
         await new Promise(r => setTimeout(r, 600));
         out.长按时的标签 = send2.textContent;
         send2.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 100, clientY: 100 }));
+        await new Promise(r => setTimeout(r, 30));
+        out.长按松手 = calls.slice();
         readingClearActbar();
         return out;
     });
-    eq('小说书空着时按钮是「背景」（原来是点了没反应的「讨论」）', H2.空着的标签, '背景');
-    ok('小说书提示语说清留空＝背景', /留空＝背景/.test(H2.提示语), H2.提示语);
-    ok('小说书空着点一下 → 标整章背景（第 3 参 0）', H2.空着点一下.length === 1 && H2.空着点一下[0][2] === 0, JSON.stringify(H2.空着点一下));
+    eq('小说书空着时按钮是「导读」（跟社科书一样）', H2.空着的标签, '导读');
+    ok('小说书提示语说清留空＝导读、长按＝背景', /留空＝导读，长按＝背景/.test(H2.提示语), H2.提示语);
+    eq('小说书空着点一下 → 先弹选单，不直接开跑', H2.空着点一下, []);
+    eq('选单是两档', H2.选单个数, 2);
+    eq('两档分别是读前和读完', H2.选单档位, ['pre', 'post']);
+    eq('点「读前」→ 走导读并带上 guideKind=pre', H2.点读前, [['guide', 'pre']]);
+    ok('选完选单就收起', H2.选完收起, String(H2.选完收起));
     eq('小说书打字后变「讨论」', H2.打字后的标签, '讨论');
     eq('小说书打字后点 → 走逐段问答，不标背景', H2.打字后点, [['ask', '他这句什么意思']]);
-    eq('清空后又变回「背景」', H2.清空后的标签, '背景');
-    eq('小说书不需要长按，长按不再蓄力', H2.长按时的标签, '背景');
+    eq('清空后又变回「导读」', H2.清空后的标签, '导读');
+    eq('小说书长按蓄力到位，标签变「背景」', H2.长按时的标签, '背景');
+    ok('小说书长按松手 → 真的标整章背景（第 3 参 0）',
+        H2.长按松手.length === 1 && H2.长按松手[0][2] === 0, JSON.stringify(H2.长按松手));
 
     /* ⚠️标注途中往上滑会自动补上一章，所有消息下标整体 +2。
        用户实测「三十四章的背景插进了三十三章」，而且这也是「9 条只成 1 条」的真凶。 */
