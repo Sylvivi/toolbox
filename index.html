@@ -3176,6 +3176,44 @@ body {
         .chat-input-area.reading-collapsed .reading-collapse-hint { display: flex; }
         /* 收起时框内只剩这行字，把上下 padding 改对称，让文字垂直居中（默认 12/8 会偏下） */
         .chat-input-area.reading-collapsed .chat-input-box { padding-top: 8px; padding-bottom: 8px; }
+        /* 收起成细条时，**日间也走「透」那套**（2026-09-17 她要的）。
+           她的原话：「夜间模式下你把阅读界面那个折叠横条做成了透明的，日间可否也？
+           但我不希望对话框变成透明」——所以这条**只挂在 `.reading-collapsed` 这个状态上**，
+           展开后的输入框仍然是原来的白（86%/72%），一个数都没动。
+           ⚠️必须写成 `body:not(.dark)`：`.chat-input-area.reading-collapsed .chat-input-box`
+             是三个类，比 `.dark .chat-input-box` 的两个类**更specific**，不限定日间的话
+             会连夜间一起盖掉——而夜间那套正是她喜欢、要照抄的那个。
+           ⚠️边框和外圈高光要跟着一起降：底透了、白环还在的话，看着像贴了一片白塑料
+             （跟 2026-09-13 她报的「周围怎么有一道白边」是同一个毛病）。
+           ⚠️blur 保留：底透了就得靠模糊把正文压住，不然那行格言会跟书里的字缠在一起。 */
+        body:not(.dark) .chat-input-area.reading-collapsed .chat-input-box {
+            border-color: color-mix(in srgb, var(--glass-white) 24%, transparent);
+            background: linear-gradient(180deg,
+                        color-mix(in srgb, var(--glass-white) 28%, transparent),
+                        color-mix(in srgb, var(--glass-white) 18%, transparent));
+            box-shadow: 0 0 0 1px color-mix(in srgb, var(--glass-white) 18%, transparent),
+                        0 6px 20px rgba(0,0,0,0.05);
+        }
+        /* 「全透」档（2026-09-17 她在预览页 pv-glass-day.html 上选的）。
+           她先问「日间也做成透明行吗」，拨到 0% 白之后说「还是带毛玻璃质感」——
+           ⚠️**那个质感来自 blur，不是来自白色**。深底上的字糊了看不出来，
+             浅纸上的黑字一糊就非常明显，所以日间要「透」必须连 blur 一起关。
+           拨完她定的是「全透 / 现在这样 两档，开关放设置微调里」。
+           ⚠️这条**必须排在上面那条折叠条规则之后**：两边特指度相同（4 类 + 1 元素），
+             靠源码顺序决胜；挪到前面去，折叠条就透不了。
+           ⚠️聚焦环单独留着：盒子全透之后，那圈强调色是「光标在这儿」的唯一提示。 */
+        body.chat-glass-clear .chat-input-box,
+        body.chat-glass-clear .chat-input-area.reading-collapsed .chat-input-box {
+            background: transparent;
+            border-color: transparent;
+            box-shadow: none;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+        }
+        body.chat-glass-clear .chat-input-box:focus-within {
+            border-color: var(--accent-mid);
+            box-shadow: 0 0 0 3px var(--accent-light);
+        }
         /* 发送键 2026-09-06 重做（她：「现在视觉效果也是有点塑料」，并让我问问 Gemini）。
            塑料感的两个来源：① 里面是**文字字符「↑」**，字形随设备字体变、还不居中
            （跟旁边那个加号同一个毛病，同日一起换掉的）；② 一个纯平的实心圆，没有层次。
@@ -6925,6 +6963,12 @@ body {
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
                     <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0" title="正文的笔画粗细。四档都是字体里真有的字重，不是浏览器硬撑出来的">字重</span>
                     <div id="readingFwChips" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end"></div>
+                </div>
+                <div id="chatGlassRow" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0" title="输入框和它收起后那条细横条的底色">输入框</span>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
+                        <button class="chip-btn" id="chipGlassClear" onclick="chatToggleGlassClear()" title="开：完全透明、不模糊，只剩文字浮在正文上；关：现在这样的白玻璃">全透</button>
+                    </div>
                 </div>
                 <div id="readingT2SRow" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
                     <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0" title="把繁体书的正文显示成简体。只转显示，原文不动">简繁</span>
@@ -24350,8 +24394,24 @@ body {
             if (typeof rdHlInitStyle === 'function') rdHlInitStyle();   // 顺带恢复「划线」底色/下划线样式
             readingApplyKeySentStyles();   // 精句样式独立一套，跟着一起初始化
             readingApplyT2S();             // 繁→简 chip 的高亮也在这儿恢复（⚠️按书存，换书要重新读）
+            chatApplyGlassClear();         // 输入框「全透」档
             updateStatusBarColor();
         }
+        /* 输入框「全透」开关（2026-09-17 她要的，见上面那段 CSS 注释）。
+           ⚠️**日夜都管**：她是在日间提的，但开关做成只管日间的话，夜里点它没反应，更费解。
+           ⚠️只存 localStorage、不进云同步——跟旁边「波浪/划线/着色」那几个 chip 一个规矩。 */
+        function chatApplyGlassClear() {
+            var on = localStorage.getItem('chat_glass_clear') === '1';
+            document.body.classList.toggle('chat-glass-clear', on);
+            var c = document.getElementById('chipGlassClear');
+            if (c) c.classList.toggle('active', on);
+        }
+        function chatToggleGlassClear() {
+            localStorage.setItem('chat_glass_clear',
+                localStorage.getItem('chat_glass_clear') === '1' ? '0' : '1');
+            chatApplyGlassClear();
+        }
+
         // ===== 精句样式（独立于引号，作用在每段最短完整句 .reading-keysent 上）=====
         // 画框/波浪/柔光 铺句底三选一；划线与波浪/画框互斥（都在底部）；着色可与任意叠加。
         /* 「着色」这一项**按日夜各记一份**（2026-08-07，用户：「夜间模式的时候精句默认着色，

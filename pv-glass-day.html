@@ -1,0 +1,102 @@
+<!doctype html><html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>日间玻璃浓度</title>
+<style>
+/* 预览页：日间模式下，输入框 / 折叠条的白色浓度到底给多少（2026-09-17）。
+   她问「输入框日间做成透明是不是也没啥，我想看看」——这东西**只能在真背景上看**，
+   所以底图用的是她自己那四张（线上地址，她浏览器有通行证 cookie）。
+   ⚠️盒子的写法跟 index.html 里的 .chat-input-box 逐条对齐：圆角 22、padding 12/14/8、
+     blur(6px) saturate(132%)、底色是 A% → A*0.84% 的竖向渐变、边 A*0.54%、外圈高光 A*0.47%。
+     改这里的公式就等于改线上，别让两边长得不一样。 */
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  font:15px/1.9 "Source Han Serif CN","Songti SC","Noto Serif CJK SC",serif;
+  color:#2b2b2b; background:#f4efe4 center/cover no-repeat fixed;
+}
+.wrap{position:relative;height:100%;display:flex;flex-direction:column;overflow:hidden}
+.bar{flex-shrink:0;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:9px 12px;
+  background:rgba(255,255,255,.72);backdrop-filter:blur(10px);border-bottom:1px solid rgba(0,0,0,.08);z-index:30}
+.bar .lbl{font-size:12px;color:#6b7280;flex-shrink:0}
+.bar .val{font-size:13px;color:#2563a6;font-weight:700;width:38px;text-align:right}
+.bar input[type=range]{flex:1;min-width:130px;accent-color:#2563a6}
+.bar button{font:12px/1 inherit;padding:5px 9px;border:1px solid rgba(0,0,0,.18);border-radius:8px;
+  background:#fff;color:#374151;cursor:pointer}
+.bar button.on{background:#2563a6;color:#fff;border-color:#2563a6}
+.page{flex:1;overflow-y:auto;padding:18px 18px 8px;-webkit-overflow-scrolling:touch}
+.page::-webkit-scrollbar{display:none}
+.page p{margin:0 0 1.05em;text-indent:2em;text-align:justify}
+/* ===== 被试的盒子 ===== */
+.inp{position:absolute;left:0;right:0;bottom:0;max-width:768px;margin:0 auto;z-index:20;padding:0 12px 12px}
+.box{
+  display:flex;flex-direction:column;border-radius:22px;padding:12px 14px 8px;position:relative;
+}
+.box .ph{color:#79838c;font-size:14px;font-family:-apple-system,sans-serif}
+.box .tools{display:flex;align-items:center;gap:12px;margin-top:9px;color:#5b7fa6;font-size:17px}
+.box .tools .sp{flex:1}
+.box.fold{padding-top:8px;padding-bottom:8px;flex-direction:row;align-items:center;gap:9px}
+.box.fold .ph{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.page{padding-bottom:140px}
+</style></head><body>
+<div class="wrap">
+  <div class="bar">
+    <span class="lbl">白色浓度</span><input type="range" id="a" min="0" max="90" value="86"><span class="val" id="v">86%</span>
+    <span class="lbl">模糊</span><input type="range" id="b" min="0" max="14" step="0.5" value="6"><span class="val" id="bv">6px</span>
+    <button id="mode">切成「折叠条」</button>
+    <span class="lbl">底图</span><button class="bg" data-u="https://box.masterofmydomain.top/pic/tg_20260905_204413.png">珠猫</button><button class="bg" data-u="https://box.masterofmydomain.top/bg/20260913_104516_1000168495.webp">蓝</button><button class="bg" data-u="https://box.masterofmydomain.top/bg/20260913_104519_1000168496.webp">粉</button><button class="bg" data-u="https://box.masterofmydomain.top/bg/20260913_104748_1000168497.webp">橙</button>
+    <button id="preset86">现在(86)</button><button id="preset28">折叠条新值(28)</button><button id="preset0">真·全透(0+不模糊)</button>
+  </div>
+  <div class="page" id="page"><p>一个乡下孩子读到鲁滨逊，可能梦想看管满山羊群；一个城里孩子遭遇鲁滨逊，可能梦想去买下一座荒岛，带上心爱的人去一起看星星。据说从前它是欧洲每个男孩阅读的第一本乐趣之书，今天，它的乐趣被各国的翻译家带给了这个星球的一代代读者。</p>
+<p>这是好故事的魔力。年轻的鲁滨逊不安于舒适的生活，到大海上去经历种种冒险，后来他所搭乘的航船遇上狂风巨浪，在加勒比海旁的一个孤岛上遇难沉没，除了鲁滨逊，其他人全都溺水身亡。鲁滨逊在岛上盖房，养羊，读《圣经》，把荒岛变成自己的独立王国，一个崭新的世界。他在这座荒岛上，度过了将近二十八年之久的光阴。最后，他帮助一位途径此处的船长平息了海员叛乱，得以返回英国。</p>
+<p>非常冒险，非常传奇，也非常有趣。好莱坞编剧“教父”罗伯特·麦基说故事是生活的比喻，我以为它更是生活的身上取下的一块骨头。鲁滨逊的原型是英国海员塞尔柯克，1704年，他因与船长发生争执，被船长抛弃在太平洋一个荒岛上，他在岛上生活了四年。之后，被一艘途径该岛的英国船只救了下来。</p>
+<p>船长出版了《环球航行记》，里面披露了塞尔柯克的事迹，这本书轰动一时。于是全英国几乎尽人皆知。让笛福提笔写下这个故事还有更深层的理由。作为英国报刊之父，笛福的人生经历坎坷，复杂多变，他四海游历，他多次经商，他坐牢，他破产，人生经历了十三次大起大落。最终，在71岁这一年，他因为躲避债主而客死在寄宿的旅馆里。在孤苦伶仃里结束了他多姿多彩的一生。</p>
+<p>他说：“我写的是一个人二十八年受尽折磨的真实经历。他的遭遇与我的生活完全可以对比。”这当然远远不够，从人类的精神历险上看，它还应当是一篇与世隔绝的寓言：岛上的世界，简朴、平和、满足；外面的世界，贪婪、暴力、自私。漂流是历经人世的沧桑，而孤岛是救赎之地。最终鲁滨逊在这里经历了肉身与灵魂的救赎。</p>
+<p>笛福的本意是要所有人在鲁滨逊的境遇中体会到上帝的天意与慈恩，并且没有忘记给苦难的人们奉上一则伟大的箴言：在人生最糟糕的时刻，忍耐足以战胜一切。</p>
+<p>美国《生活》杂志评选人类有史以来最佳书籍，《鲁滨逊漂流记》排名《唐吉诃德》之后，荣获亚军。为什么一部小说能征服一代代人？为什么直到今天它依然能引起人们的莫大的兴趣？</p>
+<p>都德认为它创造出了莎士比亚也没有创造出的英国形象；高尔基认为它是任何一位不可征服者的圣经；伟大的卢梭认为它是一本自然教科书，要使一个人摆脱庸俗的偏见而对事物做出恰当的判断的方法，就是成为鲁滨逊一样孤独的冒险者。</p>
+<p>我的理解是，每个男人心中，都有大海星辰，都有一个渴望冒险与风暴的鲁滨逊。我永不妥协，因为我有一颗冒险的心！这才是生命存在的秘密。</p>
+<p>假如世界上真有什么普通人的故事值得公之于众，并且一旦出版，就会为公众所接受，那么，编者认为，这部自述便是如此。</p>
+<p>故事的讲述谦逊而肃穆，且像智者诲人那般，常常以身说法，揭示遭遇之中的宗教寓意，在我们一切多变的境遇中都验证并荣耀上天的智慧，而不管事情的发生是顺心还是逆意。</p>
+<p>编者相信，这里所讲述的事情都是历史事实；里面没有任何虚构的痕迹。编者认为，读者对这类故事一般只是读个大概，原稿润色与否，对读者的消遣或者教诲都没什么两样。因此，编者认为，他能出版此书就是为读者做了一件大好事，无需再饶舌致意了。</p></div>
+  <div class="inp"><div class="box" id="box">
+    <span class="ph">说点什么…</span>
+    <div class="tools"><span>＋</span><span>🍄</span><span class="sp"></span><span>↑</span></div>
+  </div></div>
+</div>
+<script>
+var box=document.getElementById('box'), a=document.getElementById('a'), v=document.getElementById('v');
+var b=document.getElementById('b'), bv=document.getElementById('bv');
+function paint(){
+  var A=+a.value; v.textContent=A+'%';
+  /* ⚠️「毛玻璃质感」来自 blur，不是来自白色浓度。她把浓度拨到 0 还觉得像磨砂板，
+     就是因为 blur(6px) 还在把背后的字揉糊。夜间看着像「没有面板」，是因为深底上
+     低对比的字糊了也看不出来；浅纸上的黑字一糊就非常明显。所以日间要「透」，
+     真正该动的是这根杆。 */
+  var B=+b.value; bv.textContent=B+'px';
+  box.style.backdropFilter = B ? ('blur('+B+'px) saturate(132%)') : 'none';
+  box.style.webkitBackdropFilter = box.style.backdropFilter;
+  var mix=function(p){return 'color-mix(in srgb, #fff '+p.toFixed(1)+'%, transparent)';};
+  box.style.background='linear-gradient(180deg,'+mix(A)+','+mix(A*0.84)+')';
+  box.style.border='1px solid '+mix(A*0.54);
+  box.style.boxShadow='0 0 0 1px '+mix(A*0.47)+', 0 8px 28px rgba(0,0,0,0.08), inset 0 1px 0 '+mix(A*0.76);
+}
+a.oninput=paint; b.oninput=paint; paint();
+document.getElementById('mode').onclick=function(){
+  var f=box.classList.toggle('fold');
+  this.textContent=f?'切回「输入框」':'切成「折叠条」';
+  box.querySelector('.ph').textContent=f?'🍄  凡事总有蹊跷，方知其中有诈':'说点什么…';
+  box.querySelector('.tools').style.display=f?'none':'flex';
+};
+[['preset86',86,6],['preset28',28,6],['preset0',0,0]].forEach(function(p){
+  document.getElementById(p[0]).onclick=function(){a.value=p[1];b.value=p[2];paint();};
+});
+[].forEach.call(document.querySelectorAll('.bg'),function(b){
+  b.onclick=function(){
+    [].forEach.call(document.querySelectorAll('.bg'),function(x){x.classList.remove('on');});
+    b.classList.add('on');
+    document.body.style.backgroundImage='url('+b.dataset.u+')';
+  };
+});
+document.querySelector('.bg').click();
+</script></body></html>
