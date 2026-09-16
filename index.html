@@ -23075,6 +23075,11 @@ body {
             for (var j = 0; j < tabs.length; j++) tabs[j].classList.toggle('active', tabs[j].getAttribute('data-tab') === key);
             var b = modal.querySelector('.chat-summary-modal-body');
             if (b) b.scrollTop = 0;   // 换页回到顶部
+            /* 「重折」按哪张表走的是当前 Tab，所以切页时把它的字也改掉（2026-09-17）。
+               ⚠️切 Tab **不重渲染弹窗**（上面那句注释：纯显示切换），所以必须在这儿手动同步，
+                 否则标签会停在上一个页签、按下去跟你以为的不是同一张表。 */
+            var _rb = document.getElementById('mtRebuildBtn');
+            if (_rb) _rb.textContent = { characters: '重折·人物', places: '重折·地点', timeline: '重折·年表', plotlines: '重折·主线' }[key] || '重折';
         }
         // 切到相邻 Tab：dir=+1 下一个 / -1 上一个（到头不循环）。给左右滑手势和键盘用。
         function chatSummaryStepTab(dir) {
@@ -27588,8 +27593,14 @@ body {
                 _tick();
                 _timer = setInterval(_tick, 1000);
             }
+            /* 在哪张表的 Tab 上就只重建哪张（2026-09-17 她要的）。
+               ⚠️故意**不另加一个选择器**：Tab 本身就是选择，你正看着人物表按重折，
+                 意思再明白不过；在「摘要」Tab 上按则是四张全重建（老行为）。
+               ⚠️`_chatSummaryActiveTab` 是对话和阅读两个弹窗共用的那一个。 */
+            var _only = ({ characters: 1, places: 1, timeline: 1, plotlines: 1 }[_chatSummaryActiveTab])
+                      ? _chatSummaryActiveTab : null;
             var ok = false;
-            try { ok = await readerUpdateMemoryTables(fileKey, maxChap, mc, true); }
+            try { ok = await readerUpdateMemoryTables(fileKey, maxChap, mc, true, _only); }
             finally { _readerRebuilding = false; if (_timer) clearInterval(_timer); }
             if (!ok && !readerMemTblErrGet(fileKey)) showToast('没有新增内容（已是最新）');
             if (activeSyncProvider === 'cf') syncPushData();
@@ -27688,7 +27699,10 @@ body {
                     ? ' · <span style="color:var(--gold,#d9a400)" title="共 ' + _gap.list.length + ' 章没有摘要，进不了记忆表">缺'
                       + readerGapLabel(_bSum, _gap.list) + '</span>'
                     : '';
-                var _acts = '<span onclick="readerRebuildMemTables(this)" title="把已有摘要重新折一遍，清掉增量攒下的漂移；不重读正文" style="cursor:pointer;color:var(--accent);font-weight:600">重折</span>';
+                /* ⚠️`id="mtRebuildBtn"` 不能删：切 Tab 时靠它把字改成「重折·人物」之类
+                   （`chatSummarySwitchTab` 里那段），让你按之前就知道这一下会重折哪张表。 */
+                var _rbLbl = { characters: '重折·人物', places: '重折·地点', timeline: '重折·年表', plotlines: '重折·主线' }[_chatSummaryActiveTab] || '重折';
+                var _acts = '<span id="mtRebuildBtn" onclick="readerRebuildMemTables(this)" title="拿全书摘要重新折一遍（不重读正文）。在某张表的页签上按＝只重折那一张，在「摘要」页签上按＝四张全重折" style="cursor:pointer;color:var(--accent);font-weight:600">' + _rbLbl + '</span>';
                 /* 「全清」：把这本书的摘要一次清干净，好换个更强的模型重生成（2026-09-17 她要的：
                    「有没有办法把摘要清空呀，对我喜欢的文，我想用更好的模型」）。
                    ⚠️放在最右边、用灰色不用强调色——它是破坏性操作，不该跟「重折/补齐」一样醒目。 */
@@ -28203,7 +28217,12 @@ body {
         var _readerMemTablesRunning = false;
         // rebuild=true：无视水位线 upTo，扫描 0..curChap 里所有「已有摘要」的章重折一遍（与现有表合并、手改的不丢），
         // 用来补齐「先读后面又跳前面」「中途才开开关」留下的前段窟窿。
-        async function readerUpdateMemoryTables(fileKey, curChap, mc, rebuild) {
+        /* `only`：只重建这一张表（'characters'|'places'|'timeline'|'plotlines'），不传＝四张都重建。
+           2026-09-17 她要的：「我希望重建的时候可以让我选择，这次重建我只想修改人物」。
+           ⚠️合并那边**不用改**：`_mtParseRebuildResult` 本来就是「模型没回这张表就保留旧的」
+             （`newChars.length ? newChars : tables.characters`），所以让模型只输出人物表，
+             其余三张自然原样不动。 */
+        async function readerUpdateMemoryTables(fileKey, curChap, mc, rebuild, only) {
             if (_readerMemTablesRunning) return false;
             // 社科书不跑记忆表格：那四张表（人物/地点/大事年表/伏笔主线）是为长篇小说造的，
             // 社科书里没有人物没有伏笔，跑一遍就是烧钱产垃圾。要的概念书里往往自带术语表。
@@ -28232,7 +28251,18 @@ body {
                 var placeMd = _readerRenderTableMd(_mtPlaceCols, tables.places);
                 var timeMd = _readerRenderTableMd(_mtTimeCols, tables.timeline);
                 var plotMd = _readerRenderTableMd(_mtPlotCols, tables.plotlines);
-                var prompt = '【当前人物表】\n' + charMd + '\n\n【当前地点表】\n' + placeMd + '\n\n【当前大事年表】\n' + timeMd + '\n\n【当前主线表】\n' + plotMd + '\n\n【新章节摘要】\n' + newSums.join('\n');
+                var prompt;
+                if (rebuild && only) {
+                    /* 单表重建：**只把这一张表当上下文发出去**，省 token，也少一分模型顺手把别的表
+                       也重写一遍的风险。末尾那句「只输出X表」放在最后一行——位置最靠后效力最强。 */
+                    var _oneName = { characters: '人物', places: '地点', timeline: '大事年', plotlines: '主线' }[only];
+                    var _oneMd = { characters: charMd, places: placeMd, timeline: timeMd, plotlines: plotMd }[only];
+                    prompt = '【当前' + _oneName + '表】\n' + _oneMd
+                           + '\n\n【新章节摘要】\n' + newSums.join('\n')
+                           + '\n\n⚠️这次只重建【' + _oneName + '表】：只输出' + _oneName + '表，其余三张表一个字都不要输出。';
+                } else {
+                    prompt = '【当前人物表】\n' + charMd + '\n\n【当前地点表】\n' + placeMd + '\n\n【当前大事年表】\n' + timeMd + '\n\n【当前主线表】\n' + plotMd + '\n\n【新章节摘要】\n' + newSums.join('\n');
+                }
                 // 自动增量：模型只吐「变动行 + 删除清单」，就地并入（省 token）。重建(rebuild)仍走下面整表权威重算（可清理增量漂移）。
                 if (!rebuild) {
                     var _dMc = chatResolveCompressModel() || mc;
