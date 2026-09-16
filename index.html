@@ -26283,9 +26283,11 @@ body {
             var toSocial = !rbIsSocial(b);
             rbSetBookKind(rbBookEffKey(b), toSocial ? 'social' : 'novel');
             rbRenderShelf();
+            // ⚠️2026-09-16 起小说也有导读了（读前/读完两档），所以提示语里**别再说「可用导读」**——
+            //   那会让人以为小说没有。两种书的区别改成说「导读长什么样」。
             showToast(toSocial
-                ? '已标为社科书：可用「导读」，不再记人物表/伏笔'
-                : '已改回小说：恢复防剧透、人物表等');
+                ? '已标为社科书：导读＝整节讲解，不再记人物表/伏笔'
+                : '已改回小说：导读＝读前/读完两档，恢复防剧透、人物表等');
         }
         // 当前正在读的那本书（阅读模式看 readerBookId，共读看本对话记住的书）
         function rbCurBook() {
@@ -29045,7 +29047,8 @@ body {
             menu.style.display = 'block';
             var items = '<div onclick="rbBookMenuAction(\'rename\')">✏️ 改名</div>';
             items += '<div onclick="rbBookMenuAction(\'move\')">📁 移动到文件夹</div>';
-            // 类型：社科书解锁「导读」、关掉人物表/伏笔那套小说机关（默认小说，读到社科书标一下）
+            // 类型：默认小说。社科书＝导读改成「整节讲解」、并关掉人物表/伏笔那套小说机关。
+            // ⚠️别再写成「社科书解锁导读」：2026-09-16 起小说也有导读（读前/读完两档），只是形态不同。
             items += rbIsSocial(b)
                 ? '<div onclick="rbBookMenuAction(\'kind\')">📖 改回小说</div>'
                 : '<div onclick="rbBookMenuAction(\'kind\')">🎓 标为社科书</div>';
