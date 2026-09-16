@@ -36388,6 +36388,15 @@ body {
                     && !(typeof chatTranslateMode !== 'undefined' && chatTranslateMode)
                     && !(typeof chatReaderMode !== 'undefined' && chatReaderMode);
             }
+            /* 按下那一刻有没有选中的文字。⚠️必须在 pointerdown 读：
+               到了 click 阶段浏览器早把选区清了，读到的永远是空。 */
+            var _selBeforeTap = false;
+            el.addEventListener('pointerdown', function() {
+                try {
+                    var s0 = window.getSelection && window.getSelection();
+                    _selBeforeTap = !!(s0 && String(s0).trim().length > 0);
+                } catch (x) { _selBeforeTap = false; }
+            }, true);
             var _multiTouchAt = 0;
             el.addEventListener('touchstart', function(e) {
                 if (e.touches && e.touches.length > 1) _multiTouchAt = Date.now();
@@ -36423,6 +36432,14 @@ body {
                        不排除的话点它们会**既执行动作又翻一页**。
                        ⚠️`.rd-pref` 在阅读模式下本来也有这个毛病，一并治了。 */
                     if (e.target.closest('button, input, textarea, a, svg, img, .reading-actbar, .chat-thinking, .rd-pref, .chat-filecard')) return;
+                    /* ⚠️两道闸，缺一不可（2026-09-16 她报：「我会选中，然后取消，
+                       但是这个时候会同时触发下滑」）。
+                       第一道（原有的）只看**点击这一刻**还有没有选区——可**浏览器在 click
+                       之前就把选区清掉了**，等这里读的时候已经是空的，于是照翻不误。
+                       第二道才是治它的：在 **pointerdown**（选区还在）先记一笔，
+                       这一下点击就不翻页，只当作"取消选中"。
+                       ⚠️`_selBeforeTap` 用完立刻清掉，否则会把**下一次**正常点击也吃掉。 */
+                    if (_selBeforeTap) { _selBeforeTap = false; return; }
                     var sel = window.getSelection && window.getSelection();
                     if (sel && String(sel).length > 0) return;
                     // 原文段落：单击翻页 / 双击提问，统一用「连击计数 + 停手后判定」。
