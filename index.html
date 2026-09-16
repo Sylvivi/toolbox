@@ -6757,6 +6757,15 @@ body {
                     </select>
                     <button class="rb-btn" onclick="rbReSplit()">重新拆分</button>
                 </div>
+                <!-- 短篇集开关（2026-09-16 她提的，看《欧·亨利小说全集》时发现不适配）。
+                     ⚠️放在「分章设置」里而不是全局设置：这是**按书**的属性，
+                       跟「这本书的专用切法」是同一类东西。 -->
+                <div class="rb-split-tools" id="rbAnthRow" style="display:none">
+                    <label style="display:flex;align-items:center;gap:.5em;font-size:12px;color:var(--text-muted);cursor:pointer">
+                        <input type="checkbox" id="rbAnthChk" onchange="rbSetAnthology(this.checked)">
+                        <span>短篇集（各篇独立：前情不滞后、人物表每篇重建、不生成主线表）</span>
+                    </label>
+                </div>
                 </div>
                 <div id="rbChapterList"></div>
             </div>
@@ -20376,6 +20385,16 @@ body {
             if (!chatCtxCapped()) {
             if (chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length) || chatCompressOutline || chatCompressSummaries.length) {
                 var _sumParts = [];
+                /* ⚠️短篇集（2026-09-16 她提的，看《欧·亨利小说全集》时）：
+                   那本 269 章、每章 ~4500 字，**一章就是一个独立短篇**，彼此毫无关系。
+                   按长篇那套走会坏三件事：
+                     · 人物表堆成几百个互不相干的名字，且每章还要整表重发一遍；
+                     · 主线表 / 大事年表根本不成立（短篇之间没有主线和共同时间轴）；
+                     · **前情会帮倒忙**——读《警察和赞美诗》时上下文里塞着上一篇的剧情，
+                       模型很可能把两边的人和事串起来，这比"没有前情"更糟。
+                   所以短篇集模式下：**前情只带当前这一篇**、**人物/地点表每篇重建**、
+                   **主线表和年表不生成**。开关按书记在 `book.anthology` 上。 */
+                var _isAnth = (typeof rbIsAnthology === 'function') && rbIsAnthology();
                 // 共读模式优先用结构化记忆表格；无表格时 fallback 到旧大纲
                 // 走哪条上层记忆：结构化表格（共读优先）还是全程大纲。下面拼「详细摘要段」要看它。
                 var _usedMemTables = !!(chatMemoryTables && chatReadingMode && (chatMemoryTables.characters.length || (chatMemoryTables.places && chatMemoryTables.places.length) || (chatMemoryTables.timeline && chatMemoryTables.timeline.length) || chatMemoryTables.plotlines.length));
@@ -20383,8 +20402,8 @@ body {
                     var _memText = '';
                     if (chatMemoryTables.characters.length) _memText += '【人物表】\n| 人物 | 身份 | 关系 | 当前状态 | 备注 |\n| --- | --- | --- | --- | --- |\n' + chatMemoryTables.characters.map(function(r) { return '| ' + (r['人物']||'') + ' | ' + (r['身份']||'') + ' | ' + (r['关系']||'') + ' | ' + (r['当前状态']||'') + ' | ' + (r['备注']||'') + ' |'; }).join('\n');
                     if (chatMemoryTables.places && chatMemoryTables.places.length) _memText += (_memText ? '\n\n' : '') + '【地点表】\n| 地点 | 规模/特征 | 关联 | 简介 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.places.map(function(r) { return '| ' + (r['地点']||'') + ' | ' + (r['规模/特征']||'') + ' | ' + (r['关联']||'') + ' | ' + (r['简介']||'') + ' |'; }).join('\n');
-                    if (chatMemoryTables.timeline && chatMemoryTables.timeline.length) _memText += (_memText ? '\n\n' : '') + '【大事年表】\n| 时间 | 事件 |\n| --- | --- |\n' + chatMemoryTables.timeline.map(function(r) { return '| ' + (r['时间']||'') + ' | ' + (r['事件']||'') + ' |'; }).join('\n');
-                    if (chatMemoryTables.plotlines.length) _memText += (_memText ? '\n\n' : '') + '【主线/伏笔表】\n| 章节 | 事件 | 细节 | 已解决 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.plotlines.map(function(r) { return '| ' + (r['章节']||'') + ' | ' + (r['事件']||'') + ' | ' + (r['细节']||'') + ' | ' + (r['已解决']||'') + ' |'; }).join('\n');
+                    if (!_isAnth && chatMemoryTables.timeline && chatMemoryTables.timeline.length) _memText += (_memText ? '\n\n' : '') + '【大事年表】\n| 时间 | 事件 |\n| --- | --- |\n' + chatMemoryTables.timeline.map(function(r) { return '| ' + (r['时间']||'') + ' | ' + (r['事件']||'') + ' |'; }).join('\n');
+                    if (!_isAnth && chatMemoryTables.plotlines.length) _memText += (_memText ? '\n\n' : '') + '【主线/伏笔表】\n| 章节 | 事件 | 细节 | 已解决 |\n| --- | --- | --- | --- |\n' + chatMemoryTables.plotlines.map(function(r) { return '| ' + (r['章节']||'') + ' | ' + (r['事件']||'') + ' | ' + (r['细节']||'') + ' | ' + (r['已解决']||'') + ' |'; }).join('\n');
                     _sumParts.push(_memText);
                 } else if (chatCompressOutline) {
                     _sumParts.push('【更早前情的大纲】\n' + chatCompressOutline);
@@ -20401,7 +20420,10 @@ body {
                      凭空消失。取并集之后这个空档不存在了。
                    ⚠️正常情况下 pending ≤ 5，并集就等于最近 5 段，什么都没多发。 */
                 var _restSegs;
-                if (_usedMemTables) {
+                if (_isAnth) {
+                    // 短篇集：**前情不滞后**，只带当前这一篇，绝不把上一篇的剧情带进来
+                    _restSegs = chatCompressSummaries.slice(-1);
+                } else if (_usedMemTables) {
                     var _from = chatCompressSummaries.length - CHAT_SUMMARY_MAX_SEGS;
                     var _wm = chatMemTableCount || 0;
                     if (_wm < _from) _from = _wm;                 // 有积压就从水位开始
@@ -26128,7 +26150,30 @@ body {
             if (!box) return;
             var show = box.style.display === 'none';
             box.style.display = show ? '' : 'none';
+            var anth = document.getElementById('rbAnthRow');
+            if (anth) anth.style.display = show ? '' : 'none';
+            if (show) rbSyncAnthChk();          // 每次展开都按当前这本书刷一遍勾选状态
             if (btn) btn.classList.toggle('on', show);
+        }
+
+        /* 「短篇集」开关（2026-09-16）。按书记在 `book.anthology` 上，跟 preset/splitPattern 一路，
+           所以跟着云同步走、换设备也在。
+           ⚠️改完要 `rbSave()`（跟别的书属性同一个出口），别只改内存里的对象。 */
+        function rbSyncAnthChk() {
+            var c = document.getElementById('rbAnthChk');
+            if (!c) return;
+            var b = (typeof rbActiveBookId !== 'undefined') && rbGetBook(rbActiveBookId);
+            c.checked = !!(b && b.anthology);
+        }
+        function rbSetAnthology(on) {
+            var b = (typeof rbActiveBookId !== 'undefined') && rbGetBook(rbActiveBookId);
+            if (!b) return;
+            b.anthology = !!on;
+            if (typeof rbSave === 'function') rbSave();
+            /* 刚打开：把已经堆起来的表清掉，从这一篇重新建。
+               ⚠️不清的话她开了开关也看不到变化——表还是那几百个人。 */
+            if (on && typeof rbAnthologyResetTables === 'function') rbAnthologyResetTables();
+            showToast(on ? '已按短篇集处理：前情不滞后、人物表每篇重建' : '已恢复长篇模式');
         }
         function rbSetBookTitle(fileKey, name) {
             var map = rbTitlesLoad();
@@ -26778,6 +26823,32 @@ body {
             if (what === 'summary') { if (chatReaderMode) readerShowSummaryModal(); else chatShowSummaryModal(); return; }
             if (what === 'bookmark') { rdTraceShowPanel(); return; }
         }
+
+        /* 当前正在读的这本是不是「短篇集」。按书记在 `book.anthology`（跟 preset/splitPattern
+           一样是书对象上的字段，跟着云同步走）。⚠️挂到 window 上：拼请求那段在别的闭包里。 */
+        function rbIsAnthology() {
+            try {
+                var id = (typeof readerBookId !== 'undefined' && readerBookId) ? readerBookId
+                       : (typeof rbActiveBookId !== 'undefined' ? rbActiveBookId : null);
+                if (!id || typeof rbGetBook !== 'function') return false;
+                var b = rbGetBook(id);
+                return !!(b && b.anthology);
+            } catch (e) { return false; }
+        }
+        window.rbIsAnthology = rbIsAnthology;
+
+        /* 短篇集：翻到新的一篇就把记忆表清空重建（2026-09-16）。
+           ⚠️只清**人物/地点**那两张有意义的表；主线/年表在短篇集下压根不生成（见拼请求那段）。
+           ⚠️水位也要归零，否则下一篇会被当成"还没折进表格的积压段"整批重喂。 */
+        function rbAnthologyResetTables() {
+            if (!rbIsAnthology()) return;
+            try {
+                chatMemoryTables = { characters: [], places: [], timeline: [], plotlines: [] };
+                chatMemTableCount = (typeof chatCompressSummaries !== 'undefined' && chatCompressSummaries)
+                                  ? Math.max(0, chatCompressSummaries.length - 1) : 0;
+            } catch (e) {}
+        }
+        window.rbAnthologyResetTables = rbAnthologyResetTables;
 
         function rbCloseShelf() {
             document.getElementById('rbBg').classList.remove('show');
@@ -28563,6 +28634,8 @@ body {
             readerBookId = bookId;
             readerChapterIdx = idx;
             var cid = readerConvId(bookId);
+            // 短篇集：换一篇＝换一个故事，人物/地点表清空重建（2026-09-16，见 rbAnthologyResetTables）
+            if (typeof rbAnthologyResetTables === 'function') rbAnthologyResetTables();
             rbCloseShelf();
             // ⚠️chatResetConvState() 会把 chatSelectedModel/chatSelectedKeyStr 清空，而这里
             // 不像 chatLoadConv 那样从 conv 恢复——于是「从目录点一章」之后模型就没了，
@@ -29076,6 +29149,8 @@ body {
             if (nb) nb.style.display = (rbPickForReader || pureRead) ? 'none' : '';
             // 分章工具每次开书都收回去（低频功能，不该占着顶部）
             var st = document.getElementById('rbSplitTools'); if (st) st.style.display = 'none';
+            var anthRow = document.getElementById('rbAnthRow'); if (anthRow) anthRow.style.display = 'none';
+            rbSyncAnthChk();
             var stb = document.getElementById('rbSplitToggle'); if (stb) stb.classList.remove('on');
             rbRenderChapters();
             // 打开目录时自动定位到「当前在读的那一章」，省得每次从头下滑找
