@@ -27792,8 +27792,14 @@ body {
             var chs = Object.keys(m).filter(function (k) {
                 return /^\d+$/.test(k) && m[k] && m[k].sum;
             });
-            if (!chs.length) { showToast('这本还没有摘要可清'); return; }
-            if (!confirm('清空本书全部 ' + chs.length + ' 条摘要？\n\n'
+            var mt = readerMemTablesGet(fileKey);
+            var rows = mt ? ((mt.characters || []).length + (mt.places || []).length
+                           + (mt.timeline || []).length + (mt.plotlines || []).length) : 0;
+            if (!chs.length && !rows) { showToast('这本还没有摘要和表格可清'); return; }
+            var what = [];
+            if (chs.length) what.push(chs.length + ' 条摘要');
+            if (rows) what.push('记忆表格 ' + rows + ' 行');
+            if (!confirm('清空本书的 ' + what.join('、') + '？\n\n'
                        + '大纲也会一起清掉（它是从摘要折出来的）。\n'
                        + '清完可以去设置里换个更好的「摘要/记忆模型」，再回来点「补齐」重新生成。\n\n'
                        + '⚠️这一步不可撤销。')) return;
@@ -27802,8 +27808,17 @@ body {
             all[fileKey] = m;
             readerSummariesSaveAll(all);
             readerOutlineSet(fileKey, '', -1);
+            /* ⚠️表格必须在这儿一起清（2026-09-17 她追问「表格那些呢」）。
+               不能指望「重折」：`readerUpdateMemoryTables(rebuild=true)` 只是
+               **把已有摘要重新折到现有的表上**（纠正增量漂移），旧行原样留着；
+               而且摘要清空后 `readerMaxSummaryChap` 回 -1，重折直接就被挡在门外了。
+               不清的话，换好模型重生成完，表里还混着老模型留下的行。
+               ⚠️`readerMemTablesSet` 自带 `ts: Date.now()`，写一份空表就是合格的墓碑，
+                 能同步到另一台；`upTo` 归 -1，下次才会从第 0 章重折。 */
+            readerMemTablesSet(fileKey, { characters: [], places: [], timeline: [], plotlines: [] }, -1);
+            readerMemTblErrSet(fileKey, null);   // 上次失败的标记也一并清掉
             if (activeSyncProvider === 'cf') syncPushData();
-            showToast('已清空 ' + chs.length + ' 条摘要');
+            showToast('已清空' + what.join('、'));
             readerShowSummaryModal();
         }
 
