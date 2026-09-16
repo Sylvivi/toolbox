@@ -3843,6 +3843,25 @@ body {
             background: var(--card-bg); color: var(--text); cursor: pointer;
         }
         .rfont-select:focus { outline: none; border-color: var(--accent-mid); }
+        /* 「正文字号」挪进这两列的最后一个空位（2026-09-17 她要的：
+           「正文字号弄到字体那两列中最后的那个空位里去」）。
+           ⚠️七个槽位是奇数、第 8 格本来空着，填进来正好，外面也省掉一整行。
+             以后再加第 8 个字体槽位的话，这个就得另找地方。
+           ⚠️外观照抄 `.rfont-select`（同样的边框/圆角/底色/字号），
+             不然同一行里左边是下拉框、右边是三个裸按钮，一眼就不齐。 */
+        .rfont-size {
+            flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between;
+            font-size: 12px; padding: 3px 4px;
+            border: 1px solid var(--card-border); border-radius: 8px; background: var(--card-bg);
+        }
+        .rfont-size button {
+            border: none; background: transparent; color: var(--accent-mid);
+            font-size: 13px; line-height: 1; padding: 3px 7px; cursor: pointer; border-radius: 6px;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .rfont-size button:active { background: var(--accent-light); }
+        /* ⚠️等宽数字：110%→105% 时宽度不变，两个 A 按钮才不会左右跳 */
+        .rfont-size span { color: var(--text-muted); font-variant-numeric: tabular-nums; }
 
         /* ===== 共读：点段评价 ===== */
         /* ⚠️别再给整章加 content-visibility！2026-07-08 试过 `.reading-chapter { content-visibility:auto }`
@@ -6960,14 +6979,6 @@ body {
                         <button class="chip-btn" id="chipNameList" onclick="readingOpenNamesEditor()" title="填写/自动识别本书名词">名单…</button>
                     </div>
                 </div>
-                <div id="readingFontRow" style="display:flex;align-items:center;justify-content:space-between">
-                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">正文字号</span>
-                    <div style="display:flex;gap:6px;align-items:center">
-                        <button class="chip-btn" onclick="readingStepFontScale(-0.05)" title="缩小" style="min-width:30px">A−</button>
-                        <span id="readingFontVal" style="font-size:12px;color:var(--text-muted);min-width:40px;text-align:center">110%</span>
-                        <button class="chip-btn" onclick="readingStepFontScale(0.05)" title="放大" style="min-width:30px">A+</button>
-                    </div>
-                </div>
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
                     <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0" title="正文的笔画粗细。四档都是字体里真有的字重，不是浏览器硬撑出来的">字重</span>
                     <div id="readingFwChips" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end"></div>
@@ -7073,6 +7084,13 @@ body {
                             <div class="rfont-slot-row"><span class="rfont-slot-label">人名</span><select id="readingFontSel_person" class="rfont-select" onchange="readingSetSlotFont('person', this.value)"></select></div>
                             <div class="rfont-slot-row"><span class="rfont-slot-label" title="开「精句」时，每段最短的完整句单独用这个字体">精句</span><select id="readingFontSel_keysent" class="rfont-select" onchange="readingSetSlotFont('keysent', this.value)"></select></div>
                             <div class="rfont-slot-row"><span class="rfont-slot-label" title="上面那些字体没收的生僻字，改用这个字体显示；不选就掉回系统字体">缺字</span><select id="readingFontSel_fallback" class="rfont-select" onchange="readingSetSlotFont('fallback', this.value)"></select></div>
+                            <div class="rfont-slot-row"><span class="rfont-slot-label" title="正文字号">字号</span>
+                                <div class="rfont-size">
+                                    <button type="button" onclick="readingStepFontScale(-0.05)" title="缩小">A−</button>
+                                    <span id="readingFontVal">110%</span>
+                                    <button type="button" onclick="readingStepFontScale(0.05)" title="放大">A+</button>
+                                </div>
+                            </div>
                         </div>
                         <span id="readingFontStatus" class="rfont-status">正文：默认</span>
                     </div>
@@ -36886,7 +36904,10 @@ body {
                        附件/小红书折叠成的文件卡片，都是 span/div 带 onclick，
                        不排除的话点它们会**既执行动作又翻一页**。
                        ⚠️`.rd-pref` 在阅读模式下本来也有这个毛病，一并治了。 */
-                    if (e.target.closest('button, input, textarea, a, svg, img, .reading-actbar, .chat-thinking, .rd-pref, .chat-filecard')) return;
+                    /* ⚠️2026-09-17 又加了 `.rd-tail`（「掐尾」那个 ⋯）：她报「点那三个小点点会触发翻页，
+                       然后我点那个原文字想让他收回去又会触发翻页」。跟上面 `.rd-pref` 是同一个毛病——
+                       **凡是正文里新加的可点元素，都要来这张单子上登记一次**，否则点一下会既执行动作又翻页。 */
+                    if (e.target.closest('button, input, textarea, a, svg, img, .reading-actbar, .chat-thinking, .rd-pref, .chat-filecard, .rd-tail')) return;
                     /* ⚠️两道闸，缺一不可（2026-09-16 她报：「我会选中，然后取消，
                        但是这个时候会同时触发下滑」）。
                        第一道（原有的）只看**点击这一刻**还有没有选区——可**浏览器在 click
