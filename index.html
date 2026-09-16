@@ -17121,6 +17121,25 @@ body {
                 rbCloseShelf();                                                                  // ③ 已在最外层 → 关掉面板
             });
 
+        /* 目录页左滑＝召唤摘要（2026-09-17 她要的：「在目录页左滑可以召唤出摘要」）。
+           走的是跟顶栏那个鱼骨图标**同一个出口** `rbHeadAct('summary')`，不另写一份。
+           ⚠️只在「某本书的目录」这一层认：判据跟右滑退层用的是同一条——
+             看 `#rbChapterView` 的 display，不看 rbActiveBookId
+             （远程占位书下载中时 id 已有值、界面却还在书架，那时候左滑不该弹摘要）。
+           ⚠️**不关目录**：摘要是盖在上面的浮层，跟点鱼骨的行为一致，关掉它还在目录里。
+           ⚠️必须走 attachEdgeSwipe，别另写轻量版——里面那两道「有选区就不起手 / 划到一半
+             冒出选区立刻收手」的闸是给 iPad 选字用的，自己写必漏（见 16981 那段）。
+           ⚠️`#rbModal` 上现在挂了三个手势：下滑关、右滑退一层、左滑摘要。
+             三个方向各一个、互不同向，所以不会抢起手；**再加就要先想清楚方向冲突**。 */
+        attachEdgeSwipe(document.getElementById('rbModal'), 'left',
+            function() {
+                var m = document.getElementById('rbModal');
+                if (!m || !m.classList.contains('show')) return false;
+                var chapView = document.getElementById('rbChapterView');
+                return !!(chapView && chapView.style.display !== 'none');
+            },
+            function() { rbHeadAct('summary'); });
+
         // 空白处双击退出聊天
         (function() {
             var msgArea = document.getElementById('chatMessages');
