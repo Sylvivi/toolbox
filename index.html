@@ -5804,8 +5804,14 @@ body {
     </style>
 <!-- ⚠️2026-09-06 摘掉：这是 Noto Serif CJK 的镜像（282KB，每次都加载），但它**只有 font-weight:200 一档**（特细），她报「淡淡的、字重调不动」的正是它。CSS 里以这个字族名引用它的地方是 0 处（那三处写的是系统字体 "Noto Serif CJK SC"，不是一回事）。她说「你帮我把那个很淡的去了，我分不清这俩」——名字跟思源宋体 Source Han Serif CN 太像。 --><style id="deco-custom-style">.chat-deco-on .chat-msg.ai::before{content:""!important;position:absolute!important;top:-12px!important;left:16px!important;width:1px!important;height:1px!important;font-size:0!important;image-rendering:pixelated!important;animation:none!important;pointer-events:none!important;z-index:5!important;box-shadow:0 2px #8fb5e8,1px 2px #8fb5e8,0 3px #8fb5e8,1px 3px #8fb5e8,3px 0 #8fb5e8,4px 0 #8fb5e8,3px 1px #8fb5e8,4px 1px #8fb5e8,6px 0 #8fb5e8,7px 0 #8fb5e8,6px 1px #8fb5e8,7px 1px #8fb5e8,9px 2px #8fb5e8,10px 2px #8fb5e8,9px 3px #8fb5e8,10px 3px #8fb5e8,4px 5px #8fb5e8,5px 5px #8fb5e8,6px 5px #8fb5e8,3px 6px #8fb5e8,4px 6px #8fb5e8,5px 6px #8fb5e8,6px 6px #8fb5e8,7px 6px #8fb5e8,2px 7px #8fb5e8,3px 7px #8fb5e8,4px 7px #8fb5e8,5px 7px #8fb5e8,6px 7px #8fb5e8,7px 7px #8fb5e8,8px 7px #8fb5e8,2px 8px #8fb5e8,3px 8px #8fb5e8,4px 8px #8fb5e8,5px 8px #8fb5e8,6px 8px #8fb5e8,7px 8px #8fb5e8,8px 8px #8fb5e8,3px 9px #8fb5e8,4px 9px #8fb5e8,5px 9px #8fb5e8,6px 9px #8fb5e8,7px 9px #8fb5e8!important;}
         /* 小说导读两档选单（2026-09-16）。极简：无实心色块零件，靠字色和淡底区分，间距用 em。 */
+        /* ⚠️`.reading-actbar` 有**两份**定义（3987 和 4615，都在顶层），**后面那份赢**——
+           而它**没有 flex-wrap: wrap**。于是 flex-basis:100% 的选单换不了行，
+           跟输入框挤在同一排、把它压扁了（2026-09-16 她报的「怎么开始压缩那个输入框了呀」）。
+           修法不是去给那份加 wrap（那会改到条子的所有状态），而是**只在选单开着时**开启换行：
+           :has() 一走，选单收起来，条子就回到原来那一行的样子。 */
+        .reading-actbar:has(.rp-guide-pick) { flex-wrap: wrap; }
         .reading-actbar .rp-guide-pick {
-            flex-basis: 100%; display: flex; gap: 0.5em; margin-top: 0.4em;
+            flex-basis: 100%; width: 100%; display: flex; gap: 0.5em; margin-top: 0.4em;
         }
         .reading-actbar .rp-guide-pick button {
             flex: 1; padding: 0.4em 0.3em; border: 1px solid var(--accent-mid); border-radius: 8px;
