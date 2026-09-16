@@ -25231,13 +25231,21 @@ body {
         // 引号感知拆句：只在「引号外」的句末标点(。！？)处断句，绝不在引号内部断（否则小说里跨句号的对话会被拆坏）。
         // 返回各句片段(含各自的句末标点)；末尾没标点的收尾残句单独成段。
         function readingSplitSentences(raw) {
-            var parts = [], cur = '', depth = 0;
+            /* ⚠️英文直引号 `"` 也要算引号（2026-09-16 加）。它开合同形，只能用开关翻转、不能计数。
+               不管它的话，一段直引号对话只要内部有句号就会被从中间切开，
+               切完每半边各剩一个落单的引号 → `readingHighlightQuotes` 配不成对 → 整段引号样式全失效。
+               她报的是《鲁滨逊漂流记》，实际**全库 25 本**都中招
+               （周六的事/山雨/你到的时候刚好 这些是全篇只用直引号、一个中文引号都没有）。
+               ⚠️段内引号数为奇数时（对话跨段），`dq` 会一直挂着、后半段不再断句——
+               这是**安全的失败**：拆不开就整段交给 proc，引号照样配得上对，只是不挑精句。 */
+            var parts = [], cur = '', depth = 0, dq = false;
             for (var i = 0; i < raw.length; i++) {
                 var ch = raw[i];
                 cur += ch;
                 if (ch === '「' || ch === '『' || ch === '“') depth++;
                 else if (ch === '」' || ch === '』' || ch === '”') { if (depth > 0) depth--; }
-                else if (depth === 0 && (ch === '。' || ch === '！' || ch === '？')) {
+                else if (ch === '"') dq = !dq;
+                else if (depth === 0 && !dq && (ch === '。' || ch === '！' || ch === '？')) {
                     while (i + 1 < raw.length && '。！？'.indexOf(raw[i + 1]) >= 0) cur += raw[++i]; // 连续句末标点(如？！)一并收尾
                     parts.push(cur); cur = '';
                 }
