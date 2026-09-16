@@ -14730,6 +14730,10 @@ body {
             '· 读的时候可以留意什么（留意的"方向"，不是"会发生什么"）\n\n' +
             '【绝对禁止】不许提这一篇的情节走向、转折和结局，一句都不行，' +
             '也不要用"结尾你会发现""别急着下判断"这类暗示性的话——那等于剧透了有反转。\n' +
+            /* ⚠️它拿到的正文是**砍掉结尾的**（见 readingAskOne 里 _keep 那段）。必须挡住两种反应：
+               ① 主动交代"结尾我没看到"——那等于告诉她"结尾有东西"；② 猜测后面会怎样。 */
+            '【别提这件事】我给你的正文可能不完整（我故意没把结尾给你）。不要提这一点，' +
+            '不要说"我看到的部分到此为止"，也不要去猜后面会发生什么——就用手上这些讲背景。\n' +
             '【怎么说】大白话，像一个读过很多遍的朋友在你翻开书之前随口交代两句。' +
             '别写成赏析课，别煽情，不要小标题堆砌，三五段之内说完。';
 
@@ -31550,14 +31554,22 @@ body {
                     var _bkG = rbGetBook(readerBookId);
                     _chapTitle = (_bkG && _bkG.chapters[readerChapterIdx] && _bkG.chapters[readerChapterIdx].title) || '';
                 } catch (eG) {}
-                var _whole = lines.filter(function (x) { return x != null; }).join('\n');
-                if (!_whole.trim()) { showToast('这一章没有正文可导读'); readingClearActbar(); return; }
-                /* ⚠️读前这一档**只喂开头**（6000 字封顶，从章首往后取）。
-                   两个好处：① 背景/年代/人物登场全在开头，够用；
-                   ② 模型根本看不到结尾＝从源头上少一大半剧透风险，比光靠提示词硬压稳。
-                   读完那一档反过来，要整篇（超长就留靠后的部分，回味谈的就是后半段）。 */
-                var _cap = 6000, _tr = _whole.length > _cap;
-                _secText = { text: _gKind === 'pre' ? _whole.slice(0, _cap) : (_tr ? _whole.slice(-_cap) : _whole), truncated: _tr };
+                var _gLines = lines.filter(function (x) { return x != null && String(x).trim(); });
+                if (!_gLines.length) { showToast('这一章没有正文可导读'); readingClearActbar(); return; }
+                /* ⚠️读前这一档给**整篇、但砍掉最后 15% 的段落**（至少砍一段）。
+                   2026-09-16 她质疑过第一版的"只给开头 6000 字"：「只发开头会不会影响导读效果呀，
+                   因为像故事的解剖那边也没有只发开头呀」——说得对，而且那一版其实是**虚的**：
+                   欧·亨利一篇才三五千字，6000 封顶根本没生效，模型早看完了全篇，
+                   所谓"两层防护"对她最主要的场景只剩提示词一层，却白白让长章节的导读变薄。
+                   （⚠️《故事的解剖》那个例子不平行：社科书没有情节可剧透，所以社科那档**故意不写**防剧透。）
+                   砍尾巴比砍开头划算得多：设定/人物/中段发展全都还在（"该留意什么"才说得准），
+                   而欧·亨利的反转就压在最后几段——它没看见，就不可能说漏。
+                   读完那一档不砍，要整篇（超长就留靠后的部分，回味谈的就是后半段）。 */
+                var _keep = Math.max(1, Math.min(_gLines.length - 1, Math.ceil(_gLines.length * 0.85)));
+                var _whole = (_gKind === 'pre' ? _gLines.slice(0, _keep) : _gLines).join('\n');
+                var _cap = 8000, _tr = _whole.length > _cap;
+                _secText = { text: _tr ? (_gKind === 'pre' ? _whole.slice(0, _cap) : _whole.slice(-_cap)) : _whole,
+                             truncated: _tr, cut: _gKind === 'pre' && _keep < _gLines.length };
                 _sec = { title: _chapTitle, headP: pNum };
                 question = '导读·' + (_gKind === 'pre' ? '读前' : '回味') + (_chapTitle ? '：《' + _chapTitle + '》' : '');
             } else if (_guide) {
@@ -31651,7 +31663,10 @@ body {
                 sysPrompt = (_spAsk || READING_MODE_DEFAULT_PERSONA) + '\n\n' + (_gKind === 'pre' ? NOVEL_GUIDE_PRE : NOVEL_GUIDE_POST);
                 userMsg = '以下是《' + (rbCurBookName() || '这本书') + '》里' +
                     (_sec.title ? '「' + _sec.title + '」这一篇' : '这一篇') + '的原文' +
-                    (_secText.truncated ? (_gKind === 'pre' ? '（这篇较长，只给了开头一部分）' : '（这篇较长，只给了靠后的部分）') : '') +
+                    (_gKind === 'pre'
+                        ? (_secText.cut ? '（⚠️**结尾我故意没给你**——我还没读，别让你看见。下面是这一篇除结尾之外的部分' +
+                                          (_secText.truncated ? '，而且太长只截到中途' : '') + '）' : '')
+                        : (_secText.truncated ? '（这篇较长，只给了靠后的部分）' : '')) +
                     '：\n\n' + _secText.text + '\n\n' +
                     (_gKind === 'pre'
                         /* ⚠️位置＝效力（见 prompt-position-beats-volume）：防剧透这句必须**钉在最末尾**再说一遍。
