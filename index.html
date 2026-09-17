@@ -32513,6 +32513,31 @@ body {
         // range={from,to}（可选）：只扫这一段落区间，用于「按小节标背景」。
         // ⚠️段号仍按整章算（[P<全章段号]），因为插入、渲染、reader_qa 全都用全章编号——
         // 若改成节内相对编号，块会插到章首去。
+        /* 把模型报的段号校回「这个词真正出现的那一段」（2026-09-17 修）。
+           她报：《命运之路》里「波希米亚人」的背景卡插在了上一段后面，而那个词出现在下一段，
+           并说「之前也出现过几次这样的情况」。
+           ⚠️病根：`p` 一直是**模型自己报的**，这里只检查过「在不在扫描区间内」，
+             从没核对过那个词到底在不在第 p 段。模型报的其实是「我读到这儿想讲」，
+             跟「这个词在哪段」常常差一段。
+           ⚠️能校得回来是因为提示词要求**出发点必须是原文里逐字出现过的** 2~8 个字
+             （见 BG_SCAN_INSTRUCTION 里「原文出发点」那节）。所以拿它当针去扎段落即可。
+           ⚠️多段命中时取**离模型报的那段最近**的：常见词（咖啡、马车）满篇都是，
+             取最近的才最可能是它当时读到的那处。
+           ⚠️找不到就**原样返回**，不硬猜——出发点允许留空，也允许模型概括命名后对不上原文。 */
+        function _rdBgFixP(p, m, lines, from, to) {
+            var needle = String((m && m.anchor) || '').trim() || String((m && m.term) || '').trim();
+            if (!needle) return p;
+            if (lines[p - 1] && lines[p - 1].indexOf(needle) >= 0) return p;   // 模型报对了
+            var best = -1, bestD = Infinity;
+            for (var i = from; i <= to; i++) {
+                if (lines[i - 1] && lines[i - 1].indexOf(needle) >= 0) {
+                    var d = Math.abs(i - p);
+                    if (d < bestD) { bestD = d; best = i; }
+                }
+            }
+            return best > 0 ? best : p;
+        }
+
         async function _rdBgScan(b, lines, doneTerms, mdl, fb, range, donePara) {
             var from = Math.max(1, (range && range.from) || 1);
             var to = Math.min(lines.length, (range && range.to) || lines.length);
@@ -32595,6 +32620,7 @@ body {
                     matched++;   // 认出了格式（哪怕随后因「已讲过/段号越界」被滤掉），用来区分「模型没照做」和「确实没新的」
                     var p = m.p;
                     var term = m.term;
+                    p = _rdBgFixP(p, m, lines, from, to);   // ⚠️模型报的段号常差一段，拿出发点校回来
                     // 限定在扫描区间内：标某一节时，模型偶尔会引用节外的段号，那样块会插到别处去
                     var key = _rdBgKey(term);
                     if (!(p >= from && p <= to) || !term || !key || seen[key]) return;
