@@ -31850,7 +31850,14 @@ body {
                 var _chapTitle = '';
                 try {
                     var _bkG = rbGetBook(readerBookId);
-                    _chapTitle = (_bkG && _bkG.chapters[readerChapterIdx] && _bkG.chapters[readerChapterIdx].title) || '';
+                    /* ⚠️篇名必须取**这条消息自己的** readerChapter，不能用全局 readerChapterIdx。
+                       2026-09-17 她报「在正文点导读→回味，生成的是下一篇的内容」，病根就在这儿：
+                       滚到章尾会自动续下一章（readerAppendNextChapter 把 readerChapterIdx 推成 N+1），
+                       而「读完回味」恰恰是读到章尾才点的——于是原文是这一篇、篇名却是下一篇的。
+                       名著/短篇集尤其致命：模型认得那个篇名，就照它脑子里的那一篇讲了。
+                       消息自带的 readerChapter 是 100% 准的（见 chatGuessBook 那段注释）。 */
+                    var _ciG = (msg && msg.readerChapter != null) ? msg.readerChapter : readerChapterIdx;
+                    _chapTitle = (_bkG && _bkG.chapters[_ciG] && _bkG.chapters[_ciG].title) || '';
                 } catch (eG) {}
                 var _gLines = lines.filter(function (x) { return x != null && String(x).trim(); });
                 if (!_gLines.length) { showToast('这一章没有正文可导读'); readingClearActbar(); return; }
