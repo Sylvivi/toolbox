@@ -27734,11 +27734,21 @@ body {
         }
         // 「是否自动总结前情」总开关（默认关）：一个全局开关，决定阅读时要不要在后台总结，避免到书架随便翻翻也烧 API。
         // 存 reader_summary_on（'1'/'0'），参数保留只为兼容旧调用，实际忽略。
+        /* ⚠️**故意不落盘**，只活在这一次打开里（2026-09-18 她要的）。
+           她的原话：「就是让那个开关是一次性的，需要我自己主动去打开，
+           换设备或者下次打开还是会关掉的那种」。
+           起因：「我有时候只是跳着去看别的章节，这一总结就乱了」——
+           readerPrefetchSummaries 会从 `curChap - LOOKBACK` 一路补到当前章，
+           所以跳到第 30 章看一眼，就白白把一大片没读过的章节总结了一遍（还烧 API）。
+           ⚠️于是判据从 localStorage 换成内存变量：刷新 / 重开 PWA / 换设备一律回到关。
+           ⚠️**别再改回 localStorage**，也别顺手加个「记住我的选择」——那正是她要躲的东西。
+           ⚠️旧的 `reader_summary_on` 键不再有人读，留着不影响，不用专门去清。 */
+        var _readerSummaryOn = false;
         function readerSummaryEnabled() {
-            return localStorage.getItem('reader_summary_on') === '1';
+            return _readerSummaryOn;
         }
         function readerSetSummaryEnabled(on) {
-            try { localStorage.setItem('reader_summary_on', on ? '1' : '0'); } catch (e) {}
+            _readerSummaryOn = !!on;
         }
         // 摘要弹窗里点开关：开 → 立刻后台把前文补起来；关 → 停止后台生成（已生成的摘要保留、提问仍会带上）。
         function readerToggleSummaryEnabled() {
