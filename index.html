@@ -5924,7 +5924,7 @@ body {
            ⚠️默认**不显示**，靠齿轮里的开关开；关着时连查都不查（见 rdQaTimeOn）。
            ⚠️别给它加底色/药丸/边框——她的口味是「要显眼靠提亮字色，别加实心色块零件」。 */
         .rd-qa-t {
-            margin-left: 0.6em; font-size: 0.78em; font-weight: 400;
+            float: right; margin-left: 1em; font-size: 0.78em; font-weight: 400;
             color: var(--text-muted); opacity: 0.75;
             font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
             white-space: nowrap;
@@ -37891,14 +37891,17 @@ body {
                                     q: _rdBgSplitQ(_nl >= 0 ? _cmtRaw.slice(0, _nl) : _cmtRaw).text.replace(/^\s*汐：/, '').trim() })];
                                 if (_qtv) _qtHtml = '<span class="rd-qa-t">' + esc(rdQaTimeFmt(_qtv)) + '</span>';
                             }
-                            var _qInner;
-                            if (_qRep === _qHtml) {
-                                _qInner = _qtHtml && /<\/p>\s*$/.test(_qHtml)
-                                    ? _qHtml.replace(/<\/p>\s*$/, _qtHtml + '</p>') : _qHtml + _qtHtml;
-                            } else {
-                                _qInner = /<\/p>\s*$/.test(_qRep)
-                                    ? _qRep.replace(/<\/p>\s*$/, '</span>' + _qtHtml + '</p>')
-                                    : _qRep + '</span>' + _qtHtml;
+                            /* ⚠️2026-09-18 二改：她说「似乎贴得有点近」，选了「推到行尾右对齐」。
+                               做法是 `float:right`，而且**时间要插在问题文字的前面**（紧跟 `<p>` 之后）：
+                                 · 插在前面 → 浮到右上角，问题长到换行时文字绕着它排，时间位置不动；
+                                 · 拼在尾巴上 → 长问题会把它挤到**最后一行**的右边，看着像掉队了。
+                               ⚠️**不能用 flex** 来做右对齐：那会把 `.reading-q-hl` 变成 flex 项、
+                                 长问题时背景被撑成满行，而她明确要过「荧光笔底只包住字、不铺满整行」。 */
+                            var _qInner = (_qRep === _qHtml) ? _qHtml : _qRep + '</span>';
+                            if (_qtHtml) {
+                                _qInner = /^\s*<p[^>]*>/.test(_qInner)
+                                    ? _qInner.replace(/^(\s*<p[^>]*>)/, '$1' + _qtHtml)
+                                    : _qtHtml + _qInner;
                             }
                             _cmtRendered = '<div class="reading-q">' + _qInner + '</div>';
                             if (_aLine.trim()) {
