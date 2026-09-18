@@ -5920,6 +5920,14 @@ body {
             -webkit-tap-highlight-color: transparent;
         }
         .xhs-spec-b button:active { background: var(--accent-light); }
+        /* 问答的时间标记（2026-09-18 她要的「极简风」）：整块问答右下角一行淡灰小字。
+           ⚠️默认**不显示**，靠齿轮里的开关开；关着时连查都不查（见 rdQaTimeOn）。
+           ⚠️别给它加底色/药丸/边框——她的口味是「要显眼靠提亮字色，别加实心色块零件」。 */
+        .rd-qa-t {
+            margin-top: 0.35em; text-align: right;
+            font-size: 0.78em; color: var(--text-muted); opacity: 0.75;
+            font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+        }
     </style>
 <!-- ⚠️2026-09-06 摘掉：这是 Noto Serif CJK 的镜像（282KB，每次都加载），但它**只有 font-weight:200 一档**（特细），她报「淡淡的、字重调不动」的正是它。CSS 里以这个字族名引用它的地方是 0 处（那三处写的是系统字体 "Noto Serif CJK SC"，不是一回事）。她说「你帮我把那个很淡的去了，我分不清这俩」——名字跟思源宋体 Source Han Serif CN 太像。 --><style id="deco-custom-style">.chat-deco-on .chat-msg.ai::before{content:""!important;position:absolute!important;top:-12px!important;left:16px!important;width:1px!important;height:1px!important;font-size:0!important;image-rendering:pixelated!important;animation:none!important;pointer-events:none!important;z-index:5!important;box-shadow:0 2px #8fb5e8,1px 2px #8fb5e8,0 3px #8fb5e8,1px 3px #8fb5e8,3px 0 #8fb5e8,4px 0 #8fb5e8,3px 1px #8fb5e8,4px 1px #8fb5e8,6px 0 #8fb5e8,7px 0 #8fb5e8,6px 1px #8fb5e8,7px 1px #8fb5e8,9px 2px #8fb5e8,10px 2px #8fb5e8,9px 3px #8fb5e8,10px 3px #8fb5e8,4px 5px #8fb5e8,5px 5px #8fb5e8,6px 5px #8fb5e8,3px 6px #8fb5e8,4px 6px #8fb5e8,5px 6px #8fb5e8,6px 6px #8fb5e8,7px 6px #8fb5e8,2px 7px #8fb5e8,3px 7px #8fb5e8,4px 7px #8fb5e8,5px 7px #8fb5e8,6px 7px #8fb5e8,7px 7px #8fb5e8,8px 7px #8fb5e8,2px 8px #8fb5e8,3px 8px #8fb5e8,4px 8px #8fb5e8,5px 8px #8fb5e8,6px 8px #8fb5e8,7px 8px #8fb5e8,8px 8px #8fb5e8,3px 9px #8fb5e8,4px 9px #8fb5e8,5px 9px #8fb5e8,6px 9px #8fb5e8,7px 9px #8fb5e8!important;}
         /* 小说导读两档选单（2026-09-16）。极简：无实心色块零件，靠字色和淡底区分，间距用 em。 */
@@ -6880,13 +6888,16 @@ body {
                     </select>
                     <button class="rb-btn" onclick="rbReSplit()">重新拆分</button>
                 </div>
+                <!-- ⚠️标签就「短篇集」三个字，别再把作用写在后面（2026-09-18 她说「说明文字太多了」）。
+                     勾上/取消时的吐司已经把「前情不滞后、人物表每篇重建」讲清楚了，界面上不用再写一遍。
+                     同一条口味：导读那个选单也是只留两个字，见 [[user-taste-minimal-no-badges]]。 -->
                 <!-- 短篇集开关（2026-09-16 她提的，看《欧·亨利小说全集》时发现不适配）。
                      ⚠️放在「分章设置」里而不是全局设置：这是**按书**的属性，
                        跟「这本书的专用切法」是同一类东西。 -->
                 <div class="rb-split-tools" id="rbAnthRow" style="display:none">
                     <label style="display:flex;align-items:center;gap:.5em;font-size:12px;color:var(--text-muted);cursor:pointer">
                         <input type="checkbox" id="rbAnthChk" onchange="rbSetAnthology(this.checked)">
-                        <span>短篇集（各篇独立：前情不滞后、人物表每篇重建、不生成主线表）</span>
+                        <span>短篇集</span>
                     </label>
                 </div>
                 </div>
@@ -7038,6 +7049,7 @@ body {
                     <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
                         <button class="chip-btn" id="chipTrimTail" onclick="readingToggleTrimTail()" title="掐尾：把双击提问/追问答案最后那句总结性收尾收起来；点 ⋯ 可以展开看，原文一个字没删。点评和对话不受影响">掐尾</button>
                         <button class="chip-btn" id="chipT2S" onclick="readingToggleT2S()" title="转简：繁体书正文显示成简体（只改显示，原文和批注都不动）">转简</button>
+                        <button class="chip-btn" id="chipQaTime" onclick="readingToggleQaTime()" title="时间：每块问答的右下角标一行「什么时候问的」。当天只给时分，隔天给日期。⚠️加这个功能之前的老问答没存过时间，会空着">时间</button>
                         <button class="chip-btn" id="chipGlassSoft" onclick="chatToggleGlassSoft()" title="半透：输入框跟折叠横条一样的半透底（边还在，能看见盒子）；关掉就是现在这样的白底">半透</button>
                     </div>
                 </div>
@@ -24553,6 +24565,7 @@ body {
             readingApplyT2S();             // 繁→简 chip 的高亮也在这儿恢复（⚠️按书存，换书要重新读）
             chatApplyGlassSoft();          // 输入框「半透」档
             readingApplyTrimTail();        // 提问答案「掐尾」
+            readingApplyQaTime();          // 问答的时间标记
             updateStatusBarColor();
         }
         /* 输入框「半透」开关（2026-09-17）：让输入框用上折叠横条那档玻璃。
@@ -27415,6 +27428,25 @@ body {
                 for (var nm = 0; nm < list.length; nm++)
                     if (list[nm].p === opts.p && list[nm].q === opts.q) list[nm].m = opts.model;
             }
+            /* 「这条是什么时候问的」时间标记（2026-09-18 她要的）。存法跟上面那个模型印记一模一样，
+               只是**补盖的规矩反着来**：
+                 · 模型印记：每次重新回答都要更新成这一次用的模型；
+                 · 时间标记：**一旦有了就不动**——她要的是「我什么时候问的这一条」，
+                   重新回答、改答案、换设备同步回来，都不该把它刷成现在。
+               ⚠️所以判据是「prev 里没有这条 key」＝**这条是新冒出来的**，才盖 Date.now()。
+               ⚠️**老问答一律不补**：改这个功能之前存下来的条目在 prev 里有 key、只是没有 t，
+                 继承回来仍然是 undefined，渲染时就什么都不显示。
+                 绝不能给它们编一个「今天」——那是假数据，比没有更糟。 */
+            var _prevT = {};
+            for (var pt = 0; pt < prev.length; pt++) if (prev[pt]) _prevT[_qaKey(prev[pt])] = prev[pt].t;
+            for (var lt = 0; lt < list.length; lt++) {
+                var _tk = _qaKey(list[lt]);
+                if (_prevT.hasOwnProperty(_tk)) {
+                    if (_prevT[_tk]) list[lt].t = _prevT[_tk];   // 有就原样继承（没有就保持"空着"）
+                } else if (!list[lt].t) {
+                    list[lt].t = Date.now();                     // prev 里没有这条 key ＝ 刚问出来的
+                }
+            }
             list.sort(function (x, y) { return (x.p | 0) - (y.p | 0); });   // Array.sort 稳定，同段内保持原顺序
             all[fileKey][chap] = { list: list, ts: Date.now() }; // 即使空也写，靠新时间戳压过云端旧值
             readerQASaveAll(all);
@@ -28028,6 +28060,21 @@ body {
             localStorage.setItem('reading_trim_tail',
                 localStorage.getItem('reading_trim_tail') === '1' ? '0' : '1');
             readingApplyTrimTail();
+            if (typeof chatRenderAllMessages === 'function') chatRenderAllMessages(true);
+        }
+
+        /* 问答时间标记的开关（2026-09-18 她要的「可以显示和隐藏」）。
+           放在「零碎」那一排，跟掐尾/转简/半透一路——它们都是「读的时候的小显示偏好」。
+           ⚠️默认关：多数时候读小说不想看见时间戳，要回头对读痕时才开。
+           ⚠️切完必须重渲（chatRenderAllMessages），时间是在合并渲染里拼进去的，不是纯 CSS 开关。 */
+        function readingApplyQaTime() {
+            var c = document.getElementById('chipQaTime');
+            if (c) c.classList.toggle('active', localStorage.getItem('reading_qa_time') === '1');
+        }
+        function readingToggleQaTime() {
+            localStorage.setItem('reading_qa_time',
+                localStorage.getItem('reading_qa_time') === '1' ? '0' : '1');
+            readingApplyQaTime();
             if (typeof chatRenderAllMessages === 'function') chatRenderAllMessages(true);
         }
 
@@ -37693,6 +37740,42 @@ body {
         }
 
         // ⚠️包一层：真正的渲染在 ...Raw 里，这儿只在出口做繁→简。别把转换塞进 Raw。
+        /* ===== 问答的时间标记（2026-09-18 她要的）=====
+           「我突然想给阅读的问答后面加时间标记，极简风的那种，而且可以显示和隐藏」。
+           ⚠️时间存在 reader_qa 的 `t` 上（见 readerQASyncOne 里那段），而这儿渲染走的是
+             **msg.content 重新解析**那条路，身上没有 t → 只能按 `_qaKey`（段号+问题）回查。
+             所以整章先摊成一张表，别在循环里一条条翻列表（一章几十条问答会变成 O(n²)）。
+           ⚠️老问答没有 t，查出来是 undefined → 什么都不显示。别补「今天」。 */
+        function rdQaTimeMap(msgIdx) {
+            var map = {};
+            try {
+                if (!chatReaderMode || readerBookId == null) return map;
+                var msg = chatMessages[msgIdx];
+                if (!msg || msg.readerChapter == null) return map;
+                var cell = (readerQAAll()[readerBookKey(readerBookId)] || {})[msg.readerChapter];
+                var list = (cell && cell.list) || [];
+                for (var i = 0; i < list.length; i++)
+                    if (list[i] && list[i].t) map[_qaKey(list[i])] = list[i].t;
+            } catch (e) {}
+            return map;
+        }
+        /* 精度（2026-09-18 她拍板）：**当天给时分，隔天给日期**。
+             今天  → `14:32`
+             本年  → `9/16`
+             跨年  → `2025/9/16`
+           ⚠️她先说「带上日期吧」，看到这一档后改口「你安排的那个精度挺好的」——以这一版为准。
+           ⚠️不写「今天/昨天」那种相对词：读痕是回头翻的东西，相对词过两天就骗人。 */
+        function rdQaTimeFmt(ms) {
+            var d = new Date(ms);
+            if (isNaN(d.getTime())) return '';
+            var now = new Date();
+            if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate())
+                return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+            var md = (d.getMonth() + 1) + '/' + d.getDate();
+            return d.getFullYear() === now.getFullYear() ? md : d.getFullYear() + '/' + md;
+        }
+        function rdQaTimeOn() { return localStorage.getItem('reading_qa_time') === '1'; }
+
         function readingModeRenderMerged(originalText, aiText, msgIdx) {
             return t2sHtml(readingModeRenderMergedRaw(originalText, aiText, msgIdx));
         }
@@ -37732,6 +37815,8 @@ body {
                 _readingMergeCache = { text: originalText, ps: pHtml, namesSig: _namesSig, rdMode: !!chatReaderMode };
             }
             var comments = readingModeParseComments(aiText);
+            // 问答时间标记：整章摊成一张表，循环里直接查（开关关着就连查都不查）
+            var _qaTimes = rdQaTimeOn() ? rdQaTimeMap(msgIdx) : null;
             var commentMap = {};
             var trailingComments = [];
             for (var c = 0; c < comments.length; c++) {
@@ -37797,6 +37882,12 @@ body {
                                     _aH = /<\/p>\s*$/.test(_aH) ? _aH.replace(/<\/p>\s*$/, _mk + '</p>') : _aH + _mk;
                                 }
                                 _cmtRendered += '<div style="margin-top:0.4em">' + _aH + '</div>';
+                            }
+                            // 时间标记：整块问答的右下角，淡灰小字（2026-09-18）
+                            if (_qaTimes) {
+                                var _qt = _qaTimes[_qaKey({ p: pNum, q: _rdBgSplitQ(_nl >= 0 ? _cmtRaw.slice(0, _nl) : _cmtRaw)
+                                                               .text.replace(/^\s*汐：/, '').trim() })];
+                                if (_qt) _cmtRendered += '<div class="rd-qa-t">' + esc(rdQaTimeFmt(_qt)) + '</div>';
                             }
                         } else {
                             _cmtRendered = renderText(_cmtRaw);
