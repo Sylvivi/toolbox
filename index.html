@@ -9846,6 +9846,28 @@ body {
             else { gistSchedulePush(); }
         }
         function setSnipDataSilent(d) { idbSet(SNIP_STORE, d); }
+        /* 开机自愈：把历史上存成**数字**的时间戳就地改成 ISO 字符串（2026-09-18）。
+           ⚠️为什么不只靠上面那层 String() 兜底：兜底只保证"不崩"，
+             但数字转成字符串去跟 ISO 比大小，排序位置是乱的（"1758..." 会排到 "2026-..." 前面）。
+             所以坏数据要真修掉，不是只让它不崩。
+           ⚠️幂等：没有坏数据就一个字节都不写，不会白白触发一次云同步推送。 */
+        function snipFixTimestamps() {
+            try {
+                var d = getSnipData();
+                if (!Array.isArray(d) || !d.length) return;
+                var fixed = 0;
+                d.forEach(function (it) {
+                    ['createdAt', 'updatedAt'].forEach(function (k) {
+                        if (it && it[k] != null && typeof it[k] !== 'string') {
+                            var t = new Date(it[k]);
+                            it[k] = isNaN(t.getTime()) ? new Date().toISOString() : t.toISOString();
+                            fixed++;
+                        }
+                    });
+                });
+                if (fixed) { setSnipData(d); console.log('[收藏] 修好了 ' + fixed + ' 个坏时间戳'); }
+            } catch (e) {}
+        }
 
         function setSnipType(type, el) {
             snipTypeFilter = type;
@@ -10220,9 +10242,14 @@ body {
             filtered.sort(function(a, b) {
                 if (a.pinned && !b.pinned) return -1;
                 if (!a.pinned && b.pinned) return 1;
-                if (snipSort === 'newest') return (b.createdAt || '').localeCompare(a.createdAt || '');
-                if (snipSort === 'edited') return (b.updatedAt || '').localeCompare(a.updatedAt || '');
-                return (a.createdAt || '').localeCompare(b.createdAt || '');
+                /* ⚠️一律 String() 兜一层（2026-09-18）：历史上有条目把时间存成了数字，
+                   直接 .localeCompare 会抛异常，而这一抛**整页卡片都不见了**。
+                   排序是"一条坏数据毒死全部"的典型位置，宁可多包一层。 */
+                var _ca = String(a.createdAt || ''), _cb = String(b.createdAt || '');
+                var _ua = String(a.updatedAt || ''), _ub = String(b.updatedAt || '');
+                if (snipSort === 'newest') return _cb.localeCompare(_ca);
+                if (snipSort === 'edited') return _ub.localeCompare(_ua);
+                return _ca.localeCompare(_cb);
             });
 
             if (filtered.length === 0) {
@@ -12827,7 +12854,13 @@ body {
             all.unshift({
                 id: 'q' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
                 title: title, tag: '随手存', note: '', type: 'text', code: text,
-                updatedAt: Date.now(), createdAt: Date.now()
+                /* ⚠️⚠️必须是 **ISO 字符串**，不能写 Date.now()（2026-09-18 她报「收藏卡片全不见了」的病根）。
+                   收藏列表排序用的是 `(b.updatedAt || '').localeCompare(...)`，
+                   数字身上没有 localeCompare → **整个 renderSnippets 当场抛异常**：
+                   类型计数已经算完（所以"全部 71"还是对的），卡片一张都没写进去，
+                   连"还没有内容"那个空状态都来不及出 → 看着就像收藏全没了。
+                   **一条坏记录端掉整页。** 别的存收藏的地方写的都是 toISOString()，这里当初写漏了。 */
+                updatedAt: new Date().toISOString(), createdAt: new Date().toISOString()
             });
             setSnipData(all);
             if (typeof renderSnippets === 'function') { try { renderSnippets(); } catch (e) {} }
@@ -24567,6 +24600,7 @@ body {
             chatApplyGlassSoft();          // 输入框「半透」档
             readingApplyTrimTail();        // 提问答案「掐尾」
             readingApplyQaTime();          // 问答的时间标记
+            if (typeof snipFixTimestamps === 'function') snipFixTimestamps();   // 收藏里的坏时间戳就地修
             updateStatusBarColor();
         }
         /* 输入框「半透」开关（2026-09-17）：让输入框用上折叠横条那档玻璃。
