@@ -37780,10 +37780,14 @@ body {
             var d = new Date(ms);
             if (isNaN(d.getTime())) return '';
             var now = new Date();
+            var hm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
             if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate())
-                return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+                return hm;                                  // 当天：只给时分
             var md = (d.getMonth() + 1) + '/' + d.getDate();
-            return d.getFullYear() === now.getFullYear() ? md : d.getFullYear() + '/' + md;
+            /* ⚠️隔天**也带时分**（2026-09-18 三改）。她问「如果给日期的话，就不会带上时间了吗，只有一个日期？」——
+               原来那一版舍掉时分，是因为时间还挤在问题旁边、怕字多；
+               推到行尾右对齐之后右边空得很，放得下，没理由再省。 */
+            return (d.getFullYear() === now.getFullYear() ? md : d.getFullYear() + '/' + md) + ' ' + hm;
         }
         function rdQaTimeOn() { return localStorage.getItem('reading_qa_time') === '1'; }
 
