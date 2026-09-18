@@ -5901,6 +5901,25 @@ body {
             cursor: pointer; -webkit-tap-highlight-color: transparent;
         }
         .reading-actbar .rp-guide-pick button:active { background: var(--accent-light); }
+        /* 存小红书「选规格」弹层（2026-09-18）。极简：两个键、无副标题、间距用 em。
+           ⚠️样式写在**主样式表结尾**——最后那个 `<style id="deco-custom-style">` 会被 JS 整块重写，
+             写进去的东西一运行就没了（2026-09-16 踩过一次，见 [[toolbox-concurrent-editing]]）。 */
+        .xhs-spec-bg {
+            position: fixed; inset: 0; z-index: 9999; display: flex;
+            align-items: center; justify-content: center; background: rgba(0,0,0,.35);
+        }
+        .xhs-spec {
+            background: var(--bg); color: var(--text); border-radius: 14px;
+            padding: 1.1em 1.2em 1em; min-width: 14em; box-shadow: 0 8px 30px rgba(0,0,0,.25);
+        }
+        .xhs-spec-t { font-size: 0.95em; margin-bottom: 0.8em; text-align: center; }
+        .xhs-spec-b { display: flex; gap: 0.6em; }
+        .xhs-spec-b button {
+            flex: 1; padding: 0.55em 0.8em; border: 1px solid var(--accent-mid); border-radius: 9px;
+            background: transparent; color: var(--accent-read); font-size: 1em; cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .xhs-spec-b button:active { background: var(--accent-light); }
     </style>
 <!-- ⚠️2026-09-06 摘掉：这是 Noto Serif CJK 的镜像（282KB，每次都加载），但它**只有 font-weight:200 一档**（特细），她报「淡淡的、字重调不动」的正是它。CSS 里以这个字族名引用它的地方是 0 处（那三处写的是系统字体 "Noto Serif CJK SC"，不是一回事）。她说「你帮我把那个很淡的去了，我分不清这俩」——名字跟思源宋体 Source Han Serif CN 太像。 --><style id="deco-custom-style">.chat-deco-on .chat-msg.ai::before{content:""!important;position:absolute!important;top:-12px!important;left:16px!important;width:1px!important;height:1px!important;font-size:0!important;image-rendering:pixelated!important;animation:none!important;pointer-events:none!important;z-index:5!important;box-shadow:0 2px #8fb5e8,1px 2px #8fb5e8,0 3px #8fb5e8,1px 3px #8fb5e8,3px 0 #8fb5e8,4px 0 #8fb5e8,3px 1px #8fb5e8,4px 1px #8fb5e8,6px 0 #8fb5e8,7px 0 #8fb5e8,6px 1px #8fb5e8,7px 1px #8fb5e8,9px 2px #8fb5e8,10px 2px #8fb5e8,9px 3px #8fb5e8,10px 3px #8fb5e8,4px 5px #8fb5e8,5px 5px #8fb5e8,6px 5px #8fb5e8,3px 6px #8fb5e8,4px 6px #8fb5e8,5px 6px #8fb5e8,6px 6px #8fb5e8,7px 6px #8fb5e8,2px 7px #8fb5e8,3px 7px #8fb5e8,4px 7px #8fb5e8,5px 7px #8fb5e8,6px 7px #8fb5e8,7px 7px #8fb5e8,8px 7px #8fb5e8,2px 8px #8fb5e8,3px 8px #8fb5e8,4px 8px #8fb5e8,5px 8px #8fb5e8,6px 8px #8fb5e8,7px 8px #8fb5e8,8px 8px #8fb5e8,3px 9px #8fb5e8,4px 9px #8fb5e8,5px 9px #8fb5e8,6px 9px #8fb5e8,7px 9px #8fb5e8!important;}
         /* 小说导读两档选单（2026-09-16）。极简：无实心色块零件，靠字色和淡底区分，间距用 em。 */
@@ -12813,6 +12832,42 @@ body {
 
         /* 直接存一个已经拿到手的链接。⚠️拆出来是给**悬浮球的剪贴板那一条**用的
            （2026-09-16）：那边链接是从剪贴板读来的，不该再弹一次输入框问她。 */
+        /* 存小红书前先问一句「存哪种规格」（2026-09-18 她要的）。
+           她的原话：「这种存小红书到网盘最好可以让我选规格，一个是存大图，一个是存小图，
+           因为我工作方面的一般是需要存大图多」。
+             · 小图（默认，一直以来那样）＝头图整页 + 其余压成 500px 九宫格，一篇几百 KB；
+             · 大图＝每张都按 1600px 整页宽、一张一行，图里有整屏长文字时才读得清。
+           ⚠️两个键**只放两个字**，不加副标题——她 2026-09-16 为导读那个选单说过
+             「太啰嗦了，简洁一点，我喜欢极简风」。
+           ⚠️弹层挂在 **body** 下，别塞进别的容器：祖先只要带 filter/backdrop-filter/transform，
+             就会变成 fixed 的定位基准、把它顶歪（见 [[css-fixed-hijacked-by-filter]]）。
+           ⚠️记住上次选的那档并**排在前面**＝她连着存同类内容时不用每次想。 */
+        function xhsPickSpec() {
+            return new Promise(function (resolve) {
+                var last = '';
+                try { last = localStorage.getItem('xhs_arc_spec') || ''; } catch (e) {}
+                var wrap = document.createElement('div');
+                wrap.className = 'xhs-spec-bg';
+                var opts = last === 'big' ? [['big', '大图'], ['small', '小图']]
+                                          : [['small', '小图'], ['big', '大图']];
+                wrap.innerHTML = '<div class="xhs-spec"><div class="xhs-spec-t">存哪种规格？</div>' +
+                    '<div class="xhs-spec-b">' +
+                    opts.map(function (o) { return '<button data-k="' + o[0] + '">' + o[1] + '</button>'; }).join('') +
+                    '</div></div>';
+                function close(v) {
+                    try { wrap.remove(); } catch (e) {}
+                    if (v) { try { localStorage.setItem('xhs_arc_spec', v); } catch (e) {} }
+                    resolve(v);
+                }
+                wrap.addEventListener('click', function (e) {
+                    var b = e.target.closest('button');
+                    if (b) { close(b.getAttribute('data-k')); return; }
+                    if (e.target === wrap) close('');       // 点空白＝不存了
+                });
+                document.body.appendChild(wrap);
+            });
+        }
+
         function xhsArchiveUrl(url) {
             var cfg = null;
             try { cfg = cfGetConfig(); } catch (e) {}
@@ -12821,8 +12876,11 @@ body {
             /* ⚠️反馈必须是**要她点一下的弹窗**，不能用吐司（2026-09-15 她报
                「但是我不知道存没存成呢」）：这活要十几秒，中间界面毫无动静，
                完事再飘一个两秒就没的吐司，等于没反馈。 */
-            showToast('📕 正在存…（抓图排版要十几秒，存完会弹窗告诉你）');
-            cfReq('GET', '', undefined, 'xhsarc=' + encodeURIComponent(m[0]))
+            xhsPickSpec().then(function (spec) {
+            if (!spec) return;                       // 点空白关掉＝这次不存
+            var big = spec === 'big';
+            showToast('📕 正在存' + (big ? '大图' : '') + '…（抓图排版要十几秒，存完会弹窗告诉你）');
+            cfReq('GET', '', undefined, 'xhsarc=' + encodeURIComponent(m[0]) + (big ? '&big=1' : ''))
                 .then(function (r) {
                     if (r && r.ok) {
                         alert('✓ 存好了\n\n' + r.name +
@@ -12833,6 +12891,7 @@ body {
                     }
                 })
                 .catch(function (e) { alert('✗ 没存上\n\n' + e); });
+            });
         }
 
         function xhsFetchNote(u) {
