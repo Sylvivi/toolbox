@@ -61,6 +61,16 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         out.阅读_没摘要 = !shown('clawdSummaryBtn');
         set(false, true, false);
         out.翻译_有摘要 = shown('clawdSummaryBtn');
+        /* 「🔄 重答」的显隐算在 clawdToggleMenu 里（不在 readingSyncAutoScrollUI），
+           所以要真开一次菜单再看。⚠️2026-09-19 起**翻译模式也不给重答**：
+           翻译是逐段点出来的，会话最后一条 AI 消息是那个承载消息，重答它没有意义。 */
+        clawdToggleMenu(); out.翻译_没重答 = !shown('clawdRegenBtn'); clawdCloseMenu();
+        set(true, false, true);
+        clawdToggleMenu(); out.阅读_没重答 = !shown('clawdRegenBtn'); clawdCloseMenu();
+        set(false, false, false);
+        clawdToggleMenu(); out.对话_有重答 = shown('clawdRegenBtn'); clawdCloseMenu();
+        set(true, false, false);
+        clawdToggleMenu(); out.共读_有重答 = shown('clawdRegenBtn'); clawdCloseMenu();
         set(false, false, false);
         out.对话_有摘要 = shown('clawdSummaryBtn');
         out.对话_没目录 = !shown('clawdShelfBtn');
@@ -80,6 +90,8 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('小螃蟹菜单里已经没有「读痕」了（2026-09-19 撤的）', R.读痕按钮没了);
     ok('阅读模式：没「用量」，摘要让位给目录', R.阅读_没用量 && R.阅读_没摘要 && R.阅读_有目录);
     ok('翻译模式：没目录，所以摘要留在菜单里', R.翻译_有摘要);
+    ok('「重答」只留给对话和共读（2026-09-19 起翻译模式也不给）',
+       R.翻译_没重答 && R.阅读_没重答 && R.对话_有重答 && R.共读_有重答);
     ok('对话模式：没目录，摘要留着（她点名不许动对话模式）', R.对话_有摘要 && R.对话_没目录);
     ok('clawdNextChapter 里的兜底闸还在', R.兜底闸还在);
     ok('无 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));

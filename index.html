@@ -22412,8 +22412,14 @@ body {
                  见 readingSyncAutoScrollUI 里那段注释。
                ⚠️放在开菜单这一刻算，而不是搭 readingSyncAutoScrollUI 的车——
                  那个函数只在模式切换时跑，菜单打开时状态未必刷新过。 */
+            /* ⚠️2026-09-19 又收窄一格：**翻译模式也不要「重答」**（她要的）。
+               翻译是逐段点选出来的，整条会话的"最后一条 AI 消息"是那个承载消息，
+               重答它毫无意义；真要重翻某一段，是长按那一块删掉再译。
+               留着的只剩「对话」和「共读」两个场景。 */
             var rb = document.getElementById('clawdRegenBtn');
-            if (rb) rb.style.display = (typeof chatReaderMode !== 'undefined' && chatReaderMode) ? 'none' : '';
+            var _noRegen = (typeof chatReaderMode !== 'undefined' && chatReaderMode)
+                        || (typeof chatTranslateMode !== 'undefined' && chatTranslateMode);
+            if (rb) rb.style.display = _noRegen ? 'none' : '';
             clawdSyncMenuBtns();   // 目录 / 摘要 按场景显隐，判据见该函数
             // 「📎 常驻」：钉了东西才露面，顺手把份数写上（见 chatRenderPinBar）
             if (typeof chatRenderPinBar === 'function') chatRenderPinBar();
@@ -33351,7 +33357,11 @@ body {
                 if (!answer) throw new Error('空回复');
                 translateRemovePending(id);
                 if (msg.content && msg.content.trim()) msg.content += '\n';
-                msg.content += '[[TR s=' + lo + ' e=' + hi + ']]\n' + answer + '\n[[/TR]]';
+                /* ⚠️2026-09-19 起块头多带一个 `t=<毫秒>`（她要的「翻译模式下也要显示时间」）。
+                   存在标记里而不是另开一张表：译文块本来就整块存在 msg.content 里，
+                   跟着会话走、跟着云同步走，零新增存储键——跟阅读那边把时间存在 reader_qa 的 `t` 上同一个路子。
+                   ⚠️老块没有 t，解析出来是 null → 什么都不显示（别补「今天」，那是骗人的）。 */
+                msg.content += '[[TR s=' + lo + ' e=' + hi + ' t=' + Date.now() + ']]\n' + answer + '\n[[/TR]]';
                 chatSaveCurrentConv(true);
                 readingRerenderMsg(msgIdx);
             } catch (e) {
@@ -33501,7 +33511,8 @@ body {
            ⚠️跟 translateAppendQA 是同一条正则的反面：那边往块里塞 QA，这边把整块连 QA 一起拿走。
            删完这几段就回到「没译过」的样子，可以重新选中再译。原文一个字不动。 */
         function translateStripBlock(content, s, e) {
-            var re = new RegExp('\\n*\\[\\[TR\\s+s=' + s + '\\s+e=' + e + '\\]\\][\\s\\S]*?\\[\\[\\/TR\\]\\]', '');
+            // ⚠️块头尾巴上可能还跟着 ` t=…`（2026-09-19 加的时间戳），所以留一段 `[^\]]*` 吃掉它
+            var re = new RegExp('\\n*\\[\\[TR\\s+s=' + s + '\\s+e=' + e + '[^\\]]*\\]\\][\\s\\S]*?\\[\\[\\/TR\\]\\]', '');
             return content.replace(re, '').replace(/\n{3,}/g, '\n\n');
         }
 
@@ -33533,11 +33544,11 @@ body {
 
         // 把一条问答追加进对应 [[TR s e]] 块（插在该块 [[/TR]] 之前）
         function translateAppendQA(content, s, e, q, a) {
-            var re = new RegExp('(\\[\\[TR\\s+s=' + s + '\\s+e=' + e + '\\]\\][\\s\\S]*?)(\\n?\\[\\[\\/TR\\]\\])');
+            var re = new RegExp('(\\[\\[TR\\s+s=' + s + '\\s+e=' + e + '[^\\]]*\\]\\][\\s\\S]*?)(\\n?\\[\\[\\/TR\\]\\])');
             var done = false;
             return content.replace(re, function(m, bodyPart, close) {
                 if (done) return m; done = true;
-                return bodyPart + '\n[[QA]]' + q + '[[ANS]]' + a + '[[/QA]]' + close;
+                return bodyPart + '\n[[QA t=' + Date.now() + ']]' + q + '[[ANS]]' + a + '[[/QA]]' + close;
             });
         }
 
@@ -38032,10 +38043,12 @@ body {
         function translateModeParseBlocks(aiText) {
             var blocks = [];
             if (!aiText) return blocks;
-            var re = /\[\[TR\s+s=(\d+)\s+e=(\d+)\]\]\n?([\s\S]*?)\n?\[\[\/TR\]\]/g;
+            // ⚠️`t=` 是 2026-09-19 才加的，必须写成可选，否则老块一条都解析不出来（整章译文凭空消失）
+            var re = /\[\[TR\s+s=(\d+)\s+e=(\d+)(?:\s+t=(\d+))?\]\]\n?([\s\S]*?)\n?\[\[\/TR\]\]/g;
             var m;
             while ((m = re.exec(aiText)) !== null) {
-                blocks.push({ s: parseInt(m[1], 10), e: parseInt(m[2], 10), text: m[3] });
+                blocks.push({ s: parseInt(m[1], 10), e: parseInt(m[2], 10),
+                              t: m[3] ? parseInt(m[3], 10) : 0, text: m[4] });
             }
             return blocks;
         }
@@ -38066,9 +38079,20 @@ body {
                     for (var k = 0; k < blockByEnd[pNum].length; k++) {
                         var blk = blockByEnd[pNum][k];
                         var parsed = translateBlockSplitQA(blk.text);
-                        var body = renderText(parsed.main);
+                        /* 时间标记（2026-09-19 她要的「翻译模式下应该也要显示时间」）。
+                           跟阅读那边**同一个开关、同一个样式、同一个精度**（齿轮→零碎→「时间」，
+                           当天给时分、隔天带日期），只是落点不同：
+                             · 译文块 → 浮在块的右上角（float:right，正文绕着它排）；
+                             · 追问   → 浮在问题那一行的右边。
+                           ⚠️`rdQaTimeOn()` 关着时连拼都不拼，跟阅读那边一致。
+                           ⚠️老块/老追问没有 t（0）→ 不显示，别补「今天」。 */
+                        var _tOn = rdQaTimeOn();
+                        var body = (_tOn && blk.t ? '<span class="rd-qa-t">' + esc(rdQaTimeFmt(blk.t)) + '</span>' : '')
+                                 + renderText(parsed.main);
                         for (var q = 0; q < parsed.qas.length; q++) {
-                            body += '<div class="tb-qa"><div class="tb-q"><span class="tb-q-name">' + esc(chatUserName()) + '</span>：' + esc(parsed.qas[q].q) + '</div><div class="tb-a">' + renderText(parsed.qas[q].a) + '</div></div>';
+                            var _qt = (_tOn && parsed.qas[q].t)
+                                    ? '<span class="rd-qa-t">' + esc(rdQaTimeFmt(parsed.qas[q].t)) + '</span>' : '';
+                            body += '<div class="tb-qa"><div class="tb-q">' + _qt + '<span class="tb-q-name">' + esc(chatUserName()) + '</span>：' + esc(parsed.qas[q].q) + '</div><div class="tb-a">' + renderText(parsed.qas[q].a) + '</div></div>';
                         }
                         html += '<div class="translate-block" data-s="' + blk.s + '" data-e="' + blk.e + '">' +
                             '<div class="tb-body">' + body + '</div></div>';
@@ -38099,8 +38123,9 @@ body {
         // 从译文块文本中拆出主译文与历史追问问答
         function translateBlockSplitQA(text) {
             var qas = [];
-            var main = (text || '').replace(/\[\[QA\]\]([\s\S]*?)\[\[ANS\]\]([\s\S]*?)\[\[\/QA\]\]/g, function(m, q, a) {
-                qas.push({ q: q.trim(), a: a.trim() });
+            // ⚠️`t=` 同样是后加的、必须可选，否则老的追问会整条解析不出来
+            var main = (text || '').replace(/\[\[QA(?:\s+t=(\d+))?\]\]([\s\S]*?)\[\[ANS\]\]([\s\S]*?)\[\[\/QA\]\]/g, function(m, t, q, a) {
+                qas.push({ q: q.trim(), a: a.trim(), t: t ? parseInt(t, 10) : 0 });
                 return '';
             }).replace(/\n{3,}/g, '\n\n').trim();
             return { main: main, qas: qas };
