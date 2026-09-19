@@ -6731,11 +6731,13 @@ body {
                              ⚠️但这里**不能整个删掉**——她当场提醒「对话模式下不要变动哦，因为那里没有目录」。
                                所以改成按场景显隐，判据在 clawdToggleMenu 里，跟「📚 目录」是同一条、反着用。 -->
                         <button id="clawdSummaryBtn" onclick="clawdMenuAct('summary')">📋 摘要</button>
-                        <!-- 2026-09-19 她要的：「翻译模式下的读痕可以去掉」。
-                             这个按钮**只在翻译模式露过面**（阅读走目录顶栏、对话模式本来就藏），
-                             所以撤掉它＝读痕在翻译模式彻底消失，别的场景一点没动。
-                             ⚠️clawdMenuAct 里的 'bookmark' 分支和 rdTraceShowPanel 都留着
-                               （目录顶栏那个猫爪印还在用），想请回来只要把这一行加回去。 -->
+                        <!-- 「🔖 读痕」：2026-09-19 她说「可以去掉」，当天又问「是不是不应该关掉呀」——
+                             **查了她真实数据后请回来了**：翻译模式下这一格装的是**追问**
+                             （90 条 / 7 个会话，最近一条就是当天晚上），而且整集拉成单子、能搜、能跳回去。
+                             ⚠️翻译模式**没有划线**（选区那套只在 chatReadingMode/chatReaderMode 下生效），
+                               所以面板里「划线」「小注」两格在翻译模式恒空——别以为是坏了。
+                             ⚠️它只在翻译模式露面：阅读走目录顶栏的猫爪印，对话模式本来就藏。 -->
+                        <button id="clawdBookmarkBtn" onclick="clawdMenuAct('bookmark')">🔖 读痕</button>
                         <button onclick="clawdMenuAct('usage')">💰 用量</button>
                         <!-- 常驻资料（2026-09-13）。⚠️她原本要的是输入框上方一条横条，
                              当天就改主意了：「不要在输入框上面，最好是在小螃蟹菜单里面有个入口」。
@@ -22394,11 +22396,16 @@ body {
                主入口搬到了目录窗口顶上（.rb-head-links），所以**有目录可开时这里就不重复出现**；
                而对话/翻译模式没有目录（她当场提醒「对话模式下不要变动哦，因为那里没有目录呢」），
                这里必须留着。
-               ⚠️2026-09-19：**「读痕」这一条已经整个撤了**。它原先只在翻译模式露面
-                 （阅读走目录顶栏、对话模式本来就藏），她说「翻译模式下的读痕可以去掉」，
-                 于是按钮连同这里的判据一并删。剩下的只有「摘要」跟目录互斥。 */
+               ⚠️读痕**在对话模式下本来就是藏的**（判据原先在 readingSyncAutoScrollUI 里），
+                 搬过来时这个行为要原样保留，别顺手放开——净效果是它只在翻译模式露面。
+               ⚠️2026-09-19 撤过一次又请回来了（她当天先说「可以去掉」、随后自己问
+                 「是不是不应该关掉呀」）。**别再当成多余的按钮撤掉**：翻译模式下它装的是追问，
+                 她真实数据里有 90 条、7 个会话，当天还在产生。 */
             var sub = document.getElementById('clawdSummaryBtn');
             if (sub) sub.style.display = inBook ? 'none' : '';
+            var bmb = document.getElementById('clawdBookmarkBtn');
+            var pureChat = !inBook && !(typeof chatTranslateMode !== 'undefined' && chatTranslateMode);
+            if (bmb) bmb.style.display = (inBook || pureChat) ? 'none' : '';
         }
 
         function clawdToggleMenu() {
@@ -22420,7 +22427,7 @@ body {
             var _noRegen = (typeof chatReaderMode !== 'undefined' && chatReaderMode)
                         || (typeof chatTranslateMode !== 'undefined' && chatTranslateMode);
             if (rb) rb.style.display = _noRegen ? 'none' : '';
-            clawdSyncMenuBtns();   // 目录 / 摘要 按场景显隐，判据见该函数
+            clawdSyncMenuBtns();   // 目录 / 摘要 / 读痕 三个按场景显隐，判据见该函数
             // 「📎 常驻」：钉了东西才露面，顺手把份数写上（见 chatRenderPinBar）
             if (typeof chatRenderPinBar === 'function') chatRenderPinBar();
             m.classList.toggle('show');

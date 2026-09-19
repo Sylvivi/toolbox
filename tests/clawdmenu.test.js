@@ -49,17 +49,18 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         // 顺带钉住同一批里别的几个，免得下次改这段顺手带偏
         set(false, false, false);
         out.对话_有用量 = shown('chatUsageBtn');
-        // ⚠️2026-09-14 起「摘要」的主入口搬到了**目录窗口顶上**（.rb-head-links），
+        out.对话_没读痕 = !shown('clawdBookmarkBtn');
+        // ⚠️2026-09-14 起「读痕/摘要」的主入口搬到了**目录窗口顶上**（.rb-head-links），
         //   小螃蟹菜单里跟「📚 目录」互斥：有目录可开的场景就不重复出现。
-        //   ⚠️2026-09-19：「读痕」这一条**整个撤了**（她：「翻译模式下的读痕可以去掉」）。
-        //   它当时只剩翻译模式那一个露面的场景，所以按钮直接从 HTML 里删掉了——
-        //   下面钉的是「哪个模式都不该再有它」。
-        out.读痕按钮没了 = !document.getElementById('clawdBookmarkBtn');
+        //   净效果——读痕只在**翻译模式**露面；对话模式照旧藏着（她点名不许动对话模式）。
+        // ⚠️2026-09-19 撤过一次又请回来了（她自己问「是不是不应该关掉呀」，查数据后确认有用）。
         set(true, false, true);
+        out.阅读_没读痕 = !shown('clawdBookmarkBtn');
         out.阅读_没用量 = !shown('chatUsageBtn');
         out.阅读_有目录 = shown('clawdShelfBtn');
         out.阅读_没摘要 = !shown('clawdSummaryBtn');
         set(false, true, false);
+        out.翻译_有读痕 = shown('clawdBookmarkBtn');
         out.翻译_有摘要 = shown('clawdSummaryBtn');
         /* 「🔄 重答」的显隐算在 clawdToggleMenu 里（不在 readingSyncAutoScrollUI），
            所以要真开一次菜单再看。⚠️2026-09-19 起**翻译模式也不给重答**：
@@ -86,10 +87,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('⚠️阅读模式：没有「下一章」（chatReadingMode 在这儿也是真的，坑就在这）', R.阅读_没有下一章);
     ok('翻译模式：没有「下一章」', R.翻译_没有下一章);
     ok('对话模式：没有「下一章」', R.对话_没有下一章);
-    ok('对话模式：有「用量」', R.对话_有用量);
-    ok('小螃蟹菜单里已经没有「读痕」了（2026-09-19 撤的）', R.读痕按钮没了);
-    ok('阅读模式：没「用量」，摘要让位给目录', R.阅读_没用量 && R.阅读_没摘要 && R.阅读_有目录);
-    ok('翻译模式：没目录，所以摘要留在菜单里', R.翻译_有摘要);
+    ok('对话模式：有「用量」、没「读痕」', R.对话_有用量 && R.对话_没读痕);
+    ok('阅读模式：没「用量」，读痕和摘要都让位给目录', R.阅读_没用量 && R.阅读_没读痕 && R.阅读_没摘要 && R.阅读_有目录);
+    ok('翻译模式：没目录，所以读痕和摘要都留在菜单里（读痕装的是追问）', R.翻译_有读痕 && R.翻译_有摘要);
     ok('「重答」只留给对话和共读（2026-09-19 起翻译模式也不给）',
        R.翻译_没重答 && R.阅读_没重答 && R.对话_有重答 && R.共读_有重答);
     ok('对话模式：没目录，摘要留着（她点名不许动对话模式）', R.对话_有摘要 && R.对话_没目录);
