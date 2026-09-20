@@ -17049,10 +17049,36 @@ body {
             document.body.style.width = '100%';
             document.body.dataset.chatScrollY = window.scrollY;
             document.body.style.top = -window.scrollY + 'px';
-            var modal = document.querySelector('.modal.chat-modal');
-            if (modal && window.visualViewport) modal.style.height = window.visualViewport.height + 'px';
+            chatSyncModalHeight();
             updateStatusBarColor();
             chatOpenMostRecent();
+        }
+
+        /* 阅读层的高度：**只在键盘真的顶上来时才写死**，否则一个字节都不写，
+           交回给 CSS 那条 `.modal.chat-modal { position:fixed; top/left/right/bottom:0 }`。
+
+           ⚠️2026-09-20 她报的那个毛病就是这么来的：「关掉后台再启动，刚进去那会儿
+             底下会露出一截，能看到主页、收藏、密钥那些，刷新一下才消失」。
+             病根是原来**一开面板就写死 `height = visualViewport.height`**，
+             而写死的高度会**压过 `bottom:0`**（top+bottom+height 三者齐全时，bottom 被忽略）。
+             冷启动那一刻 PWA 还在从「带状态栏」切到全屏，量到的高度比最终的矮一截 →
+             底下露出下面首页的 DOM。刷新＝重新量，所以刷完就好了。
+           ⚠️**别改成「开面板后延迟几百毫秒再量一次」**：那只是把赌注押在延迟够不够长上，
+             机型慢一点照样漏。没键盘时**不写高度**才是真的堵死——量不到就没得量错。
+           ⚠️判有没有键盘沿用 `_kbAdjust` 那套口径（`_noKbHeight` 取历史最大值、
+             低于它 85% 才算键盘弹起来了），别另起一套阈值。
+           ⚠️`_noKbHeight` 自己也可能在冷启动时被初始化成偏小的值——不要紧，
+             它只增不减，而且偏小时这里会判成「没键盘」→ 不写高度 → 照样是满屏。 */
+        function chatSyncModalHeight() {
+            var overlay = document.getElementById('chatModalOverlay');
+            if (!overlay || !overlay.classList.contains('show')) return;
+            var modal = overlay.querySelector('.chat-modal');
+            if (!modal) return;
+            var vv = window.visualViewport;
+            if (!vv) { modal.style.height = ''; return; }
+            var h = vv.height;
+            if (h > _noKbHeight) _noKbHeight = h;
+            modal.style.height = (h > _noKbHeight * 0.85) ? '' : h + 'px';
         }
 
         function closeChatModal() {
@@ -38705,8 +38731,7 @@ body {
                 window.visualViewport.addEventListener('resize', function() {
                     var overlay = document.getElementById('chatModalOverlay');
                     if (!overlay || !overlay.classList.contains('show')) return;
-                    var modal = overlay.querySelector('.chat-modal');
-                    if (modal) modal.style.height = window.visualViewport.height + 'px';
+                    chatSyncModalHeight();
                     if (document.activeElement && document.activeElement.id === 'chatInput') {
                         setTimeout(chatScrollBottom, 100);
                     }
