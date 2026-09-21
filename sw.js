@@ -5,7 +5,17 @@
    改完之后：有缓存就瞬间出画面，新版在后台取、下次打开就是新的；
    取到新版时给页面发一条消息，弹「有新版本，点这里刷新」，免得她以为改动没生效。
    ⚠️版本号一定要跟着变（v8→v9），否则 activate 里那段清旧缓存不会跑。 */
-var CACHE = 'toolbox-v46';   // ⚠️2026-09-06 又 +1：外壳走「缓存优先」，而部署时 `cp -f` 写了一半的
+var CACHE = 'toolbox-v47';   // 2026-09-21 +1：底图改走独立缓存（下面 BG_CACHE），fetch 分支变了
+/* ⚠️2026-09-21 她报「刷新之后底图要很久才能加载回来，这期间阅读背景是透明的」。
+   病根有两个叠在一起：
+   ① 下面 fetch 里图片是**网络优先**（fetch 成功才用、失败才落缓存）——底图每次冷开都要
+     等网络那一趟回来，哪怕缓存里明明有；她那边走梯子，一张 100KB 的 webp 能等好几秒。
+   ② 部署脚本 `cp -rf` 把 bg/ 整个重拷，文件 mtime 变 → ETag 变 → 浏览器以为图更新了、整张重下
+     （deploy_toolbox_local.sh 已改成 `cp -rpf` 保时间戳）。
+   → 底图单独放一个 **BG_CACHE**：activate 时不清它；fetch 时**缓存优先**、命中就立刻给，
+     同时后台再拉一次更新缓存（stale-while-revalidate）。换图的约定本来就是**改文件名**
+     （CF 忽略查询串，见 index.html 里 rdbg 那段注释），所以缓存优先不会让她看到旧图。 */
+var BG_CACHE = 'toolbox-bg';   // ⚠️2026-09-06 又 +1：外壳走「缓存优先」，而部署时 `cp -f` 写了一半的
                              //   index.html 是 HTTP 200，被当成好的存进了 v11 —— 她那边整页 JS 全死，
                              //   而且**回退部署也没用**，因为她压根不去服务器取。+1 让 activate 清掉毒缓存。
                              //   （部署已改成原子替换，见 deploy_toolbox_local.sh，根因不会再有）
@@ -26,7 +36,7 @@ self.addEventListener('install', function(e) {
 
 self.addEventListener('activate', function(e) {
   e.waitUntil(caches.keys().then(function(ks) {
-    return Promise.all(ks.filter(function(k) { return k !== CACHE; }).map(function(k) { return caches.delete(k); }));
+    return Promise.all(ks.filter(function(k) { return k !== CACHE && k !== BG_CACHE; }).map(function(k) { return caches.delete(k); }));
   }));
   self.clients.claim();
 });
@@ -124,6 +134,18 @@ self.addEventListener('fetch', function(e) {
      ⚠️代价：没有扩展名的资源不再被离线缓存（比如某些动态图片地址），
        断网时它们取不到。那是可以接受的——真正要离线可用的是外壳，那条走上面的分支。 */
   if (!_cacheable(e.request)) return;
+  var _isBg = false;
+  try { _isBg = /^\/bg\//.test(new URL(e.request.url).pathname); } catch (x) {}
+  if (_isBg) {
+    e.respondWith(caches.open(BG_CACHE).then(function(c) {
+      return c.match(e.request).then(function(hit) {
+        var net = fetch(e.request).then(function(r) { if (r.ok) c.put(e.request, r.clone()); return r; });
+        if (hit) { net.catch(function() {}); return hit; }   // 有就秒给，后台刷新
+        return net;
+      });
+    }));
+    return;
+  }
   e.respondWith(
     fetch(e.request).then(function(r) {
       if (r.ok) { var rc = r.clone(); caches.open(CACHE).then(function(c) { c.put(e.request, rc); }); }
