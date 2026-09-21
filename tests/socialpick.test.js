@@ -62,8 +62,8 @@ function bootSocial() {
             bar.querySelector('.rp-ask-send').click();
             await new Promise(r => setTimeout(r, 30));
             const btn = bar.querySelector('.rp-guide-pick button[data-k="' + k + '"]');
-            if (!btn) return { 没按钮: true };
-            btn.click();
+            if (!btn) { readingAskOne(mi, p, k, bar, { social: k }); }   // 行里没这个键（举例已撤）→ 直接走代码路径
+            else btn.click();
             await new Promise(r => setTimeout(r, 900));
             const b = sent[0] || {}; const msgs = b.messages || [];
             // ⚠️reader_qa 的 list 是按段号排的，不能拿"最后一条"当"刚存的"——按问句开头找
@@ -75,15 +75,15 @@ function bootSocial() {
             return { sys: msgs.filter(m => m.role === 'system').map(m => m.content).join('\n'), usr: msgs.filter(m => m.role === 'user').map(m => m.content).join('\n'), 落点, 问, 档: window._slotAsked.slice(), 发了几次: sent.length };
         };
         const plain = await grab('plain', 5);
-        const example = await grab('example', 6);
+        const example = await grab('example', 6);   // 按钮没了；直接调 opts 仍走得通
         const argue = await grab('argue', 5);
         const guide = await grab('guide', 5);
         readingClearActbar();
         return { 标签, 档位, 文字, plain, example, argue, guide };
     });
     eq('空着时按钮叫「导读」', R.标签, '导读');
-    eq('弹出四个档', R.档位, ['guide', 'plain', 'example', 'argue']);
-    eq('四个短词', R.文字, ['导读', '说人话', '举例', '论证']);
+    eq('弹出三个档（举例 09-22 撤了）', R.档位, ['guide', 'plain', 'argue']);
+    eq('三个短词', R.文字, ['导读', '说人话', '论证']);
     // 说人话：就这一段、带 [P5] 原文、指令是重写、不带前文摘要
     ok('说人话：系统提示带【说人话】', /【说人话】/.test(R.plain.sys), R.plain.sys.slice(-200));
     ok('说人话：用户消息带 [P5] 那一段（P1 是章名，P5＝甲0）', /\[P5\]/.test(R.plain.usr) && /甲0/.test(R.plain.usr), R.plain.usr.slice(0, 200));
