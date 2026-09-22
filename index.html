@@ -31543,7 +31543,7 @@ body {
                只能靠猜或者歪头瞄；而震动原本只有 15ms，实际摸不出来。手势本身她认可，
                坏的是反馈，所以交互一字不改，只把反馈搬到**看得见、摸得着**的地方：
                ① `_rdBgTip*` 在按钮**正上方**浮一条提示，按住就开始走进度条（还要按多久看得见），
-                  走满变成「松手＝背景」；⚠️2026-09-22 起标的是**这一段**，不是整节/整章；
+                  走满变成「松手 → 标这一节背景」；
                ② 震动从 15ms 单下改成 30/70/30 的**双下**（单下太像误触，双下是明确的"到位了"）。 */
             var _bgHoldTimer = null, _bgHoldAt = null, _bgArmed = false, _bgEatClick = false, _bgLabel = send.textContent;
             function _bgDisarm() {
@@ -31564,7 +31564,7 @@ body {
                     _bgLabel = send.textContent;
                     send.textContent = '背景';
                     send.classList.add('rp-bg-armed');
-                    _rdBgTipArm();                  // 上方那条变成「松手＝背景」（标这一段）
+                    _rdBgTipArm();                  // 上方那条变成「松手 → 标这一节背景」
                     // 兜底：万一系统抢在 CSS 之前已经选中了按钮文字（安卓部分机型），就地清掉，
                     // 照抄长按评论块那条路的做法。不清的话选区还会拦住后面的点击。
                     try { window.getSelection().removeAllRanges(); } catch (x) {}
@@ -31612,13 +31612,15 @@ body {
             box.className = 'rp-guide-pick';
             // ⚠️就两个字，别加副标题/说明（她 2026-09-16：「那两个选项太啰嗦了，简洁一点，
             //   不要解释那么长的，我喜欢极简风」）。见 [[user-taste-minimal-no-badges]]。
-            box.innerHTML = '<button data-k="pre">读前</button><button data-k="post">读完</button>';
+            box.innerHTML = '<button data-k="pre">读前</button><button data-k="post">读完</button>' +
+                            '<button data-k="bgone">背景</button>';
             bar.appendChild(box);
             box.addEventListener('click', function (e) {
                 var b = e.target.closest('button'); if (!b) return;
                 e.stopPropagation();
                 var k = b.getAttribute('data-k');
                 box.remove();
+                if (k === 'bgone') { readingBgOne(msgIdx, pNum); return; }
                 readingAskOne(msgIdx, pNum, '导读', bar, { guide: true, guideKind: k });
             });
         }
@@ -31633,7 +31635,7 @@ body {
             box.className = 'rp-guide-pick';
             /* ⚠️2026-09-22 她：「举例感觉没啥用」→ 从这一行摘掉。代码路径（opts.social='example'）留着没删。 */
             box.innerHTML = '<button data-k="guide">导读</button><button data-k="plain">说人话</button>' +
-                            '<button data-k="argue">论证</button>';
+                            '<button data-k="argue">论证</button><button data-k="bgone">背景</button>';
             bar.appendChild(box);
             box.addEventListener('click', function (e) {
                 var b = e.target.closest('button'); if (!b) return;
@@ -31641,9 +31643,23 @@ body {
                 var k = b.getAttribute('data-k');
                 box.remove();
                 if (k === 'guide') readingAskOne(msgIdx, pNum, '导读', bar, { guide: true });
+                else if (k === 'bgone') readingBgOne(msgIdx, pNum);
                 else readingAskOne(msgIdx, pNum, k, bar, { social: k });
             });
         }
+        /* 「背景」＝只标**这一段**（2026-09-22 她要的）。她的原话：「全章有时候其实我那个词我也未必
+           就想了解，但他放在那儿又会在我的阅读范围里面，有时候反而拖慢我的阅读进度」。
+           ⚠️长按那一手**原样保留**（整章/社科整节），这里只是在选单里多给一档。 */
+        function readingBgOne(msgIdx, pNum) {
+            var b = readerBookId ? rbGetBook(readerBookId) : null;
+            if (!b) { showToast('先打开一本书'); return; }
+            var m = chatMessages[msgIdx];
+            var ci = (m && m.readerChapter != null) ? m.readerChapter : readerChapterIdx;
+            if (!b.chapters || !b.chapters[ci]) return;
+            readingClearActbar();
+            readerMarkBg(readerBookId, ci, 0, pNum);
+        }
+
         // 提问失败后，把输入框带着原问题重新挂回该段下方（找该段最后一个问答块、没有就贴原文段）
         function readingReopenAskBar(msgIdx, pNum, question) {
             try {
@@ -31685,10 +31701,7 @@ body {
             var ci = (m && m.readerChapter != null) ? m.readerChapter : readerChapterIdx;
             if (!b.chapters || !b.chapters[ci]) return;
             readingClearActbar();   // 先收操作栏：接下来插入会整段重渲，留着它会连同进度一起闪
-            /* ⚠️2026-09-22 起长按＝**只标这一段**（原来社科按小节、小说按整章）。
-               两种书同一个手势，别再按书型分叉——见 readingOpenAskBar 里导读那段的教训。
-               要整章/整节是从目录那个入口走（readerMarkBg 的 secHeadP 仍在用）。 */
-            readerMarkBg(readerBookId, ci, 0, pNum);
+            readerMarkBg(readerBookId, ci, rbIsSocial(b) ? pNum : 0);
         }
 
         // 双击 AI 回答 / 评论块：接着聊同一段，输入框插在该段问答串的最下面（贴着正在看的回答）

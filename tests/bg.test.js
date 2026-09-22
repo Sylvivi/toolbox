@@ -385,7 +385,8 @@ function bootSocial() {
         const book = window._bootSocial();
         // 手势测试只关心"调了谁、传了什么"，把两个终点换成记录器
         const calls = [];
-        window.readerMarkBg = (id, ci, p) => { calls.push(['bg', id, ci, p]); return Promise.resolve(); };
+        // ⚠️2026-09-22 签名多了第 4 个参数 onlyP（选单里的「背景」＝只标这一段）；长按仍走 secHeadP
+        window.readerMarkBg = (id, ci, p, one) => { calls.push(['bg', id, ci, p, one]); return Promise.resolve(); };
         window.readingAskOne = (mi, p, q) => { calls.push(['ask', q]); };
         const mi = chatMessages.findIndex(m => m && m.readerChapter === 0);
         const para = () => document.querySelector('.chat-msg.ai[data-idx="' + mi + '"] .reading-merged p[data-p="15"]');
@@ -397,10 +398,15 @@ function bootSocial() {
         out.按钮初始 = bar.querySelector('.rp-ask-send').textContent;
         out.提示语 = bar.querySelector('.rp-ask').placeholder;
 
-        // ① 短按 → 还是导读
+        // ① 短按 → 弹选单（2026-09-22 起不再直接发请求），点第一档才是导读
         calls.length = 0;
         let send = bar.querySelector('.rp-ask-send');
         pe(send, 'pointerdown'); await wait(120); pe(send, 'pointerup'); send.click();
+        await wait(30);
+        out.短按只弹选单 = calls.length === 0 && !!bar.querySelector('.rp-guide-pick');
+        const _g = bar.querySelector('.rp-guide-pick button[data-k="guide"], .rp-guide-pick button[data-k="pre"]');
+        if (_g) _g.click();
+        await wait(30);
         out.短按 = calls.slice();
 
         // ② 长按到位 → 标签就地变
@@ -463,7 +469,8 @@ function bootSocial() {
     ok('蓄力到位，提示整条变强调色（没有震动了，全靠这个）', H.到位后提示变色, '没变色');
     ok('松手后提示收掉', H.松手后提示收了, '提示还杵在屏幕上');
     ok('滑开反悔后提示也收掉', H.滑开后提示收了, '提示还杵在屏幕上');
-    eq('短按 → 还是导读，不会误标背景', H.短按, [['ask', '导读']]);
+    ok('短按 → 只弹选单，不直接发请求', H.短按只弹选单, '短按就发请求了');
+    eq('短按后点第一档 → 还是导读，不会误标背景', H.短按, [['ask', '导读']]);
     eq('按住半秒 → 标签就地变「背景」', H.蓄力时标签, '背景');
     ok('蓄力时按钮高亮（告诉你松手就开始）', H.蓄力时高亮);
     ok('松手 → 开标背景，且传的是双击那一段的段号', H.松手后.length === 1 && H.松手后[0][0] === 'bg' && H.松手后[0][3] === 15, JSON.stringify(H.松手后));
@@ -565,8 +572,9 @@ function bootSocial() {
     eq('小说书空着时按钮是「导读」（跟社科书一样）', H2.空着的标签, '导读');
     ok('小说书提示语说清留空＝导读、长按＝背景', /留空＝导读，长按＝背景/.test(H2.提示语), H2.提示语);
     eq('小说书空着点一下 → 先弹选单，不直接开跑', H2.空着点一下, []);
-    eq('选单是两档', H2.选单个数, 2);
-    eq('两档分别是读前和读完', H2.选单档位, ['pre', 'post']);
+    // 2026-09-22 她要的：选单里多一档「背景」＝只标这一段（长按那一手仍是整章/整节）
+    eq('选单是三档', H2.选单个数, 3);
+    eq('三档分别是读前、读完、背景', H2.选单档位, ['pre', 'post', 'bgone']);
     eq('点「读前」→ 走导读并带上 guideKind=pre', H2.点读前, [['guide', 'pre']]);
     ok('选完选单就收起', H2.选完收起, String(H2.选完收起));
     eq('小说书打字后变「讨论」', H2.打字后的标签, '讨论');
