@@ -31543,7 +31543,7 @@ body {
                只能靠猜或者歪头瞄；而震动原本只有 15ms，实际摸不出来。手势本身她认可，
                坏的是反馈，所以交互一字不改，只把反馈搬到**看得见、摸得着**的地方：
                ① `_rdBgTip*` 在按钮**正上方**浮一条提示，按住就开始走进度条（还要按多久看得见），
-                  走满变成「松手 → 标这一节背景」；
+                  走满变成「松手＝背景」；⚠️2026-09-22 起标的是**这一段**，不是整节/整章；
                ② 震动从 15ms 单下改成 30/70/30 的**双下**（单下太像误触，双下是明确的"到位了"）。 */
             var _bgHoldTimer = null, _bgHoldAt = null, _bgArmed = false, _bgEatClick = false, _bgLabel = send.textContent;
             function _bgDisarm() {
@@ -31564,7 +31564,7 @@ body {
                     _bgLabel = send.textContent;
                     send.textContent = '背景';
                     send.classList.add('rp-bg-armed');
-                    _rdBgTipArm();                  // 上方那条变成「松手 → 标这一节背景」
+                    _rdBgTipArm();                  // 上方那条变成「松手＝背景」（标这一段）
                     // 兜底：万一系统抢在 CSS 之前已经选中了按钮文字（安卓部分机型），就地清掉，
                     // 照抄长按评论块那条路的做法。不清的话选区还会拦住后面的点击。
                     try { window.getSelection().removeAllRanges(); } catch (x) {}
@@ -31685,7 +31685,10 @@ body {
             var ci = (m && m.readerChapter != null) ? m.readerChapter : readerChapterIdx;
             if (!b.chapters || !b.chapters[ci]) return;
             readingClearActbar();   // 先收操作栏：接下来插入会整段重渲，留着它会连同进度一起闪
-            readerMarkBg(readerBookId, ci, rbIsSocial(b) ? pNum : 0);
+            /* ⚠️2026-09-22 起长按＝**只标这一段**（原来社科按小节、小说按整章）。
+               两种书同一个手势，别再按书型分叉——见 readingOpenAskBar 里导读那段的教训。
+               要整章/整节是从目录那个入口走（readerMarkBg 的 secHeadP 仍在用）。 */
+            readerMarkBg(readerBookId, ci, 0, pNum);
         }
 
         // 双击 AI 回答 / 评论块：接着聊同一段，输入框插在该段问答串的最下面（贴着正在看的回答）
@@ -33056,7 +33059,10 @@ body {
 
         // secHeadP（可选）＝小标题所在段号（阅读器编号）。传了就只标那一小节——
         // 社科书一章三四万字，整章标一次又慢又贵，背景点还摊得很散（用户原话「一章有3万多字，太多了」）。
-        async function readerMarkBg(bookId, chapIdx, secHeadP) {
+        /* ⚠️2026-09-22 她要的第三档：**只标这一段**（`onlyP`＝段号）。
+           她的原话：「全章有时候其实我那个词我也未必就想了解，但他放在那儿又会在我的阅读范围里面，
+           有时候反而拖慢我的阅读进度」——所以默认收到最小：点哪段标哪段，想要整章再另说。 */
+        async function readerMarkBg(bookId, chapIdx, secHeadP, onlyP) {
             if (readerBgRunning) {
                 // 别只把用户挡回去——万一上一轮卡住了，这是唯一的出口
                 if (confirm('这一章正在标背景，要停下吗？') && readerBgAbort) readerBgAbort.abort();
@@ -33104,12 +33110,14 @@ body {
                 .split('\n').filter(function (l) { return l.trim().length > 0; });
             if (!lines.length) { showToast('这一章没有正文'); return; }
             // 只标某一节：范围取「小标题的下一段」到「下个小标题前一段」。段号仍是全章编号。
-            var _sec = null;
-            if (secHeadP > 0) {
+            var _sec = null, _one = 0;
+            if (onlyP > 0 && onlyP <= lines.length) {
+                _one = onlyP;
+            } else if (secHeadP > 0) {
                 _sec = rbSectionOf(lines, secHeadP);
                 if (!_sec || _sec.startP > _sec.endP) { showToast('这一节没有正文'); return; }
             }
-            var _scope = _sec ? ('「' + (_sec.title || '这一节') + '」') : '全章';
+            var _scope = _one ? ('这一段') : (_sec ? ('「' + (_sec.title || '这一节') + '」') : '全章');
 
             readerBgRunning = true;
             readerBgAbort = new AbortController();
@@ -33117,7 +33125,7 @@ body {
             try {
                 _rdBgBarShow('通读' + _scope + '，找背景点…');
                 var scan = await _rdBgScan(b, lines, readerBgDoneTerms(fileKey), scanM, explainM,
-                                           _sec ? { from: _sec.startP, to: _sec.endP } : null,
+                                           _one ? { from: _one, to: _one } : (_sec ? { from: _sec.startP, to: _sec.endP } : null),
                                            readerBgOfChap(fileKey, chapIdx).map(function (it) {
                                                // ⚠️剥掉 ⟦出发点⟧ 再比，否则同一条重标时认不出「这段已经讲过了」
                                                return { p: it.p, term: _rdBgSplitQ((it.q || '').slice(BG_Q_PREFIX.length)).text };
