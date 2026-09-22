@@ -22548,6 +22548,18 @@ body {
            ⚠️从后往前找 assistant，因为末尾可能跟着用户刚发还没回的消息。 */
         function clawdRegenLast() {
             if (chatStreaming) { showToast('正在回答，等它说完再重答'); return; }
+            /* ⚠️⚠️2026-09-22 她报的：「我每次用这个是因为 fail to fetch 之类的，但点了之后
+               都是重答了上一条，而不是 fail 这条」。
+               病根：请求失败时只在气泡里画一行红字（catch 里那句 chat-error），
+               **chatMessages 里一条 assistant 都没加**——于是下面「从后往前找 assistant」
+               找到的必然是上一轮成功的那条，等于把好好的回答删了重来，而失败那条没人管。
+               → 末尾要是用户消息（＝这一轮没回成），就从**那条提问**重发。 */
+            for (var t = chatMessages.length - 1; t >= 0; t--) {
+                var _t = chatMessages[t];
+                if (!_t) continue;
+                if (_t.role === 'user') { chatSheetRegenFromUser(t); return; }
+                break;   // 末尾是 assistant＝上一轮答成了，走下面原来那套
+            }
             for (var i = chatMessages.length - 1; i >= 0; i--) {
                 var _m = chatMessages[i];
                 if (!_m || _m.role !== 'assistant') continue;
