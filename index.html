@@ -27743,6 +27743,10 @@ body {
         // 2026-09-16：小说导读分两档，问题长成「导读·读前：《…》」「导读·回味：《…》」。
         // 后缀写进正则，读痕/目录上的导读标记才认得出它们（仍然咬死冒号，防用户自己打的「导读这段…」误中）。
         var GUIDE_Q_RE = /^导读(·读前|·回味)?(：|$)/;
+        // 2026-09-23：社科书「论证」存成「论证：《小节名》」（见 readingAskOne 的 _soc==='argue'）。
+        // 她靠目录上的图标判断「这一节看没看过」，原来目录只认导读和背景，论证做过了也看不出来。
+        // 同样咬死冒号或到此为止，防她自己打的「论证这段…」误中。
+        var ARGUE_Q_RE = /^论证(：|$)/;
                 // 全书已讲过的背景词——喂给第一遍让它跳过，免得共济会在第 3、7、11 章各讲一遍
         function readerBgDoneTerms(fileKey) {
             var book = readerQAAll()[fileKey] || {}, seen = {}, out = [];
@@ -30005,21 +30009,23 @@ body {
             // 每章标过几条背景 / 做过几节导读，显示在字数后面。整本 reader_qa 只读一次——
             // 二三百章的书要是每行各查一次，等于把整个 reader_qa 反复 JSON.parse 几百遍。
             // ⚠️两样必须在**同一趟**里数出来，别为导读再扫一遍全书。
-            var _bgMap = {}, _gdMap = {};
+            var _bgMap = {}, _gdMap = {}, _agMap = {};
             if (rbPickForReader) {
                 var _fk = readerBookKey(b.id);
                 var _qaBook = _fk ? (readerQAAll()[_fk] || {}) : {};
                 Object.keys(_qaBook).forEach(function (k) {
                     var l = _qaBook[k] && _qaBook[k].list;
                     if (!Array.isArray(l)) return;
-                    var n = 0, g = 0;
+                    var n = 0, g = 0, a = 0;
                     for (var z = 0; z < l.length; z++) {
                         var _q = l[z].q || '';
                         if (_q.indexOf(BG_Q_PREFIX) === 0) n++;
                         else if (GUIDE_Q_RE.test(_q)) g++;
+                        else if (ARGUE_Q_RE.test(_q)) a++;
                     }
                     if (n) _bgMap[k] = n;
                     if (g) _gdMap[k] = g;
+                    if (a) _agMap[k] = a;
                 });
             }
             var html = b.chapters.map(function (ch, i) {
@@ -30042,7 +30048,8 @@ body {
                         /* 导读只在「不止一节」时才带数字：没有小标题的书（知乎文集就是）整章
                            算作一节，rbSectionOf 对无小标题的章返回 headP:1 的整章一节，所以那个
                            数字永远是 1、一点信息都不带，纯占标题的地方。 */
-                        + (_gdMap[i] ? ' · 📖' + (_gdMap[i] > 1 ? ' ' + _gdMap[i] : '') : '') + '</div></div>'
+                        + (_gdMap[i] ? ' · 📖' + (_gdMap[i] > 1 ? ' ' + _gdMap[i] : '') : '')
+                        + (_agMap[i] ? ' · ⚖️' + (_agMap[i] > 1 ? ' ' + _agMap[i] : '') : '') + '</div></div>'
                         /* ⚠️2026-09-12：「⋯」只在**这一章真有背景**时才画。
                            撤掉「标背景」「手动分章」之后，菜单里就只剩「清掉本章背景」一项，
                            没背景的章点开是空的——她说「既然没有可操作的，那三个点也能直接去掉」。
@@ -30053,19 +30060,20 @@ body {
                         var _hs = rbSectionRanges(b, i);
                         // 这一章每段各标了几条背景 / 哪几段有导读，按小节范围分摊
                         //（整章只取一次 list，别每节各扫一遍）
-                        var _bgPs = [], _gdPs = [];
+                        var _bgPs = [], _gdPs = [], _agPs = [];
                         var _cellL = _qaBook[i] && _qaBook[i].list;
                         if (Array.isArray(_cellL)) {
                             for (var _z = 0; _z < _cellL.length; _z++) {
                                 var _zq = _cellL[_z].q || '';
                                 if (_zq.indexOf(BG_Q_PREFIX) === 0) _bgPs.push(_cellL[_z].p);
                                 else if (GUIDE_Q_RE.test(_zq)) _gdPs.push(_cellL[_z].p);
+                                else if (ARGUE_Q_RE.test(_zq)) _agPs.push(_cellL[_z].p);
                             }
                         }
                         // 搜索时只留标题匹配的小节；没搜索就全列
                         if (q) _hs = _hs.filter(function (h) { return h.title.toLowerCase().indexOf(q) >= 0; });
                         for (var _si = 0; _si < _hs.length; _si++) {
-                            var _sc = _hs[_si], _sn = 0, _sgd = false;
+                            var _sc = _hs[_si], _sn = 0, _sgd = false, _sag = false;
                             for (var _y = 0; _y < _bgPs.length; _y++) {
                                 if (_bgPs[_y] >= _sc.startP && _bgPs[_y] <= _sc.endP) _sn++;
                             }
@@ -30079,8 +30087,13 @@ body {
                                ⚠️「条」字跟着章行一起去掉了——两种行紧挨着，一个写「🏛 8」一个写
                                「🏛 2 条」会很显眼；而且小节标题跟章标题一样是 flex:1 带省略号的，
                                这一格每多一个字，标题就少露一个字。 */
-                            var _secRight = (_sgd ? '📖' : '')
-                                + (_sn ? (_sgd ? ' ' : '') + '🏛 ' + _sn : (_sgd ? '' : 'P' + _sc.p));
+                            // 论证挂在节末（pNum = _sec.endP），落在 [p, endP] 里
+                            for (var _v = 0; _v < _agPs.length; _v++) {
+                                if (_agPs[_v] >= _sc.p && _agPs[_v] <= _sc.endP) { _sag = true; break; }
+                            }
+                            var _icons = (_sgd ? '📖' : '') + (_sag ? (_sgd ? ' ' : '') + '⚖️' : '');
+                            var _secRight = _icons
+                                + (_sn ? (_icons ? ' ' : '') + '🏛 ' + _sn : (_icons ? '' : 'P' + _sc.p));
                             _row += '<div class="rb-sec" onclick="rbJumpSection(\'' + b.id + '\',' + i + ',' + _sc.p + ')">'
                                 + '<span class="rb-sec-title">' + rbEsc(_sc.title) + '</span>'
                                 + '<span class="rb-sec-p">' + _secRight + '</span>'

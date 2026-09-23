@@ -139,6 +139,28 @@ function putQA(fk, chap, items) {
     eq('光秃秃的「导读」是真导读（没小节标题时就长这样）', E.secs[2], '📖');
     ok('章行只数了那一条真导读', /📖/.test(E.meta) && !/📖 \d/.test(E.meta), E.meta);
 
+    /* ── F 组：论证也要在目录上看得见（2026-09-23 她：「论证就没有体现，我需要这个 emoji 判断这章有没有看过」）──
+     * 论证挂在**节末**（pNum = sec.endP），问题长成「论证：《小节名》」或光秃秃的「论证」。 */
+    const AG = await page.evaluate(() => {
+        const { fk, heads } = window._bootSocial();
+        window._putQA(fk, 0, [
+            { p: heads[0].endP, q: '论证：《什么是从众》', a: '这一节在论证……' },
+            { p: heads[1].p, q: '导读：《从众的经典实验》', a: '导读' },
+            { p: heads[1].endP, q: '论证：《从众的经典实验》', a: '论证' },
+            { p: heads[2].startP, q: '论证这段是怎么推出来的？', a: '她自己打的，不算' }
+        ]);
+        window._putQA(fk, 1, [{ p: 3, q: '论证', a: '没小节标题时就长这样' }]);
+        rbRenderChapters();
+        const secs = [...document.querySelectorAll('#rbChapterList .rb-sec')].map(el => el.querySelector('.rb-sec-p').textContent);
+        const metas = [...document.querySelectorAll('#rbChapterList .rb-chap-meta')].map(el => el.textContent);
+        return { secs, metas };
+    });
+    eq('只有论证的那一节标 ⚖️', AG.secs[0], '⚖️');
+    eq('导读＋论证并排', AG.secs[1], '📖 ⚖️');
+    ok('她自己打的「论证这段…」不算', /^P\d+$/.test(AG.secs[2] || ''), JSON.stringify(AG.secs));
+    ok('章行 meta 上写了 ⚖️（两条带数字）', /⚖️ 2/.test(AG.metas[0]), AG.metas[0]);
+    ok('光秃秃的「论证」也认（知乎那种没小标题的章）', /⚖️/.test(AG.metas[1] || ''), AG.metas[1]);
+
     /* ── F 组：一条导读都没有时，一个字都不多冒 ────────────────── */
     const F = await page.evaluate(() => {
         const { fk } = window._bootSocial();
