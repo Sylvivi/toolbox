@@ -3839,13 +3839,28 @@ body {
             transition: background 0.15s; margin-top: 2px;
         }
         .rfont-upload:hover { background: var(--accent-light); }
+        /* 「间距」两列排（2026-09-23 她说可改）：原来五行竖排，每行一个「− 数值 ＋」，展开占一大截。
+           现在 段间距|行间距、左边距|右边距、上边距 自己一行，高度少一半。
+           ⚠️半列只有一百六十来像素：按钮和数值的宽度从行内样式的 30/40 收到 26/34，不然挤成两行。
+           ⚠️开合在 readingToggleSpacePanel 里，显示值必须是 grid（原来是 flex）。 */
+        .rd-space-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 14px; }
+        .rd-space-grid > div { min-width: 0; gap: 4px; }
+        .rd-space-grid > div > span:first-child { white-space: nowrap; }
+        .rd-space-grid .chip-btn { min-width: 26px !important; padding-left: 0; padding-right: 0; }
+        .rd-space-grid > div > div { gap: 4px !important; }
+        .rd-space-grid > div > div > span { min-width: 34px !important; }
+
         /* ⚠️2026-09-06 她要的：七个槽位竖着排太占地方 → **一排两个**。
            ⚠️`.rfont-select` 本来就有 `min-width: 0`，所以窄列里不会把格子撑爆。
            ⚠️七个是奇数，最后那个「缺字」独占一行——让它自然落，别硬拉满：
              它本来就不是渲染位置（是接在别人字体链尾巴上的兜底），单独一行反而清楚。 */
-        .rfont-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 10px;
+        /* ⚠️2026-09-23 汐修：原来是 `1fr 1fr`，而 1fr 的下限是「内容最小宽度」——
+           正文那格选了「Source Han Serif CN」这种长名字，左列就撑宽、右列被挤出屏幕
+           （360~403 宽的手机上「引号/标题/精句/字号」那列切掉一截、A+ 看不见）。
+           改成 minmax(0,1fr) + 行本身 min-width:0，两列永远对半，长名字在框里省略。 */
+        .rfont-slots { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 7px 10px;
             padding-top: 4px; border-top: 1px solid var(--card-border); }
-        .rfont-slot-row { display: flex; align-items: center; gap: 8px; }
+        .rfont-slot-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
         .rfont-slot-label { font-size: 12px; font-weight: 600; color: var(--text-muted); flex-shrink: 0; width: 28px; }
         .rfont-select {
             flex: 1; min-width: 0; font-size: 12px; padding: 6px 8px;
@@ -7076,7 +7091,7 @@ body {
                         <span style="font-size:12px;font-weight:600;color:var(--text-muted)">间距</span>
                         <span id="readingSpaceArrow" style="font-size:10px;color:var(--text-muted);transition:transform 0.2s;display:inline-block">▶</span>
                     </div>
-                    <div id="readingSpacePanel" style="display:none;flex-direction:column;gap:10px;margin-top:8px">
+                    <div id="readingSpacePanel" class="rd-space-grid" style="display:none;margin-top:8px">
                         <div id="readingParaRow" style="display:flex;align-items:center;justify-content:space-between">
                             <span style="font-size:12px;font-weight:600;color:var(--text-muted)">段间距</span>
                             <div style="display:flex;gap:6px;align-items:center">
@@ -25052,7 +25067,7 @@ body {
             var arrow = document.getElementById('readingSpaceArrow');
             if (!panel) return;
             var open = panel.style.display !== 'none';
-            panel.style.display = open ? 'none' : 'flex';
+            panel.style.display = open ? 'none' : 'grid';   // 两列排，见 .rd-space-grid
             if (arrow) arrow.style.transform = open ? '' : 'rotate(90deg)';
         }
         /* 底图高度基准（2026-09-05）。键盘弹出会把布局视口整个顶小，底图是拉伸铺满的，
