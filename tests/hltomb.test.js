@@ -38,22 +38,22 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         const hl = (id, txt) => ({ id, msgIdx: 0, chap: 0, p: 1, start: 0, end: 2, color: 'sky', note: '', text: txt || '青苔', preview: txt || '青苔', ts: Date.now() });
         const reset = () => {
             localStorage.removeItem('reading_marks_tombs');
-            localStorage.setItem('reading_highlights', JSON.stringify({}));
-            localStorage.setItem('reading_bookmarks', JSON.stringify({}));
+            rdLsSet('reading_highlights', JSON.stringify({}));
+            rdLsSet('reading_bookmarks', JSON.stringify({}));
         };
 
         /* ── A：删掉的那条，云端并回来时要被剔掉 ── */
         {
             reset();
-            localStorage.setItem('reading_highlights', JSON.stringify({ [KEY]: [hl('keep-1'), hl('del-1')] }));
+            rdLsSet('reading_highlights', JSON.stringify({ [KEY]: [hl('keep-1'), hl('del-1')] }));
             // 模拟「删除」：从本地移除 + 立碑（rdHlDelete 干的两件事）
-            const all = JSON.parse(localStorage.getItem('reading_highlights'));
+            const all = JSON.parse(rdLsGet('reading_highlights'));
             all[KEY] = all[KEY].filter(h => h.id !== 'del-1');
-            localStorage.setItem('reading_highlights', JSON.stringify(all));
+            rdLsSet('reading_highlights', JSON.stringify(all));
             rdMarksTomb('del-1');
             out.A_立碑了 = !!rdMarksGetTombs()['del-1'];
             // 云端那份还带着 del-1（这正是用户遇到的场景）
-            const local = JSON.parse(localStorage.getItem('reading_highlights'));
+            const local = JSON.parse(rdLsGet('reading_highlights'));
             const cloud = { [KEY]: [hl('keep-1'), hl('del-1')] };
             _mergeMarksBlobs(local, cloud);
             const ids = local[KEY].map(h => h.id);
@@ -65,9 +65,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         /* ── B：⚠️只剔碑上有的。别的设备新划的线必须原样并进来 ── */
         {
             reset();
-            localStorage.setItem('reading_highlights', JSON.stringify({ [KEY]: [hl('mine-1')] }));
+            rdLsSet('reading_highlights', JSON.stringify({ [KEY]: [hl('mine-1')] }));
             rdMarksTomb('del-2');
-            const local = JSON.parse(localStorage.getItem('reading_highlights'));
+            const local = JSON.parse(rdLsGet('reading_highlights'));
             // 云端：我这条 + 另一台设备新划的两条 + 一条我删过的
             const cloud = { [KEY]: [hl('mine-1'), hl('other-1'), hl('other-2'), hl('del-2')] };
             _mergeMarksBlobs(local, cloud);
@@ -106,22 +106,22 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         /* ── F：全表清扫（云端没有这本书的数据时也要能剔掉） ── */
         {
             reset();
-            localStorage.setItem('reading_highlights', JSON.stringify({ [KEY]: [hl('keep-9'), hl('del-9')] }));
-            localStorage.setItem('reading_bookmarks', JSON.stringify({ [KEY]: [hl('bm-keep'), hl('bm-del')] }));
+            rdLsSet('reading_highlights', JSON.stringify({ [KEY]: [hl('keep-9'), hl('del-9')] }));
+            rdLsSet('reading_bookmarks', JSON.stringify({ [KEY]: [hl('bm-keep'), hl('bm-del')] }));
             rdMarksTomb('del-9');
             rdMarksTomb('bm-del');
             const swept = rdMarksSweepTombs();
-            const h = JSON.parse(localStorage.getItem('reading_highlights'))[KEY].map(x => x.id);
-            const b = JSON.parse(localStorage.getItem('reading_bookmarks'))[KEY].map(x => x.id);
+            const h = JSON.parse(rdLsGet('reading_highlights'))[KEY].map(x => x.id);
+            const b = JSON.parse(rdLsGet('reading_bookmarks'))[KEY].map(x => x.id);
             out.F_扫过了 = swept === true;
             out.F_划线剔干净 = h.indexOf('del-9') < 0 && h.indexOf('keep-9') >= 0;
             out.F_读痕也剔 = b.indexOf('bm-del') < 0 && b.indexOf('bm-keep') >= 0;
             out.F_detail = 'hl=' + h.join(',') + ' bm=' + b.join(',');
             // 没有碑的时候不该乱动
             reset();
-            localStorage.setItem('reading_highlights', JSON.stringify({ [KEY]: [hl('a'), hl('b')] }));
+            rdLsSet('reading_highlights', JSON.stringify({ [KEY]: [hl('a'), hl('b')] }));
             out.F_没碑就不动 = rdMarksSweepTombs() === false
-                && JSON.parse(localStorage.getItem('reading_highlights'))[KEY].length === 2;
+                && JSON.parse(rdLsGet('reading_highlights'))[KEY].length === 2;
         }
 
         /* ── D：删除走完整条路（rdHlDelete），碑要立上 ── */
@@ -130,9 +130,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             // rdHlDelete 依赖当前会话键，这里直接覆盖成测试键
             const origConvId = window.readingMarksConvId;
             window.readingMarksConvId = () => KEY;
-            localStorage.setItem('reading_highlights', JSON.stringify({ [KEY]: [hl('road-1'), hl('road-2')] }));
+            rdLsSet('reading_highlights', JSON.stringify({ [KEY]: [hl('road-1'), hl('road-2')] }));
             try { rdHlDelete('road-1'); } catch (e) { out.D_err = String(e).slice(0, 80); }
-            const left = (JSON.parse(localStorage.getItem('reading_highlights'))[KEY] || []).map(x => x.id);
+            const left = (JSON.parse(rdLsGet('reading_highlights'))[KEY] || []).map(x => x.id);
             out.D_删掉了 = left.indexOf('road-1') < 0 && left.indexOf('road-2') >= 0;
             out.D_立了碑 = !!rdMarksGetTombs()['road-1'];
             window.readingMarksConvId = origConvId;

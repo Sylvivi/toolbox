@@ -27,7 +27,7 @@ function bootNovel() {
     window.chatResolveReadingModel = function () { return { model: 'main', baseUrl: 'https://b.com/v1', apiKey: 'k' }; };
     window.getKeyItemById = function () { return { id: 'p1', url: 'https://b.com/v1', key: 'k' }; };
     window.chatSelectedModel = 'main';
-    try { localStorage.removeItem('reader_qa'); localStorage.removeItem('reading_book_kind'); } catch (e) {}
+    try { rdLsRemove('reader_qa'); localStorage.removeItem('reading_book_kind'); } catch (e) {}
     document.getElementById('chatModalOverlay').classList.add('show');
     readerBookId = 'bk_t'; readerChapterIdx = 0; chatReaderMode = true; chatReadingMode = true;
     chatCurrentConvId = 'reader_bk_t';
@@ -53,7 +53,7 @@ function bootSocial() {
     window.chatResolveReadingModel = function () { return { model: 'main', baseUrl: 'https://b.com/v1', apiKey: 'k' }; };
     window.getKeyItemById = function () { return { id: 'p1', url: 'https://b.com/v1', key: 'k' }; };
     window.chatSelectedModel = 'main';
-    try { localStorage.removeItem('reader_qa'); localStorage.removeItem('reading_book_kind'); } catch (e) {}
+    try { rdLsRemove('reader_qa'); localStorage.removeItem('reading_book_kind'); } catch (e) {}
     rbSetBookKind(book.fileName + '|' + book.fileSize, 'social');   // 两级目录只对社科书展开
     document.getElementById('chatModalOverlay').classList.add('show');
     readerBookId = 'bk_s'; readerChapterIdx = 0; chatReaderMode = true; chatReadingMode = true;

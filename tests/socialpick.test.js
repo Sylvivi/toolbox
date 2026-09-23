@@ -18,7 +18,7 @@ function bootSocial() {
     window.chatResolveReadingModel = function (slot) { window._slotAsked.push(slot); return { model: 'main', baseUrl: 'https://b.com/v1', apiKey: 'k' }; };
     window.getKeyItemById = function () { return { id: 'p1', url: 'https://b.com/v1', key: 'k' }; };
     window.chatSelectedModel = 'main';
-    try { localStorage.removeItem('reader_qa'); localStorage.removeItem('reading_book_kind'); } catch (e) {}
+    try { rdLsRemove('reader_qa'); localStorage.removeItem('reading_book_kind'); } catch (e) {}
     rbSetBookKind(book.fileName + '|' + book.fileSize, 'social');
     document.getElementById('chatModalOverlay').classList.add('show');
     readerBookId = 'bk_s'; readerChapterIdx = 0; chatReaderMode = true; chatReadingMode = true;
@@ -69,7 +69,7 @@ function bootSocial() {
             // ⚠️reader_qa 的 list 是按段号排的，不能拿"最后一条"当"刚存的"——按问句开头找
             const 头 = { plain: '说人话', example: '举个例子', argue: '论证', guide: '导读' }[k];
             let 落点 = null, 问 = null;
-            try { const qa = JSON.parse(localStorage.getItem('reader_qa') || '{}'); const cell = qa['社会性动物.txt|1'] && qa['社会性动物.txt|1'][0];
+            try { const qa = JSON.parse(rdLsGet('reader_qa') || '{}'); const cell = qa['社会性动物.txt|1'] && qa['社会性动物.txt|1'][0];
                   const hit = ((cell && cell.list) || []).filter(x => (x.q || '').indexOf(头) === 0); const last = hit[hit.length - 1];
                   落点 = last ? last.p : null; 问 = last ? last.q : null; } catch (e) { 落点 = 'err'; }
             return { sys: msgs.filter(m => m.role === 'system').map(m => m.content).join('\n'), usr: msgs.filter(m => m.role === 'user').map(m => m.content).join('\n'), 落点, 问, 档: window._slotAsked.slice(), 发了几次: sent.length };

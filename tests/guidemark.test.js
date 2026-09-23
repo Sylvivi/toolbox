@@ -49,7 +49,7 @@ function putQA(fk, chap, items) {
     const all = readerQAAll();
     all[fk] = all[fk] || {};
     all[fk][chap] = { ts: Date.now(), list: items };
-    localStorage.setItem('reader_qa', JSON.stringify(all));
+    rdLsSet('reader_qa', JSON.stringify(all));
 }
 
 (async () => {
@@ -175,7 +175,7 @@ function putQA(fk, chap, items) {
             { p: 7, q: '背景：双减', a: '内容' },
             { p: 9, q: '背景：VIE 架构', a: '内容' }
         ] } };
-        localStorage.setItem('reader_qa', JSON.stringify(all));
+        rdLsSet('reader_qa', JSON.stringify(all));
         rbRenderChapters();
         const meta = document.querySelector('#rbChapterList .rb-chap-meta').textContent;
         return { meta, 有小节行: document.querySelectorAll('#rbChapterList .rb-sec').length };

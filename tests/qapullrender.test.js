@@ -43,7 +43,7 @@ function bootReaderConv() {
     window.readerBgRunning = false;
     window.readerBookId = 'bk_q';
     window.chatCurrentConvId = 'reader_bk_q';
-    localStorage.setItem('reader_qa', '{}');
+    rdLsSet('reader_qa', '{}');
     window.chatMessages = [];
     for (let i = 0; i < 2; i++) {
         const pair = readerChapterPair(book.chapters[i], i);
@@ -61,10 +61,10 @@ function bootReaderConv() {
 
 // 模拟「另一台设备刚推上来、本机刚拉下来」：直接把云端那份合并进 reader_qa
 function pullFromCloud(cloudQA) {
-    const local = JSON.parse(localStorage.getItem('reader_qa') || '{}');
+    const local = JSON.parse(rdLsGet('reader_qa') || '{}');
     const changed = readerMergeByChapter(local, cloudQA);
     if (changed) {
-        localStorage.setItem('reader_qa', JSON.stringify(local));
+        rdLsSet('reader_qa', JSON.stringify(local));
         readerApplyPulledQA();
     }
     return changed;
@@ -165,7 +165,7 @@ function pullFromCloud(cloudQA) {
     const e = await page.evaluate(() => {
         const fk = '测试书.txt|4321';
         // 另一台设备的 3 条，已经躺在本机存储里
-        localStorage.setItem('reader_qa', JSON.stringify({
+        rdLsSet('reader_qa', JSON.stringify({
             [fk]: { '1': { list: [
                 { p: 1, q: '别处问的甲', a: 'A' },
                 { p: 2, q: '别处问的乙', a: 'B' },
@@ -175,7 +175,7 @@ function pullFromCloud(cloudQA) {
         // 本机视图是旧的：只有刚在本机问的这一条
         chatMessages[3].content = '[P3] 汐：本机刚问的\n本机的答案';
         readerPersistQA(3);
-        const cell = JSON.parse(localStorage.getItem('reader_qa'))[fk]['1'];
+        const cell = JSON.parse(rdLsGet('reader_qa'))[fk]['1'];
         return { n: cell.list.length, qs: cell.list.map(x => x.q), ps: cell.list.map(x => x.p) };
     });
     eq('E1 ⭐三条旧的全部保住，加上本机新的一条＝4', e.n, 4);
@@ -188,7 +188,7 @@ function pullFromCloud(cloudQA) {
        如果不告诉 readerPersistQA「这条是我删的」，它就会当成「本机没同步到」补回去。 */
     const f = await page.evaluate(() => {
         const fk = '测试书.txt|4321';
-        localStorage.setItem('reader_qa', JSON.stringify({
+        rdLsSet('reader_qa', JSON.stringify({
             [fk]: { '1': { list: [
                 { p: 1, q: '留下的', a: 'A' },
                 { p: 2, q: '要删的', a: 'B' }
@@ -197,7 +197,7 @@ function pullFromCloud(cloudQA) {
         chatMessages[3].content = '[P1] 汐：留下的\nA\n[P2] 汐：要删的\nB';
         readingRerenderMsg(3);
         readingDeleteBlock(3, 2, 0);
-        const cell = JSON.parse(localStorage.getItem('reader_qa'))[fk]['1'];
+        const cell = JSON.parse(rdLsGet('reader_qa'))[fk]['1'];
         return { qs: cell.list.map(x => x.q) };
     });
     eq('F1 ⭐明确删掉的那条没被"补"回来', f.qs, ['留下的']);
@@ -205,7 +205,7 @@ function pullFromCloud(cloudQA) {
     // F2：删除时，别处同步来的、视图里没有的条目仍然要保住（两条规则得同时成立）
     const f2 = await page.evaluate(() => {
         const fk = '测试书.txt|4321';
-        localStorage.setItem('reader_qa', JSON.stringify({
+        rdLsSet('reader_qa', JSON.stringify({
             [fk]: { '1': { list: [
                 { p: 1, q: '留下的', a: 'A' },
                 { p: 2, q: '要删的', a: 'B' },
@@ -215,7 +215,7 @@ function pullFromCloud(cloudQA) {
         chatMessages[3].content = '[P1] 汐：留下的\nA\n[P2] 汐：要删的\nB';
         readingRerenderMsg(3);
         readingDeleteBlock(3, 2, 0);
-        const cell = JSON.parse(localStorage.getItem('reader_qa'))[fk]['1'];
+        const cell = JSON.parse(rdLsGet('reader_qa'))[fk]['1'];
         return { qs: cell.list.map(x => x.q) };
     });
     eq('F2 删一条的同时，别处同步来的那条仍在', f2.qs, ['留下的', '别处来的']);

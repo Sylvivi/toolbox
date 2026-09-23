@@ -41,12 +41,12 @@ function bootTrace() {
         { p: 9, q: '这段什么意思？', a: '意思是……' },        // 追问串（同段两问）
         { p: 9, q: '那后来呢？', a: '后来……' }
     ] } };
-    localStorage.setItem('reader_qa', JSON.stringify(all));
+    rdLsSet('reader_qa', JSON.stringify(all));
     /* ⚠️划线的键是 readingMarksConvId() 给的**稳定键** `reader_<文件指纹>`，不是 `reader_<bookId>`——
        写成后者会静默存进一个没人读的槽，划线数恒为 0、颜色点那排根本不出现。
        ⚠️颜色只能取 RD_HL_SW 里那六个色名（gold/orange/green/sky/rose/ink），
        写 'yellow' 这种不存在的色名同样点不出来。 */
-    localStorage.setItem('reading_highlights', JSON.stringify({
+    rdLsSet('reading_highlights', JSON.stringify({
         ['reader_' + fk]: [
             { id: 'h1', msgIdx: 0, chap: 0, p: 2, start: 0, end: 4, color: 'gold', preview: '正文段落2', note: '', ts: Date.now() },
             { id: 'h2', msgIdx: 0, chap: 0, p: 3, start: 0, end: 4, color: 'sky', preview: '正文段落3', note: '', ts: Date.now() }

@@ -34,8 +34,8 @@ function bootTrace(list) {
     const fk = readerBookKey('bk_t');
     const all = readerQAAll();
     all[fk] = { 0: { ts: Date.now(), list: list } };
-    localStorage.setItem('reader_qa', JSON.stringify(all));
-    localStorage.removeItem('reading_highlights');
+    rdLsSet('reader_qa', JSON.stringify(all));
+    rdLsRemove('reading_highlights');
     const old = document.querySelector('.rd-trace-modal-mask');
     if (old) old.remove();
     rdTraceShowPanel();

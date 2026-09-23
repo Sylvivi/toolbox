@@ -27,7 +27,7 @@ function bootNovel() {
     window.chatResolveReadingModel = function () { return { model: 'main', baseUrl: 'https://b.com/v1', apiKey: 'k' }; };
     window.getKeyItemById = function () { return { id: 'p1', url: 'https://b.com/v1', key: 'k' }; };
     window.chatSelectedModel = 'main';
-    try { localStorage.removeItem('reader_qa'); localStorage.removeItem('reading_book_kind'); } catch (e) {}
+    try { rdLsRemove('reader_qa'); localStorage.removeItem('reading_book_kind'); } catch (e) {}
     document.getElementById('chatModalOverlay').classList.add('show');
     readerBookId = 'bk_t'; readerChapterIdx = 0; chatReaderMode = true; chatReadingMode = true;
     chatCurrentConvId = 'reader_bk_t';
@@ -53,7 +53,7 @@ function bootSocial() {
     window.chatResolveReadingModel = function () { return { model: 'main', baseUrl: 'https://b.com/v1', apiKey: 'k' }; };
     window.getKeyItemById = function () { return { id: 'p1', url: 'https://b.com/v1', key: 'k' }; };
     window.chatSelectedModel = 'main';
-    try { localStorage.removeItem('reader_qa'); localStorage.removeItem('reading_book_kind'); } catch (e) {}
+    try { rdLsRemove('reader_qa'); localStorage.removeItem('reading_book_kind'); } catch (e) {}
     rbSetBookKind(book.fileName + '|' + book.fileSize, 'social');   // 两级目录只对社科书展开
     document.getElementById('chatModalOverlay').classList.add('show');
     readerBookId = 'bk_s'; readerChapterIdx = 0; chatReaderMode = true; chatReadingMode = true;
@@ -109,7 +109,7 @@ function bootSocial() {
             // 导读块最后落在哪一段（读前该归章首、读完该归章末）——从存下来的问答里看
             let 落点 = null;
             try {
-                const qa = JSON.parse(localStorage.getItem('reader_qa') || '{}');
+                const qa = JSON.parse(rdLsGet('reader_qa') || '{}');
                 const cell = qa['测试小说.txt|1'] && qa['测试小说.txt|1'][0];
                 const hit = (cell && cell.list || []).filter(x => /^导读·/.test(x.q || ''));
                 落点 = hit.length ? hit[hit.length - 1].p : null;

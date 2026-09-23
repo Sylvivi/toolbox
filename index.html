@@ -7401,6 +7401,83 @@ body {
             }
         }
 
+        /* ===== 阅读数据搬进 IndexedDB（2026-09-23 汐）=====
+           问答/背景(reader_qa)、摘要(reader_summaries)、书签(reading_bookmarks)、划线(reading_highlights)
+           原来都在 localStorage。那个格子**整个站点只有约 500 万字**，她一本《史记的读法》就查了 540 条背景，
+           照这个速度几个月内会满——而满了之后 setItem 抛错被各处 try/catch 吞掉：
+           **屏幕上照常显示，其实没存上，一关就没了，也传不到云端**。搬到 IndexedDB（上限是磁盘的一大截）。
+           ⚠️存的仍是**同一个 JSON 字符串**，调用方拿到的东西跟以前一字不差——只换了放的地方，
+             所以各处读写只是把 localStorage.getItem/setItem 换成 rdLsGet/rdLsSet，逻辑一行没动。
+           ⚠️**不进 _idbKeys**：那套迁移会把值 JSON.parse 成对象，而且没打开 IDB 时也照删 localStorage。
+           ⚠️搬家时两边都有（旧版页面被 SW 缓存着、又往 localStorage 写了）就**合并不覆盖**，
+             用的是同步那两套现成合并（按章比时间戳 / 读痕取并集），跟两台设备对齐是同一个道理。
+           ⚠️IDB 打不开（隐私模式之类）就原地留在 localStorage，行为跟以前一样。 */
+        var RD_BIG_KEYS = { reader_qa: 'chapters', reader_summaries: 'chapters',
+                            reading_bookmarks: 'marks', reading_highlights: 'marks' };
+        var _rdReady = false;
+        var _rdWarned = false;
+        function _rdSaveFailed(err) {
+            if (_rdWarned) return;
+            _rdWarned = true;
+            try { console.error('阅读数据没存上', err); } catch (e) {}
+            try { showToast('⚠️ 阅读记录没存上（手机存储可能满了），先别关页面，截图告诉我'); } catch (e) {}
+        }
+        function rdLsGet(k) {
+            if (_rdReady && _idb) { var v = _idbCache[k]; return v === undefined ? null : v; }
+            try { return localStorage.getItem(k); } catch (e) { return null; }
+        }
+        function rdLsSet(k, str) {
+            if (_rdReady && _idb) { idbSet(k, String(str), _rdSaveFailed); return; }
+            try { localStorage.setItem(k, str); } catch (e) { _rdSaveFailed(e); }
+        }
+        function rdLsRemove(k) {
+            if (_rdReady && _idb) {
+                delete _idbCache[k];
+                try { _idb.transaction('data', 'readwrite').objectStore('data').delete(k); } catch (e) {}
+            }
+            try { localStorage.removeItem(k); } catch (e) {}
+        }
+        function _rdMergeStr(kind, a, b) {   // 两份 JSON 字符串合成一份；解析不了的那份当空
+            var A, B;
+            try { A = JSON.parse(a || '{}') || {}; } catch (e) { A = {}; }
+            try { B = JSON.parse(b || '{}') || {}; } catch (e) { B = {}; }
+            if (kind === 'chapters') readerMergeByChapter(A, B);
+            else _mergeMarksBlobs(A, B);
+            return JSON.stringify(A);
+        }
+        function rdInit() {
+            return new Promise(function (resolve) {
+                if (!_idb) { resolve(); return; }
+                var keys = Object.keys(RD_BIG_KEYS), got = {}, n = 0;
+                try {
+                    var st = _idb.transaction('data', 'readonly').objectStore('data');
+                    keys.forEach(function (k) {
+                        var r = st.get(k);
+                        r.onsuccess = function () { got[k] = r.result; if (++n === keys.length) done(); };
+                        r.onerror = function () { if (++n === keys.length) done(); };
+                    });
+                } catch (e) { resolve(); return; }
+                function done() {
+                    keys.forEach(function (k) {
+                        var ls = null;
+                        try { ls = localStorage.getItem(k); } catch (e) {}
+                        var inIdb = (typeof got[k] === 'string') ? got[k] : undefined;
+                        if (ls === null) { if (inIdb !== undefined) _idbCache[k] = inIdb; return; }
+                        var val = (inIdb === undefined) ? ls : _rdMergeStr(RD_BIG_KEYS[k], inIdb, ls);
+                        _idbCache[k] = val;
+                        // ⚠️先确认 IDB 写成了，才删 localStorage 那份——写失败就两边都留着，下次再搬
+                        try {
+                            var tx = _idb.transaction('data', 'readwrite');
+                            tx.objectStore('data').put(val, k);
+                            tx.oncomplete = function () { try { localStorage.removeItem(k); } catch (e) {} };
+                        } catch (e) {}
+                    });
+                    _rdReady = true;
+                    resolve();
+                }
+            });
+        }
+
         window.addEventListener('beforeunload', function() {
             if (_idbPendingWrites > 0 && _idb) {
                 try {
@@ -13306,7 +13383,7 @@ body {
                 if (manifest.bookmarks) {
                     var _localBm = readingGetAllBookmarks();
                     if (_mergeMarksBlobs(_localBm, manifest.bookmarks)) {
-                        localStorage.setItem('reading_bookmarks', JSON.stringify(_localBm));
+                        rdLsSet('reading_bookmarks', JSON.stringify(_localBm));
                         localStorage.setItem('reading_bookmarks_ts', new Date().toISOString());
                         marksDirty = true;   // 并进了云端新读痕 → 稍后把并集回推，好让被覆盖过的设备也补回来
                     }
@@ -13335,7 +13412,7 @@ body {
                 if (manifest.highlights) {
                     var _localHl = readingGetAllHl();
                     if (_mergeMarksBlobs(_localHl, manifest.highlights)) {
-                        localStorage.setItem('reading_highlights', JSON.stringify(_localHl));
+                        rdLsSet('reading_highlights', JSON.stringify(_localHl));
                         localStorage.setItem('reading_highlights_ts', new Date().toISOString());
                         marksDirty = true;
                     }
@@ -13458,9 +13535,9 @@ body {
                 // 阅读模式问答 / 前情摘要：按「书 → 章」两层时间戳合并（last-write-wins，每章独立）
                 if (manifest.readerQA) {
                     try {
-                        var localQA = JSON.parse(localStorage.getItem('reader_qa') || '{}');
+                        var localQA = JSON.parse(rdLsGet('reader_qa') || '{}');
                         if (readerMergeByChapter(localQA, manifest.readerQA || {})) {
-                            localStorage.setItem('reader_qa', JSON.stringify(localQA));
+                            rdLsSet('reader_qa', JSON.stringify(localQA));
                             // ⚠️光写进 localStorage 不够：这本书可能正开着，屏幕上那份正文是旧快照。
                             // 不在这儿重灌，她就得退出去再进来才看得到（见 readerApplyPulledQA 的注释）。
                             readerApplyPulledQA();
@@ -13472,8 +13549,8 @@ body {
                 if (typeof cfSplitPullAll === 'function') cfSplitPullAll();
                 if (manifest.readerSummaries) {
                     try {
-                        var localSum = JSON.parse(localStorage.getItem('reader_summaries') || '{}');
-                        if (readerMergeByChapter(localSum, manifest.readerSummaries || {})) localStorage.setItem('reader_summaries', JSON.stringify(localSum));
+                        var localSum = JSON.parse(rdLsGet('reader_summaries') || '{}');
+                        if (readerMergeByChapter(localSum, manifest.readerSummaries || {})) rdLsSet('reader_summaries', JSON.stringify(localSum));
                     } catch (e) {}
                 }
 
@@ -13729,7 +13806,8 @@ body {
            改成一本书一个键 `rqa_<书的存储名>`，值形如 `{ ts: <全书最大章节时间戳>, q: {章号: {...}} }`。
            她那 19 本书里最大的 699KB、最小的几十 KB，于是「在《爱你》里问一句」从 2.85MB 降到 69KB。
 
-           ⚠️**本地存储一个字节都没动**：`reader_qa` 还是原来那一个 localStorage 键、原来那个结构。
+           ⚠️**本地存储一个字节都没动**：`reader_qa` 还是原来那一个键、原来那个结构。
+             （2026-09-23 起这个键从 localStorage 挪进了 IndexedDB，读写走 rdLsGet/rdLsSet，结构仍不变，见 RD_BIG_KEYS。）
              变的只是「往服务器传的时候怎么分包」，所以设备上的数据没有迁移风险。
            ⚠️合并规则沿用 `readerMergeByChapter`：**按章比时间戳、只认更新的、从不删**。
              最坏情况是「某本书这次没拉下来」，下次再拉就回来了，不会丢东西。
@@ -13759,13 +13837,28 @@ body {
             var _cfg = cfGetConfig();
             if (activeSyncProvider !== 'cf' || !_cfg.url || !_cfg.token) return Promise.resolve();
             var all;
-            try { all = JSON.parse(localStorage.getItem('reader_qa') || '{}'); } catch (e) { return Promise.resolve(); }
+            try { all = JSON.parse(rdLsGet('reader_qa') || '{}'); } catch (e) { return Promise.resolve(); }
             var pushed = _rqaPushedMap(), jobs = [], touched = false;
+            /* ⚠️2026-09-23 汐：**只传变了的那几章**，服务器负责并进整本（sync.py 的 _rqa_merge）。
+               原来每问一句就整本 PUT 一次，《史记的读法》一次 250KB，书越读越深、每问一句越贵。
+               ⚠️前提是服务器真会合并——不会合并的服务器收到半本书会**直接覆盖、把别的章冲掉**。
+                 所以要等服务器亲口回过一次 `merged:true`（记下是哪个地址回的）才敢传半本；
+                 没确认过、或者换了同步地址（比如切回旧的 CF 那份），就照老办法传整本。 */
+            var _srvMerges = localStorage.getItem('rqa_srv_merge') === _cfg.url;
             Object.keys(all).forEach(function (fk) {
                 var ts = _rqaBookTs(all[fk]);
                 if (!ts || (pushed[fk] || 0) >= ts) return;    // 没变就不传——这是省流量的关键那一行
                 touched = true;
-                jobs.push(cfReq('PUT', RQA_PREFIX + fk, { ts: ts, q: all[fk] }).then(function () {
+                var body = all[fk];
+                if (_srvMerges && pushed[fk]) {
+                    body = {};
+                    Object.keys(all[fk]).forEach(function (ch) {
+                        var c = all[fk][ch];
+                        if (c && (c.ts || 0) > pushed[fk]) body[ch] = c;
+                    });
+                }
+                jobs.push(cfReq('PUT', RQA_PREFIX + fk, { ts: ts, q: body }).then(function (res) {
+                    if (res && res.merged) { try { localStorage.setItem('rqa_srv_merge', _cfg.url); } catch (e) {} }
                     var m = _rqaPushedMap(); m[fk] = ts;
                     try { localStorage.setItem(RQA_PUSHED, JSON.stringify(m)); } catch (e) {}
                 }));
@@ -13823,8 +13916,8 @@ body {
         var CF_SPLIT_PUSHED = 'cf_split_pushed';   // { '前缀+键': 上次推上去的内容指纹 }
         var CF_SPLIT_SEEN   = 'cf_split_seen';     // { '前缀+键': 已经并进来的那一版的云端 ts }
 
-        function _cfJson(k) { try { return JSON.parse(localStorage.getItem(k) || '{}'); } catch (e) { return {}; } }
-        function _cfJsonSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+        function _cfJson(k) { try { return JSON.parse((RD_BIG_KEYS[k] ? rdLsGet(k) : localStorage.getItem(k)) || '{}'); } catch (e) { return {}; } }   // 阅读四键走 IDB（09-23）
+        function _cfJsonSet(k, v) { try { if (RD_BIG_KEYS[k]) rdLsSet(k, JSON.stringify(v)); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 
         function cfSplitPush(name) {
             var sp = CF_SPLIT_SPECS[name];
@@ -13997,7 +14090,7 @@ body {
             return cfReq('GET', '', undefined, 'list=' + encodeURIComponent(RQA_PREFIX)).then(function (map) {
                 if (!map || typeof map !== 'object') return;
                 var local;
-                try { local = JSON.parse(localStorage.getItem('reader_qa') || '{}'); } catch (e) { local = {}; }
+                try { local = JSON.parse(rdLsGet('reader_qa') || '{}'); } catch (e) { local = {}; }
                 var want = [];
                 Object.keys(map).forEach(function (key) {
                     var fk = key.slice(RQA_PREFIX.length);
@@ -14005,14 +14098,17 @@ body {
                     if (cloudTs > _rqaBookTs(local[fk])) want.push(fk);
                 });
                 if (!want.length) return;
+                /* ⚠️2026-09-23：本地已经有这本书的，只要比本地新的那几章（服务器按 chsince 筛）。
+                   跟「推」那边的按章合并是一对；旧服务器不认这个参数，会整本回，照样能并。 */
                 return Promise.all(want.map(function (fk) {
-                    return cfReq('GET', RQA_PREFIX + fk).catch(function () { return null; });
+                    var _since = local[fk] ? _rqaBookTs(local[fk]) : 0;
+                    return cfReq('GET', RQA_PREFIX + fk, undefined, _since ? 'chsince=' + _since : '').catch(function () { return null; });
                 })).then(function (arr) {
                     var cloudAll = {};
                     arr.forEach(function (v, i) { if (v && v.q) cloudAll[want[i]] = v.q; });
                     if (!Object.keys(cloudAll).length) return;
                     if (readerMergeByChapter(local, cloudAll)) {
-                        localStorage.setItem('reader_qa', JSON.stringify(local));
+                        rdLsSet('reader_qa', JSON.stringify(local));
                         readerApplyPulledQA();   // 这本书可能正开着，屏幕上是旧快照，要重灌
                     }
                 });
@@ -14099,8 +14195,8 @@ body {
                 if (manifest.imgbeds) setImgBedData(manifest.imgbeds);
                 if (manifest.checkin) setCheckinDataSilent(manifest.checkin);
                 if (manifest.checkinTasks) { idbSet(CHECKIN_TASKS_KEY, manifest.checkinTasks); if (manifest.checkinTasksTs) idbSet(CHECKIN_TASKS_TS_KEY, manifest.checkinTasksTs); }
-                if (manifest.bookmarks) { localStorage.setItem('reading_bookmarks', JSON.stringify(manifest.bookmarks)); if (manifest.bookmarksTs) localStorage.setItem('reading_bookmarks_ts', manifest.bookmarksTs); }
-                if (manifest.highlights) { localStorage.setItem('reading_highlights', JSON.stringify(manifest.highlights)); if (manifest.highlightsTs) localStorage.setItem('reading_highlights_ts', manifest.highlightsTs); }
+                if (manifest.bookmarks) { rdLsSet('reading_bookmarks', JSON.stringify(manifest.bookmarks)); if (manifest.bookmarksTs) localStorage.setItem('reading_bookmarks_ts', manifest.bookmarksTs); }
+                if (manifest.highlights) { rdLsSet('reading_highlights', JSON.stringify(manifest.highlights)); if (manifest.highlightsTs) localStorage.setItem('reading_highlights_ts', manifest.highlightsTs); }
                 /* ⚠️这条路径是**整包覆盖写入**、不经过 `_mergeMarksBlobs`，所以那道墓碑筛子在这儿不生效。
                    不补的话，新设备/重新登录时会把云端还留着的、早就删掉的划线整批带回来
                    （2026-08-13 修「删除之后自己回来」时一并堵的）。碑取并集、别直接覆盖：
@@ -14126,8 +14222,8 @@ body {
                 readingApplyFontSync(manifest); // 字体库+五个位置选择，带时间戳护栏（修复开机被云端旧值冲掉的问题）
                 readingApplyBgSync(manifest, true);   // 阅读底图列表 + 每张的边距。⚠️true＝强制：这条路是「以云端为准」
                 if (manifest.readerPos) { try { localStorage.setItem('reader_pos', JSON.stringify(manifest.readerPos)); } catch (e) {} }
-                if (manifest.readerQA) { try { localStorage.setItem('reader_qa', JSON.stringify(manifest.readerQA)); } catch (e) {} }
-                if (manifest.readerSummaries) { try { localStorage.setItem('reader_summaries', JSON.stringify(manifest.readerSummaries)); } catch (e) {} }
+                if (manifest.readerQA) { try { rdLsSet('reader_qa', JSON.stringify(manifest.readerQA)); } catch (e) {} }
+                if (manifest.readerSummaries) { try { rdLsSet('reader_summaries', JSON.stringify(manifest.readerSummaries)); } catch (e) {} }
                 if (allKeys.length === 0) { setKeyDataSilent([]); setSnipDataSilent([]); return; }
                 return cfBatchGet(allKeys).then(function(results) {
                     var keys = [], snips = [];
@@ -27440,8 +27536,8 @@ body {
          * 说明：阅读模式下每本书的附属数据——逐章问答(reader_qa)、背景讲解、章节摘要、社科导读、
          *       记忆表格，以及书签/划线的存储键与跨设备合并（⚠️键必须内容派生、不能带本地 convId）。
          * ========================================================================= */
-        function readerQAAll() { try { return JSON.parse(localStorage.getItem('reader_qa') || '{}'); } catch (e) { return {}; } }
-        function readerQASaveAll(all) { try { localStorage.setItem('reader_qa', JSON.stringify(all)); } catch (e) {} }
+        function readerQAAll() { try { return JSON.parse(rdLsGet('reader_qa') || '{}'); } catch (e) { return {}; } }
+        function readerQASaveAll(all) { try { rdLsSet('reader_qa', JSON.stringify(all)); } catch (e) {} }
         function readerQAGet(fileKey, chap) {
             var book = readerQAAll()[fileKey];
             var cell = book && book[chap];
@@ -27672,9 +27768,9 @@ body {
             return removed;
         }
 
-        function readerSummariesAll() { try { return JSON.parse(localStorage.getItem('reader_summaries') || '{}'); } catch (e) { return {}; } }
+        function readerSummariesAll() { try { return JSON.parse(rdLsGet('reader_summaries') || '{}'); } catch (e) { return {}; } }
         function readerSummariesSaveAll(all) {
-            try { localStorage.setItem('reader_summaries', JSON.stringify(all)); } catch (e) {}
+            try { rdLsSet('reader_summaries', JSON.stringify(all)); } catch (e) {}
             // ⚠️推送挂在这里（不是各个调用点）：全项目有 5 处保存摘要，逐个改必漏。
             //   轻量推送只传变了的那本书，不碰大清单。
             if (typeof cfSplitPushSoon === 'function') cfSplitPushSoon('rsm');
@@ -33866,12 +33962,12 @@ body {
          * 账本本身。跨设备合并、删除墓碑(rdMarks*)、划线样式与记号种类的读写都在这儿。
          * --------------------------------------------------------------- */
         function readingGetAllBookmarks() {
-            try { return JSON.parse(localStorage.getItem('reading_bookmarks')) || {}; }
+            try { return JSON.parse(rdLsGet('reading_bookmarks')) || {}; }
             catch (e) { return {}; }
         }
         var _bookmarkPushTimer = null;
         function readingSaveAllBookmarks(obj) {
-            localStorage.setItem('reading_bookmarks', JSON.stringify(obj));
+            rdLsSet('reading_bookmarks', JSON.stringify(obj));
             localStorage.setItem('reading_bookmarks_ts', new Date().toISOString());
             if (activeSyncProvider === 'cf') {
                 if (_bookmarkPushTimer) clearTimeout(_bookmarkPushTimer);
@@ -33900,12 +33996,12 @@ body {
              换色正则匹配到；从这个数组里拿掉就够了——色板和随机都只读这个数组。 */
         var RD_HL_COLORS = ['purple', 'orange', 'green', 'sky', 'rose', 'ink'];   // 取自主题夜间亮强调色，色相拉开当分类色板；ink=墨（中性色，日间黑/夜间白）
         function readingGetAllHl() {
-            try { return JSON.parse(localStorage.getItem('reading_highlights')) || {}; }
+            try { return JSON.parse(rdLsGet('reading_highlights')) || {}; }
             catch (e) { return {}; }
         }
         var _rdHlPushTimer = null;
         function readingSaveAllHl(obj) {
-            localStorage.setItem('reading_highlights', JSON.stringify(obj));
+            rdLsSet('reading_highlights', JSON.stringify(obj));
             localStorage.setItem('reading_highlights_ts', new Date().toISOString());
             if (activeSyncProvider === 'cf') {
                 if (_rdHlPushTimer) clearTimeout(_rdHlPushTimer);
@@ -39620,7 +39716,7 @@ body {
             }
         }
 
-        idbInit().then(function() {
+        idbInit().then(rdInit).then(function() {
             migrateOldUrlBookmarks();
             migrateCheckinReciteName();
             readerMigrateAllMarksKeys();  // 开机把旧「设备专属键」下的读痕全搬到跨设备稳定键并重推（修跨设备不同步）

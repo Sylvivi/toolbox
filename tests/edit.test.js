@@ -35,7 +35,7 @@ function boot(mode) {
     window.chatSaveCurrentConv = () => { calls.saveConv++; };
     window._calls = calls;
     localStorage.removeItem('reading_book_edits');
-    localStorage.removeItem('reading_highlights');
+    rdLsRemove('reading_highlights');
     document.getElementById('chatModalOverlay').classList.add('show');
 
     if (mode === 'reader') {
