@@ -5059,6 +5059,8 @@ body {
             padding: 1px 7px; border-radius: 6px; white-space: nowrap;
             max-width: 160px; overflow: hidden; text-overflow: ellipsis;
         }
+        /* 预设标签排第一个、字色提亮一档（她的口味：显眼靠提亮字色＋淡底，别另起一种药丸） */
+        .chat-hist-meta .chat-meta-tag.chat-meta-sp { color: var(--accent); }
         .chat-hist-del {
             flex-shrink: 0; width: 30px; height: 30px; border: none; border-radius: 8px;
             background: transparent; color: var(--text-muted); font-size: 14px;
@@ -11708,6 +11710,16 @@ body {
                 return '<table><thead><tr>' + ths + '</tr></thead><tbody>' + rows + '</tbody></table>';
             });
 
+            // 模型写的 <br>＝换行（2026-09-24 晗）。
+            // 她问「<br> 这个一般代表啥呀，在 tb 的聊天中出现了」——模型排表格时，格子里要换行就写 <br>，
+            // 而上面第一步 esc() 把它转义成了 &lt;br&gt;，于是原样露出一串代码。
+            // ⚠️只放行 <br> 这一个标签，别的 HTML 照旧转义（安全口子只开这么大）。
+            // ⚠️必须放在表格之后：要是先变成 \n，表格那一行就被劈成两行、整张表散架。
+            // ⚠️代码块/行内代码里的 <br> 是用户要看的原文，保持原样。
+            html = html.split(/(<pre>[\s\S]*?<\/pre>|<code>[\s\S]*?<\/code>)/).map(function(seg, k) {
+                return (k % 2) ? seg : seg.replace(/&lt;br\s*\/?&gt;/gi, '<br>');
+            }).join('');
+
             // 段落：非标签行包裹 <p>
             html = html.replace(/^(?!<[a-z/])((?!^\s*$).+)$/gm, '<p>$1</p>');
             // 保留空行为可见间距
@@ -17114,6 +17126,7 @@ body {
                 return;
             }
             var h = '';
+            var _spPresets = chatGetSpPresets();
             for (var i = 0; i < list.length; i++) {
                 var c = list[i];
                 var msgCount = c.messages ? c.messages.length : 0;
@@ -17122,6 +17135,8 @@ body {
                 h += '<div class="chat-hist-info">';
                 h += '<div class="chat-hist-title">' + (c.pinned ? '📌 ' : '') + esc(c.title || '新对话') + '</div>';
                 h += '<div class="chat-hist-meta">';
+                var _spName = chatConvPresetLabel(c, _spPresets);
+                if (_spName) h += '<span class="chat-meta-tag chat-meta-sp">' + esc(_spName) + '</span>';
                 if (c.providerName) h += '<span class="chat-meta-tag">' + esc(c.providerName) + '</span>';
                 h += '<span class="chat-meta-tag">' + esc(c.model || '未知模型') + '</span>';
                 h += '<span class="chat-meta-tag">' + msgCount + '条</span>';
@@ -17133,6 +17148,25 @@ body {
             }
             container.innerHTML = h;
             container.scrollTop = 0;
+        }
+
+/* 对话列表里那个「预设」标签（2026-09-24 晗，她要的：「显示出该对话使用的预设是什么，
+           帮助我更好地判断对话内容，而不是只能看标题」）。
+           ⚠️**先按提示词内容认，不按 spPresetIdx 认**：spPresetIdx 只是个下标，删/挪预设时
+             只修了当前会话那一个，存量对话的下标会错位；而且她拿真实数据核过——
+             有的对话提示词是空的、下标却还挂着「翻译助手」（套用后又清空了）。按下标标就是标错。
+           ⚠️认不出时：提示词不空＋下标还指着某个预设 →「某某·改过」（套用后自己改过几句）；
+             不空也没下标 →「自定义」；提示词是空的 → 不显示（没用预设就别硬贴标签）。 */
+        function chatConvPresetLabel(c, presets) {
+            var sp = String(c.systemPrompt || '').trim();
+            if (!sp) return '';
+            presets = presets || [];
+            for (var i = 0; i < presets.length; i++) {
+                if (String(presets[i].content || '').trim() === sp) return presets[i].name || '预设';
+            }
+            var idx = c.spPresetIdx;
+            if (typeof idx === 'number' && presets[idx]) return (presets[idx].name || '预设') + '·改过';
+            return '自定义';
         }
 
         /* ===== 打开 / 关闭 ===== */
