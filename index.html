@@ -15863,6 +15863,7 @@ body {
            她：「给 TB 的聊天内置生图，用的生图模型得是我可选的；你教他怎么写提示词，聊天的那个就会自动解析为生图；在上下文里它依然是一个文字」。
            · 设置「各功能模型 → 聊天画图模型」选一个（存 chat_draw_model），空着＝整个功能关掉、也不往系统提示里加话。
            · 她要图时，模型在回复里单独写一行 [画图:画面描述]；显示时换成图，图按「这条消息＋描述」算编号存本机 IDB（genImgPut）。
+           · ⚠️图片用 data-drawimg 不用 data-genimg：genImgHydrate（老生图功能的）会抢着认 data-genimg，本机没有就把占位改成「此图仅存于生成它的设备」，把「点这里画出来」盖掉（她 10-06 截图）。
            · 只有最新那条回复会自动画（刚回完的）；翻到以前的、或别的设备同步来的，显示「点这里画出来」，免得一打开旧对话就把额度全花掉。 */
         var CHAT_DRAW_RULE = '【画图】你能给她画图：只有她明确要图的时候（让你画、要张图、想看看长什么样），在回复里单独一行写 [画图:画面描述]，程序会照这段描述画出来给她看。描述写清主体、场景、动作、构图、风格和氛围，具体可画，一两句话就够；一次最多两张。她没要图就别写这个标记，也别说「我给你画一张」之类报幕的话，直接画就行。';
         function chatDrawCfg() { try { return _chatResolveModelCfg(_chatGetModelCfg('chat_draw_model')); } catch (e) { return null; } }
@@ -15875,7 +15876,7 @@ body {
             return { text: t, items: items };
         }
         function chatDrawHtml(it) {
-            return '<div class="chat-gen-wrap chat-draw" data-draw="' + it.id + '"><img class="chat-gen-img" data-genimg="' + it.id + '" alt="' + esc(it.prompt) + '" style="display:none">'
+            return '<div class="chat-gen-wrap chat-draw" data-draw="' + it.id + '"><img class="chat-gen-img" data-drawimg="' + it.id + '" alt="' + esc(it.prompt) + '" style="display:none">'
                 + '<div class="chat-gen-ph chat-draw-ph">🎨 ' + esc(it.prompt.slice(0, 40)) + (it.prompt.length > 40 ? '…' : '') + '</div></div>';
         }
         var _drawBusy = {}, _drawTried = {};
