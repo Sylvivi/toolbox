@@ -5011,7 +5011,7 @@ body {
         /* 聊天画图（2026-10-06）：她「图好大，没有夏娃里看着舒服」→ 照夏娃的照片卡缩小：最宽 60%／240px，点开看大图 */
         .chat-draw { margin: 6px 0; }
         /* 两张以上叠成一摞（2026-10-06 她：「人家那种堆叠的效果，点一下就展开」——跟夏娃照片墙同一套，学的 Wren036/PhotoStack） */
-        .cds { position: relative; width: 150px; height: 200px; margin: 14px 0 14px 18px; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+        .cds { position: relative; width: 150px; height: 200px; margin: 10px 0 10px 12px; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
         .cds > .chat-draw { position: absolute; inset: 0; margin: 0; border-radius: 12px; overflow: hidden; background: var(--input-bg); box-shadow: 0 3px 12px rgba(0,0,0,.15); transition: transform .32s cubic-bezier(.2,.7,.3,1), opacity .3s; }
         .cds > .chat-draw .chat-gen-img { max-width: none; width: 100%; height: 100%; object-fit: cover; border-radius: 0; box-shadow: none; margin: 0; }   /* 她截图：每张上面一道白边——聊天气泡里的图默认上下各 8px 外边距，卡片里要去掉 */
         .chat-draw .chat-gen-img { margin: 0; }
@@ -5021,7 +5021,7 @@ body {
         .cds.open > .chat-draw { position: relative; inset: auto; width: calc(50% - 4px); max-width: 200px; aspect-ratio: 3 / 4; transform: none !important; opacity: 1 !important; z-index: auto !important; }
         .cds.open .cds-n { display: none; }
         .cds-fold { display: none; }
-        .cds.open + .cds-fold { display: inline-block; font-size: 11px; color: var(--text-muted); margin: -4px 0 8px; cursor: pointer; }
+        .cds.open + .cds-fold { display: inline-block; font-size: 11px; color: var(--text-muted); margin: 0 0 4px; cursor: pointer; }
         .chat-draw .chat-gen-img { max-width: min(60%, 240px); border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
         .chat-draw .chat-gen-ph { max-width: min(60%, 240px); min-width: 0; min-height: 150px; box-sizing: border-box; padding: 16px 12px; }
         .chat-gen-cap { margin-top: 5px; font-size: 10px; color: var(--text-muted); line-height: 1.5; }
@@ -15974,6 +15974,13 @@ body {
                 chatDrawStack(el, cards.length, 0, function () { el.classList.add('open'); el.querySelectorAll('.chat-draw').forEach(function (c) { c.style.transform = ''; }); }, null);
                 var fold = el.nextElementSibling; if (fold && fold.classList.contains('cds-fold')) fold.onclick = function () { el.classList.remove('open'); el._stk = 0; var nn = el.cloneNode(true); el.parentNode.replaceChild(nn, el); chatDrawHydrate(nn.parentNode, false); chatDrawStacks(nn.parentNode); };
             }); }
+        // 她：「下面的文字跟图片离那么远」→ renderText 会把空行变成 1.5em 高的空白块，图前后各夹了一两个；图块自己也有外边距。把图前后的空白块去掉
+        function chatDrawTidy(root) {
+            var isGap = function (n) { return n && n.nodeType === 1 && n.tagName === 'DIV' && !n.textContent.trim() && !n.children.length && /^\s*height:\s*[\d.]+em;?\s*$/.test(n.getAttribute('style') || ''); };
+            root.querySelectorAll('.cds, .cds-fold, .chat-bubble > .chat-draw, .chat-draw:not(.cds .chat-draw)').forEach(function (b) {
+                while (isGap(b.previousElementSibling)) b.previousElementSibling.remove();
+                while (isGap(b.nextElementSibling)) b.nextElementSibling.remove(); });
+        }
         function _drawOpenBig(img, url) { img.onclick = function (e) { if (img.closest('.cds:not(.open)')) return; e.stopPropagation(); genImgLightbox(url); }; }
         var _drawBusy = {}, _drawTried = {};
         function chatDrawRun(wrap, prompt, auto) {
@@ -18301,7 +18308,7 @@ body {
                     h += text ? renderText(text) : '';
                 }
                 bubble.innerHTML = h;
-                if (typeof _drawAuto !== 'undefined') { chatDrawHydrate(bubble, _drawAuto); chatDrawStacks(bubble); }
+                if (typeof _drawAuto !== 'undefined') { chatDrawTidy(bubble); chatDrawHydrate(bubble, _drawAuto); chatDrawStacks(bubble); }
                 if (_isReadingMsg && (text || _isReaderChap)) { readingMarkBookmarks(bubble, msgIdx); readingApplyHighlights(bubble, msgIdx); }
                 if (typeof genImgHydrate === 'function') genImgHydrate(bubble); // 共读内联插图：异步从本机 IDB 填图
             }
@@ -21585,7 +21592,7 @@ body {
                 _dh = chatDrawPlace(_dh, _dx.items); h += _dh; }
             else if (content) h += renderText(content);
             el.innerHTML = h;
-            if (_draw) { chatDrawHydrate(el, true); chatDrawStacks(el); }
+            if (_draw) { chatDrawTidy(el); chatDrawHydrate(el, true); chatDrawStacks(el); }
         }
 
         function chatRenderReadingModeFinal(el, thinking, aiContent, originalText) {
