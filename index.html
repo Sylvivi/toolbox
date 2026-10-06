@@ -7269,6 +7269,12 @@ body {
                                     <span class="preset-caret">▾</span>
                                     <div class="chat-model-dropdown preset-dd" id="presetDd_draw"></div>
                                 </div>
+                                <!-- 2026-10-06 她：「想让 TB 里的图片能去 AI 味，像夏娃里那样」→ 照夏娃的正向/负向：每张都接在描述后面；描述里写了插画/示意图这类就不接「真实照片」那段 -->
+                                <div style="font-size:11px;color:var(--text-muted);margin-top:0.6em">画图要求（每张都加在描述后面；描述是插画、示意图、漫画、海报时不加）</div>
+                                <textarea id="chatDrawPos" rows="3" oninput="chatDrawSaveTxt('pos', this.value)" style="width:100%;box-sizing:border-box;margin-top:0.3em;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:6px 8px;font-size:12px;line-height:1.5;color:var(--text);resize:vertical"></textarea>
+                                <div style="font-size:11px;color:var(--text-muted);margin-top:0.4em">不要什么</div>
+                                <textarea id="chatDrawNeg" rows="2" oninput="chatDrawSaveTxt('neg', this.value)" style="width:100%;box-sizing:border-box;margin-top:0.3em;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;padding:6px 8px;font-size:12px;line-height:1.5;color:var(--text);resize:vertical"></textarea>
+                                <div style="font-size:11px;color:var(--text-muted);margin-top:0.2em;cursor:pointer;text-decoration:underline" onclick="chatDrawSaveTxt('pos',null);chatDrawSaveTxt('neg',null);chatDrawFillTxt()">恢复夏娃那套默认</div>
                             </div>
                             <div style="margin-top:0.75em">
                                 <span style="font-size:11px;color:var(--text-muted)">导读 / 讲解模型</span>
@@ -15878,6 +15884,18 @@ body {
            · ⚠️图片用 data-drawimg 不用 data-genimg：genImgHydrate（老生图功能的）会抢着认 data-genimg，本机没有就把占位改成「此图仅存于生成它的设备」，把「点这里画出来」盖掉（她 10-06 截图）。
            · 只有最新那条回复会自动画（刚回完的）；翻到以前的、或别的设备同步来的，显示「点这里画出来」，免得一打开旧对话就把额度全花掉。 */
         var CHAT_DRAW_RULE = '【画图】你能给她画图：只有她明确要图的时候（让你画、要张图、想看看长什么样），在回复里单独一行写 [画图:画面描述]，程序会照这段描述画出来给她看。描述写清主体、场景、动作、构图、风格和氛围，具体可画，一两句话就够；她想看几张就画几张，一般一到四张，每张单独一行（两张以上会叠成一摞给她翻）。她没要图就别写这个标记，也别说「我给你画一张」之类报幕的话，直接画就行。';
+        // 去 AI 味：照夏娃 eve_image_patch 的 DEF_POS / DEF_NEG（她 10-06 要的）。存 chat_draw_pos / chat_draw_neg，没存过用默认；清空＝不加
+        var DRAW_POS_DEF = '这是一张用手机随手拍下来的真实照片，不是CG、不是渲染图、不是精修图。皮肤是真实的皮肤：干净细腻、有自然的光泽和质感，不是磨皮也不是塑料感。光线就是当时环境里的自然光，构图随手、不刻意。';
+        var DRAW_NEG_DEF = 'CGI, 3D render, anime, illustration, airbrushed skin, plastic skin, oversaturated, watermark, text, distorted anatomy, extra limbs, extra fingers, unrealistic body proportions';
+        function chatDrawTxt(k) { var v = localStorage.getItem('chat_draw_' + k); return v == null ? (k === 'pos' ? DRAW_POS_DEF : DRAW_NEG_DEF) : v; }
+        function chatDrawSaveTxt(k, v) { try { if (v == null) localStorage.removeItem('chat_draw_' + k); else localStorage.setItem('chat_draw_' + k, v); } catch (e) {} }
+        function chatDrawFillTxt() { var a = document.getElementById('chatDrawPos'), b = document.getElementById('chatDrawNeg'); if (a) a.value = chatDrawTxt('pos'); if (b) b.value = chatDrawTxt('neg'); }
+        function chatDrawFullPrompt(desc) {
+            var art = /插画|手绘|示意图|漫画|海报|卡通|简笔|水彩|油画|线稿|图解|信息图|设计图|illustration|sketch|cartoon|diagram|poster/i.test(desc);
+            var pos = art ? '' : chatDrawTxt('pos').trim(), neg = chatDrawTxt('neg').trim();
+            if (art) neg = neg.replace(/,?\s*(anime|illustration)\b/gi, '').replace(/^,\s*/, '');   // 她要插画时别再说「不要插画」
+            return desc + (pos ? '\n\n' + pos : '') + (neg ? '\n\nAvoid: ' + neg : '');
+        }
         function chatDrawCfg() { try { return _chatResolveModelCfg(_chatGetModelCfg('chat_draw_model')); } catch (e) { return null; } }
         var DRAW_RE = /[\[【]\s*画图\s*[:：]\s*([^\]】]{2,600}?)\s*[\]】]/g;
         function _drawHash(s) { var h = 5381; for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36); }
@@ -15991,7 +16009,7 @@ body {
             if (auto && _drawTried[id]) return;
             _drawBusy[id] = 1; _drawTried[id] = 1; if (ph) { ph.textContent = '🎨 正在画…'; ph.onclick = null; }
             fetch(cfg.baseUrl + '/images/generations', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.apiKey },
-                body: JSON.stringify({ model: cfg.model, prompt: prompt, n: 1, size: genImageSize() }) })
+                body: JSON.stringify({ model: cfg.model, prompt: chatDrawFullPrompt(prompt), n: 1, size: genImageSize() }) })
                 .then(function (r) { return r.text().then(function (t) { if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + t.slice(0, 80)); var d = (JSON.parse(t).data || [])[0] || {};
                     if (d.b64_json) return 'data:image/png;base64,' + d.b64_json; if (d.url) return _genUrlToDataURL(d.url); throw new Error('没给图'); }); })
                 .then(function (url) { return genImgPut(id, url).then(function () { return url; }); })
@@ -38801,6 +38819,7 @@ body {
             }
         }
         function presetRenderPickers() {
+            try { chatDrawFillTxt(); } catch (e) {}
             for (var slot in _PRESET_SLOTS) {
                 var inp = document.getElementById('presetPick_' + slot);
                 if (inp) inp.value = presetSlotText(slot);
