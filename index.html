@@ -7244,6 +7244,16 @@ body {
                                     <div class="chat-model-dropdown preset-dd" id="presetDd_compress"></div>
                                 </div>
                             </div>
+                            <!-- 2026-10-06 汐加：她「能不能给 TB 的聊天内置生图，用的生图模型得是我可选的」。
+                                 空着＝聊天里不画图；选了＝她要图时，聊天模型写 [画图:…]，程序用这个模型画出来。 -->
+                            <div style="margin-top:0.75em">
+                                <span style="font-size:11px;color:var(--text-muted)">聊天画图模型（空着＝不画）</span>
+                                <div class="chat-model-wrap" style="position:relative;margin-top:0.35em">
+                                    <input type="text" class="preset-pick" id="presetPick_draw" readonly onclick="presetTogglePicker('draw')">
+                                    <span class="preset-caret">▾</span>
+                                    <div class="chat-model-dropdown preset-dd" id="presetDd_draw"></div>
+                                </div>
+                            </div>
                             <div style="margin-top:0.75em">
                                 <span style="font-size:11px;color:var(--text-muted)">导读 / 讲解模型</span>
                                 <div class="chat-model-wrap" style="position:relative;margin-top:0.35em">
@@ -15845,6 +15855,52 @@ body {
                 if (typeof chatScrollBottom === 'function') chatScrollBottom();
             }
         }
+        /* ===== 聊天里画图（2026-10-06 汐加）=====
+           她：「给 TB 的聊天内置生图，用的生图模型得是我可选的；你教他怎么写提示词，聊天的那个就会自动解析为生图；在上下文里它依然是一个文字」。
+           · 设置「各功能模型 → 聊天画图模型」选一个（存 chat_draw_model），空着＝整个功能关掉、也不往系统提示里加话。
+           · 她要图时，模型在回复里单独写一行 [画图:画面描述]；显示时换成图，图按「这条消息＋描述」算编号存本机 IDB（genImgPut）。
+           · 只有最新那条回复会自动画（刚回完的）；翻到以前的、或别的设备同步来的，显示「点这里画出来」，免得一打开旧对话就把额度全花掉。 */
+        var CHAT_DRAW_RULE = '【画图】你能给她画图：只有她明确要图的时候（让你画、要张图、想看看长什么样），在回复里单独一行写 [画图:画面描述]，程序会照这段描述画出来给她看。描述写清主体、场景、动作、构图、风格和氛围，具体可画，一两句话就够；一次最多两张。她没要图就别写这个标记，也别说「我给你画一张」之类报幕的话，直接画就行。';
+        function chatDrawCfg() { try { return _chatResolveModelCfg(_chatGetModelCfg('chat_draw_model')); } catch (e) { return null; } }
+        var DRAW_RE = /[\[【]\s*画图\s*[:：]\s*([^\]】]{2,600}?)\s*[\]】]/g;
+        function _drawHash(s) { var h = 5381; for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36); }
+        function chatDrawExtract(text, msgIdx) {   // → { text: 换成占位符的文字, items: [{id, prompt}] }
+            var items = [], m = (typeof msgIdx === 'number') ? chatMessages[msgIdx] : null, seed = m ? String(m.ts || m.time || m.timestamp || msgIdx) : '';
+            var t = String(text || '').replace(DRAW_RE, function (_, p) { var id = 'gi_d_' + _drawHash(seed + '|' + p); items.push({ id: id, prompt: p.trim() }); return '\n\n@@DRAW' + (items.length - 1) + '@@\n\n'; });
+            return { text: t, items: items };
+        }
+        function chatDrawHtml(it) {
+            return '<div class="chat-gen-wrap chat-draw" data-draw="' + it.id + '"><img class="chat-gen-img" data-genimg="' + it.id + '" alt="' + esc(it.prompt) + '" style="display:none">'
+                + '<div class="chat-gen-ph chat-draw-ph">🎨 ' + esc(it.prompt.slice(0, 40)) + (it.prompt.length > 40 ? '…' : '') + '</div></div>';
+        }
+        var _drawBusy = {}, _drawTried = {};
+        function chatDrawRun(wrap, prompt, auto) {
+            var id = wrap.getAttribute('data-draw'), ph = wrap.querySelector('.chat-draw-ph'), img = wrap.querySelector('img');
+            if (_drawBusy[id]) { if (ph) ph.textContent = '🎨 正在画…'; return; }
+            var cfg = chatDrawCfg();
+            if (!cfg) { if (ph) ph.textContent = '🎨 没选聊天画图模型（设置 → 各功能模型）'; return; }
+            if (auto && _drawTried[id]) return;
+            _drawBusy[id] = 1; _drawTried[id] = 1; if (ph) { ph.textContent = '🎨 正在画…'; ph.onclick = null; }
+            fetch(cfg.baseUrl + '/images/generations', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.apiKey },
+                body: JSON.stringify({ model: cfg.model, prompt: prompt, n: 1, size: genImageSize() }) })
+                .then(function (r) { return r.text().then(function (t) { if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + t.slice(0, 80)); var d = (JSON.parse(t).data || [])[0] || {};
+                    if (d.b64_json) return 'data:image/png;base64,' + d.b64_json; if (d.url) return _genUrlToDataURL(d.url); throw new Error('没给图'); }); })
+                .then(function (url) { return genImgPut(id, url).then(function () { return url; }); })
+                .then(function (url) { document.querySelectorAll('.chat-draw[data-draw="' + id + '"]').forEach(function (w) { var im = w.querySelector('img'), p2 = w.querySelector('.chat-draw-ph');
+                    im.src = url; im.style.display = ''; im.onclick = function () { genImgLightbox(url); }; if (p2) p2.remove(); }); })
+                .catch(function (e) { document.querySelectorAll('.chat-draw[data-draw="' + id + '"] .chat-draw-ph').forEach(function (p2) {
+                    p2.textContent = '🎨 没画成（' + String(e.message || e).slice(0, 60) + '），点这里再试'; p2.onclick = function () { chatDrawRun(p2.parentNode, prompt, false); }; }); })
+                .then(function () { delete _drawBusy[id]; });
+        }
+        function chatDrawHydrate(root, auto) {   // 先找本机存过的图；没有：最新那条自动画，别的显示「点这里画出来」
+            var ws = root.querySelectorAll('.chat-draw'); if (!ws.length) return;
+            ws.forEach(function (w) { var id = w.getAttribute('data-draw'), img = w.querySelector('img'), ph = w.querySelector('.chat-draw-ph'), prompt = img.getAttribute('alt') || '';
+                genImgGet(id).then(function (url) {
+                    if (url) { img.src = url; img.style.display = ''; img.onclick = function () { genImgLightbox(url); }; if (ph) ph.remove(); return; }
+                    if (auto) chatDrawRun(w, prompt, true);
+                    else if (ph && !_drawBusy[id]) { ph.textContent = '🎨 点这里画出来：' + prompt.slice(0, 30) + (prompt.length > 30 ? '…' : ''); ph.style.cursor = 'pointer'; ph.onclick = function () { chatDrawRun(w, prompt, false); }; }
+                }); });
+        }
         // 把容器里所有 <img data-genimg> 从本机 IDB 异步加载出来（共读内联图、重渲后都用它水合）
         function genImgHydrate(root) {
             if (!root) return;
@@ -18133,10 +18189,16 @@ body {
                     var _orig = readingModeGetOriginalText(msgIdx);
                     _orig = readingModeStripParaNums(_orig);
                     h += readingModeRenderMerged(_orig, text || '', msgIdx);
+                } else if (role === 'ai' && text && typeof text === 'string' && /[\[【]\s*画图\s*[:：]/.test(text)) {
+                    // 聊天画图（2026-10-06）：[画图:…] 换成图；文字本身不改（上下文里还是这段字）
+                    var _dx = chatDrawExtract(text, msgIdx), _dh = renderText(_dx.text);
+                    _dx.items.forEach(function (it, k) { _dh = _dh.replace(new RegExp('(<p>)?\\s*@@DRAW' + k + '@@\\s*(</p>)?'), chatDrawHtml(it)); });
+                    h += _dh; var _drawAuto = !!isLastAi;
                 } else {
                     h += text ? renderText(text) : '';
                 }
                 bubble.innerHTML = h;
+                if (typeof _drawAuto !== 'undefined') chatDrawHydrate(bubble, _drawAuto);
                 if (_isReadingMsg && (text || _isReaderChap)) { readingMarkBookmarks(bubble, msgIdx); readingApplyHighlights(bubble, msgIdx); }
                 if (typeof genImgHydrate === 'function') genImgHydrate(bubble); // 共读内联插图：异步从本机 IDB 填图
             }
@@ -20873,6 +20935,9 @@ body {
                填了东西就按她写的来——在别人的指令后面偷偷加规矩是不对的。
                ⚠️挂在**最末尾**：位置就是这段的效力来源（见 READING_STYLE_GUARD 的注释）。 */
             if (!chatReadingMode && !chatTranslateMode && !sp) _spContent += '\n\n' + CHAT_STYLE_GUARD;
+            /* 聊天画图（2026-10-06 汐加，她选「我要图的时候才画」）：选了画图模型才教它写 [画图:…]。
+               回复里这段字原样留在上下文里（她要的：「上下文里依然是文字，不是图片」），只在显示时换成图。 */
+            if (!chatReadingMode && !chatTranslateMode && chatDrawCfg()) _spContent += '\n\n' + CHAT_DRAW_RULE;
             reqMsgs.push({ role: 'system', content: _spContent });
             /* 常驻资料（2026-09-13 她要的）：**不走历史**，每轮单独拼一条 system 发出去。
                位置故意在系统提示词之后、摘要之前——模型把它当「手边摊着的参考资料」，
@@ -38604,7 +38669,10 @@ body {
             /* 摘要被谷歌拒掉时改用的模型（2026-09-11 加）。
                ⚠️空档＝「不重试」，不是「跟随当前模型」——当前模型很可能就是刚被拒的那个，
                  跟着它重试等于白跑一趟还多烧一次额度。 */
-            sumfb:    { key: 'chat_summary_fallback_model', empty: '不重试' }
+            sumfb:    { key: 'chat_summary_fallback_model', empty: '不重试' },
+            /* 聊天画图（2026-10-06 汐加）。⚠️空档＝不画图（不是跟随当前模型——聊天模型画不了图）。
+               ⚠️别用 chat_image_model 这个键：09-02 撤「生图模型」时，chatRenderReadingModelSelects 每次都会把它清掉。 */
+            draw:     { key: 'chat_draw_model', empty: '不画图' }
         };
         function presetSlotText(slot) {
             var c = _PRESET_SLOTS[slot];
