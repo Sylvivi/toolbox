@@ -15865,8 +15865,9 @@ body {
         var DRAW_RE = /[\[【]\s*画图\s*[:：]\s*([^\]】]{2,600}?)\s*[\]】]/g;
         function _drawHash(s) { var h = 5381; for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36); }
         function chatDrawExtract(text, msgIdx) {   // → { text: 换成占位符的文字, items: [{id, prompt}] }
-            var items = [], m = (typeof msgIdx === 'number') ? chatMessages[msgIdx] : null, seed = m ? String(m.ts || m.time || m.timestamp || msgIdx) : '';
-            var t = String(text || '').replace(DRAW_RE, function (_, p) { var id = 'gi_d_' + _drawHash(seed + '|' + p); items.push({ id: id, prompt: p.trim() }); return '\n\n@@DRAW' + (items.length - 1) + '@@\n\n'; });
+            // ⚠️编号只按描述算：流式刚结束那次（chatRenderStreamFinal）还拿不到消息编号，两边算的必须一样，不然同一张图画两次
+            var items = [];
+            var t = String(text || '').replace(DRAW_RE, function (_, p) { var id = 'gi_d_' + _drawHash(p.trim()); items.push({ id: id, prompt: p.trim() }); return '\n\n@@DRAW' + (items.length - 1) + '@@\n\n'; });
             return { text: t, items: items };
         }
         function chatDrawHtml(it) {
@@ -21476,8 +21477,13 @@ body {
             _streamContentEl = null;
             if (_streamMdTimer) { clearTimeout(_streamMdTimer); _streamMdTimer = 0; }
             var h = chatThinkingBlockHtml(thinking);
-            if (content) h += renderText(content);
+            // 聊天画图（2026-10-06）：刚回完这一下也要认 [画图:…]（她截图：标记原样显示了，只改了 chatBuildMsgEl 那条路）
+            var _draw = content && !chatReadingMode && !chatTranslateMode && /[\[【]\s*画图\s*[:：]/.test(content);
+            if (_draw) { var _dx = chatDrawExtract(content), _dh = renderText(_dx.text);
+                _dx.items.forEach(function (it, k) { _dh = _dh.replace(new RegExp('(<p>)?\\s*@@DRAW' + k + '@@\\s*(</p>)?'), chatDrawHtml(it)); }); h += _dh; }
+            else if (content) h += renderText(content);
             el.innerHTML = h;
+            if (_draw) chatDrawHydrate(el, true);
         }
 
         function chatRenderReadingModeFinal(el, thinking, aiContent, originalText) {
