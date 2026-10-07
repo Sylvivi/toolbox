@@ -17590,7 +17590,9 @@ body {
                 if (canStart && !canStart(e)) return;
                 // 忽略在输入框内的滑动（避免干扰文本选择）——目录里的「搜索章节」框也靠这条
                 if (e.target.closest('textarea, input')) return;
-                if (e.target.closest('.cds:not(.open)')) return;   // 2026-10-06 她：拨聊天里那一摞图会触发右滑退出 → 摞着的图上起手不算边缘手势
+                if (e.target.closest('.cds')) return;   // 2026-10-06 她：拨聊天里那一摞图会触发右滑退出 → 摞着的图上起手不算边缘手势；10-07 展开的也算（两指捏合收起时右边那根手指往左走，会被当成「左滑开面板」）
+                // 10-07：两根手指＝捏合/缩放，不是边缘手势（第二根手指落下时 touches 已是 2，见下面 touchmove 也收手）
+                if (e.touches.length > 1) { swiping = false; if (_swipeBackHint) _swipeBackHint.style.opacity = '0'; return; }
                 // ⚠️正在选字就别抢手势（2026-08-14 修，用户在 iPad 上反复踩到）：
                 //   选中一段文字后再拖动那两个小圆点去调范围，轨迹跟"右滑返回"一模一样，
                 //   于是阅读到一半面板自己关了。有选区时一律不起手。
@@ -17608,6 +17610,7 @@ body {
             }, { passive: true });
             el.addEventListener('touchmove', function(e) {
                 if (!swiping) return;
+                if (e.touches.length > 1) { swiping = false; _swipeBackGetHint(dir).style.opacity = '0'; return; }   // 10-07 中途多了一根手指＝捏合，收手
                 // dx 一律取「朝着该方向划了多远」的正值，下面的判定两个方向就完全一样
                 var dx = (dir === 'left') ? (startX - e.touches[0].clientX) : (e.touches[0].clientX - startX);
                 var dy = Math.abs(e.touches[0].clientY - startY);
