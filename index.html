@@ -5018,13 +5018,14 @@ body {
         .cds > .chat-draw .chat-gen-ph { max-width: none; width: 100%; height: 100%; min-height: 0; border-radius: 12px; font-size: 11px; }
         .cds .cds-n { position: absolute; right: -6px; top: -8px; z-index: 200; background: var(--accent); color: #fff; font-size: 11px; border-radius: 10px; padding: 1px 7px; pointer-events: none; }
         /* 2026-10-07 她：展开后三张一排、四张也一排 → 按张数分列（两张两列、三张三列、四张四列，五张起三列折行）。气泡是按内容撑开的，宽度给死值不用百分比 */
-        .cds.open { width: min(calc(100vw - 40px), 440px); height: auto; margin-left: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; touch-action: auto; }
+        .cds.open { width: min(calc(100vw - 40px), 440px); height: auto; margin-left: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; touch-action: pan-y; }   /* pan-y：两指捏交给我们收起，不让浏览器拿去缩放页面 */
         .cds.open[data-n="2"] { grid-template-columns: repeat(2, 1fr); width: min(calc(100vw - 40px), 340px); }
         .cds.open[data-n="4"] { grid-template-columns: repeat(4, 1fr); }
         .cds.open > .chat-draw { position: relative; inset: auto; width: auto; min-width: 0; aspect-ratio: 3 / 4; border-radius: 8px; transform: none !important; opacity: 1 !important; z-index: auto !important; }
+        /* 2026-10-07 她：收起「手机用两指捏、电脑用角标」→ 下面那行「收起」字拿掉；电脑上展开后角标还在、变成「收起」；手机上展开后没有角标，两指往里捏收回去 */
         .cds.open .cds-n { display: none; }
-        .cds-fold { display: none; }
-        .cds.open + .cds-fold { display: inline-block; font-size: 11px; color: var(--text-muted); margin: 0 0 4px; cursor: pointer; }
+        @media (hover: hover) and (pointer: fine) { .cds.open .cds-n { display: block; pointer-events: auto; cursor: pointer; } }
+        .cds.open.folding > .chat-draw { transition: transform .18s ease-in, opacity .18s; transform: scale(.82) !important; opacity: 0 !important; }
         .chat-draw .chat-gen-img { max-width: min(60%, 240px); border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
         .chat-draw .chat-gen-ph { max-width: min(60%, 240px); min-width: 0; min-height: 150px; box-sizing: border-box; padding: 16px 12px; }
         .chat-gen-cap { margin-top: 5px; font-size: 10px; color: var(--text-muted); line-height: 1.5; }
@@ -5033,6 +5034,12 @@ body {
             display: flex; align-items: center; justify-content: center; padding: 20px;
         }
         .gen-lightbox-mask img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+        /* 一摞里的图点开能左右切（2026-10-07 她要的）：手机左右划，电脑点两边箭头或按方向键 */
+        .gen-lightbox-mask img.glb-anim { transition: transform .2s ease-out, opacity .2s; }
+        .gen-lightbox-n { position: absolute; top: calc(14px + env(safe-area-inset-top)); left: 0; right: 0; text-align: center; color: rgba(255,255,255,.75); font-size: 12px; pointer-events: none; }
+        .gen-lightbox-arr { display: none; position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border: none; border-radius: 50%; background: rgba(255,255,255,.14); color: #fff; font-size: 22px; line-height: 44px; cursor: pointer; }
+        .gen-lightbox-arr.l { left: 16px; } .gen-lightbox-arr.r { right: 16px; }
+        @media (hover: hover) and (pointer: fine) { .gen-lightbox-arr { display: block; } .gen-lightbox-arr[hidden] { display: none; } }
         .genimg-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
         .genimg-chip {
             background: var(--input-bg); border: 1px solid var(--card-border); color: var(--text-sub);
@@ -15961,7 +15968,7 @@ body {
     }
     var sx = null, sy = 0, drag = false, swiped = false, lx = 0, lt = 0, v = 0;
     function prog(dx, D) { return Math.min(1, Math.abs(dx) / Math.max(120, D || 240)); }
-    el.addEventListener('pointerdown', function (e) { sx = lx = e.clientX; sy = e.clientY; lt = e.timeStamp; v = 0; drag = false; swiped = false; try { el.setPointerCapture(e.pointerId); } catch (_) {} });
+    el.addEventListener('pointerdown', function (e) { if (el.classList.contains('open')) { sx = null; return; } sx = lx = e.clientX; sy = e.clientY; lt = e.timeStamp; v = 0; drag = false; swiped = false; try { el.setPointerCapture(e.pointerId); } catch (_) {} });
     el.addEventListener('pointermove', function (e) {
       if (sx === null) return; var dx = e.clientX - sx, dy = e.clientY - sy;
       if (e.timeStamp > lt) v = 0.7 * (e.clientX - lx) / (e.timeStamp - lt) + 0.3 * v; lx = e.clientX; lt = e.timeStamp;
@@ -15986,14 +15993,29 @@ body {
         // 一条回复里有两张以上：都收进一摞（放在第一张的位置），点一下展开成并排，「收起」叠回去
         function chatDrawPlace(html, items) {
             if (items.length < 2) { items.forEach(function (it, k) { html = html.replace(new RegExp('(<p>)?\\s*@@DRAW' + k + '@@\\s*(</p>)?'), chatDrawHtml(it)); }); return html; }
-            var stackH = '<div class="cds" data-n="' + items.length + '">' + items.map(chatDrawHtml).join('') + '<span class="cds-n">' + items.length + ' 张</span></div><span class="cds-fold">收起</span>';
+            var stackH = '<div class="cds" data-n="' + items.length + '">' + items.map(chatDrawHtml).join('') + '<span class="cds-n">' + items.length + ' 张</span></div>';
             items.forEach(function (it, k) { html = html.replace(new RegExp('(<p>)?\\s*@@DRAW' + k + '@@\\s*(</p>)?'), k === 0 ? stackH : ''); });
             return html;
         }
         function chatDrawStacks(root) {
             root.querySelectorAll('.cds').forEach(function (el) { if (el._stk) return; el._stk = 1; var cards = el.querySelectorAll('.chat-draw');
-                chatDrawStack(el, cards.length, 0, function () { el.classList.add('open'); el.querySelectorAll('.chat-draw').forEach(function (c) { c.style.transform = ''; }); }, null);
-                var fold = el.nextElementSibling; if (fold && fold.classList.contains('cds-fold')) fold.onclick = function () { el.classList.remove('open'); el._stk = 0; var nn = el.cloneNode(true); el.parentNode.replaceChild(nn, el); chatDrawHydrate(nn.parentNode, false); chatDrawStacks(nn.parentNode); };
+                var badge = el.querySelector('.cds-n'), label = badge ? badge.textContent : '';
+                chatDrawStack(el, cards.length, 0, function () { el.classList.add('open'); el.querySelectorAll('.chat-draw').forEach(function (c) { c.style.transform = ''; }); if (badge) badge.textContent = '收起'; }, null);
+                function fold() {
+                    if (!el.classList.contains('open') || el._folding) return; el._folding = 1; el.classList.add('folding');
+                    setTimeout(function () { el.classList.remove('open', 'folding'); el._folding = 0; if (badge) badge.textContent = label; el._stk = 0;
+                        var nn = el.cloneNode(true); el.parentNode.replaceChild(nn, el); chatDrawHydrate(nn.parentNode, false); chatDrawStacks(nn.parentNode); }, 180);
+                }
+                // 电脑：展开后点角标收起
+                if (badge) badge.addEventListener('click', function (e) { if (!el.classList.contains('open')) return; e.stopPropagation(); fold(); });
+                // 手机：展开后两指往里捏收起。⚠️第二根手指可能落在一摞外面，它的 touchstart 不到这里，所以起点在 touchmove 里现量
+                var d0 = 0, dist = function (t) { return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY); };
+                el.addEventListener('touchmove', function (e) {
+                    if (e.touches.length !== 2 || !el.classList.contains('open')) { d0 = 0; return; }
+                    e.preventDefault(); if (!d0) { d0 = dist(e.touches); return; }
+                    if (dist(e.touches) < d0 * 0.72) { d0 = 0; fold(); }
+                }, { passive: false });
+                el.addEventListener('touchend', function (e) { if (e.touches.length < 2) d0 = 0; }, { passive: true });
             }); }
         // 她：「下面的文字跟图片离那么远」→ renderText 会把空行变成 1.5em 高的空白块，图前后各夹了一两个；图块自己也有外边距。把图前后的空白块去掉
         function chatDrawTidy(root) {
@@ -16002,7 +16024,8 @@ body {
                 while (isGap(b.previousElementSibling)) b.previousElementSibling.remove();
                 while (isGap(b.nextElementSibling)) b.nextElementSibling.remove(); });
         }
-        function _drawOpenBig(img, url) { img.onclick = function (e) { if (img.closest('.cds:not(.open)')) return; e.stopPropagation(); genImgLightbox(url); }; }
+        function _drawOpenBig(img, url) { img.onclick = function (e) { if (img.closest('.cds:not(.open)')) return; e.stopPropagation(); var st = img.closest('.cds');
+            genImgLightbox(url, st ? [].slice.call(st.querySelectorAll('img.chat-gen-img')).map(function (x) { return x.src; }).filter(function (u) { return u && !/^about:|^$/.test(u) && u !== location.href; }) : null); }; }
         var _drawBusy = {}, _drawTried = {};
         function chatDrawRun(wrap, prompt, auto) {
             var id = wrap.getAttribute('data-draw'), ph = wrap.querySelector('.chat-draw-ph'), img = wrap.querySelector('img');
@@ -16501,13 +16524,53 @@ body {
         }
 
         // 生图大图查看
-        function genImgLightbox(dataURL) {
+        // list：同一摞的几张图（2026-10-07 她：「点图片后可以左右切」）。没给就跟以前一样只看一张
+        function genImgLightbox(dataURL, list) {
             var mask = document.createElement('div');
             mask.className = 'gen-lightbox-mask';
             var img = document.createElement('img');
             img.src = dataURL;
             mask.appendChild(img);
-            mask.addEventListener('click', function () { mask.remove(); });
+            list = list && list.length > 1 ? list : null;
+            function close() { mask.remove(); document.removeEventListener('keydown', onKey); }
+            function onKey(e) { if (e.key === 'Escape') close(); else if (list && e.key === 'ArrowLeft') go(-1); else if (list && e.key === 'ArrowRight') go(1); }
+            document.addEventListener('keydown', onKey);
+            var swallow = false;
+            mask.addEventListener('click', function () { if (swallow) { swallow = false; return; } close(); });
+            // 别让底下页面的左右滑切页、右滑返回接到这里的手势
+            mask.addEventListener('touchstart', function (e) { e.stopPropagation(); }, { passive: true });
+            if (list) {
+                var i = Math.max(0, list.indexOf(dataURL)), n = list.length;
+                var cnt = document.createElement('div'); cnt.className = 'gen-lightbox-n'; mask.appendChild(cnt);
+                var L = document.createElement('button'), R = document.createElement('button');
+                L.className = 'gen-lightbox-arr l'; R.className = 'gen-lightbox-arr r'; L.textContent = '‹'; R.textContent = '›';
+                L.onclick = function (e) { e.stopPropagation(); go(-1); }; R.onclick = function (e) { e.stopPropagation(); go(1); };
+                mask.appendChild(L); mask.appendChild(R);
+                var paint = function () { cnt.textContent = (i + 1) + ' / ' + n; L.hidden = i === 0; R.hidden = i === n - 1; };
+                // 换图：旧的往划的方向滑出去，新的从另一边进来
+                var go = function (d) {
+                    var j = i + d;
+                    if (j < 0 || j >= n) { img.classList.add('glb-anim'); img.style.transform = ''; return; }
+                    img.classList.add('glb-anim'); img.style.transform = 'translateX(' + (-d * 60) + 'vw)'; img.style.opacity = '0';
+                    setTimeout(function () {
+                        i = j; img.classList.remove('glb-anim'); img.src = list[i]; img.style.transform = 'translateX(' + (d * 30) + 'vw)'; paint();
+                        requestAnimationFrame(function () { requestAnimationFrame(function () { img.classList.add('glb-anim'); img.style.transform = ''; img.style.opacity = ''; }); });
+                    }, 160);
+                };
+                paint();
+                var sx = 0, sy = 0, dx = 0, on = false;
+                mask.addEventListener('touchstart', function (e) { if (e.touches.length !== 1) { on = false; return; } on = true; sx = e.touches[0].clientX; sy = e.touches[0].clientY; dx = 0; img.classList.remove('glb-anim'); }, { passive: true });
+                mask.addEventListener('touchmove', function (e) {
+                    if (!on || e.touches.length !== 1) return; dx = e.touches[0].clientX - sx;
+                    if (Math.abs(dx) > Math.abs(e.touches[0].clientY - sy)) { e.preventDefault(); var edge = (dx > 0 && i === 0) || (dx < 0 && i === n - 1); img.style.transform = 'translateX(' + (edge ? dx / 3 : dx) + 'px)'; }
+                }, { passive: false });
+                mask.addEventListener('touchend', function () {
+                    if (!on) return; on = false;
+                    if (Math.abs(dx) > 10) swallow = true;   // 划过就不算点（点一下才关）
+                    if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1); else { img.classList.add('glb-anim'); img.style.transform = ''; }
+                    setTimeout(function () { swallow = false; }, 400);
+                }, { passive: true });
+            }
             document.body.appendChild(mask);
         }
         // 对话模式：生图弹窗（描述 + 风格 → 生成）
