@@ -38604,7 +38604,10 @@ body {
                                ⚠️**不能用 flex** 来做右对齐：那会把 `.reading-q-hl` 变成 flex 项、
                                  长问题时背景被撑成满行，而她明确要过「荧光笔底只包住字、不铺满整行」。 */
                             var _qInner = (_qRep === _qHtml) ? _qHtml : _qRep + '</span>';
-                            if (_qtHtml) {
+                            /* 2026-10-11 她（汐那边截图）：「时间能不能不要放在那个位置，而是放在结束的那一行的靠边」→
+                               有回答的，时间挪到**回答最后一段的末尾**（float:right，落在最后一行的右边）；没回答的照旧跟在问题后面 */
+                            var _qtEnd = !!(_qtHtml && _aLine.trim());
+                            if (_qtHtml && !_qtEnd) {
                                 _qInner = /^\s*<p[^>]*>/.test(_qInner)
                                     ? _qInner.replace(/^(\s*<p[^>]*>)/, '$1' + _qtHtml)
                                     : _qtHtml + _qInner;
@@ -38624,6 +38627,7 @@ body {
                                     // 尽量塞进最后那个段落里，别让 ⋯ 单独占一行更扎眼
                                     _aH = /<\/p>\s*$/.test(_aH) ? _aH.replace(/<\/p>\s*$/, _mk + '</p>') : _aH + _mk;
                                 }
+                                if (_qtEnd) _aH = /<\/p>\s*$/.test(_aH) ? _aH.replace(/<\/p>\s*$/, _qtHtml + '</p>') : _aH + _qtHtml;
                                 _cmtRendered += '<div style="margin-top:0.4em">' + _aH + '</div>';
                             }
                             // （时间标记已经挪到问题那一行的末尾了，见上面 _qtHtml）

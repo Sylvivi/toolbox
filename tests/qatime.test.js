@@ -112,14 +112,15 @@ function bootSocial() {
         out.开着时个数 = els.length;
         out.文字 = els.length ? els[0].textContent : '';
         out.按钮亮 = !!document.getElementById('chipQaTime').classList.contains('active');
-        // ⚠️2026-09-18 她改了位置：时间要**跟在问题那一行后面**，不再是右下角
-        out.在问题行里 = els.length ? !!els[0].closest('.reading-q') : false;
+        // ⚠️2026-09-18 她改过一回位置（跟在问题后面）；2026-10-11 又改：有回答的，时间放在**回答最后一行的右边**
+        out.在问题行里 = els.length ? !!els[0].closest('.reading-q') : true;
         out.没被荧光笔底盖住 = els.length ? !els[0].closest('.reading-q-hl') : false;
-        out.跟问题同一行 = els.length ? (function () {
-            var q = els[0].closest('.reading-q').querySelector('.reading-q-hl');
-            return Math.abs(q.getBoundingClientRect().top - els[0].getBoundingClientRect().top) < 8;
+        out.在回答最后一行 = els.length ? (function () {
+            var p = els[0].closest('p'); if (!p || p.closest('.reading-q')) return false;
+            return Math.abs(p.getBoundingClientRect().bottom - els[0].getBoundingClientRect().bottom) < 10;
         })() : false;
-        out.问题行HTML = els.length ? els[0].closest('.reading-q').innerHTML : '';
+        out.靠右 = els.length ? (function () { var p = els[0].closest('p'); return p && Math.abs(p.getBoundingClientRect().right - els[0].getBoundingClientRect().right) < 4; })() : false;
+        out.问题行HTML = els.length ? (els[0].closest('p') || els[0]).outerHTML.slice(0, 300) : '';
 
         // 格式：当天只给时分、隔天给日期、跨年补年份
         out.今天 = rdQaTimeFmt(t0);
@@ -139,9 +140,10 @@ function bootSocial() {
     eq('开关关着时一个都不显示', R.关着时个数, 0);
     eq('开关打开后显示一个', R.开着时个数, 1);
     ok('按钮跟着亮起来', R.按钮亮, '');
-    eq('时间落在问题那一行里', R.在问题行里, true);
+    eq('有回答时不在问题行里', R.在问题行里, false);
     ok('⚠️没被荧光笔底盖住（必须在 .reading-q-hl 外面）', R.没被荧光笔底盖住, R.问题行HTML);
-    ok('⚠️跟问题在同一行（没掉到下一行去）', R.跟问题同一行, R.问题行HTML);
+    ok('⚠️落在回答的最后一行（10-11 她要的）', R.在回答最后一行, R.问题行HTML);
+    ok('靠右边', R.靠右, R.问题行HTML);
     eq('再关掉就收干净', R.再关掉个数, 0);
 
     ok('当天只给时分（14:32 这种）', /^\d{2}:\d{2}$/.test(R.今天), R.今天);
