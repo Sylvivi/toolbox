@@ -35603,7 +35603,7 @@ body {
                        正常人写小注会顺手写在这个词后面，所以这里**优先**用它（第二阶段最先试）。
                        条件都卡得严，不满足就照老路走，一个像素不动：
                          ① 词落在最后一行，而且后面到段尾只剩标点（”。这种）——跟着字的话，箭头就得穿过那截字；
-                         ② 标签整条（带倾斜）放得进「词右边 → 段落右边界」这一截；
+                         ② 标签放得进「词右边 → 段落右边界」这一截——一行放不下可以折两行（同日四改，见 _gl_tryTail）；
                          ③ 倾斜后右端翘起来，不能碰到上一行的字；往下挪也不能碰到下一块的字。 */
                     var _tail = null;
                     (function () {
@@ -35611,24 +35611,39 @@ body {
                         if (!rows.length) return;
                         var last = rows[rows.length - 1];
                         var wTop = rBot.top - cr.top, wBot = rBot.bottom - cr.top, wR = rBot.right - cr.left;
-                        if (Math.min(wBot, last.bottom) - Math.max(wTop, last.top) < (wBot - wTop) * 0.5) return;   // ① 不在最后一行
-                        /* ① 词后面到段尾**只许是标点**（2026-10-17 二改：她截图「抵罪髡钳”。」——后面跟了引号＋句号，
-                           按「最多一个字宽」被挡掉，又挤回了缝里）。不按宽度判、直接看字：跟着字就走老路（箭头会穿过那截字）。 */
-                        try {
-                            var _rgT = document.createRange();
-                            _rgT.setStartAfter(_sibs[_sibs.length - 1]);
-                            _rgT.setEnd(pa, pa.childNodes.length);
-                            if (!/^[\s\p{P}\p{S}]*$/u.test(_rgT.toString())) return;
-                        } catch (eT) { return; }
-                        var right = pLeft + pr.width;
-                        var lx0 = Math.max(wR, last.right) + RD_GL_TAIL_GAP;
-                        if (lx0 + lw > right) return;                                                             // ②
-                        var floor = rows.length >= 2 ? rows[rows.length - 2].bottom : (pTop - roomUp);
-                        var ceil = _next ? (_glInkTop(_next) - cr.top) : cr.height;
-                        var ly = Math.max((last.top + last.bottom) / 2 - lh / 2, floor + _rotAdd + 1);           // ③ 右端翘起别碰上一行
-                        if (ly + lh + 1 > ceil) return;                                                           // ③ 也别压到下面
-                        _tail = { lx: lx0, ly: ly, right: right,
-                                  sx: wR + 2, sy: (wTop + wBot) / 2 };   // 箭头从词的右边水平出发（跟上下那种一样，起点贴着词、落在圈上）
+                        var onLast = Math.min(wBot, last.bottom) - Math.max(wTop, last.top) >= (wBot - wTop) * 0.5;
+                        if (onLast) {
+                            /* ① 词后面到段尾**只许是标点**（2026-10-17 二改：她截图「抵罪髡钳”。」——后面跟了引号＋句号，
+                               按「最多一个字宽」被挡掉，又挤回了缝里）。不按宽度判、直接看字：跟着字就走老路（箭头会穿过那截字）。 */
+                            try {
+                                var _rgT = document.createRange();
+                                _rgT.setStartAfter(_sibs[_sibs.length - 1]);
+                                _rgT.setEnd(pa, pa.childNodes.length);
+                                if (!/^[\s\p{P}\p{S}]*$/u.test(_rgT.toString())) return;
+                            } catch (eT) { return; }
+                        }
+                        /* 放不放得下、要不要折两行、上下会不会碰字，都留到排位时（_gl_tryTail）按真实宽度现算；这里只记几何。 */
+                        var t = {
+                            far: !onLast,
+                            x0: Math.max(onLast ? wR : 0, last.right) + RD_GL_TAIL_GAP,
+                            right: pLeft + pr.width,
+                            mid: (last.top + last.bottom) / 2,
+                            floor: rows.length >= 2 ? rows[rows.length - 2].bottom : (pTop - roomUp),   // 上一行字底：斜着翘起来别碰到
+                            ceil: _next ? (_glInkTop(_next) - cr.top) : cr.height,                       // 下一块的字顶：往下挪别压到
+                            pBot: pBot,                                                                   // 本段字底：标签伸到这下面就占了下缝
+                            pTop: pTop,                                                                   // 本段字顶：只有一行的段，斜着翘起来会伸进上缝
+                            sx: wR + 2, sy: (wTop + wBot) / 2                                              // 段尾的词：箭头从词右边横着出发
+                        };
+                        /* 词在段落中间（2026-10-17 三改，她：「引线穿过字我一点都不介意，我更介意明明有空却只进入缝隙」）：
+                           本段最后一行右边空着就写在那儿，引线从词下沿往下穿过几行指过去。
+                           只有一种情况先让给上面那条缝：词离上缝比离段尾还近（段落开头那几行）——那条缝同样是空，而且更近；
+                           上缝放不下再回段尾，**不往下面的缝跑**。 */
+                        if (t.far) {
+                            var dTail = last.top - wBot, dUp = (rTop.top - cr.top) - pTop;
+                            t.before = (_prevIdx === -1) || dTail <= dUp;   // 上面没缝就一律先试段尾
+                        }
+                        if (t.x0 + 40 > t.right) return;   // 连两行窄条都摆不下，别费事
+                        _tail = t;
                     })();
                     all.push({
                         pIdx: j, pLeft: pLeft, pW: pr.width, lab: lab, lw: lw, lh: lh,
@@ -35822,6 +35837,7 @@ body {
                     if (nx < q.pLeft) return false;                 // 顶到段落左边界，挤不动了
                     // 挤回去又压到隔壁块的字上（它当初正是为了躲字才挪到右边的）→ 放弃
                     if (q.dodge && nx < q.dodge.r && nx + q.lw > q.dodge.l) return false;
+                    if (_gl_tailHit(key, nx, q.ly, q.lw, q.lh)) return false;   // 挤过去压上行尾标签（见 tailObs）
                 }
                 for (var cj = 0; cj < list.length; cj++) list[cj].lx -= d;
                 rowRight[key] -= d;
@@ -35875,6 +35891,9 @@ body {
                         else if (_okL) x = _xL;
                     }
                 }
+                var _lyT = useUp ? it.lyUp : it.lyDown;
+                var _xT = _gl_tailDodge(key, x, _lyT, it.lw, it.lh, left, right, prev);   // 行尾标签伸下来的那截（见 tailObs）
+                if (_xT == null) { if (!force) return false; } else x = _xT;
                 if (x + it.lw > right) {
                     /* ⚠️伸出右边了**先别急着判"这一行满了"**，往左推、贴着右边界再试一次。
                        想放的位置(want)只是「离目标字 22px」这个手感偏好，本来就允许让步；
@@ -35883,6 +35902,7 @@ body {
                        want 比右边界只多出 3px，于是被判成满 → 另起一行 → 整条抬高约 28px、
                        直接压进上一段正文里。而这条缝里**只有它一条**，贴右边一放就正好放得下。 */
                     var xr = Math.max(left, right - it.lw);
+                    if (!force && _gl_tailHit(key, xr, _lyT, it.lw, it.lh)) return false;   // 拉回来会压上行尾标签 → 换缝
                     if (prev == null || xr >= prev + RD_GL_SEP) {
                         x = xr;                                // 这一行还容得下，让个位置就行
                     } else if (_glCompact(key, prev + RD_GL_SEP - xr)) {
@@ -35969,6 +35989,7 @@ body {
                     if (prev != null && xr < prev + RD_GL_SEP && !_glCompact(key, prev + RD_GL_SEP - xr)) return false;
                     x = xr;
                 }
+                if (_gl_tailHit(key, x, ly, it.lw, it.lh)) return false;   // 撞上行尾标签伸下来的那截 → 换别的缝
                 it.up = up; it.gap = g; it.lx = x; it.ly = ly;
                 it.tx = tx; it.ty = up ? it.tyUp : it.tyDown;
                 it.row = rowNum[key] || 0;
@@ -36034,21 +36055,89 @@ body {
             }
             /* 行尾那一截（见第一阶段 _tail 那段）：同一段的末行只有一截空白，按左→右排着放，放不下就走老路 */
             var tailRight = {};
+            var tailObs = {};   // 缝号 → 伸进这条缝的行尾标签（横向占了哪一截、纵向到哪）
+            /* 摆在 x 会不会撞上「行尾标签伸进这条缝的那一截」——撞上就返回那块障碍 */
+            function _gl_tailHit(key, x, ly, lw, lh) {
+                var obs = tailObs[key]; if (!obs) return null;
+                var rot = lw * RD_GL_ROT_SIN;
+                for (var oi = 0; oi < obs.length; oi++) {
+                    var o = obs[oi];
+                    if (ly - rot < o.bottom && o.top < ly + lh + rot && x < o.r + RD_GL_SEP && o.l < x + lw + RD_GL_SEP) return o;
+                }
+                return null;
+            }
+            /* 撞上了就先往右让、右边不够再往左让；两边都让不开返回 null（交给调用方换缝）。
+               ⚠️让完不许再被「贴右边界 / 整排左挤」拉回去压上（第一版就栽在这：让到右边伸出界，又被 xr 拉回原处）。 */
+            function _gl_tailDodge(key, x, ly, lw, lh, left, right, prev) {
+                var o = _gl_tailHit(key, x, ly, lw, lh);
+                if (!o) return x;
+                var xr = o.r + RD_GL_SEP;
+                if (xr + lw <= right && !_gl_tailHit(key, xr, ly, lw, lh)) return xr;
+                var xl = o.l - RD_GL_SEP - lw;
+                if (xl >= left && (prev == null || xl >= prev + RD_GL_SEP) && !_gl_tailHit(key, xl, ly, lw, lh)) return xl;
+                return null;
+            }
             function _gl_tryTail(it) {
-                var t = it.tail, k = it.pIdx, x = t.lx;
+                var t = it.tail, k = it.pIdx, lab = it.lab;
+                var x = t.x0;
                 if (tailRight[k] != null) x = Math.max(x, tailRight[k] + RD_GL_SEP);
-                if (x + it.lw > t.right) return false;
-                it.isTail = true; it.up = false; it.gap = 'tail' + k; it.row = 0;
-                it.lx = x; it.ly = t.ly; it.tx = t.sx; it.ty = t.sy;
+                var avail = t.right - x;
+                var lw = it.lw, lh = it.lh, wrapped = false;
+                if (lw > avail) {
+                    /* 一行放不下就折两行（她 2026-08-06 说过：「极少数情况下，为了不截断，可以接受两行」）。
+                       ⚠️跟第一阶段那段一样定死 width；超过两行就算放不下、原样复原走老路。 */
+                    if (avail < 40) return false;
+                    var _ws = lab.style.whiteSpace, _w = lab.style.width;
+                    lab.style.whiteSpace = 'normal'; lab.style.width = Math.floor(avail) + 'px';
+                    /* ⚠️行数按**高度**判，别按矩形的 top 去重数：拼音和汉字是两种字体，同一行的上沿差一两像素，
+                         按 top 数会把一行数成两行（实测两行的被判成三行、白白退回缝里）。 */
+                    if (lab.offsetHeight > it.lh * 2 + 2) { lab.style.whiteSpace = _ws; lab.style.width = _w; return false; }
+                    // ⚠️不再按最长那行收窄：标签是斜的，量出来的行宽是外接框、会偏，收窄了可能当场折出第三行。段尾这截只放它一条，宽着也不碍事。
+                    lw = lab.offsetWidth; lh = lab.offsetHeight; wrapped = true;
+                    var _undo = function () { lab.style.whiteSpace = _ws; lab.style.width = _w; };
+                }
+                var rot = lw * RD_GL_ROT_SIN;
+                var ly = Math.max(t.mid - lh / 2, t.floor + rot + 1);   // 跟末行居中；斜着右端翘起来别碰上一行
+                if (ly + lh + 1 > t.ceil) { if (wrapped) _undo(); return false; }   // 往下挪会压到下一块的字
+                /* 折两行（或往下挪过）的标签会伸进本段下面那条缝——那条缝里可能已经摆了别的小注。
+                   撞上就放弃行尾走老路；没撞上就把自己登记成那条缝的障碍，后面摆进来的小注会绕开（见 _gl_tailBlock）。 */
+                // 跟哪几条缝里的小注可能撞：下缝（见下）；斜着翘过本段字顶＝上缝（只有一行的段才会）
+                /* ⚠️下缝**一律**登记，不管伸没伸出去：段间距调小（2~6px）时，下一段往上摆的小注本来就会探进本段末行的空白
+                     （老规矩是绕开这里的「字」，可现在这片空白被行尾标签占了，它看不见）。自查实测不登记会叠 14 条。 */
+                var _keys = [String(it.gapDown)];
+                if (ly - rot < t.pTop && it.gapUp >= 0) _keys.push(String(it.gapUp));
+                for (var ki2 = 0; ki2 < _keys.length; ki2++) {
+                    var _q = rowItems[_keys[ki2]] || [];
+                    for (var qi = 0; qi < _q.length; qi++) {
+                        var q = _q[qi], qr = q.lw * RD_GL_ROT_SIN;
+                        if (x < q.lx + q.lw + RD_GL_SEP && q.lx < x + lw + RD_GL_SEP && ly - rot < q.ly + q.lh + qr && q.ly - qr < ly + lh + 2) {
+                            if (wrapped) _undo(); return false;
+                        }
+                    }
+                }
+                for (var ki3 = 0; ki3 < _keys.length; ki3++)
+                    (tailObs[_keys[ki3]] || (tailObs[_keys[ki3]] = [])).push({ l: x, r: x + lw, top: ly - rot, bottom: ly + lh + 2 });
+                it.lw = lw; it.lh = lh;
+                it.up = false; it.gap = 'tail' + k; it.row = 0; it.lx = x; it.ly = ly;
+                if (t.far) { it.tailFar = true; it.tx = it.txDown; it.ty = it.tyDown; }   // 段中的词：照「往下」那套画引线（从词下沿出发、落到标签上沿）
+                else { it.isTail = true; it.tx = t.sx; it.ty = t.sy; }
                 it.dodge = null; it.flat = false;
-                if (it.lab) it.lab.classList.remove('rd-gl-flat');
-                tailRight[k] = x + it.lw;
+                if (lab) lab.classList.remove('rd-gl-flat');
+                tailRight[k] = x + lw;
                 return true;
             }
             all.sort(function (x, y) { return x.want - y.want; });
+            // ⓪ 段尾的词先占行尾（它就在那片空白旁边，最该写在那儿）
+            for (var a1 = 0; a1 < all.length; a1++) if (all[a1].tail && !all[a1].tail.far) all[a1]._tailDone = _gl_tryTail(all[a1]);
             for (var a2 = 0; a2 < all.length; a2++) {
                 var it0 = all[a2];
-                if (it0.tail && _gl_tryTail(it0)) continue;              // ⓪ 行尾空着就写在词后面
+                if (it0._tailDone) continue;
+                if (it0.tail && it0.tail.far) {
+                    // 段中的词：离段尾近（或者上面没缝）→ 先写段尾空白；离上缝更近 → 先上缝，放不下再回段尾
+                    if (it0.tail.before && _gl_tryTail(it0)) continue;
+                    if (!it0.tail.before && _gl_try(it0, true, false, false)) continue;
+                    if (!it0.tail.before && _gl_tryTail(it0)) continue;
+                }
                 /* 第一轮：**带着倾斜**、在两行以内找（见 _gl_try 上那段⚠️⚠️） */
                 if (_gl_try(it0, it0.prefUp, false, false)) continue;    // ① 就近那条缝
                 if (_gl_try(it0, !it0.prefUp, false, false)) continue;   // ② 挪到另一条缝
@@ -36146,7 +36235,7 @@ body {
                    有没有被迫另起一行。这块反复修了七八轮，每次排查都要从头猜"它到底走了哪条分支"；
                    有这三个属性，一条 querySelector 就能把可疑的那条挑出来（tests/glossaudit.test.js 就靠它分类）。 */
                 it2.lab.setAttribute('data-gl-gap', String(it2.gap));
-                it2.lab.setAttribute('data-gl-dir', it2.isTail ? 'tail' : (it2.up ? 'up' : 'down'));
+                it2.lab.setAttribute('data-gl-dir', (it2.isTail || it2.tailFar) ? 'tail' : (it2.up ? 'up' : 'down'));
                 it2.lab.setAttribute('data-gl-row', String(it2.row || 0));
 
                 /* ⚠️引线起点取「标签边上、距目标字 RD_GL_DX 的那个点」，不是标签正中。

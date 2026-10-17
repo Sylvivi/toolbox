@@ -832,6 +832,47 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             // ④ 词后面跟着好几个标点（她截图「抵罪髡钳”。」）→ 照样走行尾
             const d4 = mk2('<p data-p="1">宗室、外戚就搜集了宁成的种种罪状，“毁成之短，抵罪髡钳”。</p>', '髡钳', 'kūn qián·剃发戴铁颈圈受刑', 'z4');
             out.Z_后面全是标点也走行尾 = d4.lab.getAttribute('data-gl-dir') === 'tail';
+            // ⑤ 词在段落中间、段尾那行后面空着（她截图「必陵其长吏」→「这件事情很不得了。」后面）→ 写到段尾空白
+            const LONG = '成也是景帝时代的人，他的个性在司马迁的笔下用寥寥几笔带出：“好气，为人小吏，必陵其长吏；为人上，操下如束湿薪。”他霸道且性格急躁，之所以能崛起，是因为他承袭了郅都的特点。武帝即位，宁成被重用，升为内史。这件事情很不得了。';
+            const e5 = mk2('<p data-p="0">接下来，酷吏有了各种变形。</p><p data-p="1">' + LONG + '</p><p data-p="2">那个时候，汉代的政治体系会将外朝和内朝分得非常清楚。</p>', '承袭', 'chéng xí·接着沿用', 'z5');   // 段落靠后的词：离段尾比离上缝近
+            const l5 = e5.lab.getBoundingClientRect(), m5 = e5.mk.getBoundingClientRect();
+            const rg5 = document.createRange(); rg5.selectNodeContents(e5.p);
+            const rows5 = [...rg5.getClientRects()].filter(r => r.width > 0 && r.height > 1);
+            const last5 = rows5.reduce((a, r) => r.bottom > a.bottom ? r : a, rows5[0]);
+            const lastR5 = Math.max(...rows5.filter(r => Math.abs(r.top - last5.top) < 3).map(r => r.right));
+            out.Z_段中走段尾 = e5.lab.getAttribute('data-gl-dir') === 'tail' && l5.left > lastR5 && (l5.top + l5.height / 2) > last5.top - 4;
+            const p5 = e5.box.querySelector('.rd-gl-svg path[data-glid="z5"]');
+            const sv5 = p5.ownerSVGElement.getBoundingClientRect();
+            const mm5 = p5.getAttribute('d').match(/^M([-\d.]+) ([-\d.]+)/);
+            out.Z_段中箭头从词出发 = Math.abs(sv5.left + (+mm5[1]) - (m5.left + m5.width / 2)) <= 3 && sv5.top + (+mm5[2]) >= m5.bottom - 1;
+            out.Z_段中明细 = ['标签', Math.round(l5.left), Math.round(l5.top), '末行', Math.round(lastR5), Math.round(last5.top), 'dir', e5.lab.getAttribute('data-gl-dir')].join(' ');
+            // ⑦ 她截图那种：词离上缝更近，可上缝已经被别的小注占满 → 去段尾空白，不再往下面的缝跑
+            {
+                document.querySelectorAll('.__glt').forEach(n => n.remove());
+                const box = document.createElement('div');
+                box.className = 'reading-merged'; box.style.cssText = 'font-size:14px;line-height:1.6;width:358px';
+                box.innerHTML = '<p data-p="0">接下来，酷吏有了各种变形。</p><p data-p="1">' + LONG + '</p><p data-p="2">那个时候，汉代的政治体系会将外朝和内朝分得非常清楚。</p>';
+                const bub = document.createElement('div'); bub.className = 'chat-bubble'; bub.appendChild(box);
+                const msg = document.createElement('div'); msg.className = 'chat-msg ai __glt'; msg.setAttribute('data-idx', '0'); msg.appendChild(bub);
+                document.body.appendChild(msg);
+                box.querySelectorAll('p').forEach((p, i) => { if (i) p.style.marginTop = '28px'; });
+                const p = box.querySelector('p[data-p="1"]');
+                [['好气', 'hào qì·好斗任性，脾气大', 'z7a'], ['必陵其长吏', 'bì líng qí zhǎng lì·一定欺凌他的上级官吏', 'z7c']].forEach(([w, note, id]) => {
+                    const at = p.textContent.indexOf(w);
+                    rdHlWrapRange(p, at, at + w.length, 'sky', id, false);
+                    p.querySelector('mark[data-hlid="' + id + '"]').setAttribute('data-gl', note);
+                });
+                rdGlLayout(bub);
+                const dirs = {}; box.querySelectorAll('.rd-gl-label').forEach(l => dirs[l.getAttribute('data-glid')] = l.getAttribute('data-gl-dir'));
+                out.Z_上缝满了去段尾 = dirs.z7a === 'up' && dirs.z7c === 'tail';
+                // 段尾那截比这条小注短 → 折成两行写进去（不许超过两行、不许出界）
+                const l7 = box.querySelector('.rd-gl-label[data-glid="z7c"]');
+                out.Z_折两行没出界 = !!l7 && l7.offsetHeight <= 2 * 14 * 1.6 && l7.getBoundingClientRect().right <= p.getBoundingClientRect().right + 2;   // 按段落右边界比（排位就是按段落算的），+2 是斜着的外接框
+                out.Z_上缝满了明细 = JSON.stringify(dirs);
+            }
+            // ⑥ 词在段落第一行、上面紧挨着缝 → 还是放上面那条缝（段尾离它太远）
+            const f6 = mk2('<p data-p="0">接下来，酷吏有了各种变形。</p><p data-p="1">' + LONG.replace('成也是景帝时代的人', '成也是景帝时代的小吏') + '</p>', '小吏', 'xiǎo lì·小官', 'z6');
+            out.Z_段首走上缝 = f6.lab.getAttribute('data-gl-dir') === 'up';
             // ③ 末行太满、放不下 → 照老路走
             const c = mk2('<p data-p="1">他把那块玉翻来覆去看了半天，也没瞧出个所以然，只好又揣回怀里，嘴里念叨着这帮办。</p>', '帮办', '清代协助办理事务的副职官员，掌管钱粮', 'z3');
             const cr3 = c.lab.getBoundingClientRect(), pr3 = c.p.getBoundingClientRect();
@@ -944,6 +985,11 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('Z8 词后面还有一截字就不走行尾（箭头不许穿字）', R.Z_词在中间不走行尾);
     ok('Z9 末行放不下就照老路走、不出界', R.Z_放不下走老路);
     ok('Z10 词后面跟着”。这种好几个标点，照样写在后面', R.Z_后面全是标点也走行尾);
+    ok('Z11 词在段落中间、段尾后面空着 → 写到段尾那片空白', R.Z_段中走段尾, R.Z_段中明细);
+    ok('Z12 段中走段尾时，引线从词的下沿出发', R.Z_段中箭头从词出发);
+    ok('Z13 词在段落第一行、紧挨着上缝 → 还是放上缝', R.Z_段首走上缝);
+    ok('Z14 上缝被占满了 → 去段尾空白，不往下面的缝跑', R.Z_上缝满了去段尾, R.Z_上缝满了明细);
+    ok('Z15 段尾空白不够一行就折两行写进去、不出界', R.Z_折两行没出界);
     ok('T1 日间：引线跟字同色', R.T_日间线跟字同色);
     ok('T2 前提：不重排的话线不会自己变色', R.T_前提_不重排线就不会变);
     ok('T3 重排后引线跟上了新主题的字色', R.T_重排后线跟上了);
