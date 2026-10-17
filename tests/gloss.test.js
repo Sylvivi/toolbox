@@ -828,7 +828,28 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.Z_明细 = ['标签', Math.round(lr.left), Math.round(lr.top), Math.round(lr.bottom), '词', Math.round(mr.right), Math.round(mr.top), Math.round(mr.bottom), '上行底', Math.round(prevRowBot), '块顶', Math.round(bq.top)].join(' ');
             // ② 词在最后一行中间（后面还跟着一截字）→ 不走行尾，箭头不许穿字
             const b = mk2('<p data-p="1">其间也曾出过一些当官的和经商的，捐过前清的粮台、槽运的帮办，后来都败光了。</p>', '帮办', '清代协助办理事务的副职官员', 'z2');
-            out.Z_词在中间不走行尾 = b.lab.getAttribute('data-gl-dir') !== 'tail';
+            /* 2026-10-17 五改：末行的词后面还跟着字，也写进段尾空白，但引线从词**下沿**出发、在那截字下面兜过去（under）。
+               验：走了行尾；曲线经过那截字的横向范围时，一直在字底下面，不横穿字。 */
+            out.Z_词在中间不走行尾 = (function () {
+                if (!RD_GL_TAIL_UNDER) return b.lab.getAttribute('data-gl-dir') !== 'tail';   // 画法还没拍板、开关关着：照老规矩不走行尾
+                if (b.lab.getAttribute('data-gl-dir') !== 'tail') return false;
+                const cv = b.box.querySelector('.rd-gl-svg path[data-glid="z2"]:not(.rd-gl-arrow)');
+                const mm = cv.getAttribute('d').match(/^M([-\d.]+) ([-\d.]+) Q([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+)/);
+                const sv = cv.ownerSVGElement.getBoundingClientRect();
+                const P = mm.slice(1).map(Number);
+                const mr = b.mk.getBoundingClientRect();
+                const rg = document.createRange(); rg.selectNodeContents(b.p);
+                const rs = [...rg.getClientRects()].filter(r => r.width > 0 && r.height > 1);
+                const lastTop = Math.max(...rs.map(r => r.top));
+                const lineRs = rs.filter(r => Math.abs(r.top - lastTop) < 4);
+                const lineR = Math.max(...lineRs.map(r => r.right)), lineB = Math.max(...lineRs.map(r => r.bottom));
+                for (let k = 0; k <= 40; k++) {
+                    const u = k / 40, x = (1-u)*(1-u)*P[0] + 2*(1-u)*u*P[2] + u*u*P[4], y = (1-u)*(1-u)*P[1] + 2*(1-u)*u*P[3] + u*u*P[5];
+                    const X = sv.left + x, Y = sv.top + y;
+                    if (X > mr.right + 2 && X < lineR - 2 && Y < lineB - 2) return false;   // 在那截字的范围里却跑到字底上面＝穿字
+                }
+                return true;
+            })();
             // ④ 词后面跟着好几个标点（她截图「抵罪髡钳”。」）→ 照样走行尾
             const d4 = mk2('<p data-p="1">宗室、外戚就搜集了宁成的种种罪状，“毁成之短，抵罪髡钳”。</p>', '髡钳', 'kūn qián·剃发戴铁颈圈受刑', 'z4');
             out.Z_后面全是标点也走行尾 = d4.lab.getAttribute('data-gl-dir') === 'tail';
@@ -998,7 +1019,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('Z5 行尾：没压到下面的背景块', R.Z_没碰下面的块, R.Z_明细);
     ok('Z6 行尾：曲线从那个词出发', R.Z_箭头从词出发);
     ok('Z7 行尾：箭头横着指向标签', R.Z_箭头指向标签);
-    ok('Z8 词后面还有一截字就不走行尾（箭头不许穿字）', R.Z_词在中间不走行尾);
+    ok('Z8 末行的词后面还有字：开关关着不走行尾；开着时引线从那截字下面兜过去、不横穿', R.Z_词在中间不走行尾);
     ok('Z9 末行放不下就照老路走、不出界', R.Z_放不下走老路);
     ok('Z10 词后面跟着”。这种好几个标点，照样写在后面', R.Z_后面全是标点也走行尾);
     ok('Z11 词在段落中间、段尾后面空着 → 写到段尾那片空白', R.Z_段中走段尾, R.Z_段中明细);
