@@ -36010,6 +36010,46 @@ body {
                 (rowItems[key] || (rowItems[key] = [])).push(it);
                 return true;
             }
+            /* ===== 就近的缝里折两行（2026-10-17 加）=====
+               她截图「操下如束湿薪」：自己上下两条缝里一行放不下（上缝左半边被「滑贼任威」占了，下缝被行尾那条伸下来挡了），
+               就越过上面一整段、跑到再上一条缝里去了——「在我看来就是舍近求远」。
+               其实上缝右半边空着一百七十多 px，缝也有三十多 px 高，折成两行正好放得下、一个字都不碰。
+               所以在「往外找远缝」之前插一步：就近两条缝里**折两行**再试一次。
+               ⚠️只认「两行的外框（含倾斜多出来那截）整条落在缝里」的——跟远缝同一把尺（_gl_tryBand），不会制造新的压字。
+               ⚠️已经是两行的（本来就长到折过）不再折；折完超过两行的也不要。塞不进就把宽度、尺寸原样还回去。 */
+            function _gl_tryWrapNear(it, useUp) {
+                var g = useUp ? it.gapUp : it.gapDown;
+                if (g < 0 || !it.lab || it._wrapped) return false;
+                var band = _glBandList()[g];
+                if (!band) return false;
+                var lab = it.lab, _ws = lab.style.whiteSpace, _w = lab.style.width, lw0 = it.lw, lh0 = it.lh;
+                if (_ws === 'normal') return false;            // 第一步已经因为太长折过了，别再折
+                lab.style.whiteSpace = 'normal';
+                /* 从「对半」起步、一点点放宽，直到正好两行。⚠️不能只试对半：拼音那段常常比一半还长
+                   （「gēng xīn rén guǐ zǐ chǒu·」这种），对半一折就成了三行，整步白试（复现她那张截图时踩的）。 */
+                for (var _w2 = Math.ceil(lw0 / 2 + 14); _w2 < lw0; _w2 += 12) {
+                    lab.style.width = _w2 + 'px';
+                    if (lab.offsetHeight <= lh0 * 2 + 2) break;
+                }
+                // 跟第一步同一个做法：折完按最长那一行把盒子收窄，排位才有横向余地
+                var _rg2 = document.createRange(); _rg2.selectNodeContents(lab);
+                var _ln2 = _rg2.getClientRects(), _wd2 = 0;
+                for (var q2 = 0; q2 < _ln2.length; q2++) _wd2 = Math.max(_wd2, _ln2[q2].width);
+                /* ⚠️收窄后要回头量一次高度：getClientRects 把一行里的拼音、「·」、中文拆成几块量，
+                   「最长的那块」比整行窄，收过头会又挤出第三行（她那条「操下如束湿薪」就是这么白试的）。多出行就退回去。 */
+                var _wBefore = lab.style.width, _hBefore = lab.offsetHeight;
+                if (_wd2 > 1) lab.style.width = Math.ceil(_wd2) + 'px';
+                if (lab.offsetHeight > _hBefore) lab.style.width = _wBefore;
+                var lw2 = lab.offsetWidth, lh2 = lab.offsetHeight;
+                var undo = function () { lab.style.whiteSpace = _ws; lab.style.width = _w; it.lw = lw0; it.lh = lh0; return false; };
+                if (lh2 > lh0 * 2 + 2) return undo();          // 折成了三行：太窄，不要
+                if ((band.bottom - band.top - (lh2 + lw2 * RD_GL_ROT_SIN)) / 2 < 0.5) return undo();   // 缝不够高
+                it.lw = lw2; it.lh = lh2;
+                if (!_gl_tryBand(it, g, false)) return undo();
+                it._wrapped = true;
+                it.flat = false; lab.classList.remove('rd-gl-flat');
+                return true;
+            }
             /* 「最近那条缝」离目标字多远——第一轮判「为保持倾斜多跑这一截值不值」的基准。
                ⚠️取的是它**自己上下那两条缝**：第二轮兜底就落在其中一条，所以它俩才是真正的对照组。 */
             function _glNearDist(it) {
@@ -36167,6 +36207,8 @@ body {
                 /* 第一轮：**带着倾斜**、在两行以内找（见 _gl_try 上那段⚠️⚠️） */
                 if (_gl_try(it0, it0.prefUp, false, false)) continue;    // ① 就近那条缝
                 if (_gl_try(it0, !it0.prefUp, false, false)) continue;   // ② 挪到另一条缝
+                if (_gl_tryWrapNear(it0, it0.prefUp)) continue;          // ②a 就近的缝里折两行（见 _gl_tryWrapNear）
+                if (_gl_tryWrapNear(it0, !it0.prefUp)) continue;
                 if (_gl_tryFar(it0, false)) continue;                    // ②b 往外一两条整条塞得下的缝
                 /* 第二轮：两行以内都放不下斜的了，才允许放平（放平是特例，别提前用掉） */
                 if (_gl_try(it0, it0.prefUp, false, true)) continue;
