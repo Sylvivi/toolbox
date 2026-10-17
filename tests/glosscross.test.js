@@ -47,7 +47,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         };
         const L = 25, H = 23;
         const P0 = put(H, []);
-        const P1 = put(H + L * 4 + 10, [
+        /* ⚠️2026-10-17 末行补满到 25 字：小注有了「行尾」位置后，末行留着空白时两个词会改写进段尾空白、
+           不再同挤一条缝，这条测的「同一条缝里的左右顺序」前提就没了。填满末行＝段尾没空白，照旧进缝。 */
+        const P1 = put(H + L * 4 + 25, [
             { i: H + L * 3 + 24, word: '兹邑' },     // 第 4 行末字 + 第 5 行首字 → 跨行
             { i: H + L * 4 + 4, word: '颠越' },      // 第 5 行靠左
         ]);

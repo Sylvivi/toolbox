@@ -94,12 +94,19 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         }
 
         // ── B：引线约 23px、不塌也不长 ──
+        /* ⚠️2026-10-17 起 RD_GL_TAIL_UNDER 打开（她看对比图：「二可以接受」）：末行的词后面跟着字，
+           也改写进段尾空白、引线从字下面兜过去。B/Y/N/R 这几组测的是**上下两条缝**本身的几何，
+           夹具里的词恰好都在末行 → 会被行尾截走、前提全没了。所以这几组临时把开关关掉、测完还原；
+           行尾那条路单独由 Z 组钉。 */
+        const _tailUnder = RD_GL_TAIL_UNDER;
         {
+            RD_GL_TAIL_UNDER = false;
             const b = build([{ para: 1, word: '雾气氤氲', note: 'yīn yūn·雾气弥漫' }]);
             const L = leaderOf(b.box, 'h1雾气氤氲');
             out.B_引线长 = L && L.len;
             out.B_不塌 = !!L && L.len >= 18;      // 第一版 13px 会红
             out.B_不过长 = !!L && L.len <= 40;    // 第二版 44~112px 会红
+            RD_GL_TAIL_UNDER = _tailUnder;
         }
 
         // ── C：跨段共用同一条缝时不许重叠 ──
@@ -197,6 +204,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
            ⚠️反过来写回去（起点＝标签）不会报错、也不会有任何一条别的测试变红，
              只是箭头默默指回那个字——所以这一组必须直接量箭尖落在哪边。 */
         {
+            RD_GL_TAIL_UNDER = false;     // 见 B 组注释
             const b = build([{ para: 1, word: '雾气氤氲', note: 'yīn yūn·雾气弥漫', color: 'sky' }]);
             const curve = b.box.querySelector('.rd-gl-svg path:not(.rd-gl-arrow)');
             const arrow = b.box.querySelector('.rd-gl-svg path.rd-gl-arrow');
@@ -228,6 +236,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.Y_箭尖没戳进标签 = up ? (tip.y >= edge - 0.5) : (tip.y <= edge + 0.5);
             out.Y_余量 = Math.round((up ? tip.y - edge : edge - tip.y) * 10) / 10;
             out.Y_箭尖离标签够近 = Math.min(Math.abs(tip.y - lab.top), Math.abs(tip.y - lab.bottom)) <= 8;
+            RD_GL_TAIL_UNDER = _tailUnder;
             document.querySelectorAll('.__glt').forEach(n => n.remove());
         }
 
@@ -396,6 +405,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
            所以改成**在上下两条缝之间分流**，排版一个像素都不动。 */
         {
             document.querySelectorAll('.__glt').forEach(n => n.remove());   // ⚠️别清 __glm，那是 M 组的
+            RD_GL_TAIL_UNDER = false;     // 见 B 组注释
             document.documentElement.style.setProperty('--reading-pspace', '28px');
             const box = document.createElement('div');
             box.className = 'reading-merged'; box.style.cssText = 'font-size:14px;line-height:1.6;width:358px';
@@ -435,6 +445,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.N_分到了上下两边 = rs.some(r => midOf(r) < pr.top) && rs.some(r => midOf(r) > pr.bottom);
             out.N_没动段落间距 = getComputedStyle(p2).marginTop === before;
             out.N_没设行内间距变量 = !p2.style.getPropertyValue('--reading-pspace');
+            RD_GL_TAIL_UNDER = _tailUnder;
             document.querySelectorAll('.__glt').forEach(n => n.remove());
         }
 
@@ -584,6 +595,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
                  CSS 里那条 `.reading-merged p[data-p]{margin-top:var(--reading-pspace)!important}`
                  会把行内样式盖掉（我第一版就是这么改的，白改一轮）。 */
             const _psSave = document.documentElement.style.getPropertyValue('--reading-pspace');
+            RD_GL_TAIL_UNDER = false;     // 见 B 组注释
             document.documentElement.style.setProperty('--reading-pspace', '6px');
             const p2 = box.querySelector('p[data-p="2"]');
             const at = p2.textContent.indexOf('杯葛');
@@ -661,6 +673,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.R_内缩实测 = Math.round(inset * 10) / 10;
             out.R_大内缩比小的大 = RD_GL_INSET_OVER > RD_GL_INSET;
             out.R_大内缩没大过头 = RD_GL_INSET_OVER <= 14;              // 再大就撞块里的字了
+            RD_GL_TAIL_UNDER = _tailUnder;
             // ⚠️用完把段间距还回去，别把这一组的窄缝设置漏给后面的组
             if (_psSave) document.documentElement.style.setProperty('--reading-pspace', _psSave);
             else document.documentElement.style.removeProperty('--reading-pspace');

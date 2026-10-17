@@ -34663,7 +34663,7 @@ body {
              调大会重新出现舍近求远，调小则放平变多。 */
         var RD_GL_TILT_EXTRA = 60;
         var RD_GL_TIP   = 3;    // 引线端点离标签/目标字的留缝
-        var RD_GL_TAIL_UNDER = false;   // 末行词后面跟着字时也写进段尾、引线从字下面兜过去——画法待她看图拍板（2026-10-17），先关着
+        var RD_GL_TAIL_UNDER = true;    // 末行词后面跟着字时也写进段尾、引线从字下面兜过去（2026-10-17 她看对比图：「二可以接受」）
         var RD_GL_TAIL_GAP = 26;   // 行尾小注：词的右边到标签左边留多宽（够画一小截箭头、让开词上的圈）
 
         /* ===================== 小注那个词的手绘记号 =====================
@@ -35283,7 +35283,8 @@ body {
         }
 
         // 给一条消息（bubble）里的所有小注重新排版
-        function rdGlLayout(bubble) {
+        /* _noUnder：{hlid: true}，这几条不许走「兜弧」（只给下面那条「兜弧会跟别的线交叉就让路」自己递归用，外面别传） */
+        function rdGlLayout(bubble, _noUnder) {
             if (!bubble) return;
             rdGlClear(bubble);
             // ⚠️记号的清理要在下面那几条 return 之前：小注被删光时这里直接退出，
@@ -35623,7 +35624,10 @@ body {
                                 _rgT.setEnd(pa, pa.childNodes.length);
                                 /* 后面还跟着字（同日五改，自查 70 条「有空不用」）：照样写进段尾空白，引线改从词的**下沿**出发、
                                    在那截字的下面兜过去再上来指到标签（under），不横着穿过字。 */
-                                if (!/^[\s\p{P}\p{S}]*$/u.test(_rgT.toString())) { if (!RD_GL_TAIL_UNDER) return; under = true; }
+                                if (!/^[\s\p{P}\p{S}]*$/u.test(_rgT.toString())) {
+                                    if (!RD_GL_TAIL_UNDER || (_noUnder && _noUnder[m.getAttribute('data-hlid') || ''])) return;
+                                    under = true;
+                                }
                             } catch (eT) { return; }
                         }
                         /* 放不放得下、要不要折两行、上下会不会碰字，都留到排位时（_gl_tryTail）按真实宽度现算；这里只记几何。 */
@@ -36215,6 +36219,83 @@ body {
                 it3.rowOff = (it3.row || 0) * (it3.lh + it3.lw * RD_GL_ROT_SIN + 3);
             }
 
+            /* 每条引线的几何（起点＝字、终点＝标签边上、弓多大）。画线和下面「兜弧让路」共用这一份，
+               ⚠️别在画线那儿另算一套——两边一旦对不上，查交叉查的就不是画出来的那条线。 */
+            function _glSegGeom(it2, n) {
+                var rowOff = it2.rowOff || 0;
+                var ly = it2.up ? (it2.ly - rowOff) : (it2.ly + rowOff);
+                if (it2.isTail) {
+                    /* 行尾：从词的右边水平画到标签左端。标签绕「左端中点」转，那一点不动，箭尖正好落在那儿 */
+                    /* under：起点在词下沿，弓往下兜（rdGlPath 的弓是起点→终点的左手法向，从左往右画时正值＝往下），
+                       曲线从那截字的下面过去，到了段尾空白再往上落到标签左端 */
+                    return { ly: ly, sx: it2.tx, sy: it2.ty, ex: it2.lx - RD_GL_TIP, ey: ly + it2.lh / 2,
+                             bow: it2.tailUnder ? Math.min(22, 8 + (it2.lx - it2.tx) * 0.06) : (n % 2 === 0 ? 2 : -2) };
+                }
+                /* ⚠️引线起点取「标签边上、距目标字 RD_GL_DX 的那个点」，不是标签正中。
+                   标签有七八十像素宽，这个点几乎总落在标签范围内，所以**防撞怎么推、横向偏移都保得住**。
+                   取标签正中试过：防撞把标签排紧后中心正好落在目标字上方，引线塌到 6px。 */
+                var labMid = it2.lx + it2.lw / 2;
+                var sd = (labMid >= it2.tx) ? 1 : -1;
+                var sx = Math.max(it2.lx, Math.min(it2.lx + it2.lw, it2.tx + sd * RD_GL_DX));
+                /* ⚠️标签是斜的（rotate -2.5deg），所以「离标签多远」要按**引线出发的那个 x**
+                   现算，不能一律 1px：右端翘起、左端压低。箭头掉头指向标签之后（见下面），
+                   1px 的余量会让箭尖直接扎进花体字里——只在会更近的那一侧补，另一侧本来就更远。 */
+                var _rotGap = (it2.up ? Math.max(0, labMid - sx) : Math.max(0, sx - labMid)) * RD_GL_ROT_SIN;
+                var sy = it2.up ? (ly + it2.lh + 1 + _rotGap) : (ly - 1 - _rotGap);
+                var bow = Math.min(9, 2 + Math.abs(it2.ty - sy) * 0.05) * (n % 2 === 0 ? 1 : -1);
+                /* ⚠️⚠️**箭头指的是小注、不是那个词**（2026-08-11 用户要的，她的原话：
+                     「我希望箭头是指着小注，而不是小注指向被解释的词」）。
+                   实现就是把两头对调：曲线从**字**出发、画到**标签**边上，
+                   `rdGlPath` 的箭头永远长在终点，于是自动掉头。
+                   ⚠️`bow` 要跟着取负：弓形是按「起点→终点」的左右手方向算的，
+                     两头一换、同一个正负号会让曲线朝反方向鼓出去（弯法看着像换了个人写的）。
+                   ⚠️凡是解析这条 `d` 的地方，「指对没指对」现在要看 `M` 那一头（起点＝那个字），
+                     不再是 `Q` 后面那一头（终点＝标签）。tests/gloss.test.js 里好几处按这个改过。 */
+                return { ly: ly, sx: it2.tx, sy: it2.ty, ex: sx, ey: sy, bow: -bow };
+            }
+            var _geo = all.map(_glSegGeom);
+
+            /* 兜弧让路（2026-10-17，她拍板开兜弧那天自查出来的）：
+               兜弧（tailUnder）是最后才轮到的画法——末行词后面跟着字，硬把小注写进段尾空白，引线从字底下兜过去。
+               它在预排里先占了段尾空白，同段上面那个词就只能往下缝里绕，两条线叉在一起（400 页自查多出 6 条）。
+               其实那片空白给上面那个词才顺（它往右下一指就到），兜弧这条退回缝里也挺自然。
+               所以：兜弧的线只要跟任何一条别的线交叉，就把这条兜弧作废、整条消息重排一次（只在出事时才多排一遍）。
+               ⚠️递归一定会停：每次至少多作废一条兜弧，_noUnder 只增不减。 */
+            if (RD_GL_TAIL_UNDER) {
+                var _qPts = function (g) {
+                    var mx = (g.sx + g.ex) / 2, my = (g.sy + g.ey) / 2, dx = g.ex - g.sx, dy = g.ey - g.sy;
+                    var len = Math.sqrt(dx * dx + dy * dy) || 1;
+                    var cx = mx + (-dy / len) * g.bow, cy = my + (dx / len) * g.bow, pts = [];
+                    for (var q = 0; q <= 12; q++) {
+                        var t = q / 12, u = 1 - t;
+                        pts.push([u * u * g.sx + 2 * u * t * cx + t * t * g.ex, u * u * g.sy + 2 * u * t * cy + t * t * g.ey]);
+                    }
+                    return pts;
+                };
+                var _ori = function (a, b, c) { return Math.sign((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])); };
+                var _polyCross = function (P, Q) {
+                    for (var i = 1; i < P.length; i++) for (var j = 1; j < Q.length; j++) {
+                        var a = P[i - 1], b = P[i], c = Q[j - 1], d = Q[j];
+                        var o1 = _ori(a, b, c), o2 = _ori(a, b, d), o3 = _ori(c, d, a), o4 = _ori(c, d, b);
+                        if (o1 * o2 < 0 && o3 * o4 < 0) return true;
+                    }
+                    return false;
+                };
+                var _bad = null, _pts = _geo.map(_qPts);
+                for (var u1 = 0; u1 < all.length; u1++) {
+                    if (!all[u1].tailUnder) continue;
+                    for (var u2 = 0; u2 < all.length; u2++) {
+                        if (u2 === u1 || !_polyCross(_pts[u1], _pts[u2])) continue;
+                        (_bad || (_bad = {}))[all[u1].lab.getAttribute('data-glid') || ''] = true;
+                        break;
+                    }
+                }
+                if (_bad) {
+                    for (var _k in (_noUnder || {})) _bad[_k] = true;
+                    return rdGlLayout(bubble, _bad);
+                }
+            }
+
             /* 3a) 先画手绘记号（Rough.js）。**单独一层 SVG，不能跟引线共用**：
                  引线那层有 `.rd-gl-svg > path` 的 CSS（虚线、1.4 宽、圆头），
                  记号的线要是落进去，会被一起套成虚线。分两层还顺带定了叠放次序——
@@ -36249,8 +36330,8 @@ body {
                 var it2 = all[n];
                 /* 多行时按行号错开：往上就往上叠、往下就往下叠，第 0 行永远贴着正文。
                    引线始终从标签朝正文那条边出发，所以行号只影响 y、别的都不用改。 */
-                var rowOff = it2.rowOff || 0;
-                it2.ly = it2.up ? (it2.ly - rowOff) : (it2.ly + rowOff);
+                var g2 = _geo[n];
+                it2.ly = g2.ly;
                 it2.lab.style.left = it2.lx.toFixed(1) + 'px';
                 it2.lab.style.top = it2.ly.toFixed(1) + 'px';
                 /* 排版结论就地留痕（2026-08-11 加，纯诊断用、不影响显示）：落在哪条缝、朝上还是朝下、
@@ -36260,37 +36341,8 @@ body {
                 it2.lab.setAttribute('data-gl-dir', (it2.isTail || it2.tailFar) ? 'tail' : (it2.up ? 'up' : 'down'));
                 it2.lab.setAttribute('data-gl-row', String(it2.row || 0));
 
-                /* ⚠️引线起点取「标签边上、距目标字 RD_GL_DX 的那个点」，不是标签正中。
-                   标签有七八十像素宽，这个点几乎总落在标签范围内，所以**防撞怎么推、横向偏移都保得住**。
-                   取标签正中试过：防撞把标签排紧后中心正好落在目标字上方，引线塌到 6px。 */
-                var seg;
-                if (it2.isTail) {
-                    /* 行尾：从词的右边水平画到标签左端。标签绕「左端中点」转，那一点不动，箭尖正好落在那儿 */
-                    /* under：起点在词下沿，弓往下兜（rdGlPath 的弓是起点→终点的左手法向，从左往右画时正值＝往下），
-                       曲线从那截字的下面过去，到了段尾空白再往上落到标签左端 */
-                    seg = rdGlPath(it2.tx, it2.ty + RD_GL_PAD, it2.lx - RD_GL_TIP, it2.ly + it2.lh / 2 + RD_GL_PAD,
-                                   it2.tailUnder ? Math.min(22, 8 + (it2.lx - it2.tx) * 0.06) : (n % 2 === 0 ? 2 : -2));
-                } else {
-                var labMid = it2.lx + it2.lw / 2;
-                var sd = (labMid >= it2.tx) ? 1 : -1;
-                var sx = Math.max(it2.lx, Math.min(it2.lx + it2.lw, it2.tx + sd * RD_GL_DX));
-                /* ⚠️标签是斜的（rotate -2.5deg），所以「离标签多远」要按**引线出发的那个 x**
-                   现算，不能一律 1px：右端翘起、左端压低。箭头掉头指向标签之后（见下面），
-                   1px 的余量会让箭尖直接扎进花体字里——只在会更近的那一侧补，另一侧本来就更远。 */
-                var _rotGap = (it2.up ? Math.max(0, labMid - sx) : Math.max(0, sx - labMid)) * RD_GL_ROT_SIN;
-                var sy = it2.up ? (it2.ly + it2.lh + 1 + _rotGap) : (it2.ly - 1 - _rotGap);
-                var bow = Math.min(9, 2 + Math.abs(it2.ty - sy) * 0.05) * (n % 2 === 0 ? 1 : -1);
-
-                /* ⚠️⚠️**箭头指的是小注、不是那个词**（2026-08-11 用户要的，她的原话：
-                     「我希望箭头是指着小注，而不是小注指向被解释的词」）。
-                   实现就是把两头对调：曲线从**字**出发、画到**标签**边上，
-                   `rdGlPath` 的箭头永远长在终点，于是自动掉头。
-                   ⚠️`bow` 要跟着取负：弓形是按「起点→终点」的左右手方向算的，
-                     两头一换、同一个正负号会让曲线朝反方向鼓出去（弯法看着像换了个人写的）。
-                   ⚠️凡是解析这条 `d` 的地方，「指对没指对」现在要看 `M` 那一头（起点＝那个字），
-                     不再是 `Q` 后面那一头（终点＝标签）。tests/gloss.test.js 里好几处按这个改过。 */
-                seg = rdGlPath(it2.tx, it2.ty + RD_GL_PAD, sx, sy + RD_GL_PAD, -bow);
-                }
+                /* 几何在 _glSegGeom 里（行尾/兜弧/上下缝三种），这里只管画 */
+                var seg = rdGlPath(g2.sx, g2.sy + RD_GL_PAD, g2.ex, g2.ey + RD_GL_PAD, g2.bow);
                 var ink = getComputedStyle(it2.lab).color;
                 var glid = it2.lab.getAttribute('data-glid');
                 // 曲线（虚线）——⚠️必须先加，见 rdGlPath 上那条注释
