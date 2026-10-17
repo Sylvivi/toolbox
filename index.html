@@ -34663,6 +34663,7 @@ body {
              调大会重新出现舍近求远，调小则放平变多。 */
         var RD_GL_TILT_EXTRA = 60;
         var RD_GL_TIP   = 3;    // 引线端点离标签/目标字的留缝
+        var RD_GL_TAIL_GAP = 26;   // 行尾小注：词的右边到标签左边留多宽（够画一小截箭头、让开词上的圈）
 
         /* ===================== 小注那个词的手绘记号 =====================
            一条小注 = 一条划线 + 一个手写标签，现在再加一个**手绘记号**画在那个词身上。
@@ -35596,8 +35597,36 @@ body {
                        （「不要把那个缝撑高好吗？我担心会影响到行号什么的，其实可以让缟素的那个从下往上画呀」）。
                        撑高＝改段落 margin＝真实重排，确实会动到按段落量位置的那一套（阅读进度/翻页对齐）。
                        挪边则完全不碰排版，代价只是偶尔压到紧跟的批注框上——她说过那个不介意。 */
+                    /* ===== 行尾：词在段落最后一行的末尾、右边空着时，小注直接写在那片空白里 =====
+                       2026-10-17 她截图（鬼吹灯「槽运的帮办。」）：「明明右边就是没有字的，但它仍然在段落和背景块
+                       的那个缝隙之间待着，这个不是很自然」。老排法只认上下两条缝，从来不看末行右边那一大片空。
+                       正常人写小注会顺手写在这个词后面，所以这里**优先**用它（第二阶段最先试）。
+                       条件都卡得严，不满足就照老路走，一个像素不动：
+                         ① 词落在最后一行，而且后面最多跟一个字宽（标点那种）——再多，箭头就得穿过字；
+                         ② 标签整条（带倾斜）放得进「词右边 → 段落右边界」这一截；
+                         ③ 倾斜后右端翘起来，不能碰到上一行的字；往下挪也不能碰到下一块的字。 */
+                    var _tail = null;
+                    (function () {
+                        var rows = _glRowsOf(pa);
+                        if (!rows.length) return;
+                        var last = rows[rows.length - 1];
+                        var wTop = rBot.top - cr.top, wBot = rBot.bottom - cr.top, wR = rBot.right - cr.left;
+                        if (Math.min(wBot, last.bottom) - Math.max(wTop, last.top) < (wBot - wTop) * 0.5) return;   // ① 不在最后一行
+                        var fs = parseFloat(getComputedStyle(pa).fontSize) || 16;
+                        if (last.right - wR > fs * 1.2) return;                                                   // ① 后面还有一截字
+                        var right = pLeft + pr.width;
+                        var lx0 = Math.max(wR, last.right) + RD_GL_TAIL_GAP;
+                        if (lx0 + lw > right) return;                                                             // ②
+                        var floor = rows.length >= 2 ? rows[rows.length - 2].bottom : (pTop - roomUp);
+                        var ceil = _next ? (_glInkTop(_next) - cr.top) : cr.height;
+                        var ly = Math.max((last.top + last.bottom) / 2 - lh / 2, floor + _rotAdd + 1);           // ③ 右端翘起别碰上一行
+                        if (ly + lh + 1 > ceil) return;                                                           // ③ 也别压到下面
+                        _tail = { lx: lx0, ly: ly, right: right,
+                                  sx: wR + 2, sy: (wTop + wBot) / 2 };   // 箭头从词的右边水平出发（跟上下那种一样，起点贴着词、落在圈上）
+                    })();
                     all.push({
                         pIdx: j, pLeft: pLeft, pW: pr.width, lab: lab, lw: lw, lh: lh,
+                        tail: _tail,
                         prefUp: prefUp,
                         flat: false,          // 最终放不放平，等排好位、确定用哪条缝时才定
                         flatUp: _flatUp, flatDown: _flatDown,
@@ -35997,9 +36026,23 @@ body {
                 for (var i = 0; i < cands.length; i++) if (_gl_tryBand(it, cands[i], allowFlat)) return true;
                 return false;
             }
+            /* 行尾那一截（见第一阶段 _tail 那段）：同一段的末行只有一截空白，按左→右排着放，放不下就走老路 */
+            var tailRight = {};
+            function _gl_tryTail(it) {
+                var t = it.tail, k = it.pIdx, x = t.lx;
+                if (tailRight[k] != null) x = Math.max(x, tailRight[k] + RD_GL_SEP);
+                if (x + it.lw > t.right) return false;
+                it.isTail = true; it.up = false; it.gap = 'tail' + k; it.row = 0;
+                it.lx = x; it.ly = t.ly; it.tx = t.sx; it.ty = t.sy;
+                it.dodge = null; it.flat = false;
+                if (it.lab) it.lab.classList.remove('rd-gl-flat');
+                tailRight[k] = x + it.lw;
+                return true;
+            }
             all.sort(function (x, y) { return x.want - y.want; });
             for (var a2 = 0; a2 < all.length; a2++) {
                 var it0 = all[a2];
+                if (it0.tail && _gl_tryTail(it0)) continue;              // ⓪ 行尾空着就写在词后面
                 /* 第一轮：**带着倾斜**、在两行以内找（见 _gl_try 上那段⚠️⚠️） */
                 if (_gl_try(it0, it0.prefUp, false, false)) continue;    // ① 就近那条缝
                 if (_gl_try(it0, !it0.prefUp, false, false)) continue;   // ② 挪到另一条缝
@@ -36097,12 +36140,17 @@ body {
                    有没有被迫另起一行。这块反复修了七八轮，每次排查都要从头猜"它到底走了哪条分支"；
                    有这三个属性，一条 querySelector 就能把可疑的那条挑出来（tests/glossaudit.test.js 就靠它分类）。 */
                 it2.lab.setAttribute('data-gl-gap', String(it2.gap));
-                it2.lab.setAttribute('data-gl-dir', it2.up ? 'up' : 'down');
+                it2.lab.setAttribute('data-gl-dir', it2.isTail ? 'tail' : (it2.up ? 'up' : 'down'));
                 it2.lab.setAttribute('data-gl-row', String(it2.row || 0));
 
                 /* ⚠️引线起点取「标签边上、距目标字 RD_GL_DX 的那个点」，不是标签正中。
                    标签有七八十像素宽，这个点几乎总落在标签范围内，所以**防撞怎么推、横向偏移都保得住**。
                    取标签正中试过：防撞把标签排紧后中心正好落在目标字上方，引线塌到 6px。 */
+                var seg;
+                if (it2.isTail) {
+                    /* 行尾：从词的右边水平画到标签左端。标签绕「左端中点」转，那一点不动，箭尖正好落在那儿 */
+                    seg = rdGlPath(it2.tx, it2.ty + RD_GL_PAD, it2.lx - RD_GL_TIP, it2.ly + it2.lh / 2 + RD_GL_PAD, n % 2 === 0 ? 2 : -2);
+                } else {
                 var labMid = it2.lx + it2.lw / 2;
                 var sd = (labMid >= it2.tx) ? 1 : -1;
                 var sx = Math.max(it2.lx, Math.min(it2.lx + it2.lw, it2.tx + sd * RD_GL_DX));
@@ -36121,7 +36169,8 @@ body {
                      两头一换、同一个正负号会让曲线朝反方向鼓出去（弯法看着像换了个人写的）。
                    ⚠️凡是解析这条 `d` 的地方，「指对没指对」现在要看 `M` 那一头（起点＝那个字），
                      不再是 `Q` 后面那一头（终点＝标签）。tests/gloss.test.js 里好几处按这个改过。 */
-                var seg = rdGlPath(it2.tx, it2.ty + RD_GL_PAD, sx, sy + RD_GL_PAD, -bow);
+                seg = rdGlPath(it2.tx, it2.ty + RD_GL_PAD, sx, sy + RD_GL_PAD, -bow);
+                }
                 var ink = getComputedStyle(it2.lab).color;
                 var glid = it2.lab.getAttribute('data-glid');
                 // 曲线（虚线）——⚠️必须先加，见 rdGlPath 上那条注释

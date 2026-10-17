@@ -37,7 +37,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
 
     const R = await page.evaluate(() => {
         const out = {};
-        const P1 = '那年山里落了很大的雪，他独自守着一间破屋，门前石阶上生满青苔，屋中雾气氤氲。';
+        // ⚠️2026-10-17：词要是落在段尾，现在会走「行尾」那条路（写在词后面那片空白里），
+        //   这组用例测的是上下两条缝，所以「雾气氤氲」后面补半句，让它不在段尾。行尾单独见 T 组。
+        const P1 = '那年山里落了很大的雪，他独自守着一间破屋，门前石阶上生满青苔，屋中雾气氤氲，久久不散。';
         const P2 = '他做什么都踟蹰，像总在门槛上迈不出去。想下山，又怕山下的人问起从前那桩事；想留下，柴火却撑不过这个冬天。';
         const P3 = '偶尔有樵夫路过，两人说不上几句便生龃龉，索性各走各的。';
 
@@ -399,7 +401,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             box.className = 'reading-merged'; box.style.cssText = 'font-size:14px;line-height:1.6;width:358px';
             box.innerHTML =
                 '<blockquote data-cp="1" style="margin:0.4em 0 0;padding:10px">汐：背景：董公遮说</blockquote>' +
-                '<p data-p="2">汉王闻之，袒而大哭。遂为义帝发丧，临三日。发使者告诸侯曰：“天下共立义帝，北面事之。寡人亲为发丧，诸侯皆缟素。”</p>' +
+                '<p data-p="2">汉王闻之，袒而大哭。遂为义帝发丧，临三日。发使者告诸侯曰：“天下共立义帝，北面事之。寡人亲为发丧，诸侯皆缟素。”言罢再拜而去。</p>' +   // ⚠️10-17 补半句：缟素在段尾会走「行尾」，这组测的是上下分流
                 '<blockquote data-cp="2" style="margin:0.4em 0 0;padding:10px">汐：背景：三河</blockquote>';
             const bub = document.createElement('div'); bub.className = 'chat-bubble'; bub.appendChild(box);
             const msg = document.createElement('div');
@@ -630,7 +632,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
                 document.documentElement.style.setProperty('--reading-pspace', '28px');
                 const b2box = document.createElement('div');
                 b2box.className = 'reading-merged'; b2box.style.cssText = 'font-size:14px;line-height:1.6;width:358px';
-                b2box.innerHTML = '<p data-p="1">第一段占位。</p><p data-p="2">必然要面对这个势力可能对他的杯葛或反抗。</p>';
+                b2box.innerHTML = '<p data-p="1">第一段占位，后面还有几个字。</p><p data-p="2">必然要面对这个势力可能对他的杯葛或反抗。</p>';
                 const b2bub = document.createElement('div'); b2bub.className = 'chat-bubble'; b2bub.appendChild(b2box);
                 const b2msg = document.createElement('div');
                 b2msg.className = 'chat-msg ai __glt'; b2msg.setAttribute('data-idx','0'); b2msg.appendChild(b2bub);
@@ -780,6 +782,59 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.I_字体 = readingApplyFonts.toString().indexOf('rdGlRelayout') >= 0;
         }
 
+        /* ── Z：行尾（2026-10-17 她截图「槽运的帮办。」）──
+           她原话：「明明那个右边就是没有字的，但是他仍然是在那个段落和那个背景词的缝隙之间待着，这个不是很自然」。
+           词落在段落最后一行末尾、右边空着 → 小注写在词后面那片空白里，箭头横着指过去。 */
+        {
+            const mk2 = (paraHtml, word, note, id) => {
+                document.querySelectorAll('.__glt').forEach(n => n.remove());
+                document.documentElement.style.setProperty('--reading-pspace', '28px');
+                const box = document.createElement('div');
+                box.className = 'reading-merged'; box.style.cssText = 'font-size:14px;line-height:1.6;width:358px';
+                box.innerHTML = paraHtml;
+                const bub = document.createElement('div'); bub.className = 'chat-bubble'; bub.appendChild(box);
+                const msg = document.createElement('div');
+                msg.className = 'chat-msg ai __glt'; msg.setAttribute('data-idx', '0'); msg.appendChild(bub);
+                document.body.appendChild(msg);
+                box.querySelectorAll('p,blockquote').forEach((p, i) => { if (i && p.tagName === 'P') p.style.marginTop = '28px'; });
+                const p = box.querySelector('p[data-p="1"]');
+                const at = p.textContent.indexOf(word);
+                rdHlWrapRange(p, at, at + word.length, 'sky', id, false);
+                p.querySelector('mark[data-hlid="' + id + '"]').setAttribute('data-gl', note);
+                rdGlLayout(bub);
+                return { box, p, lab: box.querySelector('.rd-gl-label'), mk: p.querySelector('mark[data-hlid="' + id + '"]') };
+            };
+            // ① 截图那种：段尾短行、后面紧跟背景块
+            const a = mk2('<p data-p="1">其间也曾出过一些当官的和经商的，捐过前清的粮台、槽运的帮办。</p>'
+                + '<blockquote data-cp="1" style="margin:0.4em 0 0;padding:10px">汐：背景：清代捐官</blockquote>'
+                + '<p data-p="2">民谚有云：“富不过三代。”这话是非常有道理的。</p>', '帮办', '清代协助办理事务的副职官员', 'z1');
+            const lr = a.lab.getBoundingClientRect(), mr = a.mk.getBoundingClientRect();
+            const rg = document.createRange(); rg.selectNodeContents(a.p);
+            const rows = [...rg.getClientRects()].filter(r => r.width > 0 && r.height > 1);
+            const lastBot = Math.max(...rows.map(r => r.bottom));
+            const prevRowBot = Math.max(...rows.filter(r => r.bottom < mr.top + 2).map(r => r.bottom), -Infinity);
+            out.Z_走了行尾 = a.lab.getAttribute('data-gl-dir') === 'tail';
+            out.Z_在词右边 = lr.left > mr.right;
+            out.Z_跟词同一行 = (lr.top + lr.height / 2) > mr.top && (lr.top + lr.height / 2) < lastBot + 6;
+            out.Z_没碰上一行 = lr.top >= prevRowBot - 0.5;
+            const bq = a.box.querySelector('blockquote').getBoundingClientRect();
+            out.Z_没碰下面的块 = lr.bottom <= bq.top + 0.5;
+            const path = a.box.querySelector('.rd-gl-svg path[data-glid="z1"]');
+            const svgR = path.ownerSVGElement.getBoundingClientRect();
+            const m = path.getAttribute('d').match(/^M([-\d.]+) ([-\d.]+) Q[-\d.]+ [-\d.]+ ([-\d.]+) ([-\d.]+)/);
+            const sx = svgR.left + (+m[1]), sy = svgR.top + (+m[2]), ex = svgR.left + (+m[3]);
+            out.Z_箭头从词出发 = sx >= mr.left - 3 && sx <= mr.right + 3 && sy > mr.top && sy < mr.bottom;
+            out.Z_箭头指向标签 = ex > sx && ex <= lr.left + 1;
+            out.Z_明细 = ['标签', Math.round(lr.left), Math.round(lr.top), Math.round(lr.bottom), '词', Math.round(mr.right), Math.round(mr.top), Math.round(mr.bottom), '上行底', Math.round(prevRowBot), '块顶', Math.round(bq.top)].join(' ');
+            // ② 词在最后一行中间（后面还跟着一截字）→ 不走行尾，箭头不许穿字
+            const b = mk2('<p data-p="1">其间也曾出过一些当官的和经商的，捐过前清的粮台、槽运的帮办，后来都败光了。</p>', '帮办', '清代协助办理事务的副职官员', 'z2');
+            out.Z_词在中间不走行尾 = b.lab.getAttribute('data-gl-dir') !== 'tail';
+            // ③ 末行太满、放不下 → 照老路走
+            const c = mk2('<p data-p="1">他把那块玉翻来覆去看了半天，也没瞧出个所以然，只好又揣回怀里，嘴里念叨着这帮办。</p>', '帮办', '清代协助办理事务的副职官员，掌管钱粮', 'z3');
+            const cr3 = c.lab.getBoundingClientRect(), pr3 = c.p.getBoundingClientRect();
+            out.Z_放不下走老路 = c.lab.getAttribute('data-gl-dir') !== 'tail' || cr3.right <= pr3.right + 0.5;
+        }
+
         document.querySelectorAll('.__glt').forEach(n => n.remove());
         return out;
     });
@@ -876,6 +931,15 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('N4 自动分流到上下两条缝', R.N_分到了上下两边);
     ok('N5 没有把段间距撑高（用户明确否掉）', R.N_没动段落间距);
     ok('N6 没给段落写行内 --reading-pspace', R.N_没设行内间距变量);
+    ok('Z1 行尾：段尾的词右边空着，小注就写在词后面', R.Z_走了行尾, R.Z_明细);
+    ok('Z2 行尾：标签在词的右边', R.Z_在词右边, R.Z_明细);
+    ok('Z3 行尾：标签跟词在同一行', R.Z_跟词同一行, R.Z_明细);
+    ok('Z4 行尾：斜着翘起来也没碰到上一行的字', R.Z_没碰上一行, R.Z_明细);
+    ok('Z5 行尾：没压到下面的背景块', R.Z_没碰下面的块, R.Z_明细);
+    ok('Z6 行尾：曲线从那个词出发', R.Z_箭头从词出发);
+    ok('Z7 行尾：箭头横着指向标签', R.Z_箭头指向标签);
+    ok('Z8 词后面还有一截字就不走行尾（箭头不许穿字）', R.Z_词在中间不走行尾);
+    ok('Z9 末行放不下就照老路走、不出界', R.Z_放不下走老路);
     ok('T1 日间：引线跟字同色', R.T_日间线跟字同色);
     ok('T2 前提：不重排的话线不会自己变色', R.T_前提_不重排线就不会变);
     ok('T3 重排后引线跟上了新主题的字色', R.T_重排后线跟上了);
