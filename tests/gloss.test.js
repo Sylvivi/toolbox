@@ -845,7 +845,23 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             const sv5 = p5.ownerSVGElement.getBoundingClientRect();
             const mm5 = p5.getAttribute('d').match(/^M([-\d.]+) ([-\d.]+)/);
             out.Z_段中箭头从词出发 = Math.abs(sv5.left + (+mm5[1]) - (m5.left + m5.width / 2)) <= 3 && sv5.top + (+mm5[2]) >= m5.bottom - 1;
-            out.Z_段中明细 = ['标签', Math.round(l5.left), Math.round(l5.top), '末行', Math.round(lastR5), Math.round(last5.top), 'dir', e5.lab.getAttribute('data-gl-dir')].join(' ');
+            // 她截图「钎」：词在右边、段尾空白很长 → 小注挪到词的下方，引线接近竖直，不斜着往左拉。
+            //   往前面垫字，直到「铁钎」落在一行的右半边（不同字体/宽度下折行位置不一样，所以现找）
+            {
+                let got = null;
+                for (let pad = 0; pad < 30 && !got; pad++) {
+                    const txt = '那就需要一定的技术和特殊工具了，' + '又'.repeat(pad) + '铁钎、洛阳铲、竹钉、钻地龙、探阴爪、黑折子等工具应运而生。还有一些高手不依赖工具。常。';
+                    const g = mk2('<p data-p="1">' + txt + '</p><p data-p="2">这诸般事迹须从我祖父留下来的一本残书讲起。</p>', '铁钎', 'qiān·一头尖的探测或凿石长钢棍', 'z16');
+                    const mr = g.mk.getBoundingClientRect(), pr = g.p.getBoundingClientRect();
+                    if (mr.left > pr.left + pr.width * 0.6) got = g;
+                }
+                if (got) {
+                    const lr = got.lab.getBoundingClientRect(), mr = got.mk.getBoundingClientRect();
+                    out.Z_段中对准词 = got.lab.getAttribute('data-gl-dir') === 'tail' && lr.left <= mr.left + 24 && lr.right >= mr.right - 24;
+                    out.Z_对准明细 = ['标签', Math.round(lr.left), Math.round(lr.right), '词', Math.round(mr.left), Math.round(mr.right), got.lab.getAttribute('data-gl-dir')].join(' ');
+                } else { out.Z_段中对准词 = false; out.Z_对准明细 = '没造出词在右边的场景'; }
+            }
+            out.Z_段中明细 = ['标签', Math.round(l5.left), Math.round(l5.right), Math.round(l5.top), '末行', Math.round(lastR5), Math.round(last5.top), '词', Math.round(m5.left), Math.round(m5.right), 'dir', e5.lab.getAttribute('data-gl-dir')].join(' ');
             // ⑦ 她截图那种：词离上缝更近，可上缝已经被别的小注占满 → 去段尾空白，不再往下面的缝跑
             {
                 document.querySelectorAll('.__glt').forEach(n => n.remove());
@@ -987,6 +1003,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('Z10 词后面跟着”。这种好几个标点，照样写在后面', R.Z_后面全是标点也走行尾);
     ok('Z11 词在段落中间、段尾后面空着 → 写到段尾那片空白', R.Z_段中走段尾, R.Z_段中明细);
     ok('Z12 段中走段尾时，引线从词的下沿出发', R.Z_段中箭头从词出发);
+    ok('Z16 段中走段尾时，小注挪到词的下方（引线不斜着拉过大半行）', R.Z_段中对准词, R.Z_对准明细);
     ok('Z13 词在段落第一行、紧挨着上缝 → 还是放上缝', R.Z_段首走上缝);
     ok('Z14 上缝被占满了 → 去段尾空白，不往下面的缝跑', R.Z_上缝满了去段尾, R.Z_上缝满了明细);
     ok('Z15 段尾空白不够一行就折两行写进去、不出界', R.Z_折两行没出界);
