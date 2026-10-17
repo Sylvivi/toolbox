@@ -829,6 +829,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             // ② 词在最后一行中间（后面还跟着一截字）→ 不走行尾，箭头不许穿字
             const b = mk2('<p data-p="1">其间也曾出过一些当官的和经商的，捐过前清的粮台、槽运的帮办，后来都败光了。</p>', '帮办', '清代协助办理事务的副职官员', 'z2');
             out.Z_词在中间不走行尾 = b.lab.getAttribute('data-gl-dir') !== 'tail';
+            // ④ 词后面跟着好几个标点（她截图「抵罪髡钳”。」）→ 照样走行尾
+            const d4 = mk2('<p data-p="1">宗室、外戚就搜集了宁成的种种罪状，“毁成之短，抵罪髡钳”。</p>', '髡钳', 'kūn qián·剃发戴铁颈圈受刑', 'z4');
+            out.Z_后面全是标点也走行尾 = d4.lab.getAttribute('data-gl-dir') === 'tail';
             // ③ 末行太满、放不下 → 照老路走
             const c = mk2('<p data-p="1">他把那块玉翻来覆去看了半天，也没瞧出个所以然，只好又揣回怀里，嘴里念叨着这帮办。</p>', '帮办', '清代协助办理事务的副职官员，掌管钱粮', 'z3');
             const cr3 = c.lab.getBoundingClientRect(), pr3 = c.p.getBoundingClientRect();
@@ -940,6 +943,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('Z7 行尾：箭头横着指向标签', R.Z_箭头指向标签);
     ok('Z8 词后面还有一截字就不走行尾（箭头不许穿字）', R.Z_词在中间不走行尾);
     ok('Z9 末行放不下就照老路走、不出界', R.Z_放不下走老路);
+    ok('Z10 词后面跟着”。这种好几个标点，照样写在后面', R.Z_后面全是标点也走行尾);
     ok('T1 日间：引线跟字同色', R.T_日间线跟字同色);
     ok('T2 前提：不重排的话线不会自己变色', R.T_前提_不重排线就不会变);
     ok('T3 重排后引线跟上了新主题的字色', R.T_重排后线跟上了);

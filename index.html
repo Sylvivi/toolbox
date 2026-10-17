@@ -35602,7 +35602,7 @@ body {
                        的那个缝隙之间待着，这个不是很自然」。老排法只认上下两条缝，从来不看末行右边那一大片空。
                        正常人写小注会顺手写在这个词后面，所以这里**优先**用它（第二阶段最先试）。
                        条件都卡得严，不满足就照老路走，一个像素不动：
-                         ① 词落在最后一行，而且后面最多跟一个字宽（标点那种）——再多，箭头就得穿过字；
+                         ① 词落在最后一行，而且后面到段尾只剩标点（”。这种）——跟着字的话，箭头就得穿过那截字；
                          ② 标签整条（带倾斜）放得进「词右边 → 段落右边界」这一截；
                          ③ 倾斜后右端翘起来，不能碰到上一行的字；往下挪也不能碰到下一块的字。 */
                     var _tail = null;
@@ -35612,8 +35612,14 @@ body {
                         var last = rows[rows.length - 1];
                         var wTop = rBot.top - cr.top, wBot = rBot.bottom - cr.top, wR = rBot.right - cr.left;
                         if (Math.min(wBot, last.bottom) - Math.max(wTop, last.top) < (wBot - wTop) * 0.5) return;   // ① 不在最后一行
-                        var fs = parseFloat(getComputedStyle(pa).fontSize) || 16;
-                        if (last.right - wR > fs * 1.2) return;                                                   // ① 后面还有一截字
+                        /* ① 词后面到段尾**只许是标点**（2026-10-17 二改：她截图「抵罪髡钳”。」——后面跟了引号＋句号，
+                           按「最多一个字宽」被挡掉，又挤回了缝里）。不按宽度判、直接看字：跟着字就走老路（箭头会穿过那截字）。 */
+                        try {
+                            var _rgT = document.createRange();
+                            _rgT.setStartAfter(_sibs[_sibs.length - 1]);
+                            _rgT.setEnd(pa, pa.childNodes.length);
+                            if (!/^[\s\p{P}\p{S}]*$/u.test(_rgT.toString())) return;
+                        } catch (eT) { return; }
                         var right = pLeft + pr.width;
                         var lx0 = Math.max(wR, last.right) + RD_GL_TAIL_GAP;
                         if (lx0 + lw > right) return;                                                             // ②
