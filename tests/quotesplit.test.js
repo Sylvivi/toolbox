@@ -115,6 +115,22 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.E_长短关划线挤掉画框 = !document.body.classList.contains('reading-box-on') && document.body.classList.contains('reading-uline-on');
         }
 
+        /* ── F：细浪（波浪第二款）：关→波浪→细浪→关 ── */
+        {
+            const 有框图 = el => getComputedStyle(el).borderImageSource !== 'none';
+            set({ split: true }); localStorage.setItem('reading_quote_wave_kind', '1');
+            readingToggleQuoteWave();
+            out.F_第一下是原版 = 有波浪(短()) && !有框图(短()) && document.getElementById('chipQuoteWave').textContent === '波浪';
+            readingToggleQuoteWave();
+            out.F_第二下是细浪 = !有波浪(短()) && 有框图(短()) && !有框图(长()) && document.getElementById('chipQuoteWave').textContent === '细浪'
+                && document.body.classList.contains('reading-ls-pd');
+            readingToggleQuoteWave();
+            out.F_第三下关掉 = !有波浪(短()) && !有框图(短()) && localStorage.getItem('reading_quote_wave') === '0';
+            readingToggleQuoteWave();
+            out.F_再开回原版 = 有波浪(短()) && !有框图(短());
+            localStorage.setItem('reading_quote_wave_kind', '1');
+        }
+
         document.querySelectorAll('.__qs').forEach(n => n.remove());
         set({ wave: true, split: true });
         return out;
@@ -135,6 +151,10 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('E6 开波浪自动关画框', R.E_开波浪关画框);
     ok('E7 开画框自动关波浪', R.E_开画框关波浪);
     ok('E8 长短关时开划线会关掉画框', R.E_长短关划线挤掉画框);
+    ok('F1 波浪第一下是原版', R.F_第一下是原版);
+    ok('F2 第二下换细浪（只画短句、划线照样让给长句）', R.F_第二下是细浪);
+    ok('F3 第三下关掉', R.F_第三下关掉);
+    ok('F4 关了再开回到原版', R.F_再开回原版);
     ok('Z 页面没报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();
