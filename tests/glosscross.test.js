@@ -108,7 +108,12 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         out.前提_跨行锚点跟方向一致 = !!a && _want !== null && Math.abs(a.x1 - _want) < 6;
         out.前提_明细 = '方向=' + _dir + ' 片段数=' + _frags.length
             + ' 锚x=' + (a ? Math.round(a.x1) : '-') + ' 应为' + (_want === null ? '-' : Math.round(_want));
-        out.前提_两条同一行 = !!a && !!b && Math.abs(a.y2 - b.y2) < 6;
+        /* ⚠️2026-10-19 晗改判法：原来比两条引线终点的 y（差 6px 以内算同一行）。
+           同日加了「排完能展开就展开成一行」（_glUnwrap）后，这里兹邑展开成一行、颠越仍是两行（两条都一行放不下 358px），
+           两条中线对齐，但引线指的是标签底边，一行和两行的底边天然差半行 → 假红。改看排位用的行号 data-gl-row。 */
+        const _rowOf = id => { const l = box.querySelector('.rd-gl-label[data-glid="' + id + '"]'); return l ? l.getAttribute('data-gl-row') : null; };
+        out.前提_两条同一行 = !!a && !!b && _rowOf('h兹邑') !== null && _rowOf('h兹邑') === _rowOf('h颠越')
+            && document.querySelector('.rd-gl-label[data-glid="h兹邑"]').getAttribute('data-gl-gap') === document.querySelector('.rd-gl-label[data-glid="h颠越"]').getAttribute('data-gl-gap');
         // 核心：字在左边的，标签也该在左边
         out.顺序一致 = !!a && !!b && ((a.x1 - b.x1) > 0) === ((a.x2 - b.x2) > 0);
         // 线段真的没交叉（几何判定，跟顺序那条互为印证）

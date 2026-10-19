@@ -36152,6 +36152,7 @@ body {
                 it.lw = lw2; it.lh = lh2;
                 if (!_gl_tryBand(it, g, false)) return undo();
                 it._wrapped = true;
+                it._uw = { ws: _ws, w: _w, lw: lw0, lh: lh0 };   // 一行时的样子，留给排完后的「能展开就展开」（_glUnwrap）
                 it.flat = false; lab.classList.remove('rd-gl-flat');
                 return true;
             }
@@ -36325,6 +36326,47 @@ body {
             }
             // 万一三条路都没成（理论上不会），丢掉这一条，别让 undefined 流到画线那一步
             all = all.filter(function (it) { return it.lx != null && it.ly != null; });
+            /* ===== 排完再看一眼：折了两行的，原地一行放得下就展开（2026-10-19 晗补）=====
+               她截图「旮旯」那条：「为什么会变成两行呢，那一行应该放得下呀」——上缝右边空着一大片。
+               原因：词离下缝更近，① 下缝要放平、第一轮跳过；② 上缝一行本来塞得下，却被「为保持倾斜多跑不值」
+               那道闸（_gl_try 里的 RD_GL_TILT_EXTRA）挡掉；轮到 ②a 去的还是这条上缝，却折成两行塞进去了。
+               ⚠️不能在 ②a 里直接先试一行：那会提前占掉缝里的横向空间，后面的条目被挤去另起一行，
+                 自查里压字 14px 6→16、20px 9→19（晗先这么改过、跑 glossaudit 发现的，已撤）。
+               所以等所有条目都摆完再展开：只在**它自己左右两个邻居之间**挪（左右顺序不变、引线不会因此交叉），
+               外框整条落在缝里（同 _gl_tryBand 那把尺）、不碰同缝别的标签和行尾那截，才展开；否则维持两行。 */
+            (function _glUnwrap() {
+                var bands = _glBandList();
+                all.forEach(function (it) {
+                    if (!it._wrapped || !it._uw || !it.lab) return;
+                    var band = bands[it.gap]; if (!band) return;
+                    var lw = it._uw.lw, lh = it._uw.lh, room = band.bottom - band.top;
+                    if ((room - (lh + lw * RD_GL_ROT_SIN)) / 2 < 0.5) return;          // 斜着一行塞不进这条缝
+                    var key = String(it.gap), left = it.pLeft, right = it.pLeft + it.pW;
+                    var lo = left, hi = right;                                          // 邻居之间能用的横向范围
+                    all.forEach(function (o) {
+                        if (o === it || String(o.gap) !== key) return;
+                        if (o.lx + o.lw <= it.lx) lo = Math.max(lo, o.lx + o.lw + RD_GL_SEP);
+                        else if (o.lx >= it.lx + it.lw) hi = Math.min(hi, o.lx - RD_GL_SEP);
+                        else hi = lo - 1;                                               // 本来就叠着的，别动
+                    });
+                    if (hi - lo < lw) return;
+                    var ly = band.top + (room - lh) / 2;
+                    /* 同一条缝里已经有别的标签时，跟它**中线**对齐（它们是按段落留白摆的，不一定在缝正中；
+                       两行的那条中线也在缝中间），免得同一排高低错开一截（glosscross「落在同一行」那条前提抓到的）。
+                       对齐后外框仍得整条在缝里，否则就用缝正中。 */
+                    all.forEach(function (o) {
+                        if (o === it || String(o.gap) !== key) return;
+                        var y = o.ly + o.lh / 2 - lh / 2;
+                        if (y - lw * RD_GL_ROT_SIN >= band.top - 0.5 && y + lh <= band.bottom + 0.5) ly = y;
+                    });
+                    // 尽量靠着原来的位置（引线指向变化最小）：先保左沿，放不下再贴右边界往左推
+                    var x = Math.min(Math.max(it.lx, lo), hi - lw);
+                    if (_gl_tailHit(key, x, ly, lw, lh)) return;
+                    var lab = it.lab;
+                    lab.style.whiteSpace = it._uw.ws; lab.style.width = it._uw.w;
+                    it.lw = lw; it.lh = lh; it.lx = x; it.ly = ly; it._wrapped = false;
+                });
+            })();
             /* 兜底：同一条缝、同一行里，标签的左右顺序**必须**跟它们真正指的那个字的左右顺序一致，
                否则两条引线必然交叉（用户 2026-08-11 报的就是这个：「本身在左边的词，小注会放到右边，
                而在右边的词，小注会在左边」）。
