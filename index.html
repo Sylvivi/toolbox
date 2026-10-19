@@ -3762,6 +3762,7 @@ body {
         #chipNameBold, #chipKsBold { font-weight: 800; }                               /* 加粗 */
         #chipQuoteUl, #chipNameDash, #chipKsUl { text-decoration: underline dashed var(--accent-mid); text-underline-offset: 3px; }  /* 划线 */
         #chipQuoteWave, #chipKsWave { text-decoration: underline wavy var(--accent-mid); text-underline-offset: 3px; }               /* 波浪 */
+        #chipQuoteBox { box-shadow: inset 0 0 0 1.5px var(--accent-chip); }                           /* 画框（2026-10-19 加回，只在引号那行）*/
         #chipNameGlow { text-shadow: 0 0 5px var(--accent-mid); }       /* 名词柔光（引号/精句那两档柔光 2026-08-12 已去掉）*/
 
         /* ===== 共读：字体库 UI ===== */
@@ -3996,6 +3997,14 @@ body {
                 transparent 100%);
             box-shadow: inset 0 0 10px color-mix(in srgb, var(--accent), transparent 72%);
         }
+        /* 例外：短句被画框圈住时，里面的名词不上柔光——框 + 光叠在一起糊（8-12 那版画框就有这条，随画框一起回来）。
+           只清柔光那几个属性，不动着色/加粗/划线。长短关时所有引号都框，所以不限 ls-on；长短开时长句没框，用 :not(.rq-wide) 放过长句。 */
+        body.reading-box-on.rn-glow-halo:not(.reading-ls-on) .reading-merged .reading-quote .reading-name,
+        body.reading-box-on.rn-glow-band:not(.reading-ls-on) .reading-merged .reading-quote .reading-name,
+        body.reading-box-on.reading-ls-on.rn-glow-halo .reading-merged .reading-quote:not(.rq-wide) .reading-name,
+        body.reading-box-on.reading-ls-on.rn-glow-band .reading-merged .reading-quote:not(.rq-wide) .reading-name {
+            background: none; background-image: none; box-shadow: none; text-shadow: none; padding: 0; border-radius: 0;
+        }
         /* 长短分工(reading-ls-on)：着色只落长句(rq-wide)，短句不着色、让给装饰 */
         body.reading-ls-on .reading-merged .reading-quote:not(.rq-wide) { color: inherit; font-weight: 400; }
         /* 划线：默认作用于所有引号内层文字；长短分工下长句的划线由后面的 strip 规则去掉 */
@@ -4028,6 +4037,27 @@ body {
             padding-bottom: 8px;
             -webkit-box-decoration-break: clone; box-decoration-break: clone;
         }
+        /* 手绘画框（2026-10-19 晗加回；8-12 那版被她撤过）。
+           ⚠️跟 8-12 撤掉的那版**不是一个做法**：那版是一张 280×40 的毛边方框图 background-size:100% 100%
+             硬拉到整句大小——四字短句被横向压扁、竖线细横线粗、圆角变形，所以难看。
+             这版用 **border-image 九宫格**：四个角原样不缩放，只拉中间那段直线，所以多长多短的句子
+             线条粗细都一样、角上的手绘交叉也不变形。图是两遍描、略歪、角上轻轻交叉出头（学 rough notation 的方框），
+             颜色按强调色现生成、存 --quote-box-img（readingRefreshQuoteSvgs）。
+           ⚠️零 JS、零新增图层——引号「手绘线」就是栽在给整章叠图层上被撤的，这里绝不能走那条路。
+           ⚠️框挂在内层 .reading-quote-inner 上：只框字、「」留在框外（框连引号一起圈显得挤，8-12 那版就是连着圈的）。
+           ⚠️border 宽度是 0、图靠 border-image-width + outset 画在字外面：不占行高、不把字挤开，
+             只有左右 3px padding 让框别贴着字。换行时 clone ＝每行各自一个完整的框（跟划线的方框一样）。
+           跟波浪二选一（都是「占住短句」的装饰）；长短分工下长句的框由下面的 strip 规则去掉。 */
+        body.reading-box-on .reading-merged .reading-quote .reading-quote-inner {
+            border: 0 solid transparent;
+            border-image-source: var(--quote-box-img);
+            border-image-slice: 16;
+            border-image-width: 8px;
+            border-image-outset: 4px 2px;
+            border-image-repeat: stretch;
+            padding: 0 3px;
+            -webkit-box-decoration-break: clone; box-decoration-break: clone;
+        }
         /* 长短分工(reading-ls-on)：着色归长句、波浪归短句。
            着色落短句的部分已被上面那条着色 strip 去掉；这里把长句(rq-wide)的波浪背景清掉，长句只着色。
            ⚠️⚠️**这四条是长短分工真正生效的地方，别跟着别的功能一起删**：2026-08-12 拆「手绘线」时
@@ -4036,6 +4066,7 @@ body {
              先确认区块里没有别人的规则。 */
         body.reading-ls-on .reading-merged .reading-quote.rq-wide { background-image: none !important; padding: 0; }
         body.reading-ls-on .reading-merged .reading-quote.rq-wide .reading-quote-inner { background-image: none !important; padding-bottom: 0; }
+        body.reading-ls-on.reading-box-on .reading-merged .reading-quote.rq-wide .reading-quote-inner { border-image-source: none !important; padding-left: 0; padding-right: 0; }
         /* 划线永远不跟波浪落在同一句上：
            ① 短句没被波浪占住(非 ls-pd)→划线当短句装饰，去掉长句的划线； */
         body.reading-ls-on:not(.reading-ls-pd) .reading-merged .reading-quote.rq-wide .reading-quote-inner { text-decoration: none !important; }
@@ -7060,6 +7091,7 @@ body {
                 <div id="readingStyleRow" style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
                     <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0">样式</span>
                     <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
+                        <button class="chip-btn" id="chipQuoteBox" onclick="readingToggleQuoteBox()" title="引号里的字加一圈手绘方框（跟波浪二选一）。开「长短」时只框短句">画框</button>
                         <button class="chip-btn active" id="chipQuoteWave" onclick="readingToggleQuoteWave()" style="">波浪</button>
                         <button class="chip-btn" id="chipQuoteUl" onclick="readingToggleQuoteUl()" style="">划线</button>
                         <button class="chip-btn active" id="chipQuoteHl" onclick="readingToggleQuoteHl()" style="">着色</button>
@@ -20230,6 +20262,7 @@ body {
             var hl = document.getElementById('chipQuoteHl');
             var ul = document.getElementById('chipQuoteUl');
             var wv = document.getElementById('chipQuoteWave');
+            var bx = document.getElementById('chipQuoteBox');
             var ls = document.getElementById('chipQuoteLs');
             var bk = document.getElementById('chipBlackMask');
             if (m) m.style.display = isDark ? 'none' : '';
@@ -20247,6 +20280,7 @@ body {
             if (hl) hl.style.display = isChat ? 'none' : '';
             if (ul) ul.style.display = isChat ? 'none' : '';
             if (wv) wv.style.display = isChat ? 'none' : '';
+            if (bx) bx.style.display = isChat ? 'none' : '';
             if (ls) ls.style.display = isChat ? 'none' : '';
             // 对话模式下整行（含「样式」「人名」标签）都没意义，直接隐藏整行，避免留个空标签
             var styleRow = document.getElementById('readingStyleRow');
@@ -25107,6 +25141,8 @@ body {
             var hl = localStorage.getItem('reading_quote_hl') === '1';
             var ul = localStorage.getItem('reading_quote_ul') === '1';
             var wave = localStorage.getItem('reading_quote_wave') === '1';
+            var box = localStorage.getItem('reading_quote_box') === '1';   // 画框（2026-10-19 加回，九宫格做法）
+            if (box && wave) { box = false; localStorage.setItem('reading_quote_box', '0'); }   // 兜底：二者都占住短句，只留波浪
             // 「长短」是显式开关：开=着色归长句、波浪/划线归短句；关=所选样式一视同仁。
             // 旧版靠隐形的点击顺序(pick)凑分工，这里一次性迁移成显式开关，之后只认 reading_quote_split。
             var splitRaw = localStorage.getItem('reading_quote_split');
@@ -25120,18 +25156,20 @@ body {
             }
             // 不变量：长短「关」时，划线绝不与波浪落在同一句上（长短关=所有引号一视同仁，二者互斥）。
             // 加载/迁移出来的异常状态在这里兜底：若同时开着，丢掉划线、保留波浪。
-            if (!split && ul && wave) { ul = false; localStorage.setItem('reading_quote_ul', '0'); }
-            var primaryDecor = wave; // 铺在句底、占住短句的装饰
+            if (!split && ul && (wave || box)) { ul = false; localStorage.setItem('reading_quote_ul', '0'); }
+            var primaryDecor = wave || box; // 占住短句的装饰（波浪/画框二选一）
             var b = document.body;
             b.classList.toggle('reading-quote-on', hl);
             b.classList.toggle('reading-uline-on', ul);
             b.classList.toggle('reading-wave-on', wave);
+            b.classList.toggle('reading-box-on', box);
             b.classList.toggle('reading-ls-on', split);
             b.classList.toggle('reading-ls-pd', split && primaryDecor); // 长短分工且短句被波浪/画框占住→划线让给长句
             var c;
             c = document.getElementById('chipQuoteHl'); if (c) c.classList.toggle('active', hl);
             c = document.getElementById('chipQuoteUl'); if (c) c.classList.toggle('active', ul);
             c = document.getElementById('chipQuoteWave'); if (c) c.classList.toggle('active', wave);
+            c = document.getElementById('chipQuoteBox'); if (c) c.classList.toggle('active', box);
             c = document.getElementById('chipQuoteLs'); if (c) c.classList.toggle('active', split);
             if (typeof rdHlInitStyle === 'function') rdHlInitStyle();   // 顺带恢复「划线」底色/下划线样式
             readingApplyKeySentStyles();   // 精句样式独立一套，跟着一起初始化
@@ -25232,6 +25270,7 @@ body {
             // 长短「关」时划线与波浪互斥(不能同句)；长短「开」时可共存(划线落长句、波浪落短句)
             if (!on && localStorage.getItem('reading_quote_split') !== '1') {
                 localStorage.setItem('reading_quote_wave', '0');
+                localStorage.setItem('reading_quote_box', '0');
             }
             readingApplyQuoteUl();
         }
@@ -25247,9 +25286,20 @@ body {
             var on = localStorage.getItem('reading_quote_wave') === '1';
             localStorage.setItem('reading_quote_wave', on ? '0' : '1');
             if (!on) {
+                localStorage.setItem('reading_quote_box', '0');   // 跟画框二选一
                 if (localStorage.getItem('reading_quote_split') !== '1') localStorage.setItem('reading_quote_ul', '0'); // 长短关：跟划线互斥
             }
             readingApplyQuoteWave();
+        }
+        // 共读：手绘画框（2026-10-19 加回）。跟波浪二选一；长短关时跟划线互斥（同波浪）
+        function readingToggleQuoteBox() {
+            var on = localStorage.getItem('reading_quote_box') === '1';
+            localStorage.setItem('reading_quote_box', on ? '0' : '1');
+            if (!on) {
+                localStorage.setItem('reading_quote_wave', '0');
+                if (localStorage.getItem('reading_quote_split') !== '1') localStorage.setItem('reading_quote_ul', '0');
+            }
+            readingApplyQuoteStyles();
         }
         // 波浪是 SVG 图，颜色不能写 CSS 变量，这里按当前强调色生成、存进 CSS 变量，切主题/夜间时刷新
         function readingRefreshQuoteSvgs() {
@@ -25268,7 +25318,15 @@ body {
             var wave = '<svg xmlns="http://www.w3.org/2000/svg" width="44" height="10"><filter id="r" x="-20%" y="-20%" width="140%" height="140%"><feTurbulence type="fractalNoise" baseFrequency="0.05 0.3" numOctaves="2" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2"/></filter><path d="M0 6 Q 11 1, 22 6 T 44 6" fill="none" stroke="' + A + '" stroke-width="1.8" stroke-linecap="round" filter="url(#r)"/></svg>';
             // 涂抹底纹：填充矩形 + feTurbulence 把上下缘揉成毛边，作为背景图（永不擦字），靠 background-size 把它压在字的下半截、不超出行间空白。
             function band(op) { return '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="24"><filter id="r" x="-10%" y="-40%" width="120%" height="180%"><feTurbulence type="fractalNoise" baseFrequency="0.05 0.14" numOctaves="2" seed="5" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="3" xChannelSelector="R" yChannelSelector="G"/></filter><rect x="0" y="4" width="120" height="16" fill="' + A + '" fill-opacity="' + op + '" filter="url(#r)"/></svg>'; }
+            /* 画框：九宫格用的 48×48 方框（border-image-slice:16，四角原样、中段拉伸）。
+               两遍描：粗的一遍 + 淡一点的细的一遍，四条边各自略歪、在角上交叉出头一点点。
+               ⚠️线头都落在 x/y 3.6~45 之间、角区(0~16)里——出头部分在角上，不会被中段拉伸拉长。 */
+            function bp(d, w, o) { return '<path d="' + d + '" fill="none" stroke="' + A + '" stroke-width="' + w + '" stroke-linecap="round" opacity="' + o + '"/>'; }
+            var boxSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48">'
+                + bp('M4.6 11 L44 5 M41.6 3.6 L39.6 44.6 M43.6 42.6 L4.4 39 M9 44.4 L6.4 3.6', 2.4, 1)
+                + bp('M6 7 L43 10.4 M38.8 5.4 L42.8 43 M42 38.4 L6.4 43.2 M5.2 41.6 L9.6 6', 1.5, 0.55) + '</svg>';
             var root = document.documentElement.style;
+            root.setProperty('--quote-box-img', 'url("data:image/svg+xml,' + encodeURIComponent(boxSvg) + '")');
             root.setProperty('--quote-wave-img', 'url("data:image/svg+xml,' + encodeURIComponent(wave) + '")');
             root.setProperty('--quote-band-img', 'url("data:image/svg+xml,' + encodeURIComponent(band(0.24)) + '")');
             root.setProperty('--quote-band-img-dark', 'url("data:image/svg+xml,' + encodeURIComponent(band(0.5)) + '")');

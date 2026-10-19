@@ -53,6 +53,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             localStorage.setItem('reading_quote_ul', o.ul ? '1' : '0');
             localStorage.setItem('reading_quote_hl', o.hl ? '1' : '0');
             localStorage.setItem('reading_quote_split', o.split ? '1' : '0');
+            localStorage.setItem('reading_quote_box', o.box ? '1' : '0');
             readingApplyQuoteStyles();
         };
 
@@ -88,6 +89,28 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             out.D_着色只落长句 = out.D_长句着色 !== out.D_短句不着色;
         }
 
+        /* ── E：画框（2026-10-19 加回，border-image 九宫格）跟波浪同一套分工 ── */
+        {
+            const 有框 = el => getComputedStyle(el).borderImageSource !== 'none';
+            set({ box: true, split: true });
+            out.E_图生成了 = (getComputedStyle(document.documentElement).getPropertyValue('--quote-box-img') || '').indexOf('svg') >= 0;
+            out.E_分工开只框短句 = 有框(短()) && !有框(长());
+            // 框画在 border-image-outset 里，不能把行高撑开
+            out.E_不撑行高 = Math.round(短().getBoundingClientRect().height) === Math.round((() => { set({ split: true }); return 短().getBoundingClientRect().height; })());
+            set({ box: true, split: false });
+            out.E_分工关都框 = 有框(短()) && 有框(长());
+            set({ box: true, ul: true, split: true });
+            out.E_有框时划线归长句 = 有划线(长()) && !有划线(短());
+            // 二选一：开波浪就关画框，开画框就关波浪
+            set({ box: true, split: true }); readingToggleQuoteWave();
+            out.E_开波浪关画框 = localStorage.getItem('reading_quote_box') === '0' && document.body.classList.contains('reading-wave-on') && !document.body.classList.contains('reading-box-on');
+            readingToggleQuoteBox();
+            out.E_开画框关波浪 = localStorage.getItem('reading_quote_wave') === '0' && document.body.classList.contains('reading-box-on');
+            // 长短关：开划线就把画框关掉（同一句上不叠）
+            set({ box: true, split: false }); readingToggleQuoteUl();
+            out.E_长短关划线挤掉画框 = !document.body.classList.contains('reading-box-on') && document.body.classList.contains('reading-uline-on');
+        }
+
         document.querySelectorAll('.__qs').forEach(n => n.remove());
         set({ wave: true, split: true });
         return out;
@@ -99,6 +122,14 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('C1 短句被波浪占住时，划线归长句', R.C_有波浪时划线归长句);
     ok('C2 短句没被占住时，划线归短句', R.C_没波浪时划线归短句);
     ok('D1 分工开：着色只落长句', R.D_着色只落长句, '长=' + R.D_长句着色 + ' 短=' + R.D_短句不着色);
+    ok('E1 画框图按强调色生成了', R.E_图生成了);
+    ok('E2 分工开：画框只框短句', R.E_分工开只框短句);
+    ok('E3 画框不撑高行', R.E_不撑行高);
+    ok('E4 分工关：长短都框', R.E_分工关都框);
+    ok('E5 短句被框占住时，划线归长句', R.E_有框时划线归长句);
+    ok('E6 开波浪自动关画框', R.E_开波浪关画框);
+    ok('E7 开画框自动关波浪', R.E_开画框关波浪);
+    ok('E8 长短关时开划线会关掉画框', R.E_长短关划线挤掉画框);
     ok('Z 页面没报错', pageErrs.length === 0, pageErrs.join(' | '));
 
     await browser.close();
