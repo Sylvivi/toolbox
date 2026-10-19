@@ -4037,22 +4037,6 @@ body {
             padding-bottom: 8px;
             -webkit-box-decoration-break: clone; box-decoration-break: clone;
         }
-        /* 细浪（2026-10-19 晗加的「波浪」第二款；原来那款她说要保留，点「波浪」轮着切：关→波浪→细浪→关）。
-           原版的毛病：一张 44px 的图平铺，句子在哪儿结束就在哪儿一刀切，短句（一两个字）只剩半截弧；而且离字远。
-           细浪用 border-image 九宫格：左头 | 一个波长 | 右尾，中段 round ＝铺**整数个**波，两头各有一个收笔，
-           多长多短的句子都首尾完整。只画 bottom 那条边（slice 上边是 0），border 宽 0、靠 outset 画到字下面，不撑行高。
-           图在 readingRefreshQuoteSvgs 里按强调色生成（--quote-wave2-img）。
-           ⚠️要先把原版的平铺背景清掉——细浪是在 reading-wave-on 之上再挂 reading-wave2。 */
-        body.reading-wave-on.reading-wave2 .reading-merged .reading-quote .reading-quote-inner {
-            background-image: none;
-            padding-bottom: 0;
-            border: 0 solid transparent;
-            border-image-source: var(--quote-wave2-img);
-            border-image-slice: 0 8 14 8;
-            border-image-width: 0 4px 7px 4px;
-            border-image-outset: 0 2px 6px 2px;
-            border-image-repeat: round;
-        }
         /* 手绘画框（2026-10-19 晗加回；8-12 那版被她撤过）。
            ⚠️跟 8-12 撤掉的那版**不是一个做法**：那版是一张 280×40 的毛边方框图 background-size:100% 100%
              硬拉到整句大小——四字短句被横向压扁、竖线细横线粗、圆角变形，所以难看。
@@ -4086,7 +4070,6 @@ body {
              先确认区块里没有别人的规则。 */
         body.reading-ls-on .reading-merged .reading-quote.rq-wide { background-image: none !important; padding: 0; }
         body.reading-ls-on .reading-merged .reading-quote.rq-wide .reading-quote-inner { background-image: none !important; padding-bottom: 0; }
-        body.reading-ls-on.reading-wave2 .reading-merged .reading-quote.rq-wide .reading-quote-inner { border-image-source: none !important; }
         body.reading-ls-on.reading-box-on .reading-merged .reading-quote.rq-wide { border-image-source: none !important; font-feature-settings: normal; padding: 0; }
         /* 划线永远不跟波浪落在同一句上：
            ① 短句没被波浪占住(非 ls-pd)→划线当短句装饰，去掉长句的划线； */
@@ -7113,7 +7096,7 @@ body {
                     <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0">样式</span>
                     <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
                         <button class="chip-btn" id="chipQuoteBox" onclick="readingToggleQuoteBox()" title="引号里的字加一圈手绘方框（跟波浪二选一）。开「长短」时只框短句">画框</button>
-                        <button class="chip-btn active" id="chipQuoteWave" onclick="readingToggleQuoteWave()" title="点一下轮着换：关 → 波浪 → 细浪（两头收得整齐）→ 关" style="">波浪</button>
+                        <button class="chip-btn active" id="chipQuoteWave" onclick="readingToggleQuoteWave()" style="">波浪</button>
                         <button class="chip-btn" id="chipQuoteUl" onclick="readingToggleQuoteUl()" style="">划线</button>
                         <button class="chip-btn active" id="chipQuoteHl" onclick="readingToggleQuoteHl()" style="">着色</button>
                         <button class="chip-btn active" id="chipQuoteLs" onclick="readingToggleQuoteLs()" title="开：着色给长句、画框/波浪/划线给短句；关：所选样式所有引号一视同仁" style="">长短</button>
@@ -25163,6 +25146,7 @@ body {
             var ul = localStorage.getItem('reading_quote_ul') === '1';
             var wave = localStorage.getItem('reading_quote_wave') === '1';
             var box = localStorage.getItem('reading_quote_box') === '1';   // 画框（2026-10-19 加回，九宫格做法）
+            localStorage.removeItem('reading_quote_wave_kind');   // 「细浪」10-19 当天做了又撤（她：「感觉不行，去掉吧」），清掉档位残值
             if (box && wave) { box = false; localStorage.setItem('reading_quote_box', '0'); }   // 兜底：二者都占住短句，只留波浪
             // 「长短」是显式开关：开=着色归长句、波浪/划线归短句；关=所选样式一视同仁。
             // 旧版靠隐形的点击顺序(pick)凑分工，这里一次性迁移成显式开关，之后只认 reading_quote_split。
@@ -25183,15 +25167,13 @@ body {
             b.classList.toggle('reading-quote-on', hl);
             b.classList.toggle('reading-uline-on', ul);
             b.classList.toggle('reading-wave-on', wave);
-            b.classList.toggle('reading-wave2', wave && localStorage.getItem('reading_quote_wave_kind') === '2');   // 细浪
             b.classList.toggle('reading-box-on', box);
             b.classList.toggle('reading-ls-on', split);
             b.classList.toggle('reading-ls-pd', split && primaryDecor); // 长短分工且短句被波浪/画框占住→划线让给长句
             var c;
             c = document.getElementById('chipQuoteHl'); if (c) c.classList.toggle('active', hl);
             c = document.getElementById('chipQuoteUl'); if (c) c.classList.toggle('active', ul);
-            c = document.getElementById('chipQuoteWave');
-            if (c) { c.classList.toggle('active', wave); c.textContent = (wave && localStorage.getItem('reading_quote_wave_kind') === '2') ? '细浪' : '波浪'; }
+            c = document.getElementById('chipQuoteWave'); if (c) c.classList.toggle('active', wave);
             c = document.getElementById('chipQuoteBox'); if (c) c.classList.toggle('active', box);
             c = document.getElementById('chipQuoteLs'); if (c) c.classList.toggle('active', split);
             if (typeof rdHlInitStyle === 'function') rdHlInitStyle();   // 顺带恢复「划线」底色/下划线样式
@@ -25306,12 +25288,7 @@ body {
         // 共读：手绘波浪下划线（独立开关，毛边波浪平铺底部）
         function readingApplyQuoteWave() { readingApplyQuoteStyles(); }
         function readingToggleQuoteWave() {
-            /* 2026-10-19 起是三档轮切：关 → 波浪(原版) → 细浪 → 关。档位记在 reading_quote_wave_kind('1'|'2')，
-               开关本身仍是 reading_quote_wave——所以别处判断「有没有波浪」(划线让位、记号避让)一律不用改。 */
             var on = localStorage.getItem('reading_quote_wave') === '1';
-            var kind2 = localStorage.getItem('reading_quote_wave_kind') === '2';
-            if (on && !kind2) { localStorage.setItem('reading_quote_wave_kind', '2'); readingApplyQuoteWave(); return; }
-            localStorage.setItem('reading_quote_wave_kind', '1');
             localStorage.setItem('reading_quote_wave', on ? '0' : '1');
             if (!on) {
                 localStorage.setItem('reading_quote_box', '0');   // 跟画框二选一
@@ -25349,31 +25326,11 @@ body {
             /* 画框：九宫格用的 48×48 方框（border-image-slice:16，四角原样、中段拉伸）。
                两遍描：粗的一遍 + 淡一点的细的一遍，四条边各自略歪、在角上交叉出头一点点。
                ⚠️线头都落在 x/y 3.6~45 之间、角区(0~16)里——出头部分在角上，不会被中段拉伸拉长。 */
-            function bp(d, w, o) { return '<path d="' + d + '" fill="none" stroke="' + A + '" stroke-width="' + w + '" stroke-linecap="round" stroke-linejoin="round" opacity="' + o + '"/>'; }
+            function bp(d, w, o) { return '<path d="' + d + '" fill="none" stroke="' + A + '" stroke-width="' + w + '" stroke-linecap="round" opacity="' + o + '"/>'; }
             var boxSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48">'
                 + bp('M4.6 11 L44 5 M41.6 3.6 L39.6 44.6 M43.6 42.6 L4.4 39 M9 44.4 L6.4 3.6', 2.4, 1)
                 + bp('M6 7 L43 10.4 M38.8 5.4 L42.8 43 M42 38.4 L6.4 43.2 M5.2 41.6 L9.6 6', 1.5, 0.55) + '</svg>';
-            /* 细浪：60×14，左头 8 | 一个波长 44 | 右尾 8；中段 round 平铺成整数个波（见 CSS 那段）。
-               「轻毛糙」：一粗一细两笔，各加一点抖（她 10-19 在 A 轻 / B 重两版里挑的 A——光滑那版她说「粗糙感少了点」）。
-               ⚠️抖动 J 是按「一个波长」为周期的正弦叠加——中段一块接一块平铺时，接缝两边的抖动严丝合缝；
-                 换成随机数或 feTurbulence 会在每个波之间错开一截。 */
-            function wJ(t, k) { return k * (0.55 * Math.sin(2 * Math.PI * 3 * t + 1.3) + 0.35 * Math.sin(2 * Math.PI * 7 * t + 0.4) + 0.22 * Math.sin(2 * Math.PI * 11 * t + 2.1)); }
-            function wLine(amp, off, jk, ph) {
-                var pts = [];
-                for (var x = 2.4; x <= 57.61; x += 0.8) {
-                    var t = (x - 8) / 44, y;
-                    if (x < 8) { var u = (x - 2.4) / 5.6; y = 9.6 - 2.6 * u * u; }               // 左头：从下往上起笔
-                    else if (x > 52) { var v = (x - 52) / 5.6; y = 7 - 1.8 * Math.sin(v * Math.PI / 2); } // 右尾：往上收笔
-                    else y = 7 - amp * Math.sin(2 * Math.PI * t);
-                    y += off + wJ(t + ph, jk);
-                    pts.push(x.toFixed(1) + ' ' + y.toFixed(2));
-                }
-                return 'M' + pts.join(' L');
-            }
-            var wave2 = '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="14">'
-                + bp(wLine(3.2, 0, 0.35, 0), 2.2, 1) + bp(wLine(3.0, 0.6, 0.5, 0.37), 1.2, 0.7) + '</svg>';
             var root = document.documentElement.style;
-            root.setProperty('--quote-wave2-img', 'url("data:image/svg+xml,' + encodeURIComponent(wave2) + '")');
             root.setProperty('--quote-box-img', 'url("data:image/svg+xml,' + encodeURIComponent(boxSvg) + '")');
             root.setProperty('--quote-wave-img', 'url("data:image/svg+xml,' + encodeURIComponent(wave) + '")');
             root.setProperty('--quote-band-img', 'url("data:image/svg+xml,' + encodeURIComponent(band(0.24)) + '")');
