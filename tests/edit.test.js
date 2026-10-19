@@ -301,6 +301,8 @@ const P = 2, START = 6, END = 10, OLD = '情不自陆', NEW = '情不自禁';
     await page.waitForTimeout(400);
     const J = await page.evaluate(() => {
         const bar = document.getElementById('rdHlBar');
+        const more = bar && bar.querySelector('[data-act="more"]');   // 10-19 起「改」收在「⋯」里
+        if (more) more.click();
         const btn = bar && bar.querySelector('[data-act="edit"]');
         if (btn) btn.click();
         const box = document.getElementById('rdEditBox');
@@ -316,7 +318,7 @@ const P = 2, START = 6, END = 10, OLD = '情不自陆', NEW = '情不自禁';
     });
     ok('J1 选中文字冒出划线小条', J.有小条, JSON.stringify(J));
     ok('J2 小条上有「改」按钮', J.有改按钮, JSON.stringify(J));
-    eq('J3 按钮就叫「✏️ 改」', J.按钮字样, '✏️ 改');
+    eq('J3 按钮就叫「改错字」', J.按钮字样, '改错字');
     ok('J4 点了出编辑框', J.出了编辑框, JSON.stringify(J));
     eq('J5 编辑框预填的正是选中的那几个字', J.预填的是选中的字, '情不自陆');
     ok('J6 编辑框冒出来时小条收起（不叠在一起）', J.小条收起了, JSON.stringify(J));

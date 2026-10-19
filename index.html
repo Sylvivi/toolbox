@@ -4506,6 +4506,16 @@ body {
            删除键的红(.rd-del)在下面单独盖回去，不受影响。 */
         .rd-hl-bar button.rd-act { background: transparent; border: none; color: var(--text); cursor: pointer; padding: 4px 6px; border-radius: 6px; font-size: 13px; }
         .rd-hl-bar button.rd-act:hover { background: var(--accent-light); color: var(--accent); }
+        /* 选中小条的三颗键（2026-10-19 她定的样子）：她说「小注、划线、修改三个很容易混，怕点错」——
+           原来是 🖍/✍️/✏️ 三支笔并排、一样大、一样宽，一眼分不出来。现在：
+           划线＝字底下带一条强调色的线（长得就像划线）｜注＝强调色实心胶囊、放中间（她最常用）｜
+           改＝收进灰色「⋯」，点开才露出「改错字」。三颗都不带图标，只靠字和样子区分。 */
+        .rd-hl-bar button.rd-act.rd-act-hl span { text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+        .rd-hl-bar button.rd-act.rd-act-main { background: var(--accent); color: #fff; font-weight: 600; padding: 4px 12px; border-radius: 14px; margin: 0 4px; }
+        .rd-hl-bar button.rd-act.rd-act-main:hover { background: var(--accent); color: #fff; }
+        /* 夜间的强调色都偏亮（有的皮肤是金黄 #f5c842），白字压上去看不清 → 夜里换深色字 */
+        body.dark .rd-hl-bar button.rd-act.rd-act-main, body.dark .rd-hl-bar button.rd-act.rd-act-main:hover { color: #15161a; }
+        .rd-hl-bar button.rd-act.rd-act-more { color: var(--text-muted); letter-spacing: 1px; }
         .rd-hl-bar button.rd-act.rd-del { color: #e5484d; }
         .rd-hl-bar button.rd-act.rd-del.armed { background: #e5484d; color: #fff; }
         /* 选中态浮动跟随（2026-08-11 用户要的，原话「选中文字的那个小条，可不可以跟着选中走呀，
@@ -36797,15 +36807,16 @@ body {
                  跟新加的这颗真·划线键撞脸（那颗键历史上就害用户以为「划线功能坏了」，
                  见 rdHlStyleBtnHtml 上那段⚠️⚠️）。它在**已有划线**那条小条上还在，不丢功能。
                顺序（2026-08-04 她定过「✍️注 要靠前」，现在色板没了，注就排在划线后面第一位）。 */
+            /* ⚠️2026-10-19 换了样子和排法（她：「三个很容易混，怕点错」，选的是「改收进⋯、注放中间」）：
+               划线 | 注（实心、居中）| ⋯ ——「改」点了「⋯」才换出来（见下面 'more' 分支）。样式见 .rd-act-main 那段。 */
             bar.innerHTML =
-                '<button class="rd-act" data-act="hl">🖍 划线</button>' +
+                '<button class="rd-act rd-act-hl" data-act="hl"><span>划线</span></button>' +
+                '<button class="rd-act rd-act-main" data-act="gloss">注</button>' +
                 '<span class="rd-sep"></span>' +
-                '<button class="rd-act" data-act="gloss">✍️ 注</button>' +
-                '<span class="rd-sep"></span>' +
+                '<button class="rd-act rd-act-more" data-act="more">⋯</button>' +
                 /* 「✏️ 改」＝改正文错字。为什么挂在这条上：改错字的第一步本来就是「选中那个错字」，
                    手势天生就对上了，零新增手势、零新增图标。（长按段落不行——手机上长按＝系统选词，
                    而选词正是划线的入口，两者会正面打架。） */
-                '<button class="rd-act" data-act="edit">✏️ 改</button>' +
                 /* 「✍️ 注」＝给不会读/不懂的字要一句「拼音·意思」，以手写小注挂在段间距里。
                    和「💬 问」的分工：问＝自己打字、出一整段回答；注＝不用打字、只要一行短注。
                    用户原话：「有些可能个别的字我不会读，或者我不知道他的意思，不需要用一整段话来介绍」。 */
@@ -36820,6 +36831,15 @@ body {
                 var act = e.target.closest('.rd-act'); if (!act) return;
                 var a = act.getAttribute('data-act');
                 if (a === 'hl') { rdHlCreate(rdHlRandomColor()); return; }   // 颜色随机，想改点那条划线
+                if (a === 'more') {
+                    // 「⋯」原地换成「改错字」，小条变宽了就按原来的中心重新摆一下（停靠在底部时位置归 CSS 管）
+                    var w0 = bar.offsetWidth, cx = bar.offsetLeft + w0 / 2;
+                    act.outerHTML = '<button class="rd-act" data-act="edit">改错字</button>';
+                    if (bar.classList.contains('rd-selfloat')) {
+                        bar.style.left = Math.max(8, Math.min(window.innerWidth - bar.offsetWidth - 8, cx - bar.offsetWidth / 2)) + 'px';
+                    }
+                    return;
+                }
                 if (a === 'edit') {
                     // ⚠️先把 _rdHlPending 抄下来：rdEditOpen 里会 rdHlHideBar()，那会把它清成 null
                     var pe = _rdHlPending;
