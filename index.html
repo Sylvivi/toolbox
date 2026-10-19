@@ -7324,6 +7324,14 @@ body {
                                     <div class="chat-model-dropdown preset-dd" id="presetDd_explain"></div>
                                 </div>
                             </div>
+                            <div style="margin-top:0.75em">
+                                <span style="font-size:11px;color:var(--text-muted)">小注模型</span>
+                                <div class="chat-model-wrap" style="position:relative;margin-top:0.35em">
+                                    <input type="text" class="preset-pick" id="presetPick_gloss" readonly onclick="presetTogglePicker('gloss')">
+                                    <span class="preset-caret">▾</span>
+                                    <div class="chat-model-dropdown preset-dd" id="presetDd_gloss"></div>
+                                </div>
+                            </div>
                             <!-- 2026-09-11 她要的：谷歌对某些章节的内容会拒（实测同一章 Gemini 全拒、
                                  Claude 照写），拒了就自动改用这里选的模型重做一次。她指定「让我自己去选」。 -->
                             <div style="margin-top:0.75em">
@@ -36969,13 +36977,32 @@ body {
            两个入口共用：新建走 rdGlMake（先建划线再调它），重注走 rdGlRedo（直接调）。
            ⚠️别把这段逻辑复制两份——提示词、清洗、超时、空回复分类都在这里，
            复制出去必然有一份会漏掉后来的修补。 */
+        /* 小注模型没选过 → 替她挑上收藏里的 3.8 flash（她 10-19 定的「就用3.8flash吧」）。
+           ⚠️只挑一次：挑成了就记 chat_gloss_model_seeded，之后她在设置里改成别的、或改回「跟随当前模型」都尊重她，不再改回去。
+           ⚠️收藏里没有这个模型（别的设备没收藏、或朋友那边）就什么都不做、下次再看——不瞎猜别的模型。 */
+        function _rdGlSeedModel() {
+            try {
+                if (localStorage.getItem('chat_gloss_model_seeded') === '1' || localStorage.getItem('chat_gloss_model')) return;
+                for (var i = 0; i < (chatFavModels || []).length; i++) {
+                    var f = chatFavModels[i];
+                    if (/gemini-3\.8-flash$/i.test(f.model || '')) {
+                        _chatSaveModelCfg('chat_gloss_model', f.model + '||' + (f.url || ''));
+                        localStorage.setItem('chat_gloss_model_seeded', '1');
+                        return;
+                    }
+                }
+            } catch (e) {}
+        }
         async function rdGlFetch(hl) {
             var word = (hl.text || hl.preview || '').trim();
             if (!word) return;
+            _rdGlSeedModel();
+            var gm = chatResolveReadingModel('gloss');   // 小注单独的模型；没选＝跟随当前模型
             var item = chatEnsureProvider();
-            if (!item || !chatSelectedModel) { alert(chatNoModelMsg()); return; }
-            var baseUrl = getBaseUrl(item.url);
-            var apiKey = chatSelectedKeyStr || getActiveKey(item);
+            if (!gm && (!item || !chatSelectedModel)) { alert(chatNoModelMsg()); return; }
+            var baseUrl = gm ? gm.baseUrl : getBaseUrl(item.url);
+            var apiKey = gm ? gm.apiKey : (chatSelectedKeyStr || getActiveKey(item));
+            var glModel = gm ? gm.model : chatSelectedModel;
             var id = hl.id;
 
             var pEl = document.querySelector('.chat-msg.ai[data-idx="' + hl.msgIdx + '"] .reading-merged p[data-p="' + hl.p + '"]');
@@ -36988,7 +37015,7 @@ body {
                 ctxText = (from ? '…' : '') + ctxText.slice(from, from + 400);
             }
 
-            var mdl = { model: chatSelectedModel, baseUrl: baseUrl };
+            var mdl = { model: glModel, baseUrl: baseUrl };
             showToast('✍️ 正在查「' + word + '」…');
             try {
                 /* ⚠️max_tokens 给足 2000，别按「才输出 14 个字」去压。
@@ -36996,7 +37023,7 @@ body {
                    压太低会出现「思考把额度吃光、正文一个字没吐」——钱照扣、什么都没有。
                    （标背景那个功能为这条坑返工过两轮，700 和 800 都栽过。） */
                 var out = await rdGlTimed({
-                    baseUrl: baseUrl, apiKey: apiKey, model: chatSelectedModel,
+                    baseUrl: baseUrl, apiKey: apiKey, model: glModel,
                     purpose: '手写小注', markUsed: true,
                     messages: [
                         { role: 'system', content: RD_GL_SYS },
@@ -39247,6 +39274,10 @@ body {
                ⚠️空档＝「不重试」，不是「跟随当前模型」——当前模型很可能就是刚被拒的那个，
                  跟着它重试等于白跑一趟还多烧一次额度。 */
             sumfb:    { key: 'chat_summary_fallback_model', empty: '不重试' },
+            /* 手写小注（2026-10-19 晗加）。她当时聊天用 ver/gemini-4-argon，那条线时快时慢（网关记录当天 17 次里 8 次超过 45 秒、
+               最慢 108 秒；不是被拒——「吹灯摸金」同样的请求快的 4 秒就回了），小注只等 45 秒，于是老报「没注成」。
+               她定的：「就用3.8flash吧」。空档＝跟随当前模型；没选过时自动替她挑上收藏里的 3.8 flash（见 _rdGlSeedModel）。 */
+            gloss:    { key: 'chat_gloss_model', empty: '跟随当前模型' },
             /* 聊天画图（2026-10-06 汐加）。⚠️空档＝不画图（不是跟随当前模型——聊天模型画不了图）。
                ⚠️别用 chat_image_model 这个键：09-02 撤「生图模型」时，chatRenderReadingModelSelects 每次都会把它清掉。 */
             draw:     { key: 'chat_draw_model', empty: '不画图' }
@@ -39352,7 +39383,8 @@ body {
             //   两个 kind 都留着、都指向同一个键——这样 chatResolveReadingModel('guide')
             //   和 ('explain') 两处调用点一个字都不用动。
             guide:   'chat_reading_explain_model',
-            explain: 'chat_reading_explain_model'
+            explain: 'chat_reading_explain_model',
+            gloss:   'chat_gloss_model'          // 手写小注（10-19），见 _PRESET_SLOTS.gloss
         };
         function chatResolveReadingModel(kind) {
             var key = _READING_MODEL_KEYS[kind];
