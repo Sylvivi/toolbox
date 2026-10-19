@@ -17508,6 +17508,7 @@ body {
         }
 
         function openChatModal() {
+            if (typeof readingLockBgHeight === 'function') readingLockBgHeight();   // 进对话/阅读前再量一次底图高度（见 readingLockBgHeight）
             document.getElementById('chatModalOverlay').classList.add('show');
             document.body.classList.add('modal-open');
             document.body.style.overflow = 'hidden';
@@ -25475,17 +25476,24 @@ body {
              所以用 JS 锁一个高度，写进 --rd-bg-h。
            ⚠️判据是**宽度变没变**：宽度没变＝键盘弹收，高度基准不动；宽度也变了＝转屏或
              真的换了窗口大小，这时才重新量。这条是整件事的关键，别改成无脑跟着 resize 走。 */
-        var _rdBgLockW = 0;
+        /* ⚠️2026-10-19 晗补：宽度没变但**变高了**也要重量。
+             她报「第一次点进对话/阅读，底下露出一截主页，刷新就好」：冷启动时脚本跑得早，
+             innerHeight 还没算上状态栏/导航栏那截，量矮了；随后变高的 resize 宽度没变，被当成键盘忽略，
+             底图就一直短一截，下面透出主页（--bg 是渐变，垫底的 background-color 不生效）。
+             键盘只会让它变矮，所以「只升不降」不影响上面防压扁的那条。 */
+        var _rdBgLockW = 0, _rdBgLockH = 0;
         function readingLockBgHeight() {
             var w = window.innerWidth, h = window.innerHeight;
-            if (_rdBgLockW === w) return;          // 宽度没变 → 是键盘，不动
-            _rdBgLockW = w;
+            if (_rdBgLockW === w && h <= _rdBgLockH) return;   // 宽度没变、也没变高 → 是键盘，不动
+            _rdBgLockW = w; _rdBgLockH = h;
             document.documentElement.style.setProperty('--rd-bg-h', h + 'px');
         }
         readingLockBgHeight();
         window.addEventListener('resize', readingLockBgHeight);
+        window.addEventListener('load', readingLockBgHeight);
+        window.addEventListener('pageshow', readingLockBgHeight);
         window.addEventListener('orientationchange', function () {
-            _rdBgLockW = 0;                        // 转屏后强制重量一次
+            _rdBgLockW = 0; _rdBgLockH = 0;        // 转屏后强制重量一次
             setTimeout(readingLockBgHeight, 250);  // 等系统把新尺寸报准
         });
         // 阅读底图：读当前选的那张（没设过、或那条自定义已被删＝关）
