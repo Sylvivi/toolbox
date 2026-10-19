@@ -4044,11 +4044,14 @@ body {
              线条粗细都一样、角上的手绘交叉也不变形。图是两遍描、略歪、角上轻轻交叉出头（学 rough notation 的方框），
              颜色按强调色现生成、存 --quote-box-img（readingRefreshQuoteSvgs）。
            ⚠️零 JS、零新增图层——引号「手绘线」就是栽在给整章叠图层上被撤的，这里绝不能走那条路。
-           ⚠️框挂在内层 .reading-quote-inner 上：只框字、「」留在框外（框连引号一起圈显得挤，8-12 那版就是连着圈的）。
+           ⚠️框挂在**外层 .reading-quote** 上，把「」一起框进去（10-19 当天她看了只框字的版本说「我觉得要把引号包含在内呢」）。
+             全角「」本身半边是空白，原样框进去框和引号之间会空出半个字；所以框住时给外层开 halt（引号收成半宽），
+             内层再用 normal 还原——句子里的逗号问号照常全宽，只有两头的「」收窄。长句不框，halt 也跟着撤（见 strip 规则）。
            ⚠️border 宽度是 0、图靠 border-image-width + outset 画在字外面：不占行高、不把字挤开，
              只有左右 3px padding 让框别贴着字。换行时 clone ＝每行各自一个完整的框（跟划线的方框一样）。
            跟波浪二选一（都是「占住短句」的装饰）；长短分工下长句的框由下面的 strip 规则去掉。 */
-        body.reading-box-on .reading-merged .reading-quote .reading-quote-inner {
+        body.reading-box-on .reading-merged .reading-quote {
+            font-feature-settings: "halt";
             border: 0 solid transparent;
             border-image-source: var(--quote-box-img);
             border-image-slice: 16;
@@ -4058,6 +4061,7 @@ body {
             padding: 0 3px;
             -webkit-box-decoration-break: clone; box-decoration-break: clone;
         }
+        body.reading-box-on .reading-merged .reading-quote .reading-quote-inner { font-feature-settings: normal; }
         /* 长短分工(reading-ls-on)：着色归长句、波浪归短句。
            着色落短句的部分已被上面那条着色 strip 去掉；这里把长句(rq-wide)的波浪背景清掉，长句只着色。
            ⚠️⚠️**这四条是长短分工真正生效的地方，别跟着别的功能一起删**：2026-08-12 拆「手绘线」时
@@ -4066,7 +4070,7 @@ body {
              先确认区块里没有别人的规则。 */
         body.reading-ls-on .reading-merged .reading-quote.rq-wide { background-image: none !important; padding: 0; }
         body.reading-ls-on .reading-merged .reading-quote.rq-wide .reading-quote-inner { background-image: none !important; padding-bottom: 0; }
-        body.reading-ls-on.reading-box-on .reading-merged .reading-quote.rq-wide .reading-quote-inner { border-image-source: none !important; padding-left: 0; padding-right: 0; }
+        body.reading-ls-on.reading-box-on .reading-merged .reading-quote.rq-wide { border-image-source: none !important; font-feature-settings: normal; padding: 0; }
         /* 划线永远不跟波浪落在同一句上：
            ① 短句没被波浪占住(非 ls-pd)→划线当短句装饰，去掉长句的划线； */
         body.reading-ls-on:not(.reading-ls-pd) .reading-merged .reading-quote.rq-wide .reading-quote-inner { text-decoration: none !important; }

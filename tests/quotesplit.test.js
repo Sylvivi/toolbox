@@ -91,12 +91,16 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
 
         /* ── E：画框（2026-10-19 加回，border-image 九宫格）跟波浪同一套分工 ── */
         {
-            const 有框 = el => getComputedStyle(el).borderImageSource !== 'none';
+            const 有框 = el => getComputedStyle(el.closest('.reading-quote')).borderImageSource !== 'none';
             set({ box: true, split: true });
             out.E_图生成了 = (getComputedStyle(document.documentElement).getPropertyValue('--quote-box-img') || '').indexOf('svg') >= 0;
             out.E_分工开只框短句 = 有框(短()) && !有框(长());
             // 框画在 border-image-outset 里，不能把行高撑开
             out.E_不撑行高 = Math.round(短().getBoundingClientRect().height) === Math.round((() => { set({ split: true }); return 短().getBoundingClientRect().height; })());
+            set({ box: true, split: true });   // 上一条量行高时把画框关了，这里重新打开
+            out.E_框住时引号收窄长句不收 = getComputedStyle(短().closest('.reading-quote')).fontFeatureSettings.indexOf('halt') >= 0
+                && getComputedStyle(长().closest('.reading-quote')).fontFeatureSettings.indexOf('halt') < 0
+                && getComputedStyle(短()).fontFeatureSettings.indexOf('halt') < 0;
             set({ box: true, split: false });
             out.E_分工关都框 = 有框(短()) && 有框(长());
             set({ box: true, ul: true, split: true });
@@ -125,6 +129,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('E1 画框图按强调色生成了', R.E_图生成了);
     ok('E2 分工开：画框只框短句', R.E_分工开只框短句);
     ok('E3 画框不撑高行', R.E_不撑行高);
+    ok('E9 框住时只收窄两头的「」、句内标点和长句不动', R.E_框住时引号收窄长句不收);
     ok('E4 分工关：长短都框', R.E_分工关都框);
     ok('E5 短句被框占住时，划线归长句', R.E_有框时划线归长句);
     ok('E6 开波浪自动关画框', R.E_开波浪关画框);
