@@ -25349,13 +25349,29 @@ body {
             /* 画框：九宫格用的 48×48 方框（border-image-slice:16，四角原样、中段拉伸）。
                两遍描：粗的一遍 + 淡一点的细的一遍，四条边各自略歪、在角上交叉出头一点点。
                ⚠️线头都落在 x/y 3.6~45 之间、角区(0~16)里——出头部分在角上，不会被中段拉伸拉长。 */
-            function bp(d, w, o) { return '<path d="' + d + '" fill="none" stroke="' + A + '" stroke-width="' + w + '" stroke-linecap="round" opacity="' + o + '"/>'; }
+            function bp(d, w, o) { return '<path d="' + d + '" fill="none" stroke="' + A + '" stroke-width="' + w + '" stroke-linecap="round" stroke-linejoin="round" opacity="' + o + '"/>'; }
             var boxSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48">'
                 + bp('M4.6 11 L44 5 M41.6 3.6 L39.6 44.6 M43.6 42.6 L4.4 39 M9 44.4 L6.4 3.6', 2.4, 1)
                 + bp('M6 7 L43 10.4 M38.8 5.4 L42.8 43 M42 38.4 L6.4 43.2 M5.2 41.6 L9.6 6', 1.5, 0.55) + '</svg>';
-            // 细浪：60×14，左头 8 | 一个波长 44 | 右尾 8；中段 round 平铺成整数个波（见 CSS 那段）
+            /* 细浪：60×14，左头 8 | 一个波长 44 | 右尾 8；中段 round 平铺成整数个波（见 CSS 那段）。
+               「轻毛糙」：一粗一细两笔，各加一点抖（她 10-19 在 A 轻 / B 重两版里挑的 A——光滑那版她说「粗糙感少了点」）。
+               ⚠️抖动 J 是按「一个波长」为周期的正弦叠加——中段一块接一块平铺时，接缝两边的抖动严丝合缝；
+                 换成随机数或 feTurbulence 会在每个波之间错开一截。 */
+            function wJ(t, k) { return k * (0.55 * Math.sin(2 * Math.PI * 3 * t + 1.3) + 0.35 * Math.sin(2 * Math.PI * 7 * t + 0.4) + 0.22 * Math.sin(2 * Math.PI * 11 * t + 2.1)); }
+            function wLine(amp, off, jk, ph) {
+                var pts = [];
+                for (var x = 2.4; x <= 57.61; x += 0.8) {
+                    var t = (x - 8) / 44, y;
+                    if (x < 8) { var u = (x - 2.4) / 5.6; y = 9.6 - 2.6 * u * u; }               // 左头：从下往上起笔
+                    else if (x > 52) { var v = (x - 52) / 5.6; y = 7 - 1.8 * Math.sin(v * Math.PI / 2); } // 右尾：往上收笔
+                    else y = 7 - amp * Math.sin(2 * Math.PI * t);
+                    y += off + wJ(t + ph, jk);
+                    pts.push(x.toFixed(1) + ' ' + y.toFixed(2));
+                }
+                return 'M' + pts.join(' L');
+            }
             var wave2 = '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="14">'
-                + bp('M2.4 9.6 Q5 9.4 8 7 Q19 2.4 30 7 T52 7 Q54.6 5 57.4 5.4', 2.4, 1) + '</svg>';
+                + bp(wLine(3.2, 0, 0.35, 0), 2.2, 1) + bp(wLine(3.0, 0.6, 0.5, 0.37), 1.2, 0.7) + '</svg>';
             var root = document.documentElement.style;
             root.setProperty('--quote-wave2-img', 'url("data:image/svg+xml,' + encodeURIComponent(wave2) + '")');
             root.setProperty('--quote-box-img', 'url("data:image/svg+xml,' + encodeURIComponent(boxSvg) + '")');
