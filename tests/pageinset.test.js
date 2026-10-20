@@ -47,8 +47,15 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
 
         // 真正被玻璃压住的高度（测试自己量一遍，跟实现对照）
         const box = document.querySelector('#chatInputArea .chat-input-box');
-        const covered = el.getBoundingClientRect().bottom - box.getBoundingClientRect().top;
-        const out = { inset: readingBottomInset(), covered: Math.round(covered), clientH: el.clientHeight };
+        // ⚠️2026-10-21：阅读时折叠的细条是透的，条后面的字看得见 → 只算条下沿以下那截
+        const covered = el.getBoundingClientRect().bottom - box.getBoundingClientRect().bottom;
+                const out = { inset: readingBottomInset(), covered: Math.round(covered), clientH: el.clientHeight };
+        // 展开的输入框不透 → 仍按上沿
+        document.getElementById('chatInputArea').classList.remove('reading-collapsed');
+        out.insetOpen = readingBottomInset();
+        out.coveredOpen = Math.round(el.getBoundingClientRect().bottom - box.getBoundingClientRect().top);
+        document.getElementById('chatInputArea').classList.add('reading-collapsed');
+        out.insetBack = readingBottomInset();
 
         // 翻页前：贴着「玻璃上沿」的最后一段是谁——翻完它必须还在屏上
         function lastVisibleP() {
@@ -90,7 +97,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     /* ⚠️2026-09-14 口径改回「整条玻璃都算被挡住」：她第二次报「留的行数少了一行，
        我想接着最上面那个看的，那一行已经被推到更上面去了」。
        所以 inset 就该等于被压住的高度，不再少减一行。 */
-    ok('inset ＝ 被玻璃压住的高度', Math.abs(R.inset - R.covered) <= 1,
+    ok('展开的输入框（不透）仍按上沿算', Math.abs(R.insetOpen - R.coveredOpen) <= 1 && R.insetOpen > R.insetBack,
+        'open=' + R.insetOpen + ' / 上沿 ' + R.coveredOpen + ' / 折叠 ' + R.insetBack);
+    ok('inset ＝ 折叠细条下沿以下那截（条是透的，后面的字算读过）', Math.abs(R.inset - R.covered) <= 1,
         'inset=' + R.inset + ' / 压住 ' + R.covered);
     /* 上限：绝不许跳过被玻璃挡住的那几行。 */
     ok('不跳字：一屏的步长 ≤ 可读区',

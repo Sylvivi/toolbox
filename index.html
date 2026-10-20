@@ -31123,6 +31123,14 @@ body {
                    输入区上面还有 10px 纯透明的内边距，那一截的字是完全看得见的，
                    一起减掉就会多留一行。 */
                 h = er.bottom - br.top;
+                /* ⚠️2026-10-21 晗改：阅读时折叠成的细条是**透的**（09-17 起日间也透，夜间本来就透），
+                   条后面的字她其实看得见、也读了。还按条的上沿算屏底，那一两行翻完又出现在顶上，
+                   她报「上面保留的行数在我看来多了」。
+                   所以折叠时屏底算到**条的下沿**：条后面那几行算读过，
+                   压在格言底下最看不清的那一行正好成了新页顶上留的那一行。
+                   展开的输入框是不透的（86%/72% 白），仍按上沿。 */
+                var area = document.getElementById('chatInputArea');
+                if (area && area.classList.contains('reading-collapsed')) h = er.bottom - br.bottom;
             }
             if (!(h > 0)) {
                 var v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--chat-ih'));
