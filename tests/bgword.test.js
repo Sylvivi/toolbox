@@ -38,7 +38,7 @@ const { chromium } = require('playwright');
     readingBgWord({ msgIdx: 0, pNum: 2, text: '一条鞭' });     // 别的段 → 照讲
     out.calls = calls;
     // ④ 小条
-    out.barHasBg = /data-act="gloss">注<\/button>[\s\S]{0,400}rd-act-main" data-act="bg">解</.test(rdHlShowSelBar.toString());
+    out.barHasBg = /data-act="gloss">注<\/button>[\s\S]{0,400}rd-act-ghost" data-act="bg">解</.test(rdHlShowSelBar.toString());
     return out;
   });
   const res = [
