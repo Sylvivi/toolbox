@@ -198,7 +198,8 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
             阅读模式弹窗里有: readerShowSummaryModal.toString().indexOf("umPaneHtml()") >= 0,
             对话模式弹窗里有: chatShowSummaryModal.toString().indexOf("umPaneHtml()") >= 0,
             // 她要求排第一（2026-08-23）：unshift 不是 push
-            两边都排第一: /unshift\(\{\s*key:\s*'usermem'/.test(readerShowSummaryModal.toString())
+            // ⚠️08-29 她改主意：阅读模式里「我」排最后（「我还是放最后去吧」），对话里仍排第一（10-20 晗改测试）
+            排位对: /push\(\{\s*key:\s*'usermem'/.test(readerShowSummaryModal.toString())
                        && /unshift\(\{\s*key:\s*'usermem'/.test(chatShowSummaryModal.toString()),
             // ⚠️旧入口必须拆干净，否则同一组 id 在页面上出现两次、umRenderPanel 只认头一个
             设置页那块已拆: !document.getElementById('chatUserMemRow')
@@ -210,7 +211,7 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
 
     ok('阅读模式的「摘要」弹窗里有「我」这一页', G.阅读模式弹窗里有, '');
     ok('普通对话的「摘要」弹窗里也有', G.对话模式弹窗里有, '');
-    ok('⚠️「我」排在第一个 Tab（她要求的）', G.两边都排第一, '');
+    ok('⚠️「我」：对话里排第一、阅读里排最后（她 08-29 定的）', G.排位对, '');
     ok('⚠️设置页那个旧入口已拆干净（同组 id 不能有两份）', G.设置页那块已拆, '');
 
     /* ===== H 组：让蘑菇自己动手记（2026-08-23 第二步）=====

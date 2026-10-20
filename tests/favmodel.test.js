@@ -174,8 +174,8 @@ function probe() {
         _chatFavExpanded = true;
         chatRenderFavSection();
         const box = document.getElementById('chatFavSection');
-        // 组标题的那几行（字号 11px 那种）
-        const labels = Array.from(box.querySelectorAll('div')).filter(d => /font-size:\s*11px/.test(d.getAttribute('style') || '')).map(d => d.textContent);
+        // 组标题的那几行。⚠️09-02 起组标题改用 .fav-grp-title 类（跟弹层 .fq-grp 统一），不再是行内 font-size:11px（10-20 晗改测试）
+        const labels = Array.from(box.querySelectorAll('.fav-grp-title')).map(d => d.textContent);
         return { 组数: labels.length, 标题: labels };
     });
     eq('两个同名中转站分成两组（不再混排）', H.组数, 2);

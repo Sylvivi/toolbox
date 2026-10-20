@@ -60,7 +60,7 @@ function eq(name, got, want) { ok(name, JSON.stringify(got) === JSON.stringify(w
     });
 
     eq('文件夹内按最近阅读排：C(3000) > A(2000) > E(1000)，没读过的 B D 按原顺序垫底',
-        R.names, ['C.txt', 'A.txt', 'E.txt', 'B.txt', 'D.txt']);
+        R.names, ['C', 'A', 'E', 'B', 'D']);   // 书架上显示的书名不带 .txt 了（10-20 晗改测试）
     eq('排序没有反过来改动 rbBooks 本身的顺序', R.after, R.importOrder);
     eq('文件夹列表仍按组内最近时间排（测试夹有 3000、另一个夹没读过）', R.folders, ['测试夹', '另一个夹']);
 

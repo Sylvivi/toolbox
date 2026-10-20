@@ -63,13 +63,15 @@ function build(tag) {
         await page.evaluate(() => navigator.serviceWorker.ready);
         await page.waitForTimeout(1500);
 
-        const A = await page.evaluate(async () => {
+        // 10-20 晗：缓存名原来写死 'toolbox-v9'，sw.js 每次 +1 后这两条就假红（现在已经 v47）→ 从 sw.js 里读
+        const CACHE_NAME = (fs.readFileSync(path.join(SRC, 'sw.js'), 'utf8').match(/var CACHE = '([^']+)'/) || [])[1];
+        const A = await page.evaluate(async (cn) => {
             const ks = await caches.keys();
-            const c = await caches.open('toolbox-v9');
+            const c = await caches.open(cn);
             const hit = await c.match('index.html');
             return { 缓存名: ks, 外壳在缓存里: !!hit, 标题: document.title };
-        });
-        ok('① 缓存用的是 v9', A.缓存名.indexOf('toolbox-v9') !== -1, JSON.stringify(A.缓存名));
+        }, CACHE_NAME);
+        ok('① 缓存用的是 sw.js 里写的那个版本（' + CACHE_NAME + '）', CACHE_NAME && A.缓存名.indexOf(CACHE_NAME) !== -1, JSON.stringify(A.缓存名));
         ok('① 外壳存在统一键 index.html 下', A.外壳在缓存里, JSON.stringify(A));
         ok('首次访问拿到的是 V1', /V1$/.test(A.标题), A.标题);
 

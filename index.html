@@ -602,17 +602,6 @@ body {
         .sync-dot.sync-conflict { background: var(--gold, #f0ad4e); }
         @keyframes sync-pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
-        .btn-quick-delete {
-            flex-shrink: 0; width: 22px; height: 22px;
-            border: none; border-radius: 50%; background: transparent;
-            color: var(--text-muted); font-size: 15px; line-height: 1;
-            cursor: pointer; display: flex; align-items: center; justify-content: center;
-            transition: background 0.18s, color 0.18s; padding: 0; margin-left: 2px;
-            opacity: 0.45;
-        }
-        .btn-quick-delete:hover { background: var(--red-bg); color: var(--red); opacity: 1; }
-        .card:hover .btn-quick-delete { opacity: 0.7; }
-
         .card-body {
             overflow: hidden;
             transition: max-height 0.35s ease, opacity 0.25s ease, margin-top 0.35s ease;
@@ -625,14 +614,12 @@ body {
             display: flex; gap: 8px; margin-top: 14px; padding-top: 12px;
             border-top: 1px solid var(--card-border);
         }
-        .btn-edit, .btn-delete {
+        .btn-edit {
             flex: 1; padding: 8px; border: none; border-radius: 8px;
             font-size: 13px; cursor: pointer; font-weight: 500; transition: all 0.2s;
         }
         .btn-edit { background: var(--blue-bg); color: var(--blue); }
-        .btn-delete { background: var(--red-bg); color: var(--red); }
         .btn-edit:hover { background: rgba(59,130,246,0.2); }
-        .btn-delete:hover { background: rgba(239,68,68,0.18); }
 
         .btn-copy, .btn-visit {
             flex-shrink: 0; padding: 4px 10px;
@@ -748,9 +735,6 @@ body {
             font-size: 11px; color: var(--text-muted);
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
-        .sub-img-left .sub-img-btns {
-            display: flex; gap: 6px; flex-wrap: wrap;
-        }
         .sub-img-right {
             width: 40%; max-width: 180px; flex-shrink: 0;
             max-height: 140px; overflow-y: auto; overflow-x: hidden;
@@ -839,12 +823,6 @@ body {
         .card-time-preview span { white-space: nowrap; display: flex; align-items: center; gap: 3px; }
         .card-time-preview .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--text-muted); opacity: 0.4; flex-shrink: 0; }
         .card:not(.collapsed) .card-time-preview { max-height: 0; opacity: 0; margin-top: 0; }
-        .btn-pin {
-            flex: 1; padding: 8px; border: none; border-radius: 8px;
-            font-size: 13px; cursor: pointer; font-weight: 500; transition: all 0.2s;
-            background: var(--accent-light); color: var(--accent-mid);
-        }
-        .btn-pin:hover { background: var(--accent-light); }
 
         .export-menu {
             display: none; position: absolute; top: 100%; right: 0; margin-top: 4px;
@@ -1574,12 +1552,8 @@ body {
            并不会把空间还给正文，纯粹换来一个「还得先把它叫出来」的额外动作。 */
 
 
-        /* 「白底」开关单独控制：开了遮罩再开白底，所有主题统一换成同一种白（盖过上面各主题色）。
-           不开白底则维持上面各主题自己的主题色遮罩。点「白底」chip 循环切换：关→纯白→柔白→暖白→关。
-           纯白纯不透明（#fff）完全不透主题色；柔白 90% 不透明、主题色只透出一丝；暖白半透明偏暖。 */
-        body.chat-mask-on.pure-mask-on .modal.chat-modal {   /* 纯白：纯不透明白，完全不透主题色 */
-            background: #fff;
-        }
+
+
         body.chat-mask-on.soft-mask-on .modal.chat-modal {   /* 柔白：90% 不透明白，主题色只透出一丝，比纯白柔 */
             background: rgba(255,255,255,0.90);
         }
@@ -1606,10 +1580,6 @@ body {
         }
         html:has(body.modal-open.dark.nightmask-soft)  { background-color: #121215; }
         html:has(body.modal-open.dark.nightmask-stone) { background-color: #161618; }
-        /* iPad 装成 App 后，阅读遮罩有时铺不到屏幕最底边，底下会露出页面主题底色（偏紫/偏冷）的一截。
-           开着遮罩+白底、又正打开对话页时，把整个 html 底色也换成同样的白，露出来的也是同色。
-           只在对话页打开时生效（modal-open），关掉就还原各主题底色，不影响首页。 */
-        html:has(body.modal-open.chat-mask-on.pure-mask-on:not(.dark))  { background-color: #FFFFFF; }
         html:has(body.modal-open.chat-mask-on.soft-mask-on:not(.dark))  { background-color: #FFFFFF; }
         html:has(body.modal-open.chat-mask-on.warm-mask-on:not(.dark))  { background-color: #FFF8F0; }
         html:has(body.modal-open.chat-mask-on.concrete-mask-on:not(.dark))  { background-color: #f1efe9; }
@@ -1661,7 +1631,6 @@ body {
             max-width: 768px; width: 100%; margin: 0 auto;
             transition: margin-top 0.3s cubic-bezier(0.32,0.72,0,1);
         }
-        .chat-topbar.topbar-hidden { /* margin-top 由 JS 按实际高度设置 */ }
         /* 对话列表那条顶栏不要下边线（2026-09-05 她要的）。原话：「日间模式下不明显，
            但是夜间模式下会跟我那个壁纸的那个线有点快叠在一起、偏平行的那种」——
            底图上本来就印着横线，再来一条几乎平行的分隔线，看着像印歪了。
@@ -1684,7 +1653,7 @@ body {
         }
         .chat-topbar select:focus { border-color: var(--accent-mid); }
 
-        /* 共读/翻译：本章阅读进度小字（绝对定位，正对齐在 clawd 图标正下方） */
+        /* 阅读/翻译：本章阅读进度小字（绝对定位，正对齐在 clawd 图标正下方） */
         .reading-progress-inline {
             position: absolute; right: 32px; width: 50px; top: 50%;
             transform: translateY(-50%); text-align: center;
@@ -1930,14 +1899,6 @@ body {
                 backdrop-filter: none; -webkit-backdrop-filter: none;
                 background: rgba(30,43,37,0.95);
             }
-            .page-header {
-                backdrop-filter: none; -webkit-backdrop-filter: none;
-                background: rgba(255,255,255,0.92);
-            }
-            .dark .page-header {
-                backdrop-filter: none; -webkit-backdrop-filter: none;
-                background: rgba(30,43,37,0.95);
-            }
             .tab-bar-wrap {
                 backdrop-filter: none; -webkit-backdrop-filter: none;
                 background: rgba(255,255,255,0.88);
@@ -1945,33 +1906,6 @@ body {
             .dark .tab-bar-wrap {
                 backdrop-filter: none; -webkit-backdrop-filter: none;
                 background: rgba(30,43,37,0.92);
-            }
-            .search-area {
-                backdrop-filter: none; -webkit-backdrop-filter: none;
-                background: rgba(255,255,255,0.88);
-            }
-            .dark .search-area {
-                backdrop-filter: none; -webkit-backdrop-filter: none;
-                background: rgba(30,43,37,0.92);
-            }
-            .link-card {
-                backdrop-filter: none; -webkit-backdrop-filter: none;
-                background: rgba(255,255,255,0.82);
-            }
-            .dark .link-card {
-                backdrop-filter: none; -webkit-backdrop-filter: none;
-                background: rgba(255,255,255,0.1);
-            }
-            .tag-bar-item, .tag-bar-item-sub {
-                backdrop-filter: none; -webkit-backdrop-filter: none;
-                background: rgba(255,255,255,0.82);
-            }
-            .dark .tag-bar-item, .dark .tag-bar-item-sub {
-                backdrop-filter: none; -webkit-backdrop-filter: none;
-                background: rgba(255,255,255,0.1);
-            }
-            .chat-quick-btn {
-                backdrop-filter: none; -webkit-backdrop-filter: none;
             }
             .card {
                 backdrop-filter: none; -webkit-backdrop-filter: none;
@@ -2219,7 +2153,6 @@ body {
         .rd-trace-hl { font-size: 13px; color: var(--text-sub); line-height: 1.5; }
         .rd-trace-cdot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; vertical-align: middle; margin-right: 5px; }
         .rd-trace-note { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
-        .rd-trace-para { font-size: 13px; color: var(--text-sub); line-height: 1.5; }
         .rd-trace-meta { font-size: 10px; color: var(--text-muted); margin-top: 5px; }
         .rd-trace-sort { margin-left: auto; padding: 4px 12px; border-radius: 14px; border: 1px solid var(--card-border); background: transparent; color: var(--text-sub); font-size: 12px; cursor: pointer; }
         .rd-trace-thread { border-color: var(--accent); background: var(--accent-light); }
@@ -2243,19 +2176,6 @@ body {
         .chat-bubble th { background: var(--card-inner); font-weight: 600; }
         .chat-bubble a { color: var(--accent); text-decoration: underline; }
         .chat-bubble img { max-width: 100%; border-radius: 10px; margin: 8px 0; }
-
-        /* 复制按钮（用户消息悬浮） */
-        .chat-copy-btn {
-            position: absolute; top: -4px; right: -4px;
-            width: 28px; height: 28px; border: none; border-radius: 8px;
-            background: var(--card-bg); border: 1px solid var(--card-border);
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            color: var(--text-muted); font-size: 13px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-            opacity: 0; transition: opacity 0.15s;
-        }
-        .chat-bubble:hover .chat-copy-btn { opacity: 1; }
-        .chat-copy-btn.copied { background: rgba(34,197,94,0.15); color: #16a34a; opacity: 1; border-color: rgba(34,197,94,0.3); }
 
         /* AI 消息底部工具栏 */
         .chat-toolbar {
@@ -3121,7 +3041,7 @@ body {
             -webkit-tap-highlight-color: transparent;
         }
         .chat-topmenu-item:hover { background: var(--accent-light); }
-        /* 共读/翻译：点 clawd 弹出的功能菜单（退出/书架/书签/跳转/搜索/模型） */
+        /* 阅读/翻译：点 clawd 弹出的功能菜单（退出/书架/书签/跳转/搜索/模型） */
         /* ⚠️2026-09-06 改成新粗野主义（她要的，跟书架和 `⋯` 菜单同一套语言）：
            直角、2.5px 描边、5px 实心硬投影、条目之间实线分隔。
            ⚠️**毛玻璃整个去掉**（原来是 blur(18px)）：手机上本来就在 @media 里关着（防发烫），
@@ -3170,7 +3090,7 @@ body {
            ⚠️字色用实色不用 var(--modal-bg)（半透明会糊），暗色单独覆盖。 */
         .clawd-reading-menu button:active { background: var(--text); color: #fff; }
         .dark .clawd-reading-menu button:active { color: #1a2420; }
-        /* 共读模式：输入框折叠成细条，只留 clawd 图标 + 提示，点一下展开 */
+        /* 阅读模式：输入框折叠成细条，只留 clawd 图标 + 提示，点一下展开 */
         .reading-collapse-hint { display: none; flex: 1; min-width: 0; min-height: 24px; align-items: center; color: var(--text-muted); font-size: 13px; padding-left: 4px; cursor: text; -webkit-tap-highlight-color: transparent; }
         .reading-collapse-hint .reading-hint-motto { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 64px; font-style: italic; }
         .chat-input-area.reading-collapsed #chatInput,
@@ -3267,16 +3187,6 @@ body {
             100% { transform: scale(1) rotate(0); }
         }
         .chat-send-btn.sending { animation: chatSendPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
-        /* ⚠️原来这里给夜间写死 color:#1a2420，是因为底是实心 accent、要压深色字。
-           现在底改成透明+淡底、字色本身就是 accent，写死反而会让它在夜里发黑看不见。 */
-
-        .chat-clear-btn {
-            width: 36px; height: 36px; border: none; border-radius: 10px;
-            background: transparent; color: var(--text-muted); font-size: 15px;
-            cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-            transition: background 0.15s, color 0.15s;
-        }
-        .chat-clear-btn:hover { background: var(--red-bg); color: var(--red); }
 
         /* ===== 思维链折叠 ===== */
         .chat-thinking {
@@ -3697,7 +3607,6 @@ body {
         }
         .chat-action-item:hover, .chat-action-item:active { background: var(--card-inner); }
         .chat-action-item.danger { color: var(--red); }
-        .chat-action-item .act-icon { font-size: 18px; width: 26px; text-align: center; }
 
         /* ===== 回到底部按钮 ===== */
         .chat-scroll-bottom {
@@ -3725,23 +3634,6 @@ body {
         .chat-scroll-bottom:hover { color: var(--accent); border-color: var(--accent-mid); }
         .chat-scroll-bottom:active { transform: scale(0.9); }
         .chat-scroll-bottom:hover { background: var(--accent-light); }
-        /* 共读：下滑一屏按钮（仅共读模式显示） */
-        .chat-pagedown, .chat-pageup {
-            position: absolute; right: 14px; z-index: 16;
-            width: 34px; height: 34px; border-radius: 50%;
-            border: 1px solid var(--card-border);
-            background: var(--card-bg); color: var(--text-muted);
-            opacity: 0.55; cursor: pointer;
-            display: none; align-items: center; justify-content: center;
-            -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
-            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-            transition: opacity 0.2s, transform 0.12s;
-        }
-        .chat-pagedown { bottom: 12px; }
-        .chat-pageup { bottom: 54px; }
-        .chat-pagedown.show, .chat-pageup.show { display: flex; }
-        .chat-pagedown:hover, .chat-pageup:hover { opacity: 0.9; }
-        .chat-pagedown:active, .chat-pageup:active { opacity: 1; transform: scale(0.9); }
         /* 设置面板里的小圆角 chip 按钮（主题/模式/夜间/引号样式/精句样式/名词样式/字号…）。
            ⚠️它原名 .pagebtn-pos-opt——来自早就删掉的「翻页按钮位置选择」功能，后来被当成
            通用 chip 样式沿用到 30 个毫不相关的按钮上，名字彻底误导。2026-08-06 改名。 */
@@ -3754,7 +3646,7 @@ body {
         .chip-btn.active {
             background: var(--accent-light); border-color: var(--accent-mid); color: var(--text);
         }
-        /* 共读「样式/名词」chip 自带迷你效果预览：chip 上直接显示它代表的装饰，所见即所得，
+        /* 阅读「样式/名词」chip 自带迷你效果预览：chip 上直接显示它代表的装饰，所见即所得，
            不用挨个点着试。选中态只是浅高亮(accent-light)、文字仍深色，所以预览在选中/未选中都清晰。
            用 id 选择器(特异性高于 .active)保证预览装饰一直在。「长短」是分工开关、非视觉效果，不加预览。 */
         #chipQuoteHl, #chipNameColor { color: var(--accent-mid); font-weight: 600; }   /* 着色 */
@@ -3765,7 +3657,7 @@ body {
         #chipQuoteBox { box-shadow: inset 0 0 0 1.5px var(--accent-chip); }                           /* 画框（2026-10-19 加回，只在引号那行）*/
         #chipNameGlow { text-shadow: 0 0 5px var(--accent-mid); }       /* 名词柔光（引号/精句那两档柔光 2026-08-12 已去掉）*/
 
-        /* ===== 共读：字体库 UI ===== */
+        /* ===== 阅读：字体库 UI ===== */
         .rfont-chip {
             display: inline-flex; align-items: center; gap: 4px;
             padding: 5px 6px 5px 11px; font-size: 11.5px; line-height: 1;
@@ -3889,14 +3781,14 @@ body {
         /* ⚠️等宽数字：110%→105% 时宽度不变，两个 A 按钮才不会左右跳 */
         .rfont-size span { color: var(--text-muted); font-variant-numeric: tabular-nums; }
 
-        /* ===== 共读：点段评价 ===== */
+        /* ===== 阅读：点段评价 ===== */
         /* ⚠️别再给整章加 content-visibility！2026-07-08 试过 `.reading-chapter { content-visibility:auto }`
            防卡/防烫，但屏外整章高度变成估算值，让「记住/回到上次阅读位置」（靠精确量每段真实位置的
            readingSaveScrollPos/readingRestoreScrollPos）定位跳歪——和更早在「段落」上试 content-visibility
            因「记忆阅读位置对不准」退回是同一个坑（见下方 3224 注释）。已彻底移除。
            长篇流畅度改由「窗口化」保证：页面里始终只留眼前约 20 条真实排版的消息（≤READING_RENDER_MAX），
            真实排版=定位天然精准。 */
-        /* 共读正文字号（按设备调节，作用于整段正文与问答，不影响操作栏） */
+        /* 阅读正文字号（按设备调节，作用于整段正文与问答，不影响操作栏） */
         /* ⚠️`--reading-lh` 的兜底值是 **normal**（浏览器默认，中文约 1.15 倍），
            不是随便挑个 1.75（2026-09-06 加行间距调节时定的）。
            正文在这之前**从来没有设过行高**，直接给个"舒适值"会让她一升级就发现
@@ -4144,9 +4036,6 @@ body {
             -webkit-user-select: none; user-select: none;
             -webkit-touch-callout: none; touch-action: manipulation;
         }
-        .reading-actbar button.rp-cancel { background: transparent; color: var(--text-muted); padding: 4px 6px; }
-        .reading-actbar button.rp-bookmark { background: transparent; color: var(--accent); padding: 4px 8px; }
-        .reading-actbar button.rp-bookmark.on { background: var(--accent); color: #fff; }
         .reading-actbar button.rp-del { background: transparent; color: #e5484d; border: 1px solid currentColor; }
         .reading-actbar button.rp-del.armed { background: #e5484d; color: #fff; border-color: #e5484d; }
         /* 长按「导读」键蓄力到位：标签就地变「标背景」，底色一并变深，告诉你松手就开始 */
@@ -4155,27 +4044,6 @@ body {
         /* 删除键顶到最左、跟右侧「重新回答/取消」拉开距离，防误触 */
         .reading-actbar.rp-actions .rp-del { margin-right: auto; }
         .reading-actbar button:disabled { opacity: 0.6; cursor: default; }
-        .reading-actbar .rp-col {
-            display: flex; flex-direction: column; gap: 4px; flex: 0 0 auto; align-items: stretch;
-        }
-        .reading-actbar .rp-col .rp-ask-send { width: 100%; }
-        .reading-actbar label.rp-ctx {
-            display: inline-flex; align-items: center; justify-content: center; gap: 4px; flex: 0 0 auto;
-            color: var(--text-muted); font-size: 11px; cursor: pointer;
-            user-select: none; white-space: nowrap;
-        }
-        .reading-actbar label.rp-ctx input {
-            -webkit-appearance: none; appearance: none; margin: 0; flex: 0 0 auto;
-            width: 16px; height: 16px; border-radius: 5px; cursor: pointer; position: relative;
-            border: 1.5px solid var(--accent-mid); background: var(--card-bg);
-            transition: background 0.15s, border-color 0.15s;
-        }
-        .reading-actbar label.rp-ctx input:checked { background: var(--accent); border-color: var(--accent); }
-        .reading-actbar label.rp-ctx input:checked::after {
-            content: ''; position: absolute; left: 4.5px; top: 1.5px;
-            width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0;
-            transform: rotate(45deg);
-        }
         /* 提问「带多少材料」的三档小方块（2026-07-28）。用户选的形态：一个圆点，点一下换一档。
            ⚠️用 CSS 画、不用 ○◐● 这三个字符——半黑圆 ◐ 在部分安卓字体里会掉字或大小不一，
            而这个控件全靠形状表意，掉一个字就彻底看不懂了。 */
@@ -4387,7 +4255,7 @@ body {
             font-family: var(--gl-font-lab, cursive);   /* 没有「·」时的兜底，挑覆盖最全的那个 */
             font-size: 13px; line-height: 1.05;
             /* ⚠️默认仍是 nowrap，**别改成 normal**（2026-08-06 踩过，见下）。
-               允许折两行是在 JS 里**只对真超出一行的那几条**开的（rdGlLayout 里 _glWrap 那段）：
+               允许折两行是在 JS 里**只对真超出一行的那几条**开的（rdGlLayout 里 _gl_tryWrapNear 那段；排完后 _glUnwrap 再把一行放得下的展开回一行）：
                先按 nowrap 量出天然单行宽，装得下就原样保持 nowrap，一个像素都不动；
                装不下的才就地改成 normal + 定死 width。
                ⚠️为什么不能在 CSS 里直接 normal + max-width：标签是**绝对定位**的，
@@ -4659,7 +4527,6 @@ body {
             font-size: 12px; padding: 5px 12px; border-radius: 8px; cursor: pointer;
         }
         .translate-askbar button:disabled { opacity: 0.6; cursor: default; }
-        .translate-askbar button.ta-remember { background: var(--card-bg); color: var(--accent); border: 1px solid var(--accent-mid); }
         /* 删除键（`.ta-ask-del`，2026-09-05 前文案是「删除译文」，她嫌啰嗦改成「删除」）
            放在「提问」左边（2026-08-28 她指定的位置）。
            不给实心色块——她的口味是「要显眼靠提亮字色＋淡底」，见记忆 user-taste-minimal-no-badges。 */
@@ -4682,7 +4549,7 @@ body {
         #translateActBar button.ta-run { background: var(--accent); color: #fff; }
         #translateActBar button:disabled { opacity: 0.6; cursor: default; }
 
-        /* ===== 共读：点段评价 ===== */
+        /* ===== 阅读：点段评价 ===== */
         .reading-merged blockquote { font-style: normal; }
         .reading-merged blockquote .reading-q { font-weight: 600; }
         .reading-merged blockquote .reading-q-name { color: var(--accent-read); font-weight: 600; }
@@ -4739,7 +4606,7 @@ body {
         .reading-merged blockquote[data-fold="1"].bg-fold > *:not(.reading-q) { display: none; }
         /* 折叠时把块压薄一点：整块只剩一行字，原来的上下内边距会显得空 */
         .reading-merged blockquote[data-fold="1"].bg-fold { padding-top: 0.35em !important; padding-bottom: 0.35em !important; }
-        /* 共读正文段间距（按设备调节，默认 8px≈原 0.5em）。段落带行内 margin:0.5em 0，
+        /* 阅读正文段间距（按设备调节，默认 8px≈原 0.5em）。段落带行内 margin:0.5em 0，
            必须用 !important 才能盖过行内样式。间距只落在「上边距」、下边距归零：
            段落之间靠下一段的 margin-top 拉开＝段间距；而紧跟段落的批注框(blockquote[data-cp])
            不再被上一段的下边距推开，自动贴住它点评的那一段（批注只吃自身 0.4em 上边距）。 */
@@ -4763,9 +4630,6 @@ body {
             -webkit-user-select: none; user-select: none;
             -webkit-touch-callout: none; touch-action: manipulation;
         }
-        .reading-actbar button.rp-cancel { background: transparent; color: var(--text-muted); padding: 4px 6px; }
-        .reading-actbar button.rp-bookmark { background: transparent; color: var(--accent); padding: 4px 8px; }
-        .reading-actbar button.rp-bookmark.on { background: var(--accent); color: #fff; }
         .reading-actbar button.rp-del { background: transparent; color: #e5484d; border: 1px solid currentColor; }
         .reading-actbar button.rp-del.armed { background: #e5484d; color: #fff; border-color: #e5484d; }
         /* 长按「导读」键蓄力到位：标签就地变「标背景」，底色一并变深，告诉你松手就开始 */
@@ -4796,27 +4660,6 @@ body {
         /* 删除键顶到最左、跟右侧「重新回答/取消」拉开距离，防误触 */
         .reading-actbar.rp-actions .rp-del { margin-right: auto; }
         .reading-actbar button:disabled { opacity: 0.6; cursor: default; }
-        .reading-actbar .rp-col {
-            display: flex; flex-direction: column; gap: 4px; flex: 0 0 auto; align-items: stretch;
-        }
-        .reading-actbar .rp-col .rp-ask-send { width: 100%; }
-        .reading-actbar label.rp-ctx {
-            display: inline-flex; align-items: center; justify-content: center; gap: 4px; flex: 0 0 auto;
-            color: var(--text-muted); font-size: 11px; cursor: pointer;
-            user-select: none; white-space: nowrap;
-        }
-        .reading-actbar label.rp-ctx input {
-            -webkit-appearance: none; appearance: none; margin: 0; flex: 0 0 auto;
-            width: 16px; height: 16px; border-radius: 5px; cursor: pointer; position: relative;
-            border: 1.5px solid var(--accent-mid); background: var(--card-bg);
-            transition: background 0.15s, border-color 0.15s;
-        }
-        .reading-actbar label.rp-ctx input:checked { background: var(--accent); border-color: var(--accent); }
-        .reading-actbar label.rp-ctx input:checked::after {
-            content: ''; position: absolute; left: 4.5px; top: 1.5px;
-            width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0;
-            transform: rotate(45deg);
-        }
         /* 提问「带多少材料」的三档小方块（2026-07-28）。用户选的形态：一个圆点，点一下换一档。
            ⚠️用 CSS 画、不用 ○◐● 这三个字符——半黑圆 ◐ 在部分安卓字体里会掉字或大小不一，
            而这个控件全靠形状表意，掉一个字就彻底看不懂了。 */
@@ -4907,7 +4750,7 @@ body {
         }
         @keyframes rpFlash { 0%,100% { background: transparent; } 30% { background: var(--accent-light); } }
         .reading-merged p[data-p].rp-flash { animation: rpFlash 1.1s ease; }
-        /* 共读正文段落首行缩进 2 字符（中文小说排版习惯）。
+        /* 阅读正文段落首行缩进 2 字符（中文小说排版习惯）。
            翻译容器同时带 .translate-merged 类，用 :not() 排除，翻译模式不缩进。 */
         .reading-merged:not(.translate-merged) p[data-p] { text-indent: 2em; }
 
@@ -5204,16 +5047,7 @@ body {
         }
 
         /* ===== 重新生成 ===== */
-        .chat-reroll-btn {
-            position: absolute; bottom: 8px; right: 40px;
-            width: 28px; height: 28px; border: none; border-radius: 8px;
-            background: var(--card-bg); border: 1px solid var(--card-border);
-            color: var(--text-muted); font-size: 13px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-            opacity: 0; transition: opacity 0.15s;
-        }
-        .chat-bubble:hover .chat-reroll-btn { opacity: 1; }
-        .chat-reroll-btn:hover { background: var(--accent-light); color: var(--accent); }
+
 
         /* ===== SP预设：用/管理两层 ===== */
         /* 顶部 chips：点一下=套用开聊 */
@@ -5613,12 +5447,6 @@ body {
         .sub-more-menu-item:hover { background: var(--accent-light); }
         .sub-more-menu-item.danger { color: var(--red); }
         .sub-more-menu-item.danger:hover { background: var(--red-bg); }
-        .btn-sub-del {
-            padding: 2px 6px; border: none; border-radius: 5px; cursor: pointer;
-            font-size: 13px; font-weight: 600; line-height: 1;
-            background: var(--red-bg); color: var(--red); transition: all 0.15s;
-        }
-        .btn-sub-del:hover { background: rgba(239,68,68,0.18); }
 
 /* =========================================================================
  * [1.7] 密钥管理与诊断面板
@@ -5666,13 +5494,6 @@ body {
         .model-type-tag { font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 500; }
         .model-type-tag.volume { background: rgba(59,130,246,0.12); color: var(--blue); }
         .model-type-tag.peruse { background: rgba(217,119,6,0.12); color: var(--gold); }
-
-        .btn-duplicate {
-            flex: 1; padding: 8px; border: none; border-radius: 8px;
-            font-size: 13px; cursor: pointer; font-weight: 500; transition: all 0.2s;
-            background: var(--dup-bg); color: var(--accent-mid);
-        }
-        .btn-duplicate:hover { background: var(--accent-light); }
 
         .model-entries { margin-top: 10px; }
         .model-entry {
@@ -5794,15 +5615,7 @@ body {
  * [1.8] 计算器与密码锁屏
  * ========================================================================= */
         /* ===== 计算器 ===== */
-        .calc-card {
-            background: var(--card-bg); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-            border: 1px solid var(--card-border); border-radius: 20px; padding: 24px;
-            max-width: 500px; margin: 0 auto;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.5);
-        }
-        .calc-title { text-align: center; margin-bottom: 24px; }
-        .calc-title h2 { font-size: 20px; color: var(--accent); margin-bottom: 6px; }
-        .calc-title p { font-size: 13px; color: var(--text-sub); }
+
         .calc-section { margin-bottom: 20px; }
         .calc-section-title {
             font-size: 13px; font-weight: 600; color: var(--accent-mid);
@@ -8449,11 +8262,6 @@ body {
             if (typeof readingApplyKeySentStyles === 'function') readingApplyKeySentStyles();
             // 更新 PWA 状态栏颜色
             updateStatusBarColor();
-        }
-        function cycleTheme() {
-            var idx = (getThemeIdx() + 1) % THEMES.length;
-            applyTheme(idx);
-            showToast(THEMES[idx].name);
         }
         // 切换夜间模式：保存开关 + 重新套用当前皮肤（随机模式保持随机）+ 刷新相关 UI
         function setNightMode(on) {
@@ -11868,7 +11676,7 @@ body {
             readingApplyBg();
             readingApplyNames();
             readingSeedPresetFonts();   // ⚠️要在 readingApplyFonts 之前：补完才轮得到它去挂 link
-            readingDropNotoOnce();      // ⚠️必须在 applyFonts 之前：改完选择才轮到它去挂对的字体
+            readingDropNotoOnce();      // ⚠️必须在 readingApplyFonts 之前：改完选择才轮到它去挂对的字体
             readingRegisterLocalFonts();
             readingApplyFonts();
             try { localStorage.removeItem('reading_stats'); } catch (e) {}   // 阅读时长统计已移除，顺手清掉各端残留的旧数据
@@ -14398,7 +14206,6 @@ body {
             var box = document.getElementById('syncLastErr');
             if (box) box.remove();
         }
-        function syncClearLastErr() { syncRenderLastErr(); }
 
         /* ===== 统一同步调度 ===== */
         // 页面起来时先渲染一次：她可能是关掉 app 之后才想起来要看
@@ -14475,64 +14282,7 @@ body {
             document.getElementById('gistModalOverlay').classList.remove('show');
         }
 
-        /* ⚠️已废弃（2026-09-06）：GitHub Gist 同步 的界面整个删掉了，这个函数**没有任何入口**。
-           留着不删是因为它引用的那些 DOM 已经不存在、真跑会抛异常，
-           而挖干净所有引用的风险大于收益。别再给它接入口。 */
-        function gistSaveConfig() {
-            var token = document.getElementById('gistToken').value.trim();
-            if (!token) { gistSetStatus('⚠️ 请填写 Token', 'var(--red)'); return; }
-            gistSetStatus('🔄 正在连接…', 'var(--text-muted)');
-            // 先验证 token 是否有效，同时看是否已有工具箱的 gist
-            fetch('https://api.github.com/gists?per_page=100', {
-                headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
-            }).then(function(r) {
-                if (!r.ok) throw new Error('Token 无效或无权限');
-                return r.json();
-            }).then(function(gists) {
-                // 查找是否已有工具箱 gist
-                var existing = null;
-                for (var i = 0; i < gists.length; i++) {
-                    if (gists[i].files && gists[i].files['toolbox_data.json']) { existing = gists[i]; break; }
-                }
-                localStorage.setItem('toolbox_gist_token', token);
-                if (existing) {
-                    localStorage.setItem('toolbox_gist_id', existing.id);
-                    gistSetStatus('✅ 找到已有同步记录，正在拉取数据…', 'var(--accent)');
-                    return gistPullFromId(existing.id, token, true);
-                } else {
-                    return gistCreateNew(token);
-                }
-            }).then(function() {
-                var cfg = gistGetConfig();
-                document.getElementById('gistId').value = cfg.gistId;
-                document.getElementById('gistIdGroup').style.display = 'block';
-                document.getElementById('gistSyncBtns').style.display = 'flex';
-                document.getElementById('gistSaveBtn').textContent = '重新连接';
-                gistUpdateLastSync();
-            }).catch(function(err) {
-                gistSetStatus('❌ ' + (err.message || '连接失败'), 'var(--red)');
-            });
-        }
 
-        function gistCreateNew(token) {
-            var all = buildSyncPayload();
-            return fetch('https://api.github.com/gists', {
-                method: 'POST',
-                headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    description: '工具箱数据备份',
-                    public: false,
-                    files: { 'toolbox_data.json': { content: JSON.stringify(all, null, 2) } }
-                })
-            }).then(function(r) {
-                if (!r.ok) throw new Error('创建失败');
-                return r.json();
-            }).then(function(data) {
-                localStorage.setItem('toolbox_gist_id', data.id);
-                localStorage.setItem('toolbox_gist_last_sync', new Date().toISOString());
-                gistSetStatus('✅ 已创建新同步，数据变动时自动上传', 'var(--accent)');
-            });
-        }
 
         /* ---- 墓碑（删除记录） ---- */
         var TOMB_STORE = 'toolbox_tombstones';
@@ -15022,7 +14772,7 @@ body {
         var chatCompressing = false;   // 正在压缩中
         var chatReadingMode = false;    // 共读模式
         var chatReaderMode = false;     // 阅读器模式（纯看书，临时态：仅在阅读器/选书覆盖层打开期间为 true，不写入会话）
-        // 共读/翻译：进入会话时只渲染「存档位置 → 末尾」这一窗口，避免一次性重排整本书卡几十秒；
+        // 阅读/翻译：进入会话时只渲染「存档位置 → 末尾」这一窗口，避免一次性重排整本书卡几十秒；
         // 往上滚到顶再按需补渲染更早章节。chatRenderStartIdx = 当前已渲染的首条消息下标（0 表示全渲染）。
         var chatRenderStartIdx = 0;
         var READING_RENDER_BUFFER = 4;   // 锚点之前多带几条做缓冲，免得锚点贴在最顶端
@@ -17992,7 +17742,7 @@ body {
             // 恢复预设选中状态
             chatActivePresetIdx = (conv.spPresetIdx !== undefined && conv.spPresetIdx !== null) ? conv.spPresetIdx : -1;
             chatEditingPresetIdx = -1;
-            // 共读/翻译：若本对话存过阅读位置，渲染时别滚到底（交给下面的定位逻辑）
+            // 阅读/翻译：若本对话存过阅读位置，渲染时别滚到底（交给下面的定位逻辑）
             var _hasReadingPos = false;
             if (chatReadingMode || chatTranslateMode) {
                 try { _hasReadingPos = !!localStorage.getItem(readingScrollKey()); } catch (e) {}
@@ -18002,7 +17752,7 @@ body {
             // ⚠️繁→简是**按书**存的，换书之后必须重新读一次，否则 chip 还显示上一本的状态
             if (typeof readingApplyT2S === 'function') readingApplyT2S();
             chatRenderAllMessages(true);
-            // 共读/翻译：渲染后回到上次阅读位置（覆盖默认的「滚到底」）
+            // 阅读/翻译：渲染后回到上次阅读位置（覆盖默认的「滚到底」）
             // 逐帧收敛校正到 <1px；并在短延时、网络字体加载完后各补一轮——
             // 因为网络字体是异步到的，到了会让整篇行高变化、位置整体偏移，必须复位。
             if (_hasReadingPos) {
@@ -18115,7 +17865,7 @@ body {
             }
             return lastTs;
         }
-        // 共读/翻译：算出进入会话时只渲染的起点下标。优先以「上次阅读位置」那条消息为锚点，
+        // 阅读/翻译：算出进入会话时只渲染的起点下标。优先以「上次阅读位置」那条消息为锚点，
         // 往前多带 BUFFER 条；没有存档位置时退而渲染最后 WINDOW 条。短会话直接全渲染（返回 0）。
         function chatComputeRenderStart() {
             var n = chatMessages.length;
@@ -18258,7 +18008,7 @@ body {
             chatAppendWindowTo(container, newEnd);
         }
         // 确保第 idx 条消息已在 DOM 中（可能在窗口上方或下方还没渲染），供任意位置跳转前调用。
-        // ⚠️阅读模式(chatReaderMode)的 DOM 由它自己那套(readerOpenChapter 非窗口化 + readerAppend/Prepend)管，
+        // ⚠️阅读模式(chatReaderMode)的 DOM 由它自己那套(readerOpenChapter 非窗口化 + readerAppendNextChapter/readerPrependPrevChapter)管，
         // 不维护 chatRenderStartIdx/EndIdx；这里若介入会误判「后面没渲染」而把已在页面里的章节重复补一遍、
         // 撑出重复 DOM 导致定位错乱（读痕定位不到出处的根因）。故阅读模式下直接不介入，交给它自己的加载。
         function chatEnsureRenderedIdx(idx) {
@@ -19190,7 +18940,7 @@ body {
                 }
             }
             if (_fnDirty) localStorage.setItem('chat_fav_models', JSON.stringify(chatFavModels));
-            // 按中转站名字分组（不同站点绝不混排）
+            // 按中转站分组（键是网址、标题显示名字；不同站点绝不混排）
             var groups = {};
             var groupOrder = [];
             /* ⚠️分组的键是**网址**不是名字（2026-07-28 修）：原来按 `providerName` 分组，
@@ -19395,7 +19145,7 @@ body {
             readingApplyBg();
             readingApplyNames();
             readingSeedPresetFonts();   // ⚠️要在 readingApplyFonts 之前：补完才轮得到它去挂 link
-            readingDropNotoOnce();      // ⚠️必须在 applyFonts 之前：改完选择才轮到它去挂对的字体
+            readingDropNotoOnce();      // ⚠️必须在 readingApplyFonts 之前：改完选择才轮到它去挂对的字体
             readingRegisterLocalFonts();
             readingApplyFonts();
             chatSyncReadingToggleVis();
@@ -21072,7 +20822,7 @@ body {
                 }
             }
 
-            // 共读模式：给原文标段落号
+            // 阅读模式：给原文标段落号
             // 阈值 200 字：只对足够长的文本标段号，短消息视为聊天/讨论而非待读原文
             var _readingOriginal = '';
             if (chatReadingMode && text && text.length > 200) {
@@ -21257,7 +21007,7 @@ body {
                 //   1-2 段处在「超窗了、但还没折」的中间态。旧代码 slice(covers) 之后又 slice(-5)，
                 //   把这些中间段两头都漏掉了——大纲没覆盖到，发送时又被截掉，那几段记忆凭空消失。
                 //   （用户 2026-08-20 从「7 段摘要、大纲只折入 1 段」看出来的：第 2 段就是这么丢的。）
-                //   背景追问那条路（chatAskBg 里 `slice(chatOutlineCovers)`）本来就是对的，这里补齐一致。
+                //   （当时背景追问那条路是 `slice(chatOutlineCovers)`、本来就对，这里补齐一致；那条路后来已撤。）
                 /* 走记忆表那条路：带「最近 5 段」和「还没折进表格的段」的**并集**。
                    ⚠️2026-08-29 改的（配合上面「攒 5 段再折表」）：原来只切最近 5 段，
                      万一某次折表失败、积压涨到 6 段，最老那段就会**既不在表里、也不在窗口里**，
@@ -22025,6 +21775,7 @@ body {
             try { return new TextEncoder().encode(s).length; }
             catch (e) { return s.length * 3; }
         }
+
 
         /* ===== v2：按「消息条数」分块，只重传变了的那一块（2026-09-11）=====
            起因同「阅读问答拆键」那次：她报手机发烫。对话原来是**整条重传**——
@@ -24591,7 +24342,7 @@ body {
             chatCompressing = false;
         }
 
-        // 共读：输入框折叠/展开（只留 clawd 图标 + 提示，点一下展开）
+        // 阅读：输入框折叠/展开（只留 clawd 图标 + 提示，点一下展开）
         function readingCollapseInput() {
             var a = document.getElementById('chatInputArea');
             if (a) a.classList.add('reading-collapsed');
@@ -24634,7 +24385,7 @@ body {
                 if (inp) setTimeout(function() { inp.focus(); }, 0);
             }
         }
-        // 失焦且为空时自动收回（仅共读模式）
+        // 失焦且为空时自动收回（阅读、翻译模式）
         (function() {
             var inp = document.getElementById('chatInput');
             if (inp) inp.addEventListener('blur', function() {
@@ -24971,6 +24722,8 @@ body {
              点段点评、记忆表，阅读模式全都在用同一套——`readerOpenChapter` 里
              `chatReadingMode` 和 `chatReaderMode` 是**一起置真**的。
              所以别看到「共读」字样就去清，多半是阅读也在走的那条路。
+           （10-20 晗：注释里当小标题用的「共读：」「共读/翻译：」已改成「阅读…」；还写着「共读」的，
+            多半是在对比两条分支、讲来龙去脉，或者是整章点评那条共读独有、现在走不到的路，别再统一替换。）
            ⚠️`chatReadingMode` 这个变量**保留**且仍有意义：现在它＝「已经进到某一章的正文」，
              而 `chatReaderMode` 还包含「阅读入口/书架开着但还没选章」那个中间态。 */
         function chatSetMode(mode) {
@@ -25050,7 +24803,7 @@ body {
             if (sb) sb.style.display = inReading ? 'none' : '';
         }
 
-        // 共读：正文字号缩放（按设备保存，倍率 0.8~1.6，默认 1.0）
+        // 阅读：正文字号缩放（按设备保存，倍率 0.8~1.6，默认 1.0）
         function readingApplyFontScale() {
             var s = parseFloat(localStorage.getItem('reading_font_scale') || '1') || 1;
             if (s < 0.8) s = 0.8; if (s > 1.6) s = 1.6;
@@ -25072,7 +24825,7 @@ body {
             readingApplyFontScale();
         }
 
-        // 共读：正文段间距（按设备保存，2~28px，默认 8）
+        // 阅读：正文段间距（按设备保存，2~28px，默认 8）
         function readingApplyParaSpace() {
             var s = parseInt(localStorage.getItem('reading_para_space') || '8', 10);
             if (isNaN(s)) s = 8;
@@ -25273,20 +25026,20 @@ body {
             }
             readingApplyKeySentStyles();
         }
-        // 共读：引号高亮（着色）
+        // 阅读：引号高亮（着色）
         function readingApplyQuoteHl() { readingApplyQuoteStyles(); }
         function readingToggleQuoteHl() {
             var on = localStorage.getItem('reading_quote_hl') === '1';
             localStorage.setItem('reading_quote_hl', on ? '0' : '1');
             readingApplyQuoteStyles();
         }
-        // 共读：长短分工开关（着色归长句、画框/波浪/划线归短句；关掉则所选样式一视同仁）
+        // 阅读：长短分工开关（着色归长句、画框/波浪/划线归短句；关掉则所选样式一视同仁）
         function readingToggleQuoteLs() {
             var on = localStorage.getItem('reading_quote_split') === '1';
             localStorage.setItem('reading_quote_split', on ? '0' : '1');
             readingApplyQuoteStyles();
         }
-        // 共读：引号下划线（独立开关，只给引号内文字加主题色虚线，不挂暖奶白遮罩）
+        // 阅读：引号下划线（独立开关，只给引号内文字加主题色虚线，不挂暖奶白遮罩）
         function readingApplyQuoteUl() { readingApplyQuoteStyles(); }
         function readingToggleQuoteUl() {
             var on = localStorage.getItem('reading_quote_ul') === '1';
@@ -25298,13 +25051,13 @@ body {
             }
             readingApplyQuoteUl();
         }
-        // 共读：引号底纹高亮（独立开关，学自酒馆美化，给整段引号铺半透明灰底）
+        // 阅读：引号底纹高亮（独立开关，学自酒馆美化，给整段引号铺半透明灰底）
         // 涂抹样式已下线：强制关闭并清掉可能残留的开关，避免老用户那边还显示底纹
         function readingApplyQuoteBand() {
             localStorage.removeItem('reading_quote_band');
             document.body.classList.remove('reading-band-on');
         }
-        // 共读：手绘波浪下划线（独立开关，毛边波浪平铺底部）
+        // 阅读：手绘波浪下划线（独立开关，毛边波浪平铺底部）
         function readingApplyQuoteWave() { readingApplyQuoteStyles(); }
         function readingToggleQuoteWave() {
             var on = localStorage.getItem('reading_quote_wave') === '1';
@@ -25315,7 +25068,7 @@ body {
             }
             readingApplyQuoteWave();
         }
-        // 共读：手绘画框（2026-10-19 加回）。跟波浪二选一；长短关时跟划线互斥（同波浪）
+        // 阅读：手绘画框（2026-10-19 加回）。跟波浪二选一；长短关时跟划线互斥（同波浪）
         function readingToggleQuoteBox() {
             var on = localStorage.getItem('reading_quote_box') === '1';
             localStorage.setItem('reading_quote_box', on ? '0' : '1');
@@ -25355,7 +25108,7 @@ body {
             root.setProperty('--quote-band-img', 'url("data:image/svg+xml,' + encodeURIComponent(band(0.24)) + '")');
             root.setProperty('--quote-band-img-dark', 'url("data:image/svg+xml,' + encodeURIComponent(band(0.5)) + '")');
         }
-        // 共读：白底遮罩（独立开关，跟「遮罩」配合——遮罩开了再开白底，遮罩就从主题色换成选中的那种白）
+        // 阅读：白底遮罩（独立开关，跟「遮罩」配合——遮罩开了再开白底，遮罩就从主题色换成选中的那种白）
         // 读出当前选的白：暖白/米白/月白/关；带两段历史迁移，老用户观感不突变。
         function readingGetMaskTint() {
             // 迁移1：暖白原先依附在「填色」上，没设过的老用户按当前填色状态继承一次
@@ -25625,39 +25378,6 @@ body {
 
             if (nightMode) localStorage.setItem('reading_bg_daybak', raw);   // 记住白天用的档
             localStorage.setItem('reading_bg', other.id);
-            readingApplyBg();
-        }
-        /* ⚠️2026-09-13：这个功能的**入口已经撤掉**（面板上那个 🔗 按钮没了），
-           函数留着只是没删干净；日夜换图现在不看 pair 了，见 readingSwapBgForMode。
-           给一张底图挑「另一半」。⚠️两边都写：配对是双向的，
-           只写一边的话从另一张切回来时又不认识对方了。 */
-        function readingBgPair(id) {
-            var list = readingBgList();
-            var me = readingBgFind(id);
-            if (!me) return;
-            var others = list.filter(function (x) { return x.id !== id; });
-            if (!others.length) { alert('还只有这一张底图，先添加另一张（比如同一套图的深色版）再来配对。'); return; }
-            var menu = others.map(function (x, i) {
-                return (i + 1) + ') ' + (x.name || '未命名') + (x.dark ? '（深）' : x.dark === false ? '（浅）' : '');
-            }).join('\n');
-            var cur = me.pair ? readingBgFind(me.pair) : null;
-            var ans = prompt('给「' + (me.name || '未命名') + '」挑一张日夜搭档\n'
-                + '（切日间/夜间时会自动换成它）\n\n' + menu + '\n\n输入编号，0 = 取消配对'
-                + (cur ? '\n当前搭档：' + (cur.name || '未命名') : ''));
-            if (ans === null) return;
-            var n = parseInt(String(ans).trim(), 10);
-            if (n === 0) {
-                list.forEach(function (x) { if (x.id === id || x.pair === id) delete x.pair; });
-                readingBgSaveList(list); readingApplyBg(); return;
-            }
-            var pick = others[n - 1];
-            if (!pick) return;
-            list.forEach(function (x) {
-                if (x.id === id) x.pair = pick.id;
-                else if (x.id === pick.id) x.pair = id;      // ⚠️双向
-                else if (x.pair === id || x.pair === pick.id) delete x.pair;  // 拆掉旧的三角关系
-            });
-            readingBgSaveList(list);
             readingApplyBg();
         }
         /* 点名字左边那个圆点：把这张图加入/移出随机池（2026-09-13）。
@@ -26301,7 +26021,7 @@ body {
             return out;
         }
 
-        // 共读：正文网络字体。支持「字体库」——存多个，点一下切换。随云同步（CF manifest，按时间戳整块覆盖）。
+        // 阅读：正文网络字体。支持「字体库」——存多个，点一下切换。随云同步（CF manifest，按时间戳整块覆盖）。
         /* ===== 阅读字体 =====
            两类字体源：
              · 在线字体库 reading_fonts=[{name,url}]（localStorage，参与云同步）——靠 <link> 加载 CSS。
@@ -26420,10 +26140,6 @@ body {
                 if (isFinite(v) && v > 0.3 && v < 3) return v;
             }
             return RD_FONT_SCALE_DEFAULT[name] || 1;
-        }
-        function readingFontScaleSet(name, v) {
-            if (Math.abs(v - (RD_FONT_SCALE_DEFAULT[name] || 1)) < 0.001) localStorage.removeItem('reading_fscale_' + name);
-            else localStorage.setItem('reading_fscale_' + name, String(Math.round(v * 100) / 100));
         }
         /* 把比例写进各槽位的 CSS 变量。⚠️没选字体的槽位写 1（跟随正文，不缩放）。 */
         function readingApplyFontScales() {
@@ -26609,7 +26325,7 @@ body {
             try { readingApplyFonts(); } catch (e) {}
         }
 
-        // 共读：字体设置块折叠开关（默认收起，省面积）
+        // 阅读：字体设置块折叠开关（默认收起，省面积）
         function readingToggleFontPanel() {
             var p = document.getElementById('readingFontPanel');
             var arrow = document.getElementById('readingFontArrow');
@@ -26909,7 +26625,7 @@ body {
             function done() {
                 readingLocalFontsSave(arr);
                 readingSeedPresetFonts();   // ⚠️要在 readingApplyFonts 之前：补完才轮得到它去挂 link
-                readingDropNotoOnce();      // ⚠️必须在 applyFonts 之前：改完选择才轮到它去挂对的字体
+                readingDropNotoOnce();      // ⚠️必须在 readingApplyFonts 之前：改完选择才轮到它去挂对的字体
             readingRegisterLocalFonts();
                 readingApplyFonts();
                 if (bkSyncCfg()) arr.forEach(function (f) { if (added.indexOf(f.name) >= 0) bkSyncPushFont(f, false, true); }); // 配了服务器就顺手上传新字体（fresh=她亲手选的，可以撤掉旧墓碑）
@@ -27828,7 +27544,6 @@ body {
         // ===== 阅读器（纯看书，第一步：不接 AI） =====
         var readerBookId = null;
         var readerChapterIdx = 0;
-        var _readerSaveTimer = null;
 
         // 多设备互通的关键：进度按「文件名+大小」存，而不是按本地随机生成的 book.id
         //（同一本书在每台设备上 id 不同，但文件名+大小一样，这样云端互相认得出是同一本）
@@ -29293,7 +29008,6 @@ body {
             }
             return out;
         }
-        var chatTransMining = false;
         // 从一段前情梗概里增量提取人物+地点（只碰 characters/places，别的表原样不动）。成功返回 true。
         async function chatTransMineCharPlace(recapText, signal) {
             if (!recapText || !recapText.trim()) return false;
@@ -30112,13 +29826,6 @@ body {
         }
         function rbOpenFolder(idx) { rbCurrentFolder = rbFolderNames[idx] != null ? rbFolderNames[idx] : null; rbRenderShelf(); rbScrollShelfTop(); }
         function rbFolderBack() { rbCurrentFolder = null; rbRenderShelf(); }
-        // 给每本书分一个固定的书本 emoji（按文件键哈希定死，同一本永远同一个，摆出来像一排彩色书脊）
-        var RB_BOOK_EMOJIS = ['📕', '📗', '📘', '📙', '📓', '📔', '📒'];
-        function rbBookEmoji(b) {
-            var k = rbBookFileKey(b), h = 0;
-            for (var i = 0; i < k.length; i++) { h = (h * 31 + k.charCodeAt(i)) & 0x7fffffff; }
-            return RB_BOOK_EMOJIS[h % RB_BOOK_EMOJIS.length];
-        }
         // 书本右上角 ⋯ 菜单：改名 / 删除（占位云端书只给改名）。动态建一个小浮层，点外面自动关。
         function rbBookMenuOpen(id, e) {
             e.stopPropagation(); e.preventDefault();
@@ -31352,7 +31059,7 @@ body {
             return new Uint8Array(output);
         }
 
-        // 共读：点击翻到下一屏，并按「行」对齐——把本页「最后一行完整露出的字」滚到新页顶部。
+        // 阅读：点击翻到下一屏，并按「行」对齐——把本页「最后一行完整露出的字」滚到新页顶部。
         // 新页顶行 = 上页读过的最后一整行（保留一行接头，衔接不生硬），且永远是完整一行、不被切半截。
         // 行的位置用 Range.getClientRects() 取真实行框，不靠 line-height 估算，换字体/字号/行距都不受影响。
         /* 底边被悬浮输入条挡掉多少（2026-09-13）。
@@ -31438,7 +31145,7 @@ body {
             }
         }
 
-        /* 共读：整页往回翻一屏（2026-08-09 新加）。在此之前**根本没有"往回翻"这个动作**——
+        /* 阅读：整页往回翻一屏（2026-08-09 新加）。在此之前**根本没有"往回翻"这个动作**——
            点屏幕任何地方都是 readingPageDown，看漏了只能手动往上滑。
            （`readingSyncReadingModeToggle` 上面原来挂着一句「点左半屏…切到上一屏」的注释，是更早
              删掉的功能留下的孤儿、底下根本没有对应代码，同日一并清掉了，别再照它理解这块。）
@@ -31506,7 +31213,7 @@ body {
             else readingPageDown();
         }
 
-        // 共读/翻译：自动记住/恢复上次阅读位置（不用手动书签）
+        // 阅读/翻译：自动记住/恢复上次阅读位置（不用手动书签）
         // 用「屏幕最上面那一段」当锚点存起来（段落 idx + data-p + 偏移）；
         // 锚点比纯像素 scrollTop 更稳——换字体/重排后能按段落重新定位，不会错位。
         function readingScrollKey() {
@@ -31571,7 +31278,7 @@ body {
             return false;
         }
 
-        // 共读/翻译：更新本章阅读进度小标志
+        // 阅读/翻译：更新本章阅读进度小标志
         function readingUpdateProgress() {
             var badge = document.getElementById('readingProgressInline');
             if (!badge) return;
@@ -31583,7 +31290,7 @@ body {
             if (pct < 0) pct = 0; if (pct > 100) pct = 100;
             badge.textContent = '已读 ' + pct + '%';
         }
-        // 共读/翻译：顶栏「永久隐藏」——阅读时横栏始终藏起，退出/搜索/书签等从 clawd 菜单进
+        // 阅读/翻译：顶栏「永久隐藏」——阅读时横栏始终藏起，退出/搜索/书签等从 clawd 菜单进
         var _topbarHidden = false;
         var _topbarLastScroll = 0;
         var _topbarSuppressUntil = 0;   // 该时间戳之前不做显隐判断（进入对话/自身动画期间）
@@ -31815,7 +31522,7 @@ body {
             return { text: picked.join('\n'), truncated: truncated };
         }
 
-        /* ===== 共读：点段评价 ===== */
+        /* ===== 阅读：点段评价 ===== */
         /* ⚠️共读提问/点评是**可并发**的（2026-07-30 改），别退回全局单锁。
            原样子：一个全局 `readingCommenting` 布尔，`readingOnParaClick` 第一行就
            「锁着直接 return」——于是**一段在生成时，双击别的段落毫无反应**（用户原话
@@ -31945,7 +31652,7 @@ body {
             readingOpenAskBar(idx, st.pNum, anchor, keep.text || '', o);
         }
 
-        // 共读：在 anchorEl 后面插入「问这一段」操作栏（原文段落、AI 回答块都能触发，复用同一套）
+        // 阅读：在 anchorEl 后面插入「问这一段」操作栏（原文段落、AI 回答块都能触发，复用同一套）
         // prefill：可选，预填问题文本（提问失败时用来把原问题塞回输入框，不让用户白打一遍）
         // opts.bgCi：双击的是某条背景讲解时，它在该段问答里的序号。带上它＝这一轮走「背景追问」模式。
         /* 长按「导读」蓄力时，浮在按钮**正上方**的那条提示。
@@ -32663,7 +32370,7 @@ body {
             }
         }
 
-        // 共读：对某段提问（单轮问答），答案以引用形式接在该段下方
+        // 阅读：对某段提问（单轮问答），答案以引用形式接在该段下方
         /* opts.guide = true 时走「社科书整节导读」：pNum 传的是你点的那一段，
            函数内会把它扩成所在的整个小节，并把导读挂到小节的小标题后面（重读时先看导读再看正文）。
            其余一切——流式小气泡、停止按钮、reader_qa 落盘同步、读痕、整条重渲——全部复用，不另起一套。 */
@@ -33009,7 +32716,7 @@ body {
                 } else if ((_ctxCfg.mt || _ctxCfg.sum) && chatReaderMode && readerBookId != null && msg.readerChapter != null) {
                     // 阅读模式没有自动压缩摘要：开了「自动总结前情」才按需补摘要（已存的跳过）；没开就只发已备好的，不新烧 API
                     try {
-                        // ⚠️摘要那个开关关掉时 genOK 也要跟着关：readerEnsureSummaries 会**现场调 API 生成摘要**，
+                        // ⚠️摘要那个开关关掉时 _genOK 也要跟着关：readerEnsureSummaries 会**现场调 API 生成摘要**，
                         //   不挡就是白烧一笔它根本不会发出去的钱（跟背景追问那条路踩过的是同一个坑）。
                         var _genOK = readerSummaryEnabled() && !!_ctxCfg.sum;
                         var _mtOpts = { mt: !!_ctxCfg.mt, sum: !!_ctxCfg.sum };
@@ -33839,7 +33546,7 @@ body {
                     var qas = lastTb.querySelectorAll('.tb-qa');
                     target = qas.length ? qas[qas.length - 1] : lastTb;
                 }
-                // 共读模式：评论块 blockquote[data-cp]
+                // 阅读模式：评论块 blockquote[data-cp]
                 if (!target) {
                     var bqs = fresh.querySelectorAll('blockquote[data-cp="' + focusP + '"]');
                     if (bqs.length) target = bqs[bqs.length - 1];
@@ -34386,7 +34093,7 @@ body {
             }
         }
 
-        /* ===== 共读：书签 ===== */
+        /* ===== 阅读：书签 ===== */
         /* =========================================================================
          * [3.10.5.12] 书签 · 划线 · 手写小注 · 读痕
          * 说明：书签与划线的存取和跨设备合并、划线样式、手写小注(rdGl*)的取词/排版/引线布局、
@@ -34427,14 +34134,14 @@ body {
         /* ===================== 划线（读者在正文里划重点 + 批注 + 问 clawd） =====================
            存账思路同书签：按「会话 → 第几条消息 + 第几段 + 段内第几个字到第几个字」记，
            正文内容稳定不变，所以刷新/换设备/窗口化补渲染都能按账把线重新描回去，且不破坏既有人名/引号高亮。 */
-        /* ⚠️加/删颜色时**必须同步改**：下面两条写死色名的正则（小注取色 rdGlLayout、换色 rdHlSetColor）、
+        /* ⚠️加/删颜色时**必须同步改**：下面这条写死色名的正则（小注取色，在 rdGlLayout 里；原来还有一条换色用的，换色功能已撤）、
    RD_HL_SW（读痕面板那个小圆点）、以及 CSS 里 --hlc/--hla、下划线色、.rd-gl-* 墨色、.rd-sw-* 色板
-   的日间+夜间各一套。漏掉正则那两条的表现是**新颜色被当成蓝色**（正则匹配不上就走 || 'sky' 兜底）。 */
+   的日间+夜间各一套。漏掉那条正则的表现是**新颜色被当成蓝色**（正则匹配不上就走 || 'sky' 兜底）。 */
         /* ⚠️**金(gold)已被换成紫(purple)**（2026-08-10 用户：「可以把那个黄色换成紫色哦……
            我应该是不会用那个黄色的」）。起因是夜间主题钉死蓝金、强调色本身就是金黄，划线的黄跟它撞。
            ⚠️**gold 的那一整套定义（--hlc/--hla/--mk-ink/下划线色/.rd-gl-gold/.rd-sw-gold/RD_HL_SW）
              一律留着别删，两条正则里也要继续认它**：书里已经划过的黄色划线还得正常显示、还得能被
-             换色正则匹配到；从这个数组里拿掉就够了——色板和随机都只读这个数组。 */
+             小注取色那条正则匹配到；从这个数组里拿掉就够了——色板和随机都只读这个数组。 */
         var RD_HL_COLORS = ['purple', 'orange', 'green', 'sky', 'rose', 'ink'];   // 取自主题夜间亮强调色，色相拉开当分类色板；ink=墨（中性色，日间黑/夜间白）
         function readingGetAllHl() {
             try { return JSON.parse(rdLsGet('reading_highlights')) || {}; }
@@ -34644,7 +34351,7 @@ body {
                     if (_mk) _mk.setAttribute('data-gl', _note);
                 }
             }
-            /* ⚠️必须 try 住：这里在**正文渲染的主路径**上（chatRenderMessage → 每条共读消息都走），
+            /* ⚠️必须 try 住：这里在**正文渲染的主路径**上（chatBuildMsgEl → 每条阅读正文消息都走），
                小注排版一旦抛异常，整篇正文就渲染不出来了。小注只是装饰，坏了顶多不显示，
                绝不能连累正文。（同理，rdGlLayoutAll 里也逐条 try。） */
             /* ⚠️视口外的这一步直接跳过（2026-08-11 加）：进一次会话要渲十几条消息，每条都当场
@@ -35786,7 +35493,7 @@ body {
                            顺带：段间距最大 28px、标签高 14px，(28-14)/2 正好也是 7，
                            所以缝够宽时这个值跟居中是一回事，简化掉不损失什么。 */
                         // 缝装得下就用 7px（居中）；装不下＝注定压到隔壁块，改用 12px 落进它的留白带
-                        lyUp: _lyU,      // 留白由 _insetOf 按缝的实际宽度定，见它上面那段
+                        lyUp: _lyU,      // 留白由 _insetToward 按缝的实际宽度定，见它上面那段
                         lyDown: _lyD,
                         /* 这一侧的缝装不下＝标签注定伸进隔壁块里，排位时要设法**横向避开它的字**
                            （2026-08-06 加，见 _glGlyphSpan 上那段）。存下邻居节点备查。 */
@@ -36267,7 +35974,7 @@ body {
                     if (!t.nextEl || (_sp && x < _sp.r + RD_GL_DODGE_SEP && _sp.l < x + lw + RD_GL_DODGE_SEP)) { if (wrapped) _undo(); return false; }   // 没有下一块＝超过了下缝小注能到的地方
                 }
                 /* 折两行（或往下挪过）的标签会伸进本段下面那条缝——那条缝里可能已经摆了别的小注。
-                   撞上就放弃行尾走老路；没撞上就把自己登记成那条缝的障碍，后面摆进来的小注会绕开（见 _gl_tailBlock）。 */
+                   撞上就放弃行尾走老路；没撞上就把自己登记成那条缝的障碍，后面摆进来的小注会绕开（见 tailObs、_gl_tailHit / _gl_tailDodge）。 */
                 // 跟哪几条缝里的小注可能撞：下缝（见下）；斜着翘过本段字顶＝上缝（只有一行的段才会）
                 /* ⚠️下缝**一律**登记，不管伸没伸出去：段间距调小（2~6px）时，下一段往上摆的小注本来就会探进本段末行的空白
                      （老规矩是绕开这里的「字」，可现在这片空白被行尾标签占了，它看不见）。自查实测不登记会叠 14 条。 */
@@ -37879,7 +37586,7 @@ body {
                 // 阅读模式：提问从 reader_qa 出（同步可靠），不依赖 reading_bookmarks
                 entries = rdTraceReaderAskEntries();
             } else {
-                // 共读/翻译：提问从 reading_bookmarks 的 ask 书签出（会话 id chat_ 跨设备稳定，同步没问题）
+                // 阅读/翻译：提问从 reading_bookmarks 的 ask 书签出（会话 id chat_ 跨设备稳定，同步没问题）
                 entries = [];
                 var groups = {}, order = [];
                 readingGetConvBookmarks().forEach(function (b) {
@@ -38273,7 +37980,7 @@ body {
                 // translate-merged 同时带 reading-merged 类，必须先判翻译模式
                 var tp = e.target.closest('.translate-merged p[data-p]');
                 if (tp) { translateOnParaClick(tp); return; }
-                // 共读模式：点屏幕任意一边都往下翻一屏（左手握机随便点都能继续读，
+                // 阅读模式：点屏幕任意一边都往下翻一屏（左手握机随便点都能继续读，
                 // 往回看用手指上滑滚动）。双击留给段落评价、拖选/已选中文字留给复制，故排除并延迟确认。
                 if (chatReadingMode || _chatTapPageOn()) {
                     if (_isMultiTouchEcho()) return;   // 多指手势（如三指截屏）误合成的点击，不翻页
@@ -38338,7 +38045,7 @@ body {
             }
             el.addEventListener('pointerdown', function(e) {
                 if (!e.target.closest) { _lpClear(); return; }
-                // 共读模式：长按 AI 回复块 = 弹出「删除 / 重新回答」操作条
+                // 阅读模式：长按 AI 回复块 = 弹出「删除 / 重新回答」操作条
                 if (chatReadingMode && !e.target.closest('.translate-merged')) {
                     var rbq = e.target.closest('.reading-merged blockquote[data-cp]');
                     if (rbq && !e.target.closest('.reading-actbar, button, input, textarea')) {
@@ -38370,7 +38077,7 @@ body {
             el.addEventListener('pointerup', _lpClear);
             el.addEventListener('pointercancel', _lpClear);
             el.addEventListener('pointerleave', _lpClear);
-            // 共读模式：双击 AI 回答块 = 接着聊。原文段落的单/双击改由 click 连击计数统一处理。
+            // 阅读模式：双击 AI 回答块 = 接着聊。原文段落的单/双击改由 click 连击计数统一处理。
             el.addEventListener('dblclick', function(e) {
                 if (!e.target.closest) return;
                 if (_isMultiTouchEcho()) return;   // 多指手势（如三指截屏）误合成的双击，忽略
@@ -40680,183 +40387,10 @@ body {
         })();
 
         /* =========================================================================
-         * [3.12] 部署与 PWA 支持
-         * 说明：负责生成可部署 HTML 快照、推送 GitHub Pages 以及 PWA 资源定义。
+         * [3.12] PWA 支持
+         * 说明：Service Worker 注册、「有新版本」提示，以及 PWA 资源定义。
+         *       （原来的「一键部署到 GitHub Pages」09-06 撤了入口，10-20 晗把遗留的函数清掉了。）
          * ========================================================================= */
-        /* ===== 一键部署到 GitHub Pages ===== */
-        /* ⚠️已废弃（2026-09-06）：一键部署到 GitHub Pages 的界面整个删掉了，这个函数**没有任何入口**。
-           留着不删是因为它引用的那些 DOM 已经不存在、真跑会抛异常，
-           而挖干净所有引用的风险大于收益。别再给它接入口。 */
-        function deployGetCleanHtml() {
-            // 深度清理 DOM 快照：移除所有动态渲染的列表内容、敏感值、运行时状态
-            var overlays = document.querySelectorAll('.modal-overlay.show');
-            overlays.forEach(function(o) { o.classList.remove('show'); });
-            var lockScreen = document.getElementById('lockScreen');
-            if (lockScreen) lockScreen.classList.add('hidden');
-
-            // 清空敏感输入框
-            var sensitiveIds = ['gistToken', 'gistId', 'cfWorkerUrl', 'cfToken', 'deployRepo', 'deployBranch', 'lockInput', 'lockSqAnswer', 'lockSqVerifyAnswer'];
-            var saved = {};
-            sensitiveIds.forEach(function(id) {
-                var el = document.getElementById(id);
-                if (el) { saved[id] = el.value; el.value = ''; el.removeAttribute('value'); }
-            });
-
-            // 清空状态文字
-            ['gistStatus', 'gistLastSync', 'deployStatus', 'lockMsg', 'gistStatusLine'].forEach(function(id) {
-                var el = document.getElementById(id);
-                if (el) el.textContent = '';
-            });
-
-            // 清空动态渲染的列表内容（关键！避免僵尸卡片）
-            ['keyCardList', 'snipCardList', 'keyFilterBar', 'snipFilterBar', 'imgbedList', 'collectionItems', 'modelEntries'].forEach(function(id) {
-                var el = document.getElementById(id);
-                if (el) el.innerHTML = '';
-            });
-
-            // 隐藏仅在连接后显示的区域
-            var gistIdGroup = document.getElementById('gistIdGroup');
-            var gistSyncBtns = document.getElementById('gistSyncBtns');
-            var deploySection = document.getElementById('deploySection');
-            if (gistIdGroup) { saved._gistIdGroup = gistIdGroup.style.display; gistIdGroup.style.display = 'none'; }
-            if (gistSyncBtns) { saved._gistSyncBtns = gistSyncBtns.style.display; gistSyncBtns.style.display = 'none'; }
-            if (deploySection) { saved._deploySection = deploySection.style.display; deploySection.style.display = 'none'; }
-
-            // 移除可能残留的 .active 状态
-            document.querySelectorAll('.filter-chip.active').forEach(function(el) { el.classList.remove('active'); });
-
-            var html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-
-            // ---- 立即恢复现场 ----
-            overlays.forEach(function(o) { o.classList.add('show'); });
-            sensitiveIds.forEach(function(id) {
-                var el = document.getElementById(id);
-                if (el && saved[id] !== undefined) el.value = saved[id];
-            });
-            if (gistIdGroup) gistIdGroup.style.display = saved._gistIdGroup || '';
-            if (gistSyncBtns) gistSyncBtns.style.display = saved._gistSyncBtns || '';
-            if (deploySection) deploySection.style.display = saved._deploySection || '';
-
-            // 重新渲染
-            if (typeof renderKeyFilters === 'function') renderKeyFilters();
-            if (typeof renderKeyCards === 'function') renderKeyCards();
-            if (typeof renderSnipFilters === 'function') renderSnipFilters();
-            if (typeof renderSnippets === 'function') renderSnippets();
-            if (typeof checkBackupReminder === 'function') checkBackupReminder();
-
-            return html;
-        }
-
-        /* ⚠️已废弃（2026-09-06）：一键部署到 GitHub Pages 的界面整个删掉了，这个函数**没有任何入口**。
-           留着不删是因为它引用的那些 DOM 已经不存在、真跑会抛异常，
-           而挖干净所有引用的风险大于收益。别再给它接入口。 */
-        function deployToGitHub() {
-            var token = document.getElementById('gistToken').value.trim() || localStorage.getItem('toolbox_gist_token') || '';
-            var repo = document.getElementById('deployRepo').value.trim();
-            var branch = document.getElementById('deployBranch').value;
-            var statusEl = document.getElementById('deployStatus');
-            if (!token) { statusEl.textContent = '⚠️ 请先填写 GitHub Token'; statusEl.style.color = 'var(--red)'; return; }
-            if (!repo || repo.indexOf('/') === -1) { statusEl.textContent = '⚠️ 仓库格式：用户名/仓库名'; statusEl.style.color = 'var(--red)'; return; }
-            localStorage.setItem('toolbox_deploy_repo', repo);
-            localStorage.setItem('toolbox_deploy_branch', branch);
-            statusEl.textContent = '🔄 [1/6] 获取源码…'; statusEl.style.color = 'var(--text-muted)';
-
-            var headers = { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' };
-
-            // 推送单个文件的辅助函数
-            function pushFile(path, contentBase64, msg) {
-                var checkUrl = 'https://api.github.com/repos/' + repo + '/contents/' + path + '?ref=' + encodeURIComponent(branch);
-                return fetch(checkUrl, { headers: headers })
-                .then(function(r) { return r.ok ? r.json() : null; })
-                .then(function(existing) {
-                    var putUrl = 'https://api.github.com/repos/' + repo + '/contents/' + path;
-                    var body = { message: msg, content: contentBase64, branch: branch };
-                    if (existing && existing.sha) body.sha = existing.sha;
-                    return fetch(putUrl, { method: 'PUT', headers: headers, body: JSON.stringify(body) });
-                })
-                .then(function(r) {
-                    if (!r.ok) return r.json().then(function(d) { throw new Error(path + ': ' + (d.message || 'HTTP ' + r.status)); });
-                    return r.json();
-                });
-            }
-
-            // 检查文件是否已存在（存在则跳过）
-            function pushIfMissing(path, contentBase64, msg) {
-                var checkUrl = 'https://api.github.com/repos/' + repo + '/contents/' + path + '?ref=' + encodeURIComponent(branch);
-                return fetch(checkUrl, { headers: headers })
-                .then(function(r) {
-                    if (r.ok) return null; // 已存在，跳过
-                    var putUrl = 'https://api.github.com/repos/' + repo + '/contents/' + path;
-                    var body = { message: msg, content: contentBase64, branch: branch };
-                    return fetch(putUrl, { method: 'PUT', headers: headers, body: JSON.stringify(body) })
-                    .then(function(r2) {
-                        if (!r2.ok) return r2.json().then(function(d) { throw new Error(path + ': ' + (d.message || 'HTTP ' + r2.status)); });
-                        return r2.json();
-                    });
-                });
-            }
-
-            function toBase64(str) {
-                return new Promise(function(resolve, reject) {
-                    var blob = new Blob([str], { type: 'text/plain;charset=utf-8' });
-                    var reader = new FileReader();
-                    reader.onload = function() { resolve(reader.result.split(',')[1]); };
-                    reader.onerror = function() { reject(new Error('编码失败')); };
-                    reader.readAsDataURL(blob);
-                });
-            }
-
-            // ---- 1. 获取 HTML 源码 ----
-            var sourcePromise;
-            if (location.protocol === 'http:' || location.protocol === 'https:') {
-                sourcePromise = fetch(location.href).then(function(r) {
-                    if (!r.ok) throw new Error('无法获取源码 (HTTP ' + r.status + ')');
-                    return r.text();
-                });
-            } else {
-                sourcePromise = Promise.resolve(deployGetCleanHtml());
-            }
-
-            var deployMsg = '🚀 toolbox deploy ' + new Date().toLocaleString('zh-CN');
-
-            sourcePromise
-            .then(function(sourceHtml) {
-                statusEl.textContent = '🔄 [1/3] 编码中… (' + Math.round(sourceHtml.length / 1024) + 'KB)';
-                return toBase64(sourceHtml);
-            })
-            .then(function(htmlBase64) {
-                statusEl.textContent = '🔄 [2/3] 推送 index.html…';
-                return pushFile('index.html', htmlBase64, deployMsg);
-            })
-            .then(function() {
-                statusEl.textContent = '🔄 [3/3] 检查静态资源…';
-                return toBase64(PWA_MANIFEST).then(function(manifestB64) {
-                    return toBase64(PWA_SW).then(function(swB64) {
-                        return Promise.all([
-                            pushIfMissing('manifest.json', manifestB64, deployMsg + ' [manifest]'),
-                            pushFile('sw.js', swB64, deployMsg + ' [sw]'),
-                            pushIfMissing('icon-192.png', generateAppIcon(192), deployMsg + ' [icon192]'),
-                            pushIfMissing('icon-512.png', generateAppIcon(512), deployMsg + ' [icon512]')
-                        ]);
-                    });
-                });
-            })
-            .then(function() {
-                var parts = repo.split('/');
-                var pageUrl = 'https://' + parts[0] + '.github.io/' + parts[1] + '/';
-                statusEl.innerHTML = '✅ 部署成功！<a href="' + pageUrl + '" target="_blank" style="color:var(--accent);text-decoration:underline">访问页面 ↗</a>';
-                statusEl.style.color = 'var(--accent)';
-            })
-            .catch(function(e) {
-                var msg = e.message || '部署失败';
-                if (msg.indexOf('404') !== -1) msg = '仓库不存在或 Token 无 repo 权限（需勾选 repo）';
-                else if (msg.indexOf('409') !== -1) msg = '分支 ' + branch + ' 不存在';
-                else if (msg.indexOf('422') !== -1) msg = 'SHA 冲突，请重试';
-                statusEl.textContent = '❌ ' + msg;
-                statusEl.style.color = 'var(--red)';
-            });
-        }
-
         /* ===== PWA 支持 ===== */
         /* Service Worker 注册。只在**安全上下文**下有效：https，**外加 localhost/127.0.0.1**
            —— 后者是浏览器规范里明确认可的安全上下文，不是特例开洞。
@@ -40891,83 +40425,7 @@ body {
             }).catch(function() {});
         }
 
-        // PWA 文件内容定义（部署时推送）
-        var PWA_MANIFEST = JSON.stringify({
-            name: '工具箱',
-            short_name: '工具箱',
-            description: 'API 密钥管理 & 代码/文本/链接收藏夹',
-            start_url: './',
-            display: 'standalone',
-            background_color: '#EEF4FB',
-            theme_color: '#EEF4FB',
-            icons: [
-                { src: 'icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
-                { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
-            ]
-        }, null, 2);
 
-        var PWA_SW = [
-            "var CACHE = 'toolbox-v5';",
-            "var PRECACHE = ['./', 'index.html', 'manifest.json'];",
-            "",
-            "self.addEventListener('install', function(e) {",
-            "  e.waitUntil(caches.open(CACHE).then(function(c) { return c.addAll(PRECACHE); }));",
-            "  self.skipWaiting();",
-            "});",
-            "",
-            "self.addEventListener('activate', function(e) {",
-            "  e.waitUntil(caches.keys().then(function(ks) {",
-            "    return Promise.all(ks.filter(function(k) { return k !== CACHE; }).map(function(k) { return caches.delete(k); }));",
-            "  }));",
-            "  self.clients.claim();",
-            "});",
-            "",
-            "self.addEventListener('fetch', function(e) {",
-            "  if (e.request.method !== 'GET') return;",
-            "  if (e.request.url.indexOf('api.github.com') !== -1) return;",
-            "  if (e.request.url.indexOf('/v1/') !== -1) return;",
-            "  if (e.request.url.indexOf('.workers.dev') !== -1) return;",
-            "  e.respondWith(",
-            "    fetch(e.request).then(function(r) {",
-            "      if (r.ok) { var rc = r.clone(); caches.open(CACHE).then(function(c) { c.put(e.request, rc); }); }",
-            "      return r;",
-            "    }).catch(function() { return caches.match(e.request); })",
-            "  );",
-            "});"
-        ].join('\n');
-
-        // 生成 APP 图标（绿色渐变 + 工具箱图形）
-        function generateAppIcon(size) {
-            var c = document.createElement('canvas');
-            c.width = size; c.height = size;
-            var ctx = c.getContext('2d');
-            var BODY_DATA = [
-              [0,0,0,1,1,1,1,1,1,1,1,0,0,0],
-              [0,0,0,1,1,1,1,1,1,1,1,0,0,0],
-              [0,1,1,1,1,1,1,1,1,1,1,1,1,0],
-              [0,1,1,1,1,1,1,1,1,1,1,1,1,0],
-              [0,0,0,1,1,1,1,1,1,1,1,0,0,0],
-              [0,0,0,1,1,1,1,1,1,1,1,0,0,0],
-              [0,0,0,1,0,1,0,0,1,0,1,0,0,0],
-              [0,0,0,1,0,1,0,0,1,0,1,0,0,0]
-            ];
-            var rows = BODY_DATA.length, cols = BODY_DATA[0].length;
-            var pad = 0.15;
-            var area = size * (1 - pad * 2);
-            var cell = Math.floor(Math.min(area / cols, area / rows));
-            var offX = Math.floor((size - cell * cols) / 2);
-            var offY = Math.floor((size - cell * rows) / 2);
-            for (var r = 0; r < rows; r++)
-              for (var cc = 0; cc < cols; cc++)
-                if (BODY_DATA[r][cc] === 1) {
-                  ctx.fillStyle = '#CD6E58';
-                  ctx.fillRect(offX + cc * cell, offY + r * cell, cell, cell);
-                }
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(offX + 4 * cell, offY + 1 * cell, cell, cell);
-            ctx.fillRect(offX + 9 * cell, offY + 1 * cell, cell, cell);
-            return c.toDataURL('image/png').split(',')[1];
-        }
     </script>
 
 </body></html>

@@ -15,10 +15,11 @@ var CACHE = 'toolbox-v47';   // 2026-09-21 +1：底图改走独立缓存（下�
    → 底图单独放一个 **BG_CACHE**：activate 时不清它；fetch 时**缓存优先**、命中就立刻给，
      同时后台再拉一次更新缓存（stale-while-revalidate）。换图的约定本来就是**改文件名**
      （CF 忽略查询串，见 index.html 里 rdbg 那段注释），所以缓存优先不会让她看到旧图。 */
-var BG_CACHE = 'toolbox-bg';   // ⚠️2026-09-06 又 +1：外壳走「缓存优先」，而部署时 `cp -f` 写了一半的
-                             //   index.html 是 HTTP 200，被当成好的存进了 v11 —— 她那边整页 JS 全死，
-                             //   而且**回退部署也没用**，因为她压根不去服务器取。+1 让 activate 清掉毒缓存。
-                             //   （部署已改成原子替换，见 deploy_toolbox_local.sh，根因不会再有）
+var BG_CACHE = 'toolbox-bg';   // 底图专用缓存：activate 不清它，取图缓存优先（原因见上面 09-21 那段）
+/* CACHE 版本号的一条旧账（10-20 晗从 BG_CACHE 那行挪过来——原来错挂在那行后面，读着像在说底图缓存）：
+   ⚠️2026-09-06 +1 过一次：外壳走「缓存优先」，而部署时 `cp -f` 写了一半的 index.html 是 HTTP 200，
+   被当成好的存进了 v11 —— 她那边整页 JS 全死，而且**回退部署也没用**，因为她压根不去服务器取。
+   +1 让 activate 清掉毒缓存。（部署已改成原子替换，见 deploy_toolbox_local.sh，根因不会再有） */
 /* ⚠️故意**不预缓存 './'**：它和 'index.html' 是同一个 1.9MB 的文件，会白存两份。
    下面 fetch 里外壳一律归一到 SHELL_KEY，'./' 那份存了也没人读，纯浪费配额。
    而 Cache Storage 跟 IndexedDB **共用同一个源的配额**——顶满时字体落盘的 idbSet 会**静默**失败
