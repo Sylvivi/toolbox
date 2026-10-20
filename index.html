@@ -35499,12 +35499,22 @@ body {
                             sy: under ? wBot + RD_GL_TIP : (wTop + wBot) / 2
                         };
                         /* 词在段落中间（2026-10-17 三改，她：「引线穿过字我一点都不介意，我更介意明明有空却只进入缝隙」）：
-                           本段最后一行右边空着就写在那儿，引线从词下沿往下穿过几行指过去。
-                           只有一种情况先让给上面那条缝：词离上缝比离段尾还近（段落开头那几行）——那条缝同样是空，而且更近；
-                           上缝放不下再回段尾，**不往下面的缝跑**。 */
+                           本段最后一行右边空着，也可以写在那儿，引线从词下沿往下穿过几行指过去。
+                           ⚠️2026-10-20 改成**比路径长短**（她截图「精璞」：词在倒数第三行最左边，末行只写到一半，
+                             小注被拉去末行右边，引线斜着穿过大半段——「这明明应该直接往下呀，为什么要为了指向那边而指向那边呢」
+                             「主要是违背了最短路径…改了之后反而好像非得往那个地方去一样」）。
+                             三改原来是死顺序（离段尾比离上缝近就先占段尾），只量了竖着的距离，没管段尾空白在词的左边还是右边。
+                           → 现在量两条路：到段尾那片空白（标签左端）的直线距离 vs 到就近那条缝（直上或直下）的竖直距离，
+                             **哪条短先试哪条，放不下再试另一条**。上面没缝就只跟下缝比。 */
                         if (t.far) {
-                            var dTail = last.top - wBot, dUp = (rTop.top - cr.top) - pTop;
-                            t.before = (_prevIdx === -1) || dTail <= dUp;   // 上面没缝就一律先试段尾
+                            var _wx = (rBot.left + rBot.right) / 2 - cr.left;
+                            /* 引线落在标签上沿离词最近的那一点（tailFar 照「往下」那套画），所以横向量到标签那一截、不是量到左端 */
+                            var _tR = t.x0 + Math.min(lw, t.right - t.x0);
+                            var dTail = Math.hypot(Math.max(0, t.x0 - _wx, _wx - _tR), t.mid - wBot);
+                            var dUp = (rTop.top - cr.top) - pTop, dDown = pBot - wBot;
+                            var gUp = (_prevIdx !== -1) && dUp < dDown;
+                            t.before = dTail <= (gUp ? dUp : dDown);   // 段尾更近 → 预排里先占段尾
+                            t.gapUp = gUp;                              // 不然先试这条缝，放不下再回段尾
                         }
                         if (t.x0 + 40 > t.right) return;   // 连两行窄条都摆不下，别费事
                         _tail = t;
@@ -36053,9 +36063,11 @@ body {
                 var it0 = all[a2];
                 if (it0._tailDone) continue;
                 if (it0.tail && it0.tail.far) {
-                    // 段中的词：离段尾近的已经在预排里试过了；离上缝更近 → 先上缝，放不下再回段尾
-                    if (!it0.tail.before && _gl_try(it0, true, false, false)) continue;
-                    if (!it0.tail.before && _gl_tryTail(it0)) continue;
+                    // 段中的词：段尾更近的已经在预排里试过了；缝更近 → 先试那条缝（直上/直下），放不下再回段尾（见 10-20 那段）
+                    if (!it0.tail.before) {
+                        if (_gl_try(it0, it0.tail.gapUp, false, false)) continue;
+                        if (_gl_tryTail(it0)) continue;
+                    }
                 }
                 /* 第一轮：**带着倾斜**、在两行以内找（见 _gl_try 上那段⚠️⚠️） */
                 if (_gl_try(it0, it0.prefUp, false, false)) continue;    // ① 就近那条缝

@@ -874,7 +874,10 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             const rows5 = [...rg5.getClientRects()].filter(r => r.width > 0 && r.height > 1);
             const last5 = rows5.reduce((a, r) => r.bottom > a.bottom ? r : a, rows5[0]);
             const lastR5 = Math.max(...rows5.filter(r => Math.abs(r.top - last5.top) < 3).map(r => r.right));
-            out.Z_段中走段尾 = e5.lab.getAttribute('data-gl-dir') === 'tail' && l5.left > lastR5 && (l5.top + l5.height / 2) > last5.top - 4;
+            /* ⚠️2026-10-20 晗改：这条原来要求「段中的词一律先占段尾」。她截图「精璞」后定了**最短路径**
+               （「主要是违背了最短路径」）：这里「承袭」在行首、段尾空白在右边，直下进下缝更近 → 现在该往下、标签就在词下面。
+               词就在段尾空白上方的那种，看 Z16 和 tests/glossside.test.js。 */
+            out.Z_段中走段尾 = e5.lab.getAttribute('data-gl-dir') === 'down' && Math.abs(l5.left - m5.left) < 60 && l5.top > last5.bottom - 2;
             const p5 = e5.box.querySelector('.rd-gl-svg path[data-glid="z5"]');
             const sv5 = p5.ownerSVGElement.getBoundingClientRect();
             const mm5 = p5.getAttribute('d').match(/^M([-\d.]+) ([-\d.]+)/);
@@ -1035,7 +1038,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('Z8 末行的词后面还有字：开关关着不走行尾；开着时引线从那截字下面兜过去、不横穿', R.Z_词在中间不走行尾);
     ok('Z9 末行放不下就照老路走、不出界', R.Z_放不下走老路);
     ok('Z10 词后面跟着”。这种好几个标点，照样写在后面', R.Z_后面全是标点也走行尾);
-    ok('Z11 词在段落中间、段尾后面空着 → 写到段尾那片空白', R.Z_段中走段尾, R.Z_段中明细);
+    ok('Z11 词在段落中间、段尾空白在另一边 → 直下（最短路径）', R.Z_段中走段尾, R.Z_段中明细);
     ok('Z12 段中走段尾时，引线从词的下沿出发', R.Z_段中箭头从词出发);
     ok('Z16 段中走段尾时，小注挪到词的下方（引线不斜着拉过大半行）', R.Z_段中对准词, R.Z_对准明细);
     ok('Z13 词在段落第一行、紧挨着上缝 → 还是放上缝', R.Z_段首走上缝);
