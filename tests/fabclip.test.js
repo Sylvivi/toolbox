@@ -7,7 +7,8 @@
  *  ① 认得出三类：小红书链接 / 别的网址 / 一段文字；
  *  ② **认不出就整条不出现**（宁可少一格，别给她莫名其妙的按钮）；
  *  ③ 读不到剪贴板（没授权 / 不是 https）要**静默**，绝不能挡住那 2×2；
- *  ④ 2×2 本身一格不少——这条是加在上面的，不是挤掉谁。
+ *  ④ 上面那排图标一格不少——这条是加在上面的，不是挤掉谁。
+ *     （10-20 晗：2×2 改成两个图标＋书名条，见 fabrecent.test.js；书名条借了 fab-clip 的样式，所以这里排除 .fab-book）
  *
  * 跑法：node tests/fabclip.test.js  或  bash tests/p.sh fabclip
  */
@@ -48,7 +49,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             ball.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 300, clientY: 400, pointerId: 1 }));
             ball.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 300, clientY: 400, pointerId: 1 }));
             await new Promise(r => setTimeout(r, 80));
-            const row = menu.querySelector('.fab-clip');
+            const row = menu.querySelector('.fab-clip:not(.fab-book)');
             return { acts: menu.querySelectorAll('.fab-act').length,
                      row: row ? row.textContent.trim() : null };
         }
@@ -71,8 +72,8 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('一段文字 → 「存成资料」', R.txt.row && R.txt.row.indexOf('存成资料') === 0, JSON.stringify(R.txt));
     ok('剪贴板空 → 整条不出现', R.empty.row === null, JSON.stringify(R.empty));
     ok('没授权 → 静默，不出现也不报错', R.denied.row === null, JSON.stringify(R.denied));
-    ok('2×2 一格没少（五种情况都是 4 格）',
-        [R.xhs, R.url, R.txt, R.empty, R.denied].every(x => x.acts === 4),
+    ok('图标一格没少（五种情况都是 2 格）',
+        [R.xhs, R.url, R.txt, R.empty, R.denied].every(x => x.acts === 2),
         JSON.stringify([R.xhs.acts, R.url.acts, R.txt.acts, R.empty.acts, R.denied.acts]));
     ok('没有页面报错', errs.length === 0, errs.join(' | '));
 

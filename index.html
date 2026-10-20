@@ -2309,8 +2309,15 @@ body {
         /* ⚠️2026-09-15 她要的：「别弄成一排展开，改成两排，一排两个的那种」。
            一排四个横着铺出去有两个毛病：贴边时容易顶到屏幕另一头，
            而且手指要横着划一长条。两排两个更像一小块面板，够得着。 */
+        /* ⚠️2026-10-20 晗改：四格 2×2 → 上面一排两个图标、下面几条带字的书名。
+           她说四格里「只有小红书用得多」，图片箱、云盘、新对话撤掉，
+           换成「回到最近的对话」＋最近读的另外两本书（长按只能回最后那一本）。
+           书名条比两个图标宽，所以整块改成竖排，**朝屏幕里那侧对齐**（贴右边就右对齐、靠着球）。 */
         #fabMenu { position: absolute; display: none; gap: 8px; }
-        #fabWrap.open #fabMenu { display: grid; grid-template-columns: repeat(2, 42px); }
+        #fabWrap.open #fabMenu { display: flex; flex-direction: column; }
+        #fabWrap[data-side="r"] #fabMenu { align-items: flex-end; }
+        #fabWrap[data-side="l"] #fabMenu { align-items: flex-start; }
+        .fab-row { display: flex; gap: 8px; }
         .fab-act {
             width: 42px; height: 42px; flex-shrink: 0; cursor: pointer;
             display: flex; align-items: center; justify-content: center;
@@ -2326,9 +2333,9 @@ body {
              而且这一条**必须带字**——光一个图标说不清它要对什么东西干什么。
            ⚠️横跨两列，压在 2×2 上面；剪贴板里没东西时整条不出现。 */
         .fab-clip {
-            grid-column: 1 / -1; cursor: pointer;
+            cursor: pointer; box-sizing: border-box;
             display: flex; align-items: center; gap: 6px;
-            padding: 7px 9px; max-width: 216px;
+            padding: 7px 9px; min-width: 92px; max-width: 176px;
             background: #fff; color: var(--text);
             border: 2.5px solid var(--text); border-radius: 0;
             box-shadow: 4px 4px 0 var(--text);
@@ -2340,6 +2347,9 @@ body {
         .fab-clip b { font-weight: 700; flex-shrink: 0 }
         .fab-clip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
                          color: var(--text-muted); min-width: 0 }
+        /* 书名条：跟剪贴板那条同一个壳，书名用正文色（剪贴板那条的 span 是灰的，那是"预览"）。 */
+        .fab-book span { color: var(--text); }
+        .fab-book svg { flex-shrink: 0; }
         @keyframes fabIn { from { opacity: 0; transform: scale(.6) } to { opacity: 1; transform: none } }
         /* ===== 输入区 — 悬浮玻璃条 =====
            2026-09-13 她要的：「人家的输入框是一个独立的东西，字能从它背后穿过；
@@ -20120,26 +20130,13 @@ body {
             if (!wrap || !ball || !menu) return;
 
             var KEY = 'toolbox_fab_pos';
+            /* ⚠️2026-10-20 她：四格里「只有小红书用得多，其他好像用得少」，问原因是「那几个功能本来就不常用」；
+               晗翻同步记录：一周里她几乎都在**续同一个对话**、新对话只开了两三次；书是**好几本换着读**。
+               → 图片箱、谷歌云盘、新对话撤掉；留存小红书，加「回到最近的对话」，
+                 下面再列最近读的另外两本（见 recentBooks）。她：「我感觉你说的不错」。
+               ⚠️她不要只剩一个按钮（「你说就放一个我不喜欢」）。
+               撤掉的三个（含云盘那串 AccountChooser 地址、authuser 的坑）在 git 1d2cb98 里，要回来照抄。 */
             var ACTS = [
-                { t: '图片箱', svg: '<rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path>',
-                  go: function () { window.open('https://box.masterofmydomain.top/', '_blank'); } },
-                /* ⚠️这一格原来是「继续阅读」（摊开的书）。2026-09-15 她说：
-                   「阅读现在有这个了（＝长按小克），那现在点小克的那个就有点多余了」，
-                   换成**谷歌云盘**。⚠️别把阅读加回来，它在长按上。
-                   ⚠️落点是**网盘首页**，不是某个文件夹——她挑的（「胜在万能」）。
-                     真要直达，几个 ID：姐姐请看 1Aj2YKVD2vVIszJvTwebeRCKKM9CB4KSE，
-                     小红书存档 1fM_FsN9r0o6SuJIgdIcgG4qY-VwoFHJb。
-                   ⚠️**必须带 `authuser=`**（她：「每次还得选账号呢」）：她登着好几个谷歌号，
-                     不指名就每次弹账号选择页。那个 5TB 网盘在 **dangminhhieu05356** 上
-                     （rclone 配置里不记邮箱，问她确认的）。
-                   ⚠️**别改成 `/u/0/`** 这种按序号的写法——序号取决于她当时的登录顺序，
-                     哪天变了就会静悄悄进到**另一个账号的空网盘**，比弹选择页糟得多。
-                   ⚠️光在 drive.google.com 后面挂 `?authuser=` **不够**（试过，她说「好像还是会弹」）：
-                     那个参数对服务根地址常被忽略。现在走 **accounts.google.com/AccountChooser**
-                     ——"先认准账号、再 continue 跳过去"的两步，Google 专门为这件事做的。
-                   ⚠️图标用**云**，不用 Drive 那个三角：三角在 19px 下会被当成播放键或警告。 */
-                { t: '谷歌云盘', svg: '<path d="M7.2 18.5a4.2 4.2 0 0 1 .5-8.37 5.6 5.6 0 0 1 10.8 1.1A3.7 3.7 0 0 1 17.6 18.5z"></path>',
-                  go: function () { window.open('https://accounts.google.com/AccountChooser?Email=dangminhhieu05356%40gmail.com&continue=https%3A%2F%2Fdrive.google.com%2Fdrive%2Fmy-drive', '_blank'); } },
                 /* 「存小红书」的图标定了三轮，别再翻（2026-09-15）：
                    气泡（她：「不咋滴」）→ 两张并排的卡片 → **回形针**。
                    ⚠️她定回形针的理由是「**就是那种链接的感觉**」——这个动作的入口确实是
@@ -20149,9 +20146,34 @@ body {
                      理由是"简化版线条更挤"——她看了实际尺寸选了简化版。**以她为准，别改回去。** */
                 { t: '存小红书', svg: '<path d="M19 10.5l-7.6 7.6a4.5 4.5 0 0 1-6.36-6.36l8.3-8.3a3 3 0 0 1 4.25 4.25l-8.3 8.3a1.5 1.5 0 0 1-2.12-2.12l7.1-7.1"></path>',
                   go: function () { if (typeof xhsArchivePrompt === 'function') xhsArchivePrompt(); } },
-                { t: '新对话', svg: '<path d="M12 5v14"></path><path d="M5 12h14"></path>',
-                  go: function () { ensureChatOpen(); if (typeof chatNewConv === 'function') chatNewConv(); } }
+                /* 回到最近的对话：阅读会话（reader_）不算。一个对话都没有时退回开新对话。 */
+                { t: '最近的对话', svg: '<path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.3 9.3 0 0 1-3.9-.8L3 20.5l1.4-4.3A8 8 0 0 1 3 11.5 8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4z"></path>',
+                  go: function () {
+                      var list = (typeof chatGetHistory === 'function' ? chatGetHistory() : []) || [];
+                      var c = list.filter(function (x) { return !(x.id && x.id.indexOf('reader_') === 0); })
+                                  .sort(function (x, y) { return (y.updated || y.created || 0) - (x.updated || x.created || 0); })[0];
+                      ensureChatOpen();
+                      if (c && typeof chatLoadConv === 'function') chatLoadConv(c.id);
+                      else if (typeof chatNewConv === 'function') chatNewConv();
+                  } }
             ];
+
+            /* 最近读的书，**去掉长按会回的那本**，取两本。
+               时间跟书架「按最近读排」同一套口径：阅读进度的 ts 和「打开过」的时间取较新的。
+               ⚠️只列本机有正文的书：服务器上的占位书（_remote）点开要先下载、还要弹确认，
+                 不适合放在一点就走的快捷里。 */
+            function recentBooks() {
+                if (typeof rbGetBook !== 'function' || typeof readerPosAll !== 'function') return [];
+                if (!rbBooks.length && typeof rbLoad === 'function') rbLoad();
+                var last = null;
+                try { last = localStorage.getItem('reader_last_book'); } catch (e) {}
+                var rp = readerPosAll(), op = (typeof rbOpenedLoad === 'function') ? rbOpenedLoad() : {};
+                return rbBooks.filter(function (b) { return b && b.id !== last && !b._remote && b.chapters && b.chapters.length; })
+                    .map(function (b) { var k = rbBookEffKey(b); return { b: b, ts: Math.max((rp[k] || {}).ts || 0, op[k] || 0) }; })
+                    .filter(function (x) { return x.ts > 0; })
+                    .sort(function (x, y) { return y.ts - x.ts; })
+                    .slice(0, 2).map(function (x) { return x.b; });
+            }
 
             /* ⚠️2026-09-15 她报的：「那个加号，在对话列表和阅读界面才能直接生效，在主页不生效」。
                病根：`chatNewConv()` / `readerResumeLast()` 都是「**在已经打开的对话界面里**做事」——
@@ -20187,7 +20209,8 @@ body {
                 /* 两排两个之后菜单有 92px 高（42×2 + 8），比球（52）高一截。
                    ⚠️**要跟球对齐着居中，还要夹在屏幕里**：球拖到最上或最下时，
                      不夹的话那一块会有一半跑到屏幕外，点不着。 */
-                var MH = 92, off = Math.round((bh - MH) / 2);
+                /* ⚠️10-20 起菜单高度不固定了（有没有剪贴板条、有几本书），按实际量；收起时量不到就按 92 算。 */
+                var MH = menu.offsetHeight || 92, off = Math.round((bh - MH) / 2);
                 var absTop = top + off;
                 if (absTop < 8) off += (8 - absTop);
                 if (absTop + MH > h - 8) off -= (absTop + MH - (h - 8));
@@ -20235,26 +20258,23 @@ body {
                     if (!wrap.classList.contains('open')) return;     // 已经收起来了就别插
                     var info = clipKind(t);
                     if (!info) return;
-                    if (menu.querySelector('.fab-clip')) return;
+                    if (menu.querySelector('.fab-clip:not(.fab-book)')) return;   // 书名条也挂 fab-clip（借样式），别把它当成已经插过
                     var row = document.createElement('div');
                     row.className = 'fab-clip';
                     row.innerHTML = '<b>' + esc(info.label) + '</b><span>' + esc(info.tip.slice(0, 40)) + '</span>';
                     row.addEventListener('click', function (e) { e.stopPropagation(); close(); clipAct(info); });
                     menu.insertBefore(row, menu.firstChild);
+                    apply();       // 多了一条，菜单变高了，重新对齐球、夹回屏幕里
                 }).catch(function () { /* 没给权限 / 不是 https：当没有，静默 */ });
             }
 
             function buildMenu() {
                 menu.innerHTML = '';
-                /* 两排两个的排布（2026-09-15 她定的）：
-                     存小红书  图片箱
-                     新对话    继续阅读
-                   ⚠️贴右边时是**左右镜像**（两两对调），不是整个 reverse。
-                     reverse 等于把面板转 180°，上下也跟着翻了——她要的是
-                     「对话阅读放下面」，那一排必须待在下面。
-                   ⚠️镜像的目的：让最常用的**图片箱始终挨着球**（贴右边在右上角、
-                     贴左边在左上角），手指移动最短。 */
-                var list = pos.side === 'l' ? ACTS : [ACTS[1], ACTS[0], ACTS[3], ACTS[2]];
+                /* 上面一排两个图标：**存小红书始终挨着球**（最常用的离手指最近，9-15 定的原则），
+                   贴右边时它在右、贴左边时它在左。 */
+                var row = document.createElement('div');
+                row.className = 'fab-row';
+                var list = pos.side === 'l' ? ACTS : ACTS.slice().reverse();
                 list.forEach(function (a, i) {
                     var b = document.createElement('div');
                     b.className = 'fab-act'; b.title = a.t;
@@ -20264,7 +20284,23 @@ body {
                     b.addEventListener('click', function (e) {
                         e.stopPropagation(); close(); a.go();
                     });
-                    menu.appendChild(b);
+                    row.appendChild(b);
+                });
+                menu.appendChild(row);
+                /* 下面的书名条：图标说不清是哪本，所以直接写书名。 */
+                recentBooks().forEach(function (bk, i) {
+                    var r = document.createElement('div');
+                    r.className = 'fab-clip fab-book';
+                    r.style.animationDelay = ((i + 2) * 0.035) + 's';
+                    r.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+                                  '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>' +
+                                  '<span>' + esc(rbBookNiceName(bk)) + '</span>';
+                    r.addEventListener('click', function (e) {
+                        e.stopPropagation(); close();
+                        ensureChatOpen();
+                        if (typeof readerResumeLast === 'function') readerResumeLast(bk.id);
+                    });
+                    menu.appendChild(r);
                 });
                 addClipRow();      // 异步，认出来了才插；见上面那段
             }
@@ -20280,7 +20316,7 @@ body {
             function close() { wrap.classList.remove('open'); wake(); }
 
             /* 三种手势共用一次按下，判据必须互斥，否则会打架（2026-09-15）：
-                 **点**   ＝ 按下到松手位移 ≤6px、且没到长按时间 → 展开那 2×2
+                 **点**   ＝ 按下到松手位移 ≤6px、且没到长按时间 → 展开菜单（10-20 起不再是 2×2）
                  **长按** ＝ 按住 500ms 没挪动 → 直接进阅读（她要的："长按小克就去阅读"）
                  **拖**   ＝ 位移 >6px → 挪位置，同时**取消长按计时**
                ⚠️长按触发之后要**吃掉这一次的松手**，不然手一抬又把菜单展开了。
@@ -20333,7 +20369,7 @@ body {
                 if (longFired) { longFired = false; return; }   // 长按已经办完事了，这一下不算点击
                 if (!moved) {                       // 没挪动＝点击
                     if (wrap.classList.contains('open')) close();
-                    else { buildMenu(); wrap.classList.add('open'); wake(); }
+                    else { buildMenu(); wrap.classList.add('open'); apply(); wake(); }
                     return;
                 }
                 // 松手吸到最近的一边，并记住位置
@@ -29319,10 +29355,14 @@ body {
         }
 
         // 列表顶栏「继续阅读」快捷入口：直接进上次在读的书 + 上次看到的位置（不停在书架/目录）
-        function readerResumeLast() {
-            var lastBook = null;
-            try { lastBook = localStorage.getItem('reader_last_book'); } catch (e) {}
+        /* bookId 可选（2026-10-20 晗加，悬浮小克里列的「最近读的另外两本」要直达某一本）：
+           不传＝回上次那本，跟原来一样；传了就回那一本，并把它记成「上次那本」，
+           ⚠️不记的话走 chatLoadConv 那条路不会更新 reader_last_book，长按小克还会回到旧的那本。 */
+        function readerResumeLast(bookId) {
+            var lastBook = bookId || null;
+            if (!lastBook) { try { lastBook = localStorage.getItem('reader_last_book'); } catch (e) {} }
             if (typeof rbLoad === 'function') rbLoad();
+            if (bookId && rbGetBook(bookId)) { try { localStorage.setItem('reader_last_book', bookId); } catch (e) {} }
             // 没有上次在读的书（或书已删/换设备没同步过来）→ 退回正常阅读入口：打开书架选书
             if (!lastBook || !rbGetBook(lastBook)) { readerEnter(); return; }
             chatReaderMode = true;
