@@ -31945,6 +31945,30 @@ body {
             readerMarkBg(readerBookId, ci, 0, pNum);
         }
 
+        /* 选中小条的「解」键（2026-10-20 晗，她选的「紧挨着注」，名字她定的）：围绕她选中的字讲，
+           不让模型满段自己挑（「导读 → 背景」挑的有时不是她想问的那个）。
+           选中的字是出发点，题目由摘要模型定（可以更概括，见 _rdBgPickOne）。花费＝一次便宜的定题＋背景里的一条。 */
+        function readingBgWord(pend) {
+            var term = ((pend && pend.text) || '').replace(/\s+/g, ' ').trim();
+            if (!term) return;
+            if (term.length > 30) { showToast('「解」是讲一个词或一个说法的，选短一点（30 个字以内）', true); return; }
+            var b = readerBookId ? rbGetBook(readerBookId) : null;
+            if (!b) { showToast('先打开一本书'); return; }
+            var m = chatMessages[pend.msgIdx];
+            var ci = (m && m.readerChapter != null) ? m.readerChapter : readerChapterIdx;
+            if (!b.chapters || !b.chapters[ci]) return;
+            // 这一段已经讲过同一个词就别再花一次钱
+            var fk = readerBookKey(readerBookId), key = _rdBgKey(term);
+            var dup = readerBgOfChap(fk, ci).some(function (it) {
+                if (it.p !== pend.pNum) return false;
+                var sq = _rdBgSplitQ((it.q || '').slice(BG_Q_PREFIX.length));   // 题目或出发点撞上都算讲过
+                return _rdBgKey(sq.text) === key || (sq.anchor && _rdBgKey(sq.anchor) === key);
+            });
+            if (dup) { showToast('「' + term + '」这一段已经讲过了'); return; }
+            readingClearActbar();
+            readerMarkBg(readerBookId, ci, 0, pend.pNum, term);
+        }
+
         // 提问失败后，把输入框带着原问题重新挂回该段下方（找该段最后一个问答块、没有就贴原文段）
         function readingReopenAskBar(msgIdx, pNum, question) {
             try {
@@ -33313,6 +33337,54 @@ body {
             return { picks: picked, replies: replies, matched: matched };
         }
 
+        /* 「背景」键的定题一步（2026-10-20 晗）：她选中的字只是**出发点**，要讲的题目可以更概括——
+           她：「它是可以从这个里面提取出真正的那个要解释的背景……有时候它圈的是一个东西，
+             但是它解释的词不一定就是原样圈的那个东西，而是另一个更有概括性的词」。
+           所以跟全章找点同一个思路（BG_SCAN_INSTRUCTION 的「出发点 / 题目」两样），只是范围缩到她选的那几个字、只出一条。
+           ⚠️她是特意选的，所以不许回「无」；常识词也照样定一条。
+           ⚠️名称规则（对/错例子）跟 BG_SCAN_INSTRUCTION 是同一套，改一边要看另一边。 */
+        function _rdBgPickPrompt(sel, p) {
+            return '【任务】读者读书时在下面这段原文里选中了「' + sel + '」，想弄懂它背后的背景。请定出**一个**要讲的背景点。\n\n' +
+                '背景点指的是**书本之外的世界**：那个年代的社会状况、制度与机构、历史事件、思想流派、宗教派别、货币与度量、提到的真实人物是谁、民俗与器物。\n' +
+                '选中的字只是**出发点**，背景点不一定就是它本身：可以就是这个词（选中「共济会」就讲共济会），' +
+                '也可以是它背后更概括的那件事（选中「桑叶」讲「吴楚边境桑女争桑」，选中「艾陵」讲「艾陵之战」）。' +
+                '结合这段原文，挑读者读到这里最需要知道的那一件。读者是特意选的，一定要给出一条，不许回「无」。\n\n' +
+                '【背景点名称怎么写】写那个东西**本身的名字**，短名词，一般 2～8 个字，像词典词条那样。\n' +
+                '· 对：悬丝诊脉、绿衣官员、齐悼公之死、春秋复仇观念\n' +
+                '· 错：「丝帕覆腕诊脉是高门女眷就医礼制」——这是解释，不是名字。名称里不许出现「是」「指」这类解释性尾巴。\n\n' +
+                '【原文出发点】从选中的字里挑原文逐字出现的那个词，一般就是选中的字本身；选得长时挑其中最关键的 2～8 个字。\n\n' +
+                '【输出格式】只输出一行，严格是「P' + p + '|原文出发点|背景点名称」，不要解释、不要任何别的话。';
+        }
+        async function _rdBgPickOne(b, lines, p, sel, mdl, fb) {
+            var around = lines.slice(Math.max(0, p - 2), Math.min(lines.length, p + 1)).join('\n');
+            var ask = function (m) {
+                return _rdBgTimed({
+                    baseUrl: m.baseUrl, apiKey: m.apiKey, model: m.model,
+                    purpose: '标背景·定题',
+                    messages: [
+                        { role: 'system', content: _rdBgPickPrompt(sel, p) },
+                        { role: 'user', content: '书名《' + (rbBookNiceName(b) || '这本书') + '》。原文：\n\n' + around }
+                    ],
+                    max_tokens: 4000   // 同 _rdBgScan：思考型模型的推理不算在 delta.content 里，给小了正文出不来
+                }, 60000, _rdMdlName(m));
+            };
+            var out = '';
+            try { out = await ask(mdl); }
+            catch (e) {
+                if ((e && e.name === 'AbortError') || !fb || fb.model === mdl.model) throw e;
+                out = await ask(fb);   // 摘要模型挂了换主模型，同 _rdBgScan
+            }
+            var lns = (out || '').split('\n');
+            for (var i = 0; i < lns.length; i++) {
+                var m = _rdBgParseLine(lns[i]);
+                if (!m || !m.term) continue;
+                // 出发点得真在这一段里才画得出圈；不在就用她选的字
+                var anc = (m.anchor && (lines[p - 1] || '').indexOf(m.anchor) >= 0) ? m.anchor : sel;
+                return { p: p, term: m.term, anchor: anc };
+            }
+            return null;
+        }
+
         // 第二遍：一条一条讲，每次只想一件事。只喂这个背景点 + 它所在段落前后一小圈上下文。
         // ⚠️模型必须由调用方在「开章之前」定好传进来：readerOpenChapter → chatResetConvState()
         // 会把 chatSelectedModel/chatSelectedKeyStr 清空，之后要等 chatLoadModelsForCurrentKey
@@ -33360,7 +33432,10 @@ body {
         /* ⚠️2026-09-22 她要的第三档：**只标这一段**（`onlyP`＝段号）。
            她的原话：「全章有时候其实我那个词我也未必就想了解，但他放在那儿又会在我的阅读范围里面，
            有时候反而拖慢我的阅读进度」——所以默认收到最小：点哪段标哪段，想要整章再另说。 */
-        async function readerMarkBg(bookId, chapIdx, secHeadP, onlyP) {
+        /* givenTerm（可选，2026-10-20 晗加）＝她自己选中的词：跳过第一遍「找背景点」，直接讲这一个。
+           她：「导读那个键按了之后选的那个背景，有时候不一定能解释到我想要解释的那个内容」。
+           入口在选中小条的「背景」键（rdHlShowSelBar → readingBgWord），必须同时传 onlyP（那一段的段号）。 */
+        async function readerMarkBg(bookId, chapIdx, secHeadP, onlyP, givenTerm) {
             if (readerBgRunning) {
                 // 别只把用户挡回去——万一上一轮卡住了，这是唯一的出口
                 if (confirm('这一章正在标背景，要停下吗？') && readerBgAbort) readerBgAbort.abort();
@@ -33421,8 +33496,17 @@ body {
             readerBgAbort = new AbortController();
             var done = 0, failed = 0, lastErr = '', namesAdded = 0;
             try {
-                _rdBgBarShow('通读' + _scope + '，找背景点…');
-                var scan = await _rdBgScan(b, lines, readerBgDoneTerms(fileKey), scanM, explainM,
+                if (givenTerm && !_one) givenTerm = '';   // 段号不对就退回老路，别把块插到别处
+                if (!givenTerm) _rdBgBarShow('通读' + _scope + '，找背景点…');
+                var _given = null;
+                if (givenTerm) {
+                    // 先定题（她选的只是出发点，见 _rdBgPickOne）；定不出来就按她选的字原样讲，不让她白点
+                    _rdBgBarShow('看看「' + givenTerm + '」该讲什么…');
+                    try { _given = await _rdBgPickOne(b, lines, _one, givenTerm, scanM, explainM); }
+                    catch (eP) { if (eP && eP.name === 'AbortError') throw eP; }
+                    if (!_given) _given = { p: _one, term: givenTerm, anchor: givenTerm };
+                }
+                var scan = _given ? { picks: [_given], replies: [], matched: 1 } : await _rdBgScan(b, lines, readerBgDoneTerms(fileKey), scanM, explainM,
                                            _one ? { from: _one, to: _one } : (_sec ? { from: _sec.startP, to: _sec.endP } : null),
                                            readerBgOfChap(fileKey, chapIdx).map(function (it) {
                                                // ⚠️剥掉 ⟦出发点⟧ 再比，否则同一条重标时认不出「这段已经讲过了」
@@ -36629,6 +36713,9 @@ body {
             bar.innerHTML =
                 '<button class="rd-act rd-act-hl" data-act="hl"><span>划线</span></button>' +
                 '<button class="rd-act rd-act-main" data-act="gloss">注</button>' +
+                /* 「解」紧挨着注（2026-10-20 她选的位置；名字她定的：「不叫背景，叫解」）：
+                   普通字、不做胶囊，注照旧是最显眼的那颗。做的事＝围绕选中的字讲一条背景（readingBgWord） */
+                '<button class="rd-act" data-act="bg">解</button>' +
                 '<span class="rd-sep"></span>' +
                 '<button class="rd-act rd-act-more" data-act="more">⋯</button>' +
                 /* 「✏️ 改」＝改正文错字。为什么挂在这条上：改错字的第一步本来就是「选中那个错字」，
@@ -36661,6 +36748,13 @@ body {
                     // ⚠️先把 _rdHlPending 抄下来：rdEditOpen 里会 rdHlHideBar()，那会把它清成 null
                     var pe = _rdHlPending;
                     if (pe) rdEditOpen({ msgIdx: pe.msgIdx, pNum: pe.pNum, start: pe.start, end: pe.end, text: pe.text });
+                    return;
+                }
+                if (a === 'bg') {
+                    var pb = _rdHlPending;   // 同下：先抄下来再收小条
+                    rdHlHideBar();
+                    try { window.getSelection().removeAllRanges(); } catch (eS) {}
+                    if (pb) readingBgWord(pb);
                     return;
                 }
                 if (a === 'gloss') {
