@@ -20175,11 +20175,13 @@ body {
                 var last = null;
                 try { last = localStorage.getItem('reader_last_book'); } catch (e) {}
                 var rp = readerPosAll(), op = (typeof rbOpenedLoad === 'function') ? rbOpenedLoad() : {};
-                return rbBooks.filter(function (b) { return b && b.id !== last && !b._remote && b.chapters && b.chapters.length; })
-                    .map(function (b) { var k = rbBookEffKey(b); return { b: b, ts: Math.max((rp[k] || {}).ts || 0, op[k] || 0) }; })
+                /* 10-22 她：「最近读的那一本」也要列出来（原来去掉了长按会回的那本）、数量改成 3。
+                   长按回的那本排第一（没记到阅读位置也照样列）。 */
+                return rbBooks.filter(function (b) { return b && !b._remote && b.chapters && b.chapters.length; })
+                    .map(function (b) { var k = rbBookEffKey(b); return { b: b, ts: b.id === last ? Infinity : Math.max((rp[k] || {}).ts || 0, op[k] || 0) }; })
                     .filter(function (x) { return x.ts > 0; })
                     .sort(function (x, y) { return y.ts - x.ts; })
-                    .slice(0, 2).map(function (x) { return x.b; });
+                    .slice(0, 3).map(function (x) { return x.b; });
             }
 
             /* ⚠️2026-09-15 她报的：「那个加号，在对话列表和阅读界面才能直接生效，在主页不生效」。

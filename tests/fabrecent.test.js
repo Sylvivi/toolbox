@@ -4,7 +4,7 @@
  *
  * 守这几件事：
  *  ① 图标只剩两个，存小红书挨着球（贴右边在右）；
- *  ② 书名条按最近读排、**去掉长按会回的那本**、最多两本、服务器占位书不列；
+ *  ② 书名条按最近读排、长按会回的那本排第一（10-22 她要加回来）、最多三本、服务器占位书不列；
  *  ③ 点书名条＝回到那一本（readerResumeLast 收到那本的 id）；
  *  ④ 「最近的对话」跳过阅读会话（reader_），进最新的那个普通对话；
  *  ⑤ 球拖到最底下时，变高的菜单仍整块在屏幕里；
@@ -98,13 +98,13 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     });
 
     ok('图标只剩两个、存小红书挨着球（贴右边在右）', JSON.stringify(R.acts) === JSON.stringify(['最近的对话', '存小红书']), JSON.stringify(R.acts));
-    ok('书名条：去掉长按那本、去掉占位书、按最近排、最多两本', JSON.stringify(R.books) === JSON.stringify(['乙书', '丙书（很长很长的一个书名用来看会不会撑破）']), JSON.stringify(R.books));
+    ok('书名条：长按那本排第一、去掉占位书、按最近排、最多三本', JSON.stringify(R.books) === JSON.stringify(['甲书', '乙书', '丙书（很长很长的一个书名用来看会不会撑破）']), JSON.stringify(R.books));
     ok('长书名不撑破（≤176px）', R.widest <= 176.5, R.widest);
     ok('书名条在时剪贴板那条照样出现', R.clip, '');
-    ok('点第二本 → 回到丙书', R.calls[0] && R.calls[0][0] === 'book' && R.calls[0][1] === 'bC', JSON.stringify(R.calls));
+    ok('点第二本 → 回到乙书', R.calls[0] && R.calls[0][0] === 'book' && R.calls[0][1] === 'bB', JSON.stringify(R.calls));
     ok('最近的对话 → 跳过阅读会话、进最新的普通对话', R.calls[1] && R.calls[1][0] === 'conv' && R.calls[1][1] === 'c_new', JSON.stringify(R.calls));
     ok('菜单在屏幕里', R.inView, '');
-    ok('球在最底下时，剪贴板条＋图标＋两本书整块仍在屏幕里', R2.n === 4 && R2.top >= 0 && R2.bottom <= R2.h, JSON.stringify(R2));
+    ok('球在最底下时，剪贴板条＋图标＋三本书整块仍在屏幕里', R2.n === 5 && R2.top >= 0 && R2.bottom <= R2.h, JSON.stringify(R2));
     ok('没有页面报错', errs.length === 0, errs.join(' | '));
 
     await browser.close();
