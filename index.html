@@ -31134,7 +31134,21 @@ body {
                    压在格言底下最看不清的那一行正好成了新页顶上留的那一行。
                    展开的输入框是不透的（86%/72% 白），仍按上沿。 */
                 var area = document.getElementById('chatInputArea');
-                if (area && area.classList.contains('reading-collapsed')) h = er.bottom - br.bottom;
+                if (area && area.classList.contains('reading-collapsed')) {
+                    h = er.bottom - br.bottom;
+                    /* ⚠️2026-10-23 晗又往回调一行：按条下沿算，条后面最下那行翻完就被推出屏顶了，
+                       她报「上面超过了一行，希望再往下一行，让我看到」。
+                       所以屏底再往上挪**正好一行高**（量正文段落真实行高），新页顶上多留这一行；
+                       但最多挪到条的上沿（那是 10-21 前她嫌留多了的那一档）。 */
+                    var _p = el.querySelector('.reading-merged p[data-p]');
+                    var _lh = 0;
+                    if (_p) {
+                        var _cs = getComputedStyle(_p);
+                        _lh = parseFloat(_cs.lineHeight);
+                        if (!(_lh > 0)) _lh = (parseFloat(_cs.fontSize) || 16) * 1.6;
+                    }
+                    h = Math.min(h + _lh, er.bottom - br.top);
+                }
             }
             if (!(h > 0)) {
                 var v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--chat-ih'));

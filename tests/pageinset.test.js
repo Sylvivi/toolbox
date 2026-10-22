@@ -48,7 +48,11 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
         // 真正被玻璃压住的高度（测试自己量一遍，跟实现对照）
         const box = document.querySelector('#chatInputArea .chat-input-box');
         // ⚠️2026-10-21：阅读时折叠的细条是透的，条后面的字看得见 → 只算条下沿以下那截
-        const covered = el.getBoundingClientRect().bottom - box.getBoundingClientRect().bottom;
+        // ⚠️2026-10-23：再往上挪正好一行（她：「上面超过了一行，希望再往下一行」），最多到条上沿
+        const _cs0 = getComputedStyle(el.querySelector('.reading-merged p[data-p]'));
+        const _lh0 = parseFloat(_cs0.lineHeight) || (parseFloat(_cs0.fontSize) || 16) * 1.6;   // 跟实现同一个兜底
+        const covered = Math.min(el.getBoundingClientRect().bottom - box.getBoundingClientRect().bottom + _lh0,
+                                 el.getBoundingClientRect().bottom - box.getBoundingClientRect().top);
                 const out = { inset: readingBottomInset(), covered: Math.round(covered), clientH: el.clientHeight };
         // 展开的输入框不透 → 仍按上沿
         document.getElementById('chatInputArea').classList.remove('reading-collapsed');
@@ -99,7 +103,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
        所以 inset 就该等于被压住的高度，不再少减一行。 */
     ok('展开的输入框（不透）仍按上沿算', Math.abs(R.insetOpen - R.coveredOpen) <= 1 && R.insetOpen > R.insetBack,
         'open=' + R.insetOpen + ' / 上沿 ' + R.coveredOpen + ' / 折叠 ' + R.insetBack);
-    ok('inset ＝ 折叠细条下沿以下那截（条是透的，后面的字算读过）', Math.abs(R.inset - R.covered) <= 1,
+    ok('inset ＝ 折叠细条下沿以下那截＋一行（最多到条上沿）', Math.abs(R.inset - R.covered) <= 1,
         'inset=' + R.inset + ' / 压住 ' + R.covered);
     /* 上限：绝不许跳过被玻璃挡住的那几行。 */
     ok('不跳字：一屏的步长 ≤ 可读区',
