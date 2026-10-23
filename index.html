@@ -13482,7 +13482,7 @@ body {
                         var rpChanged = false;
                         Object.keys(cloudRP).forEach(function (k) {
                             var c = cloudRP[k], l = localRP[k];
-                            if (c && (!l || (c.ts || 0) > (l.ts || 0))) { localRP[k] = c; rpChanged = true; }
+                            if (c && (!l || (c.ts || 0) > (l.ts || 0))) { rdDiag('cloudPos', { k: k.slice(0, 16), local: l || null, cloud: c }); localRP[k] = c; rpChanged = true; }
                         });
                         if (rpChanged) localStorage.setItem('reader_pos', JSON.stringify(localRP));
                     } catch (e) {}
@@ -17316,6 +17316,7 @@ body {
         }
 
         function closeChatModal() {
+            rdDiagLeave('close');
             if (chatStreaming && chatAbortCtrl) chatAbortCtrl.abort();
             chatStreaming = false;
             if (chatThinkInterval) { clearInterval(chatThinkInterval); chatThinkInterval = null; }
@@ -17337,6 +17338,7 @@ body {
 
         function chatBackToList() {
             if (chatStreaming) return;
+            rdDiagLeave('backToList');
             readingSaveScrollPos();
             chatSaveCurrentConv();
             chatResetConvState();
@@ -17674,6 +17676,7 @@ body {
 
         /* ===== 加载历史对话 ===== */
         function chatLoadConv(id) {
+            rdDiagLeave('loadConv:' + id);
             chatCleanEmptyConv();
             var list = chatGetHistory();
             var conv = null;
@@ -18051,6 +18054,7 @@ body {
         // windowed=true（仅进入会话时传）：共读/翻译模式下只渲染「存档位置→末尾」，避免一次性重排整本书。
         // 其余调用（编辑/重生成/截断等）保持全量渲染，行为不变。
         function chatRenderAllMessages(windowed) {
+            if (Date.now() < _rdDiagUntil) rdDiag('rerender', { w: !!windowed, conv: chatCurrentConvId });
             var container = document.getElementById('chatMessages');
             container.innerHTML = '';
             if (chatMessages.length === 0) {
@@ -27678,7 +27682,7 @@ body {
                 syncPushData();
             }
         }
-        document.addEventListener('visibilitychange', function() { if (document.hidden) flushReaderPosPush(); });
+        document.addEventListener('visibilitychange', function() { if (document.hidden) { rdDiagLeave('hidden'); flushReaderPosPush(); } });
         window.addEventListener('beforeunload', flushReaderPosPush);
 
         // data 字段都显式传：{ chapter, p, off }。带上 ts 供云端逐书按时间取较新的。
@@ -29367,6 +29371,46 @@ body {
         /* bookId 可选（2026-10-20 晗加，悬浮小克里列的「最近读的另外两本」要直达某一本）：
            不传＝回上次那本，跟原来一样；传了就回那一本，并把它记成「上次那本」，
            ⚠️不记的话走 chatLoadConv 那条路不会更新 reader_last_book，长按小克还会回到旧的那本。 */
+        /* ⚠️10-24 汐：**临时诊断，查清修好后整段删掉**（连同下面各处 `rdDiag(` 调用，grep 清到 0）。
+           她：「悬浮小克好像不太能记阅读进度，每次点进去都不是在我之前退出来的那个位置」——落在那一章开头。
+           云端记录对得上：10-23 23:21 她还在《小说六讲》第 2 章第 42 段划线，23:38 进度变成第 2 章第 1 段；
+           前几本也都是「某章第 1 段」、一两秒后她就左滑开了目录。
+           本机模拟（右滑回列表/回首页、小克去对话再回来、冷启动、真书）全都能回到原位，只在她手机上出。
+           所以每次回书记一条：走哪条路、本机锚点、进度、落在哪、这期间谁动了位置。
+           存 localStorage `rd_resume_diag`（最近 40 条），并传到同步服务器的 `diag_resume` 键给汐看。 */
+        var _rdDiagUntil = 0;
+        function rdDiag(ev, info) {
+            try {
+                var arr = JSON.parse(localStorage.getItem('rd_resume_diag') || '[]');
+                var d = new Date(), rec = { t: (d.getMonth() + 1) + '-' + d.getDate() + ' ' + d.toTimeString().slice(0, 8) + '.' + String(d.getMilliseconds()).padStart(3, '0'), ev: ev };
+                if (info) for (var k in info) rec[k] = info[k];
+                arr.push(rec); if (arr.length > 40) arr = arr.slice(-40);
+                localStorage.setItem('rd_resume_diag', JSON.stringify(arr));
+                clearTimeout(rdDiag._t);
+                rdDiag._t = setTimeout(function () {
+                    try { if (activeSyncProvider === 'cf') cfReq('PUT', 'diag_resume', { items: arr }).catch(function () {}); } catch (e) {}
+                }, 3000);
+            } catch (e) {}
+        }
+        function rdDiagTop() {
+            try {
+                var el = document.getElementById('chatMessages'); if (!el) return {};
+                var ctop = el.getBoundingClientRect().top, ps = el.querySelectorAll('.reading-merged p[data-p]');
+                var o = { conv: chatCurrentConvId, st: Math.round(el.scrollTop), sh: el.scrollHeight, nP: ps.length,
+                          chs: chatMessages.filter(function (m) { return m && m.readerChapter != null; }).map(function (m) { return m.readerChapter; }).join(',') };
+                for (var i = 0; i < ps.length; i++) {
+                    if (ps[i].getBoundingClientRect().bottom > ctop + 4) {
+                        var m = ps[i].closest('.chat-msg'), mi = m ? (m.getAttribute('data-idx') | 0) : -1;
+                        o.idx = mi; o.ch = chatMessages[mi] ? chatMessages[mi].readerChapter : null; o.p = ps[i].getAttribute('data-p');
+                        o.off = Math.round(ps[i].getBoundingClientRect().top - ctop); break;
+                    }
+                }
+                return o;
+            } catch (e) { return { err: String(e).slice(0, 80) }; }
+        }
+        function rdDiagLeave(how) {
+            try { if (chatCurrentConvId && chatCurrentConvId.indexOf('reader_') === 0) rdDiag('leave', Object.assign({ how: how, anchor: localStorage.getItem('reading_pos_' + chatCurrentConvId) }, rdDiagTop())); } catch (e) {}
+        }
         function readerResumeLast(bookId) {
             var lastBook = bookId || null;
             if (!lastBook) { try { lastBook = localStorage.getItem('reader_last_book'); } catch (e) {} }
@@ -29385,6 +29429,13 @@ body {
             var hasAnchor = false;
             try { hasAnchor = !!localStorage.getItem('reading_pos_' + readerConvId(lastBook)); } catch (e) {}
             readerMigrateMarksKey(lastBook); // 「继续阅读」走 chatLoadConv 的路径也搬一次读痕键（幂等）
+            try {
+                rdDiag('resume', { arg: bookId || '', book: lastBook, prog: prog, conv: !!conv, msgs: conv && conv.messages ? conv.messages.length : 0,
+                                   anchor: localStorage.getItem('reading_pos_' + readerConvId(lastBook)), path: (conv && hasAnchor) ? 'loadConv' : 'openChapter', from: rdDiagTop() });
+                _rdDiagUntil = Date.now() + 2500;
+                setTimeout(function () { rdDiag('landed300', rdDiagTop()); }, 300);
+                setTimeout(function () { rdDiag('landed2s', rdDiagTop()); }, 2000);
+            } catch (e) {}
             if (conv && hasAnchor) {
                 chatLoadConv(readerConvId(lastBook));
             } else {
@@ -29597,7 +29648,7 @@ body {
                         if (pEl) {
                             var ctop = container.getBoundingClientRect().top;
                             container.scrollTop = container.scrollTop + (pEl.getBoundingClientRect().top - ctop) - (prog.off || 0);
-                        } else { container.scrollTop = 0; }
+                        } else { rdDiag('goParaMiss', { p: prog.p, nP: container.querySelectorAll('.reading-merged p[data-p]').length }); container.scrollTop = 0; }
                     };
                     requestAnimationFrame(goPara);
                     setTimeout(goPara, 60);
@@ -29669,6 +29720,7 @@ body {
             return d;
         }
         function readerPrependPrevChapter() {
+            if (Date.now() < _rdDiagUntil) rdDiag('prepend', rdDiagTop());
             if (_readerPrepending || !chatReaderMode || !readerBookId) return false;
             var b = rbGetBook(readerBookId); if (!b) return false;
             var first = readerFirstLoadedChapter();
@@ -31316,6 +31368,7 @@ body {
                     var rcMsg = chatMessages[data.idx | 0];
                     var rc = rcMsg ? rcMsg.readerChapter : null;
                     if (rc != null) readerSetProgress(readerBookId, { chapter: rc, p: data.p, off: data.off });
+                    if (rc != null && Date.now() < _rdDiagUntil) rdDiag('save', { ch: rc, p: data.p, off: data.off, st: Math.round(el.scrollTop) });
                 }
             } catch (e) {}
         }
@@ -31345,6 +31398,7 @@ body {
                 // 仍有偏移：返回 true，让上层再跑一帧（等 content-visibility 渲染出真实高度后复测）
                 return true;
             }
+            if (Date.now() < _rdDiagUntil) rdDiag('restoreMiss', { pos: pos, nP: el.querySelectorAll('.reading-merged p[data-p]').length });
             if (typeof pos.top === 'number') { el.scrollTop = pos.top; return false; }
             return false;
         }
