@@ -81,7 +81,7 @@ function bootSocial() {
         readingClearActbar();
         return { 标签, 档位, 文字, plain, example, argue, guide };
     });
-    eq('空着时按钮叫「导读」', R.标签, '导读');
+    eq('空着时按钮叫「讲解」（10-24 改名）', R.标签, '讲解');
     eq('弹出四个档，按范围排：前三个整节、说人话（这一段）在最后（10-24 她排的）', R.档位, ['guide', 'bgone', 'argue', 'plain']);
     eq('四个短词', R.文字, ['导读', '背景', '论证', '说人话']);
     // 说人话：就这一段、带 [P5] 原文、指令是重写、不带前文摘要
