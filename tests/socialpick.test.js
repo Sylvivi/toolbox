@@ -82,8 +82,8 @@ function bootSocial() {
         return { 标签, 档位, 文字, plain, example, argue, guide };
     });
     eq('空着时按钮叫「导读」', R.标签, '导读');
-    eq('弹出四个档（举例已撤、背景 09-22 加）', R.档位, ['guide', 'plain', 'argue', 'bgone']);
-    eq('四个短词', R.文字, ['导读', '说人话', '论证', '背景']);
+    eq('弹出四个档，按范围排：前三个整节、说人话（这一段）在最后（10-24 她排的）', R.档位, ['guide', 'bgone', 'argue', 'plain']);
+    eq('四个短词', R.文字, ['导读', '背景', '论证', '说人话']);
     // 说人话：就这一段、带 [P5] 原文、指令是重写、不带前文摘要
     ok('说人话：系统提示带【说人话】', /【说人话】/.test(R.plain.sys), R.plain.sys.slice(-200));
     ok('说人话：用户消息带 [P5] 那一段（P1 是章名，P5＝甲0）', /\[P5\]/.test(R.plain.usr) && /甲0/.test(R.plain.usr), R.plain.usr.slice(0, 200));
