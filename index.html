@@ -17771,6 +17771,11 @@ body {
             // 渲染消息（进入会话时窗口化：共读/翻译只渲染「存档位置→末尾」，更早的上滑再补）
             // ⚠️繁→简是**按书**存的，换书之后必须重新读一次，否则 chip 还显示上一本的状态
             if (typeof readingApplyT2S === 'function') readingApplyT2S();
+            /* ⚠️10-24 汐修（她：「悬浮小克点进去总不在上次退出的位置」，落在那一章开头）。
+               从别的书/对话切进来，重画时 scrollTop 被清成 0，手机上紧跟一次 scroll 事件；
+               `_readerLastTop` 还是上一个会话的（几千 px）→ 判成「往上滑到顶」→ 前面补一章 →
+               锚点下标错开两格 → 落到章首，再被当成新进度存下。readerOpenChapter 早就有这两句，这条路漏了。 */
+            if (chatReaderMode) { _readerLastTop = 0; _readerAutoLoadSuppressUntil = Date.now() + 1000; }
             chatRenderAllMessages(true);
             // 阅读/翻译：渲染后回到上次阅读位置（覆盖默认的「滚到底」）
             // 逐帧收敛校正到 <1px；并在短延时、网络字体加载完后各补一轮——
@@ -31359,6 +31364,9 @@ body {
                 if (anchor) {
                     var msgEl = anchor.closest('.chat-msg');
                     data.idx = msgEl ? msgEl.getAttribute('data-idx') : null;
+                    // 10-24：阅读会话再记一个章号——前面补了章、下标整体后移时，按章找回（见 readingRestoreScrollPos）
+                    var _am = data.idx != null ? chatMessages[data.idx | 0] : null;
+                    if (_am && _am.readerChapter != null) data.ch = _am.readerChapter;
                     data.p = anchor.getAttribute('data-p');
                     data.off = Math.round(anchor.getBoundingClientRect().top - ctop);
                 }
@@ -31385,6 +31393,11 @@ body {
             var el = document.getElementById('chatMessages');
             if (!el) return false;
             var anchor = null;
+            if (pos.ch != null && chatReaderMode) {   // 有章号就按章找下标（下标会因前面补章而后移，章号不会）
+                for (var _ci = 0; _ci < chatMessages.length; _ci++) {
+                    if (chatMessages[_ci] && chatMessages[_ci].readerChapter === pos.ch) { pos.idx = String(_ci); break; }
+                }
+            }
             if (pos.idx != null && pos.p != null) {
                 anchor = el.querySelector('.chat-msg[data-idx="' + pos.idx + '"] p[data-p="' + pos.p + '"]');
             }
