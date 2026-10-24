@@ -473,7 +473,8 @@ function bootSocial() {
     eq('短按后点第一档 → 还是导读，不会误标背景', H.短按, [['ask', '导读']]);
     eq('按住半秒 → 标签就地变「背景」', H.蓄力时标签, '背景');
     ok('蓄力时按钮高亮（告诉你松手就开始）', H.蓄力时高亮);
-    ok('松手 → 开标背景，且传的是双击那一段的段号', H.松手后.length === 1 && H.松手后[0][0] === 'bg' && H.松手后[0][3] === 15, JSON.stringify(H.松手后));
+    // 10-24 她对调：长按＝只标这一段（第 4 参 one＝段号），不再是整节
+    ok('松手 → 只标双击那一段的背景（one＝15）', H.松手后.length === 1 && H.松手后[0][0] === 'bg' && H.松手后[0][3] === 0 && H.松手后[0][4] === 15, JSON.stringify(H.松手后));
     ok('松手后不会再顺手走一遍导读（pointerup 后面紧跟一个 click）', H.松手后.filter(c => c[0] === 'ask').length === 0, JSON.stringify(H.松手后));
     eq('长按中途滑开 → 标签变回「导读」', H.滑开后标签, '导读');
     eq('长按中途滑开 → 什么都不触发（反悔得掉）', H.滑开后, []);
@@ -516,7 +517,7 @@ function bootSocial() {
     const H2 = await page.evaluate(async () => {
         window._bootNovel();
         const calls = [];
-        window.readerMarkBg = (id, ci, p) => { calls.push([id, ci, p]); return Promise.resolve(); };
+        window.readerMarkBg = (id, ci, p, one) => { calls.push([id, ci, p, one]); return Promise.resolve(); };
         window.readingAskOne = (mi, p, q) => { calls.push(['ask', q]); };
         const mi = chatMessages.findIndex(m => m && m.readerChapter === 0);
         readingClearActbar();
@@ -566,6 +567,16 @@ function bootSocial() {
         send2.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 100, clientY: 100 }));
         await new Promise(r => setTimeout(r, 30));
         out.长按松手 = calls.slice();
+        // 10-24 对调：选单里那档「背景」＝整章
+        readingClearActbar();
+        readingOnParaClick(document.querySelector('.chat-msg.ai[data-idx="' + mi + '"] .reading-merged p[data-p="5"]'));
+        const bar3 = document.querySelector('.reading-actbar');
+        bar3.querySelector('.rp-ask-send').click();
+        await new Promise(r => setTimeout(r, 30));
+        calls.length = 0;
+        const pk3 = bar3.querySelector('.rp-guide-pick button[data-k="bgone"]'); if (pk3) pk3.click();
+        await new Promise(r => setTimeout(r, 30));
+        out.选单背景 = calls.slice();
         readingClearActbar();
         return out;
     });
@@ -581,8 +592,10 @@ function bootSocial() {
     eq('小说书打字后点 → 走逐段问答，不标背景', H2.打字后点, [['ask', '他这句什么意思']]);
     eq('清空后又变回「导读」', H2.清空后的标签, '导读');
     eq('小说书长按蓄力到位，标签变「背景」', H2.长按时的标签, '背景');
-    ok('小说书长按松手 → 真的标整章背景（第 3 参 0）',
-        H2.长按松手.length === 1 && H2.长按松手[0][2] === 0, JSON.stringify(H2.长按松手));
+    ok('小说书长按松手 → 只标这一段（10-24 对调，one＝5）',
+        H2.长按松手.length === 1 && H2.长按松手[0][2] === 0 && H2.长按松手[0][3] === 5, JSON.stringify(H2.长按松手));
+    ok('小说书选单里的「背景」→ 标整章（第 3 参 0、不带 one）',
+        H2.选单背景.length === 1 && H2.选单背景[0][2] === 0 && H2.选单背景[0][3] == null, JSON.stringify(H2.选单背景));
 
     /* ⚠️标注途中往上滑会自动补上一章，所有消息下标整体 +2。
        用户实测「三十四章的背景插进了三十三章」，而且这也是「9 条只成 1 条」的真凶。 */
