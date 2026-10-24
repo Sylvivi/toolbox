@@ -62,7 +62,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             if (more) more.click();
             out.A_有改键 = !!(bar && bar.querySelector('[data-act="edit"]')) && !bar.querySelector('[data-act="more"]');
             const btns = bar ? Array.from(bar.querySelectorAll('button')).map(b => b.getAttribute('data-act')) : [];
-            out.A_注在中间 = btns.join(',') === 'hl,gloss,edit';
+            out.A_注在中间 = btns.join(',') === 'hl,gloss,bg,edit';   // 10-20 起注后面紧跟「解」(bg)
             // ⚠️D 组那条：样式键不许留在这条上（跟真·划线键撞脸）
             out.D_没有样式键 = bar ? bar.querySelectorAll('button.rd-style').length === 0 : false;
             out.A_零件数 = bar ? bar.querySelectorAll('button').length : -1;
@@ -161,7 +161,7 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('A1 选中后弹出了小条', R.A_有小条);
     ok('A2 ⚠️选中小条上没有色板（颜色改成随机了）', R.A_没有色板);
     ok('A6 「改」先收在「⋯」里', R.A_改先藏着);
-    ok('A7 顺序：划线｜注｜改（注在中间）', R.A_注在中间);
+    ok('A7 顺序：划线｜注｜解｜改（注解连成一颗、在中间）', R.A_注在中间);
     ok('A3 有「🖍 划线」键', R.A_有划线键, '共 ' + R.A_零件数 + ' 颗键');
     ok('A4 「✍️ 注」还在', R.A_有注键);
     ok('A5 「✏️ 改」还在', R.A_有改键);
