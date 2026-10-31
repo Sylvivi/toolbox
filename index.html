@@ -4642,7 +4642,7 @@ body {
         .reading-merged.translate-merged p[data-p].tp-dir + p.tp-sp::before, .reading-merged.translate-merged .translate-block + p.tp-sp::before { height: 0; }
         .translate-merged .tp-name { font-weight: 600; }
         /* 主角（她：「那 5 个人，三男两女」）照对话模式加粗那套：强调色＋虚线下划线 */
-        .translate-merged .tp-name.tp-lead { font-weight: 700; color: var(--accent-read); text-decoration: underline dashed currentColor 1px; text-underline-offset: 3px; }
+        .translate-merged .tp-name.tp-lead { font-weight: 700; text-decoration: underline dashed currentColor 1px; text-underline-offset: 3px; }
 
         /* 注：原先这里用 content-visibility 省渲染，但会让屏外段落高度变估算值，
            导致「记忆阅读位置」对不准，故移除——改回全量真实排版，定位天然精准。 */
@@ -39120,6 +39120,8 @@ body {
 
         // 主角＝这个会话里大多数集都在说话的人（每集客串的多、但只出现一两集）；集数少于 3 就取台词最多的 5 个
         var _tpLeadCache = { key: '', leads: {} };
+        // 她：「把那 5 个人用不同的颜色标注」→ 划线那 5 色调深一档当字色，按台词总数排（台词最多的拿第一个色，换集也不变）
+        var TP_LEAD_C = ['#8b5cf6', '#2f7de1', '#e0702a', '#2f9e4b', '#e0577a'];
         function translateScriptLeads() {
             var eps = [], key = chatMessages.length + ':' + (chatMessages[0] && chatMessages[0].id || '');
             if (_tpLeadCache.key === key) return _tpLeadCache.leads;
@@ -39130,16 +39132,16 @@ body {
                 for (var k = 0; k < ls.length; k++) { var m = ls[k].trim().match(re); if (m) cnt[m[1]] = (cnt[m[1]] || 0) + 1; }
                 eps.push(cnt);
             }
-            var leads = {};
+            var leads = {}, tot = {};
+            eps.forEach(function (c) { for (var n in c) tot[n] = (tot[n] || 0) + c[n]; });
             if (eps.length >= 3) {
                 var seen = {};
                 eps.forEach(function (c) { for (var n in c) if (c[n] >= 3) seen[n] = (seen[n] || 0) + 1; });
                 for (var n in seen) if (seen[n] >= eps.length * 0.6 && n === n.replace(/^[A-Z ]+$/, '')) leads[n] = 1;   // 全大写的（CUT TO）不算人
             } else {
-                var tot = {};
-                eps.forEach(function (c) { for (var n in c) tot[n] = (tot[n] || 0) + c[n]; });
                 Object.keys(tot).filter(function (n) { return n !== n.toUpperCase(); }).sort(function (a, b) { return tot[b] - tot[a]; }).slice(0, 5).forEach(function (n) { leads[n] = 1; });
             }
+            Object.keys(leads).sort(function (a, b) { return tot[b] - tot[a]; }).forEach(function (n, i) { leads[n] = i + 1; });
             _tpLeadCache = { key: key, leads: leads };
             return leads;
         }
@@ -39180,7 +39182,7 @@ body {
             var looks = translateScriptLooks(paragraphs), leads = looks.length ? translateScriptLeads() : {};
             for (var j = 0; j < paragraphs.length; j++) {
                 var pNum = j + 1, lk = looks[j], ptxt = esc(paragraphs[j]);
-                if (lk && lk.name) ptxt = '<span class="tp-name' + (leads[lk.name] ? ' tp-lead' : '') + '">' + esc(lk.name) + '</span>' + esc(paragraphs[j].slice(lk.name.length));
+                if (lk && lk.name) ptxt = '<span class="tp-name' + (leads[lk.name] ? ' tp-lead" style="color:' + TP_LEAD_C[(leads[lk.name] - 1) % TP_LEAD_C.length] : '') + '">' + esc(lk.name) + '</span>' + esc(paragraphs[j].slice(lk.name.length));
                 html += '<p data-p="' + pNum + '"' + (lk ? ' class="' + lk.cls + '"' : '') + ' style="white-space:pre-wrap;word-break:break-word;margin:0.5em 0">' + ptxt + '</p>';
                 if (blockByEnd[pNum]) {
                     for (var k = 0; k < blockByEnd[pNum].length; k++) {
