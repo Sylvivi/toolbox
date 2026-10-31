@@ -4634,6 +4634,13 @@ body {
            剧本一句台词就是一段，套阅读那套间距会一行一行隔得很开；这里给固定的紧凑值。 */
         .reading-merged.translate-merged { line-height: 1.6; }
         .reading-merged.translate-merged p[data-p] { margin-top: 0.25em !important; }
+        /* 2026-10-31 岚：她「复制粘贴的台本一句台词断成几行，分不清这个人说到哪」→ 人名开头的行前面空开、接着的行贴上去、舞台说明淡一点；只动样子，段号不变 */
+        .reading-merged.translate-merged p[data-p].tp-sp, .reading-merged.translate-merged p[data-p].tp-cont { display: inline; }   /* 断开的半句接回一行里 */
+        .reading-merged.translate-merged p[data-p].tp-sp::before { content: ""; display: block; height: 0.9em; }
+        .reading-merged.translate-merged p[data-p].tp-cont { padding-left: 0.3em; }
+        .reading-merged.translate-merged p[data-p].tp-dir { margin-top: 0.9em !important; font-style: italic; opacity: 0.6; }
+        .reading-merged.translate-merged p[data-p].tp-dir + p.tp-sp::before, .reading-merged.translate-merged .translate-block + p.tp-sp::before { height: 0; }
+        .translate-merged .tp-name { font-weight: 600; }
 
         /* 注：原先这里用 content-visibility 省渲染，但会让屏外段落高度变估算值，
            导致「记忆阅读位置」对不准，故移除——改回全量真实排版，定位天然精准。 */
@@ -39093,6 +39100,22 @@ body {
             return paragraphs;
         }
 
+        // 台本分人（2026-10-31 岚）：「人名：」开头＝新的一句（tp-sp），没人名的接在上一句后面（tp-cont）；
+        // 上一行已经说完、这行又以某个说话人的名字开头（「Frasier laughs…」）当舞台说明（tp-dir）。人名行少于 5 条不当台本，原样显示。
+        function translateScriptLooks(paras) {
+            var re = /^([A-Z][A-Za-z.'\- ]{0,24}):\s/, who = {}, n = 0, out = [];
+            for (var i = 0; i < paras.length; i++) { var m = paras[i].match(re); if (m) { who[m[1].split(' ')[0]] = 1; n++; } }
+            if (n < 5) return out;
+            for (var j = 0; j < paras.length; j++) {
+                var t = paras[j], mm = t.match(re);
+                if (mm) { out.push({ cls: 'tp-sp', name: mm[1] + ':' }); continue; }
+                var prev = j ? paras[j - 1] : '', first = (t.match(/^[A-Za-z']+/) || [''])[0].replace(/'s$/, '');
+                if (!j || (/[.!?"”')\]—]$/.test(prev) && who[first])) out.push({ cls: 'tp-dir' });
+                else out.push({ cls: 'tp-cont' });
+            }
+            return out;
+        }
+
         // 解析承载消息里的 [[TR s=N e=M]]...[[/TR]] 块
         function translateModeParseBlocks(aiText) {
             var blocks = [];
@@ -39126,9 +39149,11 @@ body {
                 pendByEnd[pp.hi].push(pp);
             }
             var html = '<div class="reading-merged translate-merged">';
+            var looks = translateScriptLooks(paragraphs);
             for (var j = 0; j < paragraphs.length; j++) {
-                var pNum = j + 1;
-                html += '<p data-p="' + pNum + '" style="white-space:pre-wrap;word-break:break-word;margin:0.5em 0">' + esc(paragraphs[j]) + '</p>';
+                var pNum = j + 1, lk = looks[j], ptxt = esc(paragraphs[j]);
+                if (lk && lk.name) ptxt = '<span class="tp-name">' + esc(lk.name) + '</span>' + esc(paragraphs[j].slice(lk.name.length));
+                html += '<p data-p="' + pNum + '"' + (lk ? ' class="' + lk.cls + '"' : '') + ' style="white-space:pre-wrap;word-break:break-word;margin:0.5em 0">' + ptxt + '</p>';
                 if (blockByEnd[pNum]) {
                     for (var k = 0; k < blockByEnd[pNum].length; k++) {
                         var blk = blockByEnd[pNum][k];
