@@ -4641,6 +4641,8 @@ body {
         .reading-merged.translate-merged p[data-p].tp-dir { margin-top: 0.9em !important; font-style: italic; opacity: 0.6; }
         .reading-merged.translate-merged p[data-p].tp-dir + p.tp-sp::before, .reading-merged.translate-merged .translate-block + p.tp-sp::before { height: 0; }
         .translate-merged .tp-name { font-weight: 600; }
+        /* 主角（她：「那 5 个人，三男两女」）照对话模式加粗那套：强调色＋虚线下划线 */
+        .translate-merged .tp-name.tp-lead { font-weight: 700; color: var(--accent-read); text-decoration: underline dashed currentColor 1px; text-underline-offset: 3px; }
 
         /* 注：原先这里用 content-visibility 省渲染，但会让屏外段落高度变估算值，
            导致「记忆阅读位置」对不准，故移除——改回全量真实排版，定位天然精准。 */
@@ -39108,12 +39110,38 @@ body {
             if (n < 5) return out;
             for (var j = 0; j < paras.length; j++) {
                 var t = paras[j], mm = t.match(re);
-                if (mm) { out.push({ cls: 'tp-sp', name: mm[1] + ':' }); continue; }
+                if (mm) { out.push({ cls: 'tp-sp', name: mm[1] }); continue; }
                 var prev = j ? paras[j - 1] : '', first = (t.match(/^[A-Za-z']+/) || [''])[0].replace(/'s$/, '');
                 if (!j || (/[.!?"”')\]—]$/.test(prev) && who[first])) out.push({ cls: 'tp-dir' });
                 else out.push({ cls: 'tp-cont' });
             }
             return out;
+        }
+
+        // 主角＝这个会话里大多数集都在说话的人（每集客串的多、但只出现一两集）；集数少于 3 就取台词最多的 5 个
+        var _tpLeadCache = { key: '', leads: {} };
+        function translateScriptLeads() {
+            var eps = [], key = chatMessages.length + ':' + (chatMessages[0] && chatMessages[0].id || '');
+            if (_tpLeadCache.key === key) return _tpLeadCache.leads;
+            var re = /^([A-Z][A-Za-z.'\- ]{0,24}):\s/;
+            for (var i = 0; i < chatMessages.length; i++) {
+                if (!chatMessages[i] || !chatMessages[i].translateMode) continue;
+                var cnt = {}, ls = readingModeStripParaNums(readingModeGetOriginalText(i) || '').split('\n');
+                for (var k = 0; k < ls.length; k++) { var m = ls[k].trim().match(re); if (m) cnt[m[1]] = (cnt[m[1]] || 0) + 1; }
+                eps.push(cnt);
+            }
+            var leads = {};
+            if (eps.length >= 3) {
+                var seen = {};
+                eps.forEach(function (c) { for (var n in c) if (c[n] >= 3) seen[n] = (seen[n] || 0) + 1; });
+                for (var n in seen) if (seen[n] >= eps.length * 0.6 && n === n.replace(/^[A-Z ]+$/, '')) leads[n] = 1;   // 全大写的（CUT TO）不算人
+            } else {
+                var tot = {};
+                eps.forEach(function (c) { for (var n in c) tot[n] = (tot[n] || 0) + c[n]; });
+                Object.keys(tot).filter(function (n) { return n !== n.toUpperCase(); }).sort(function (a, b) { return tot[b] - tot[a]; }).slice(0, 5).forEach(function (n) { leads[n] = 1; });
+            }
+            _tpLeadCache = { key: key, leads: leads };
+            return leads;
         }
 
         // 解析承载消息里的 [[TR s=N e=M]]...[[/TR]] 块
@@ -39149,10 +39177,10 @@ body {
                 pendByEnd[pp.hi].push(pp);
             }
             var html = '<div class="reading-merged translate-merged">';
-            var looks = translateScriptLooks(paragraphs);
+            var looks = translateScriptLooks(paragraphs), leads = looks.length ? translateScriptLeads() : {};
             for (var j = 0; j < paragraphs.length; j++) {
                 var pNum = j + 1, lk = looks[j], ptxt = esc(paragraphs[j]);
-                if (lk && lk.name) ptxt = '<span class="tp-name">' + esc(lk.name) + '</span>' + esc(paragraphs[j].slice(lk.name.length));
+                if (lk && lk.name) ptxt = '<span class="tp-name' + (leads[lk.name] ? ' tp-lead' : '') + '">' + esc(lk.name) + '</span>' + esc(paragraphs[j].slice(lk.name.length));
                 html += '<p data-p="' + pNum + '"' + (lk ? ' class="' + lk.cls + '"' : '') + ' style="white-space:pre-wrap;word-break:break-word;margin:0.5em 0">' + ptxt + '</p>';
                 if (blockByEnd[pNum]) {
                     for (var k = 0; k < blockByEnd[pNum].length; k++) {
