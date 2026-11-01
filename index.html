@@ -16393,6 +16393,8 @@ body {
             });
             return { text: t.replace(/\n{3,}/g, '\n\n').trim(), ops: ops };
         }
+        // 11-01 她：「删 记忆桩 · 第 5 季 · 锚点 并没有生效」→ 同步合并条目是取并集，删条目得记进 _deletedSubIds，不然又被同步带回来
+        function _docTombSub(card, id) { card._deletedSubIds = card._deletedSubIds || []; if (card._deletedSubIds.indexOf(id) < 0) card._deletedSubIds.push(id); }
         function _docCount(t, sub) { if (!sub) return 0; var n = 0, k = 0; while ((k = t.indexOf(sub, k)) >= 0) { n++; k += sub.length; } return n; }
         function _docFindText(data, name, item) {   // 替换的目标：条目正文，或整篇文字卡片的正文
             for (var i = 0; i < data.length; i++) {
@@ -16547,7 +16549,7 @@ body {
                 var it = card.items[k]; undo.item = it.id;
                 if (o.kind === '改') { undo.prev = it.content || ''; it.content = o.body; }
                 else if (o.kind === '改名') { undo.prev = it.title || ''; it.title = o.body.trim(); }
-                else if (o.kind === '删') { undo.obj = it; undo.at = k; card.items.splice(k, 1); }
+                else if (o.kind === '删') { undo.obj = it; undo.at = k; card.items.splice(k, 1); _docTombSub(card, it.id); }
                 else if (o.kind === '挪') { undo.at = k; card.items.splice(k, 1); card.items.splice(Math.max(0, Math.min(card.items.length, o.to - 1)), 0, it); }
                 else if (o.kind === '带上') {
                     var d = _docPinOf(card.id);
@@ -16592,10 +16594,10 @@ body {
             var k = -1;
             card.items.forEach(function (it, j) { if (it && it.id === u.item) k = j; });
             if (o.kind === '加') {
-                if (k >= 0) card.items.splice(k, 1);
+                if (k >= 0) { card.items.splice(k, 1); _docTombSub(card, u.item); }
                 if (u.conv && card.items.length === 1 && card.items[0].title === '正文') { card.code = card.items[0].content || ''; card.type = 'text'; card.items = []; }   // 只剩正文就变回整篇
             }
-            else if (o.kind === '删') card.items.splice(Math.min(u.at, card.items.length), 0, u.obj);
+            else if (o.kind === '删') { if (k < 0) card.items.splice(Math.min(u.at, card.items.length), 0, Object.assign({}, u.obj, { id: generateId() })); }   // 删过的 id 已记了删除，放回去换个新 id；同步把它带回来过的就不重复放
             else if (k < 0) { showToast('那一条已经不在了'); return; }
             else if (o.kind === '改') card.items[k].content = u.prev;
             else if (o.kind === '改名') card.items[k].title = u.prev;
