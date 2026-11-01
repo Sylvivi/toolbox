@@ -16304,7 +16304,7 @@ body {
         /* 11-01 岚：绑着的文档让 AI 边聊边改（她：「像在话术助手里一样，一边跟我讨论一边修改」，灵感是 Float 的小卷）。
            AI 在回复里写 <改 卡片="" 条="">…</改> 这类标签 → 正文里藏掉，回复底下每处一张小卡片「改上 / 不要」，改上了能撤回。
            条目按标题认（序号会随增删变）。状态存在这条消息的 docOps 上，跟对话一起同步。 */
-        var DOC_OP_RE = /<(改名|改|加|删|挪|新卡片|带上)((?:\s+[^\s=>]+="[^"]*")*)\s*>([\s\S]*?)<\/\1>/g;
+        var DOC_OP_RE = /<(改名|改|加|删|挪|新卡片|带上|替换)((?:\s+[^\s=>]+="[^"]*")*)\s*>([\s\S]*?)<\/\1>/g;
         var DOC_OP_HELP = '\n\n这些文档可以由你直接提出修改：在回复末尾用下面的标签，每处一个，她会逐条点「改上」或「不要」。\n'
             + '<改 卡片="卡片名" 条="条目标题">改好后的完整内容</改>\n'
             + '<加 卡片="卡片名" 标题="新条目标题">内容</加>\n'
@@ -16314,13 +16314,14 @@ body {
             + '<新卡片 名="卡片名"></新卡片>（新卡片里的条目接着用「加」）\n'
             + '<带上 卡片="卡片名" 条="条目标题"></带上>（想看只有标题的条目全文时用）\n'
             + '卡片名、条目标题照目录原文写。「改」只用在附了全文的条目上，写整条的完整内容。讨论定了再提，没定的先聊；标签外照常说话，不用复述标签里的内容。';
+        function _docSave(data) { setSnipData(data); if (typeof renderSnippets === 'function') renderSnippets(); }   // 收藏页开着也要跟着变（她：建好了在收藏里找不到）
         function chatDocNewCard() {
             var name = (prompt('卡片叫什么？') || '').trim();
             if (!name) return;
             var data = getSnipData(), now = new Date().toISOString();
             if (_docFindCard(data, name)) { showToast('已经有叫「' + name + '」的卡片了，去下面列表里点它的「常驻」就能绑上'); return; }
             var nc = { id: generateId(), title: name, tag: '', type: 'collection', items: [], code: '', url: '', note: '', createdAt: now, updatedAt: now, pinned: false };
-            data.unshift(nc); setSnipData(data);
+            data.unshift(nc); _docSave(data);
             chatPinnedDocs.push({ id: _pinKey(nc.id, ''), name: name, ref: { snipId: nc.id, subId: '' }, content: '' });
             chatRenderPinBar(); chatCloseSnipPicker();
             if (typeof chatSaveCurrentConv === 'function') chatSaveCurrentConv();
@@ -16332,9 +16333,22 @@ body {
                 var a = {};
                 attrs.replace(/([^\s=>]+)="([^"]*)"/g, function (__, k, v) { a[k] = v; return ''; });
                 ops.push({ kind: kind, card: a['卡片'] || a['名'] || '', item: a['条'] || '', title: a['标题'] || '', to: parseInt(a['到'], 10) || 0, body: body.replace(/^\n+|\n+$/g, '') });
+                if (kind === '替换') { var o = ops[ops.length - 1], mf = body.match(/<原>([\s\S]*?)<\/原>/), mt = body.match(/<新>([\s\S]*?)<\/新>/); o.from = mf ? mf[1] : ''; o.to2 = mt ? mt[1] : ''; o.body = ''; }
                 return '';
             });
             return { text: t.replace(/\n{3,}/g, '\n\n').trim(), ops: ops };
+        }
+        function _docCount(t, sub) { if (!sub) return 0; var n = 0, k = 0; while ((k = t.indexOf(sub, k)) >= 0) { n++; k += sub.length; } return n; }
+        function _docFindText(data, name, item) {   // 替换的目标：条目正文，或整篇文字卡片的正文
+            for (var i = 0; i < data.length; i++) {
+                var x = data[i];
+                if (!x || (x.title || '') !== name) continue;
+                if (x.type === 'collection' && Array.isArray(x.items)) {
+                    var k = item ? _docFindItem(x, item) : -1;
+                    if (k >= 0) { var it = x.items[k]; return { owner: x, get: function () { return it.content || ''; }, set: function (v) { it.content = v; } }; }
+                } else if (!item) return { owner: x, get: function () { return x.code || ''; }, set: function (v) { x.code = v; } };
+            }
+            return null;
         }
         function _docOpMsg(idx) {
             if (idx >= 0) return chatMessages[idx];
@@ -16363,9 +16377,9 @@ body {
             if (_left >= 3) h += '<div class="doc-op-ft" style="margin:0"><a onclick="chatDocOpAll(' + msgIdx + ',this)">全部改上（' + _left + ' 处）</a></div>';
             ops.forEach(function (o, i) {
                 var s = st[i] && st[i].st;
-                var head = o.kind === '新卡片' ? ('新卡片 · ' + o.card) : (o.kind + ' · ' + o.card + ' · ' + (o.kind === '加' ? o.title : o.item) + (o.kind === '挪' ? ' → 第 ' + o.to + ' 条' : ''));
+                var head = o.kind === '新卡片' ? ('新卡片 · ' + o.card) : (o.kind + ' · ' + o.card + ((o.kind === '加' ? o.title : o.item) ? ' · ' + (o.kind === '加' ? o.title : o.item) : '') + (o.kind === '挪' ? ' → 第 ' + o.to + ' 条' : ''));
                 h += '<div class="doc-op' + (s ? ' ' + s : '') + '"><div class="doc-op-hd">' + esc(head) + '</div>'
-                   + (o.body ? '<div class="doc-op-bd">' + esc(o.body) + '</div>' : '')
+                   + (o.kind === '替换' ? '<div class="doc-op-bd"><del>' + esc(o.from) + '</del>\n' + esc(o.to2) + '</div>' : o.body ? '<div class="doc-op-bd">' + esc(o.body) + '</div>' : '')
                    + '<div class="doc-op-ft">'
                    + (s === 'done' ? '<span>已改上</span><a onclick="chatDocOpUndo(' + msgIdx + ',' + i + ',this)">撤回</a>'
                       : s === 'no' ? '<span>不要了</span><a onclick="chatDocOpApply(' + msgIdx + ',' + i + ',this)">还是改上</a>'
@@ -16403,9 +16417,17 @@ body {
             if (o.kind === '新卡片') {
                 if (_docFindCard(data, o.card)) { showToast('已经有叫「' + o.card + '」的卡片了'); return; }
                 var nc = { id: generateId(), title: o.card, tag: '', type: 'collection', items: [], code: '', url: '', note: '', createdAt: now, updatedAt: now, pinned: false };
-                data.unshift(nc); setSnipData(data);
+                data.unshift(nc); _docSave(data);
                 chatPinnedDocs.push({ id: _pinKey(nc.id, ''), name: o.card, ref: { snipId: nc.id, subId: '' }, content: '' });
                 _docOpSet(msgIdx, i, { st: 'done', undo: { card: nc.id } }, el); showToast('建好了，已绑到这段对话'); return;
+            }
+            if (o.kind === '替换') {
+                var tgt = _docFindText(data, o.card, o.item);
+                if (!tgt) { showToast('没找到「' + o.card + (o.item ? ' · ' + o.item : '') + '」'); return; }
+                var hit = _docCount(tgt.get(), o.from);
+                if (hit !== 1) { showToast(hit ? '这句原文出现了 ' + hit + ' 次，不知道换哪处' : '没找到这句原文，可能已经改过了'); return; }
+                tgt.set(tgt.get().replace(o.from, function () { return o.to2; })); tgt.owner.updatedAt = now; _docSave(data);
+                _docOpSet(msgIdx, i, { st: 'done', undo: {} }, el); return;
             }
             var card = _docFindCard(data, o.card);
             if (!card) { showToast('没找到卡片「' + o.card + '」' + (o.kind === '加' ? '，先点上面的「新卡片」' : '')); return; }
@@ -16429,17 +16451,23 @@ body {
                     _docOpSet(msgIdx, i, { st: 'done', undo: undo }, el); return;
                 }
             }
-            card.updatedAt = now; setSnipData(data);
+            card.updatedAt = now; _docSave(data);
             _docOpSet(msgIdx, i, { st: 'done', undo: undo }, el);
         }
         function chatDocOpUndo(msgIdx, i, el) {
             var m = _docOpMsg(msgIdx), o = _docOpsOf(msgIdx)[i], u = m && m.docOps && m.docOps[i] && m.docOps[i].undo;
             if (!o || !u) return;
             var data = getSnipData(), card = null;
+            if (o.kind === '替换') {   // 撤回＝把新的那句换回原文
+                var tg = _docFindText(data, o.card, o.item);
+                if (!tg || _docCount(tg.get(), o.to2) !== 1) { showToast('改过的那句找不到了，没法撤回'); return; }
+                tg.set(tg.get().replace(o.to2, function () { return o.from; })); tg.owner.updatedAt = new Date().toISOString(); _docSave(data);
+                _docOpSet(msgIdx, i, { st: 'no' }, el); return;
+            }
             data.forEach(function (x) { if (x && x.id === u.card) card = x; });
             if (o.kind === '新卡片') {
                 if (card && card.items.length) { showToast('这张卡片里已经有条目了，要删请去收藏页'); return; }
-                if (card) { addTombstone(card.id); setSnipData(data.filter(function (x) { return x !== card; })); }
+                if (card) { addTombstone(card.id); _docSave(data.filter(function (x) { return x !== card; })); }
                 chatPinnedDocs = chatPinnedDocs.filter(function (d) { return d.id !== _pinKey(u.card, ''); });
                 _docOpSet(msgIdx, i, { st: 'no' }, el); return;
             }
@@ -16457,7 +16485,7 @@ body {
             else if (o.kind === '改') card.items[k].content = u.prev;
             else if (o.kind === '改名') card.items[k].title = u.prev;
             else if (o.kind === '挪') { var it = card.items.splice(k, 1)[0]; card.items.splice(Math.min(u.at, card.items.length), 0, it); }
-            card.updatedAt = new Date().toISOString(); setSnipData(data);
+            card.updatedAt = new Date().toISOString(); _docSave(data);
             _docOpSet(msgIdx, i, { st: 'no' }, el);
         }
 
