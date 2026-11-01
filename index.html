@@ -2751,14 +2751,17 @@ body {
            开关绝对定位压在右边，行的 padding-right 给它让出位置。 */
         .snip-row-wrap { position: relative; }
         /* 11-01 岚：AI 提的文档修改，回复底下一处一张 */
-        .doc-ops { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
-        .doc-op { border: 1px solid var(--card-border); background: var(--card-inner); border-radius: 8px; padding: 7px 10px; font-size: 12px; }
-        .doc-op-hd { color: var(--text-sub); font-weight: 600; }
-        .doc-op-bd { margin-top: 4px; white-space: pre-wrap; max-height: 9em; overflow-y: auto; color: var(--text); }
-        .doc-op-ft { margin-top: 6px; display: flex; gap: 14px; justify-content: flex-end; color: var(--text-muted); }
-        .doc-op-ft a { color: var(--accent); cursor: pointer; }
-        .doc-op.done { border-color: var(--accent); }
-        .doc-op.no { opacity: .55; }
+        .doc-ops { margin-top: 10px; border: 1px solid var(--card-border); background: var(--card-inner); border-radius: 10px; font-size: 12px; overflow: hidden; }
+        .doc-ops-hd { display: flex; justify-content: space-between; padding: 6px 10px; color: var(--text-muted); font-size: 11px; }
+        .doc-ops a { color: var(--accent); cursor: pointer; text-decoration: none; }
+        .doc-op { padding: 7px 10px; border-top: 1px solid var(--card-border); }
+        .doc-op-hd { display: flex; align-items: baseline; gap: 6px; }
+        .doc-op-hd em { flex-shrink: 0; font-style: normal; font-size: 11px; color: var(--text-muted); }
+        .doc-op-hd > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+        .doc-op-ft { flex-shrink: 0; display: flex; gap: 10px; color: var(--text-muted); font-size: 11px; }
+        .doc-op-bd { margin-top: 3px; color: var(--text-sub); white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+        .doc-op-bd.open { display: block; }
+        .doc-op.done .doc-op-hd > span, .doc-op.no { opacity: .5; }
         .snip-pin-tog {
             position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
             font-size: 10px; line-height: 1.6; padding: 1px 7px; border-radius: 6px;
@@ -16372,19 +16375,20 @@ body {
         }
         function chatDocOpsHtml(ops, msgIdx) {
             if (!ops.length) return '';
+            // 11-01 她嫌「三个画风不太一样的大窗口」→ 收成一个框、一处一行，正文默认只露两行、点开看全
             var m = _docOpMsg(msgIdx), st = (m && m.docOps) || {}, h = '<div class="doc-ops">';
             var _left = ops.filter(function (o, i) { return !(st[i] && st[i].st); }).length;
-            if (_left >= 3) h += '<div class="doc-op-ft" style="margin:0"><a onclick="chatDocOpAll(' + msgIdx + ',this)">全部改上（' + _left + ' 处）</a></div>';
+            h += '<div class="doc-ops-hd"><span>改动 ' + ops.length + ' 处</span>'
+               + (_left >= 2 ? '<a onclick="chatDocOpAll(' + msgIdx + ',this)">全部改上</a>' : '') + '</div>';
             ops.forEach(function (o, i) {
-                var s = st[i] && st[i].st;
-                var head = o.kind === '新卡片' ? ('新卡片 · ' + o.card) : (o.kind + ' · ' + o.card + ((o.kind === '加' ? o.title : o.item) ? ' · ' + (o.kind === '加' ? o.title : o.item) : '') + (o.kind === '挪' ? ' → 第 ' + o.to + ' 条' : ''));
-                h += '<div class="doc-op' + (s ? ' ' + s : '') + '"><div class="doc-op-hd">' + esc(head) + '</div>'
-                   + (o.kind === '替换' ? '<div class="doc-op-bd"><del>' + esc(o.from) + '</del>\n' + esc(o.to2) + '</div>' : o.body ? '<div class="doc-op-bd">' + esc(o.body) + '</div>' : '')
-                   + '<div class="doc-op-ft">'
+                var s = st[i] && st[i].st, what = o.kind === '加' ? o.title : o.item;
+                var tgt = o.kind === '新卡片' ? o.card : (o.card + (what ? ' · ' + what : '') + (o.kind === '挪' ? ' → 第 ' + o.to + ' 条' : ''));
+                var bd = o.kind === '替换' ? '<del>' + esc(o.from) + '</del> → ' + esc(o.to2) : esc(o.body || '');
+                h += '<div class="doc-op' + (s ? ' ' + s : '') + '"><div class="doc-op-hd"><em>' + esc(o.kind) + '</em><span>' + esc(tgt) + '</span><div class="doc-op-ft">'
                    + (s === 'done' ? '<span>已改上</span><a onclick="chatDocOpUndo(' + msgIdx + ',' + i + ',this)">撤回</a>'
-                      : s === 'no' ? '<span>不要了</span><a onclick="chatDocOpApply(' + msgIdx + ',' + i + ',this)">还是改上</a>'
+                      : s === 'no' ? '<span>不要了</span><a onclick="chatDocOpApply(' + msgIdx + ',' + i + ',this)">改上</a>'
                       : '<a onclick="chatDocOpApply(' + msgIdx + ',' + i + ',this)">改上</a><a onclick="chatDocOpSkip(' + msgIdx + ',' + i + ',this)">不要</a>')
-                   + '</div></div>';
+                   + '</div></div>' + (bd ? '<div class="doc-op-bd" onclick="this.classList.toggle(\'open\')">' + bd + '</div>' : '') + '</div>';
             });
             return h + '</div>';
         }
