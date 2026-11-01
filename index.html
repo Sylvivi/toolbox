@@ -16565,6 +16565,8 @@ body {
         function chatDocOpUndo(msgIdx, i, el) {
             var m = _docOpMsg(msgIdx), o = _docOpsOf(msgIdx)[i], u = m && m.docOps && m.docOps[i] && m.docOps[i].undo;
             if (!o || !u) return;
+            // 之前按错位置记下的状态（撤回资料对不上这一处）→ 不动内容，只恢复成没改
+            if ((o.kind === '删' && !u.obj) || ((o.kind === '改' || (o.kind === '改名' && o.item)) && typeof u.prev !== 'string')) { _docOpSet(msgIdx, i, { st: '' }, el); return; }
             var data = getSnipData(), card = null;
             if (o.kind === '替换') {   // 撤回＝把新的那句换回原文
                 var tg = _docFindText(data, o.card, o.item);
@@ -21968,7 +21970,8 @@ body {
                 _dh = chatDrawPlace(_dh, _dx.items); h += _dh; }
             else if (content && !chatReadingMode && !chatTranslateMode && content.indexOf('</') >= 0 && DOC_OP_RE.test(content)) {
                 DOC_OP_RE.lastIndex = 0;
-                var _ox = chatDocOpsExtract(content); h += renderText(_ox.text) + chatDocOpsHtml(_ox.ops, -1);
+                // 11-01 修：原来传 -1＝「最后一条回复」，后面又来了新回复再点这条的按钮就按到新那条上了 → 用它马上要存进去的位置
+                var _ox = chatDocOpsExtract(content); h += renderText(_ox.text) + chatDocOpsHtml(_ox.ops, chatMessages.length);
             }
             else if (content) h += renderText(content);
             el.innerHTML = h;
