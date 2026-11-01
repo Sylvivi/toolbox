@@ -16359,6 +16359,8 @@ body {
         function chatDocOpsHtml(ops, msgIdx) {
             if (!ops.length) return '';
             var m = _docOpMsg(msgIdx), st = (m && m.docOps) || {}, h = '<div class="doc-ops">';
+            var _left = ops.filter(function (o, i) { return !(st[i] && st[i].st); }).length;
+            if (_left >= 3) h += '<div class="doc-op-ft" style="margin:0"><a onclick="chatDocOpAll(' + msgIdx + ',this)">全部改上（' + _left + ' 处）</a></div>';
             ops.forEach(function (o, i) {
                 var s = st[i] && st[i].st;
                 var head = o.kind === '新卡片' ? ('新卡片 · ' + o.card) : (o.kind + ' · ' + o.card + ' · ' + (o.kind === '加' ? o.title : o.item) + (o.kind === '挪' ? ' → 第 ' + o.to + ' 条' : ''));
@@ -16383,6 +16385,16 @@ body {
             var box = el && el.closest('.doc-ops');
             if (box) box.outerHTML = chatDocOpsHtml(_docOpsOf(msgIdx), msgIdx);
             if (typeof chatRenderPinBar === 'function') chatRenderPinBar();
+        }
+        // 一次建好几季时一处处点太累 → 按顺序一处处改上（新卡片排在前面，后面往里加的条目才找得到卡片）
+        function chatDocOpAll(msgIdx, el) {
+            var box = el.closest('.doc-ops'), ops = _docOpsOf(msgIdx), m = _docOpMsg(msgIdx);
+            var order = ops.map(function (o, i) { return i; }).sort(function (a, b) { return (ops[b].kind === '新卡片') - (ops[a].kind === '新卡片') || a - b; });
+            order.forEach(function (i) {
+                if (m.docOps && m.docOps[i] && m.docOps[i].st) return;
+                chatDocOpApply(msgIdx, i, null);
+            });
+            box.outerHTML = chatDocOpsHtml(ops, msgIdx);
         }
         function chatDocOpSkip(msgIdx, i, el) { _docOpSet(msgIdx, i, { st: 'no' }, el); }
         function chatDocOpApply(msgIdx, i, el) {
