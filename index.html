@@ -16361,9 +16361,10 @@ body {
         /* 11-01 岚：绑着的文档让 AI 边聊边改（她：「像在话术助手里一样，一边跟我讨论一边修改」，灵感是 Float 的小卷）。
            AI 在回复里写 <改 卡片="" 条="">…</改> 这类标签 → 正文里藏掉，回复底下每处一张小卡片「改上 / 不要」，改上了能撤回。
            条目按标题认（序号会随增删变）。状态存在这条消息的 docOps 上，跟对话一起同步。 */
-        var DOC_OP_RE = /<(改名|改|加|删|挪|新卡片|带上|替换)((?:\s+[^\s=>]+="[^"]*")*)\s*>([\s\S]*?)<\/\1>/g;
+        var DOC_OP_RE = /<(改名|改|加|删|挪|新卡片|带上|替换|续)((?:\s+[^\s=>]+="[^"]*")*)\s*>([\s\S]*?)<\/\1>/g;
         var DOC_OP_HELP = '\n\n这些文档可以由你直接提出修改：在回复末尾用下面的标签，每处一个，她会逐条点「改上」或「不要」。\n'
-            + '<改 卡片="卡片名" 条="条目标题">改好后的完整内容</改>\n'
+            + '<续 卡片="卡片名" 条="条目标题">接在这条末尾的新内容</续>（往一条里添几行用它，只写新加的）\n'
+            + '<改 卡片="卡片名" 条="条目标题">改好后的完整内容</改>（大半都要重写时才用）\n'
             + '<加 卡片="卡片名" 标题="新条目标题">内容</加>\n'
             + '<改名 卡片="卡片名" 条="条目标题">新标题</改名>（改卡片本身的名字就不写「条」，收藏里任何一张都行）\n'
             + '<删 卡片="卡片名" 条="条目标题"></删>\n'
@@ -16371,7 +16372,7 @@ body {
             + '<新卡片 名="卡片名"></新卡片>（新卡片里的条目接着用「加」）\n'
             + '整篇文字的卡片也能「加」：原来那篇会变成第一条「正文」，新条目排在它下面。\n'
             + '<带上 卡片="卡片名" 条="条目标题"></带上>（想看只有标题的条目全文时用）\n'
-            + '卡片名、条目标题照目录原文写。「改」只用在附了全文的条目上，写整条的完整内容。讨论定了再提，没定的先聊；标签外照常说话，不用复述标签里的内容。';
+            + '卡片名、条目标题照目录原文写。能用「续」「替换」就别用「改」，没动的内容不要重抄；「改」只用在附了全文的条目上，写整条的完整内容。讨论定了再提，没定的先聊；标签外照常说话，不用复述标签里的内容。';
         function _docSave(data) { setSnipData(data); if (typeof renderSnippets === 'function') renderSnippets(); }   // 收藏页开着也要跟着变（她：建好了在收藏里找不到）
         function chatDocNewCard() {
             var name = (prompt('卡片叫什么？') || '').trim();
@@ -16479,13 +16480,14 @@ body {
                 var tgt = o.kind === '新卡片' ? o.card : (o.card + (what ? ' · ' + what : '') + (o.kind === '挪' ? ' → 第 ' + o.to + ' 条' : ''));
                 var bd = o.kind === '替换' ? _docPairHtml(o.from, o.to2)
                        : o.kind === '改名' ? _docPairHtml(o.item || o.card, o.body.trim())
+                       : o.kind === '续' ? '<span class="dd-skip">…</span><ins>' + esc(o.body) + '</ins>'
                        : o.kind === '改' ? _docDiffHtml(s === 'done' && st[i].undo ? st[i].undo.prev : _docCurText(o), o.body)
                        : esc(o.body || '');
                 h += '<div class="doc-op' + (s ? ' ' + s : '') + '"><div class="doc-op-hd"><em>' + esc(o.kind) + '</em><span>' + esc(tgt) + '</span><div class="doc-op-ft">'
                    + (s === 'done' ? '<span>已改上</span><a onclick="chatDocOpUndo(' + msgIdx + ',' + i + ',this)">撤回</a>'
                       : s === 'no' ? '<span>不要了</span><a onclick="chatDocOpApply(' + msgIdx + ',' + i + ',this)">改上</a>'
                       : '<a onclick="chatDocOpApply(' + msgIdx + ',' + i + ',this)">改上</a><a onclick="chatDocOpSkip(' + msgIdx + ',' + i + ',this)">不要</a>')
-                   + '</div></div>' + (bd ? '<div class="doc-op-bd' + (o.kind === '改' || o.kind === '替换' || o.kind === '改名' ? ' diff' : '') + '" onclick="this.classList.toggle(\'open\')">' + bd + '</div>' : '') + '</div>';
+                   + '</div></div>' + (bd ? '<div class="doc-op-bd' + (o.kind === '改' || o.kind === '替换' || o.kind === '改名' || o.kind === '续' ? ' diff' : '') + '" onclick="this.classList.toggle(\'open\')">' + bd + '</div>' : '') + '</div>';
             });
             return h + '</div>';
         }
@@ -16527,6 +16529,13 @@ body {
                 if (!rc) { showToast('没找到卡片「' + o.card + '」'); return; }
                 undo.card = rc.id; undo.prev = rc.title; rc.title = o.body.trim(); rc.updatedAt = now; _docSave(data);
                 _docOpSet(msgIdx, i, { st: 'done', undo: undo }, el); return;
+            }
+            if (o.kind === '续') {   // 11-01 她：「把那些我没要改的也一起输出……3000 字的文档岂不是还得先把那些都输出」→ 只写新加的，接在末尾
+                var tx = _docFindText(data, o.card, o.item);
+                if (!tx) { showToast('没找到「' + o.card + (o.item ? ' · ' + o.item : '') + '」'); return; }
+                var cur = tx.get(), add = (cur && !/\n$/.test(cur) ? '\n' : '') + o.body;
+                tx.set(cur + add); tx.owner.updatedAt = now; _docSave(data);
+                _docOpSet(msgIdx, i, { st: 'done', undo: { add: add } }, el); return;
             }
             if (o.kind === '替换') {
                 var tgt = _docFindText(data, o.card, o.item);
@@ -16571,6 +16580,12 @@ body {
             // 之前按错位置记下的状态（撤回资料对不上这一处）→ 不动内容，只恢复成没改
             if ((o.kind === '删' && !u.obj) || ((o.kind === '改' || (o.kind === '改名' && o.item)) && typeof u.prev !== 'string')) { _docOpSet(msgIdx, i, { st: '' }, el); return; }
             var data = getSnipData(), card = null;
+            if (o.kind === '续') {
+                var tx2 = _docFindText(data, o.card, o.item), c2 = tx2 && tx2.get();
+                if (!tx2 || typeof u.add !== 'string' || c2.slice(-u.add.length) !== u.add) { showToast('末尾已经变了，没法撤回，去收藏里手动删吧'); return; }
+                tx2.set(c2.slice(0, c2.length - u.add.length)); tx2.owner.updatedAt = new Date().toISOString(); _docSave(data);
+                _docOpSet(msgIdx, i, { st: 'no' }, el); return;
+            }
             if (o.kind === '替换') {   // 撤回＝把新的那句换回原文
                 var tg = _docFindText(data, o.card, o.item);
                 if (!tg || _docCount(tg.get(), o.to2) !== 1) { showToast('改过的那句找不到了，没法撤回'); return; }
