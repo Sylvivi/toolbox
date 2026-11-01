@@ -16316,7 +16316,7 @@ body {
         var DOC_OP_HELP = '\n\n这些文档可以由你直接提出修改：在回复末尾用下面的标签，每处一个，她会逐条点「改上」或「不要」。\n'
             + '<改 卡片="卡片名" 条="条目标题">改好后的完整内容</改>\n'
             + '<加 卡片="卡片名" 标题="新条目标题">内容</加>\n'
-            + '<改名 卡片="卡片名" 条="条目标题">新标题</改名>\n'
+            + '<改名 卡片="卡片名" 条="条目标题">新标题</改名>（改卡片本身的名字就不写「条」，收藏里任何一张都行）\n'
             + '<删 卡片="卡片名" 条="条目标题"></删>\n'
             + '<挪 卡片="卡片名" 条="条目标题" 到="排第几"></挪>\n'
             + '<新卡片 名="卡片名"></新卡片>（新卡片里的条目接着用「加」）\n'
@@ -16427,13 +16427,14 @@ body {
                 var s = st[i] && st[i].st, what = o.kind === '加' ? o.title : o.item;
                 var tgt = o.kind === '新卡片' ? o.card : (o.card + (what ? ' · ' + what : '') + (o.kind === '挪' ? ' → 第 ' + o.to + ' 条' : ''));
                 var bd = o.kind === '替换' ? _docPairHtml(o.from, o.to2)
+                       : o.kind === '改名' ? _docPairHtml(o.item || o.card, o.body.trim())
                        : o.kind === '改' ? _docDiffHtml(s === 'done' && st[i].undo ? st[i].undo.prev : _docCurText(o), o.body)
                        : esc(o.body || '');
                 h += '<div class="doc-op' + (s ? ' ' + s : '') + '"><div class="doc-op-hd"><em>' + esc(o.kind) + '</em><span>' + esc(tgt) + '</span><div class="doc-op-ft">'
                    + (s === 'done' ? '<span>已改上</span><a onclick="chatDocOpUndo(' + msgIdx + ',' + i + ',this)">撤回</a>'
                       : s === 'no' ? '<span>不要了</span><a onclick="chatDocOpApply(' + msgIdx + ',' + i + ',this)">改上</a>'
                       : '<a onclick="chatDocOpApply(' + msgIdx + ',' + i + ',this)">改上</a><a onclick="chatDocOpSkip(' + msgIdx + ',' + i + ',this)">不要</a>')
-                   + '</div></div>' + (bd ? '<div class="doc-op-bd' + (o.kind === '改' || o.kind === '替换' ? ' diff' : '') + '" onclick="this.classList.toggle(\'open\')">' + bd + '</div>' : '') + '</div>';
+                   + '</div></div>' + (bd ? '<div class="doc-op-bd' + (o.kind === '改' || o.kind === '替换' || o.kind === '改名' ? ' diff' : '') + '" onclick="this.classList.toggle(\'open\')">' + bd + '</div>' : '') + '</div>';
             });
             return h + '</div>';
         }
@@ -16469,6 +16470,12 @@ body {
                 data.unshift(nc); _docSave(data);
                 chatPinnedDocs.push({ id: _pinKey(nc.id, ''), name: o.card, ref: { snipId: nc.id, subId: '' }, content: '' });
                 _docOpSet(msgIdx, i, { st: 'done', undo: { card: nc.id } }, el); showToast('建好了，已绑到这段对话'); return;
+            }
+            if (o.kind === '改名' && !o.item) {   // 11-01 她：收藏里不管哪张卡片的标题都能改
+                var rc = null; data.forEach(function (x) { if (!rc && x && (x.title || '') === o.card) rc = x; });
+                if (!rc) { showToast('没找到卡片「' + o.card + '」'); return; }
+                undo.card = rc.id; undo.prev = rc.title; rc.title = o.body.trim(); rc.updatedAt = now; _docSave(data);
+                _docOpSet(msgIdx, i, { st: 'done', undo: undo }, el); return;
             }
             if (o.kind === '替换') {
                 var tgt = _docFindText(data, o.card, o.item);
@@ -16522,6 +16529,12 @@ body {
                 if (card && card.items.length) { showToast('这张卡片里已经有条目了，要删请去收藏页'); return; }
                 if (card) { addTombstone(card.id); _docSave(data.filter(function (x) { return x !== card; })); }
                 chatPinnedDocs = chatPinnedDocs.filter(function (d) { return d.id !== _pinKey(u.card, ''); });
+                _docOpSet(msgIdx, i, { st: 'no' }, el); return;
+            }
+            if (o.kind === '改名' && !o.item) {
+                var rc = null; data.forEach(function (x) { if (x && x.id === u.card) rc = x; });
+                if (!rc) { showToast('卡片已经不在了'); return; }
+                rc.title = u.prev; rc.updatedAt = new Date().toISOString(); _docSave(data);
                 _docOpSet(msgIdx, i, { st: 'no' }, el); return;
             }
             if (o.kind === '带上') {
