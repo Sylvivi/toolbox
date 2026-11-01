@@ -16411,6 +16411,24 @@ body {
             }
             return null;
         }
+        /* 11-01 她：「万一 AI 笨笨的还是用改怎么办，还要我口头提醒吗」→ 上一条回复里有「改」且一半以上是原样照抄的，
+           下一轮在说明末尾自动提一句（跟原文比：改上了的用撤回资料里的原文，没改上的用现在的） */
+        function _docRewroteTooMuch() {
+            for (var i = chatMessages.length - 1; i >= 0; i--) {
+                var m = chatMessages[i];
+                if (m.role !== 'assistant') continue;
+                var ops = chatDocOpsExtract(typeof m.content === 'string' ? m.content : '').ops, st = m.docOps || {};
+                return ops.some(function (o, k) {
+                    if (o.kind !== '改' || o.body.length < 80) return false;
+                    var old = st[k] && st[k].undo && typeof st[k].undo.prev === 'string' ? st[k].undo.prev : _docCurText(o);
+                    if (!old || old === o.body) return false;
+                    var p = 0; while (p < old.length && p < o.body.length && old[p] === o.body[p]) p++;
+                    var q = 0; while (q < old.length - p && q < o.body.length - p && old[old.length - 1 - q] === o.body[o.body.length - 1 - q]) q++;
+                    return (p + q) / o.body.length > 0.5;
+                });
+            }
+            return false;
+        }
         function _docOpMsg(idx) {
             if (idx >= 0) return chatMessages[idx];
             for (var i = chatMessages.length - 1; i >= 0; i--) if (chatMessages[i].role === 'assistant') return chatMessages[i];
@@ -21446,10 +21464,12 @@ body {
                 var _pinTxt = _pins.map(function (d) {
                     return '【' + d.name + '】\n' + d.body;
                 }).join('\n\n');
-                var _hasDoc = chatPinnedDocs.some(function (d) { return d.ref && d.ref.snipId; });   // 11-01 她：宋飞那段钉的是一整篇 md、不是带条目的卡片，AI 就不知道能建卡片 → 钉了收藏里的东西就带说明
+                var _hasDoc = chatPinnedDocs.some(function (d) { return d.ref && d.ref.snipId; });
+                var _nag = _hasDoc && _docRewroteTooMuch();   // 11-01 她：宋飞那段钉的是一整篇 md、不是带条目的卡片，AI 就不知道能建卡片 → 钉了收藏里的东西就带说明
                 reqMsgs.push({ role: 'system', content:
                     '以下是本次对话一直带着的参考资料，随时可以查阅引用。'
-                  + '它会在每一轮都附上，**不需要复述、不需要确认收到**，正常回答就好。' + (_hasDoc ? DOC_OP_HELP : '') + '\n\n' + _pinTxt });
+                  + '它会在每一轮都附上，**不需要复述、不需要确认收到**，正常回答就好。' + (_hasDoc ? DOC_OP_HELP : '')
+                  + (_nag ? '\n（上一条回复用「改」把大段没动的内容又抄了一遍。往后添用「续」，改一小处用「替换」。）' : '') + '\n\n' + _pinTxt });
             }
             // 插入压缩摘要（如果有）。「发送最近 N 轮」封顶时整块跳过——
             // 她要的是干净的一句一问，旧摘要塞进来就等于把记忆又带回来了。
