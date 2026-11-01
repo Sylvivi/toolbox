@@ -2750,6 +2750,15 @@ body {
            行本身是 <button>，HTML 不许 button 套 button，所以外面包一层相对定位的 div，
            开关绝对定位压在右边，行的 padding-right 给它让出位置。 */
         .snip-row-wrap { position: relative; }
+        .pin-hd .nm.ed, .pin-it .nm.ed { cursor: pointer; }
+        .doc-ed { display: flex; flex-direction: column; gap: 8px; padding: 0 14px; min-height: 0; flex: 1 1 auto; }
+        .doc-ed-card { font-size: 11px; color: var(--text-muted); }
+        .doc-ed input, .doc-ed textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--card-border); background: var(--input-bg); color: var(--text); border-radius: 9px; padding: 8px 10px; font: inherit; outline: none; }
+        .doc-ed input { font-size: 14px; font-weight: 600; }
+        .doc-ed textarea { font-size: 13px; line-height: 1.7; height: 46vh; resize: none; }
+        .doc-ed-ft { display: flex; justify-content: flex-end; gap: 18px; padding: 2px 2px 4px; font-size: 13px; }
+        .doc-ed-ft a { color: var(--text-muted); cursor: pointer; }
+        .doc-ed-ft a.ok { color: var(--accent); font-weight: 600; }
         .pin-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
         .pin-card { margin: 0 14px 10px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--card-inner); overflow: hidden; }
         .pin-hd, .pin-it { display: flex; align-items: center; gap: 10px; padding: 9px 12px; }
@@ -16712,6 +16721,46 @@ body {
             document.getElementById('chatPinBg').classList.add('show');
             document.getElementById('chatPinSheet').classList.add('show');
         }
+        /* 11-01 她：「常驻里面的内容，能不能打开看看甚至编辑」→ 点条目名字弹出来看、改，保存直接写回收藏（同步跟手动改一样） */
+        function chatDocEdit(snipId, subId) {
+            var data = getSnipData(), card = null, it = null;
+            data.forEach(function (x) { if (x && x.id === snipId) card = x; });
+            if (!card) { showToast('这份已经不在收藏里了'); return; }
+            if (subId) (card.items || []).forEach(function (x) { if (x && x.id === subId) it = x; });
+            if (subId && !it) { showToast('这一条已经不在了'); return; }
+            var bg = document.getElementById('chatDocEditBg');
+            if (!bg) {
+                bg = document.createElement('div'); bg.id = 'chatDocEditBg'; bg.className = 'chat-action-sheet-bg'; bg.style.zIndex = 1001;
+                bg.onclick = chatDocEditClose; document.body.appendChild(bg);
+                var sh0 = document.createElement('div'); sh0.id = 'chatDocEditSheet'; sh0.className = 'chat-action-sheet'; sh0.style.zIndex = 1002;
+                sh0.onclick = function (e) { e.stopPropagation(); }; document.body.appendChild(sh0);
+            }
+            var sh = document.getElementById('chatDocEditSheet');
+            sh.innerHTML = '<div class="sheet-handle"></div>'
+                + '<div class="doc-ed">' + (it ? '<div class="doc-ed-card">' + esc(card.title || '') + '</div>' : '')
+                + '<input id="docEdTitle" value="' + esc(it ? (it.title || '') : (card.title || '')) + '">'
+                + '<textarea id="docEdBody">' + esc(it ? (it.content || '') : (card.code || '')) + '</textarea>'
+                + '<div class="doc-ed-ft"><a onclick="chatDocEditClose()">取消</a><a class="ok" onclick="chatDocEditSave(' + JSON.stringify(snipId).replace(/"/g, '&quot;') + ',' + JSON.stringify(subId || '').replace(/"/g, '&quot;') + ')">保存</a></div></div>';
+            chatClosePinPanel();   // 底下的常驻面板会从毛玻璃里透出来、看着乱 → 先收起，关掉编辑再回来
+            bg.classList.add('show'); sh.classList.add('show');
+        }
+        function chatDocEditClose() {
+            var bg = document.getElementById('chatDocEditBg'), sh = document.getElementById('chatDocEditSheet');
+            if (bg) bg.classList.remove('show'); if (sh) sh.classList.remove('show');
+            chatOpenPinPanel();
+        }
+        function chatDocEditSave(snipId, subId) {
+            var data = getSnipData(), card = null, title = document.getElementById('docEdTitle').value.trim(), body = document.getElementById('docEdBody').value;
+            data.forEach(function (x) { if (x && x.id === snipId) card = x; });
+            if (!card) { showToast('这份已经不在收藏里了'); return; }
+            if (subId) {
+                var it = null; (card.items || []).forEach(function (x) { if (x && x.id === subId) it = x; });
+                if (!it) { showToast('这一条已经不在了'); return; }
+                it.title = title || it.title; it.content = body;
+            } else { card.title = title || card.title; card.code = body; }
+            card.updatedAt = new Date().toISOString(); _docSave(data);
+            chatDocEditClose(); showToast('存好了');
+        }
         function chatClosePinPanel() {
             var bg = document.getElementById('chatPinBg'), sh = document.getElementById('chatPinSheet');
             if (bg) bg.classList.remove('show');
@@ -16737,7 +16786,9 @@ body {
                     var r = list[i] || { name: d.name, body: d.content || '' };
                     tot += (r.body || '').length;
                     var _qid = JSON.stringify(d.id).replace(/"/g, '&quot;'), _dc = _chatDocCard(d);
-                    h += '<div class="pin-card"><div class="pin-hd"><span class="nm">' + esc(r.name) + '</span>'
+                    var _eq = function (sub) { return JSON.stringify(d.ref.snipId).replace(/"/g, '&quot;') + ',' + JSON.stringify(sub || '').replace(/"/g, '&quot;'); };
+                    var _hdEdit = (!_dc && d.ref && d.ref.snipId) ? ' onclick="chatDocEdit(' + _eq(d.ref.subId) + ')"' : '';
+                    h += '<div class="pin-card"><div class="pin-hd"><span class="nm' + (_hdEdit ? ' ed' : '') + '"' + _hdEdit + '>' + esc(r.name) + '</span>'
                        + '<span class="pin-sz">' + (_dc && d.cardOff ? '只带目录' : _snipSize((r.body || '').length)) + '</span>'
                        + (_dc ? '<span class="pin-sw' + (d.cardOff ? '' : ' on') + '" onclick="chatDocTog(' + _qid + ')"></span>' : '')
                        + '<span class="pin-x" onclick="chatUnpinDoc(' + _qid + ')">取下</span></div>';
@@ -16746,7 +16797,7 @@ body {
                             if (!it) return;
                             var on = _chatDocOn(d, it);
                             h += '<div class="pin-it' + (on ? '' : ' off') + (d.cardOff ? ' dim' : '') + '" onclick="chatDocTog(' + _qid + ',' + JSON.stringify(it.id).replace(/"/g, '&quot;') + ')">'
-                               + '<span class="nm">' + esc(it.title || '无题') + '</span><span class="pin-sz">' + _snipSize((it.content || '').length) + '</span>'
+                               + '<span class="nm ed" onclick="event.stopPropagation();chatDocEdit(' + _eq(it.id) + ')">' + esc(it.title || '无题') + '</span><span class="pin-sz">' + _snipSize((it.content || '').length) + '</span>'
                                + '<span class="pin-sw' + (on ? ' on' : '') + '"></span></div>';
                         });
                     }
