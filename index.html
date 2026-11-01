@@ -16246,13 +16246,48 @@ body {
             var out = [];
             for (var i = 0; i < chatPinnedDocs.length; i++) {
                 var d = chatPinnedDocs[i], name = d.name, body = d.content || '';
-                if (d.ref && d.ref.snipId) {
+                var _dc = _chatDocCard(d);
+                if (_dc) { name = _dc.title || name; body = _chatDocBody(d, _dc); }
+                else if (d.ref && d.ref.snipId) {
                     var r = chatSnipResolve(d.ref.snipId, d.ref.subId);
                     if (r && (r.body || '').trim()) { name = r.name; body = r.body; }
                 }
                 if ((body || '').trim()) out.push({ name: name, body: body });
             }
             return out;
+        }
+
+        /* 11-01 岚：她的宋飞正传七季要「边聊边改」→ 整张有条目的卡片常驻＝**绑成文档**：
+           目录（全部条目标题）每轮都带，正文只带开着的条目；开关存在这条常驻上（d.off＝关掉的条目 id，
+           d.cardOff＝整张只带目录），跟着对话走。新加的条目不在 off 里，默认就是开着的。 */
+        function _chatDocCard(d) {
+            if (!d || !d.ref || !d.ref.snipId || d.ref.subId) return null;
+            var all = (typeof getSnipData === 'function' ? getSnipData() : []) || [];
+            for (var i = 0; i < all.length; i++) {
+                var x = all[i];
+                if (x && x.id === d.ref.snipId) return (x.type === 'collection' && Array.isArray(x.items)) ? x : null;
+            }
+            return null;
+        }
+        function _chatDocOn(d, it) { return !d.cardOff && !(d.off && d.off[it.id]); }
+        function _chatDocBody(d, card) {
+            var items = card.items.filter(function (it) { return it; });
+            var toc = items.map(function (it, i) { return (i + 1) + '. ' + (it.title || '无题') + (_chatDocOn(d, it) ? ' ✓' : ''); });
+            var full = [];
+            items.forEach(function (it, i) { if (_chatDocOn(d, it)) full.push('〔' + (i + 1) + '. ' + (it.title || '无题') + '〕\n' + (it.content || '')); });
+            return '目录（共 ' + items.length + ' 条，打 ✓ 的下面附了全文，其余只有标题）：\n' + toc.join('\n')
+                 + (full.length ? '\n\n' + full.join('\n\n') : '');
+        }
+        function chatDocTog(docId, itemId) {
+            for (var i = 0; i < chatPinnedDocs.length; i++) {
+                var d = chatPinnedDocs[i];
+                if (d.id !== docId) continue;
+                if (itemId) { d.off = d.off || {}; if (d.off[itemId]) delete d.off[itemId]; else d.off[itemId] = 1; }
+                else d.cardOff = !d.cardOff;
+                chatRenderPinPanel();
+                if (typeof chatSaveCurrentConv === 'function') chatSaveCurrentConv();
+                return;
+            }
         }
 
         function chatIsPinned(snipId, subId) {
@@ -16320,13 +16355,27 @@ body {
                     var d = chatPinnedDocs[i];
                     var r = list[i] || { name: d.name, body: d.content || '' };
                     tot += (r.body || '').length;
+                    var _qid = JSON.stringify(d.id).replace(/"/g, '&quot;'), _dc = _chatDocCard(d);
                     h += '<div class="snip-row-wrap">'
-                       + '<div class="chat-action-item" style="display:flex;align-items:baseline;gap:8px">'
+                       + '<div class="chat-action-item" style="display:flex;align-items:baseline;gap:8px' + (_dc ? ';font-weight:600' : '') + '">'
                        + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(r.name) + '</span>'
                        + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + _snipSize((r.body || '').length) + '</span>'
                        + '</div>'
-                       + '<span class="snip-pin-tog" onclick="chatUnpinDoc(' + JSON.stringify(d.id).replace(/"/g, '&quot;') + ')">取下</span>'
+                       + '<span class="snip-pin-tog" onclick="chatUnpinDoc(' + _qid + ')">取下</span>'
                        + '</div>';
+                    // 绑成文档的卡片：整张一个开关（关了只带目录），底下每条一个「带上」
+                    if (_dc) {
+                        h += '<div class="snip-row-wrap"><div class="chat-action-item" style="padding-left:28px;color:var(--text-sub)">↳ 整张</div>'
+                           + '<span class="snip-pin-tog' + (d.cardOff ? '' : ' on') + '" onclick="chatDocTog(' + _qid + ')">' + (d.cardOff ? '只带目录' : '带上') + '</span></div>';
+                        _dc.items.forEach(function (it) {
+                            if (!it) return;
+                            var on = _chatDocOn(d, it);
+                            h += '<div class="snip-row-wrap"><div class="chat-action-item" style="display:flex;gap:8px;padding-left:28px' + (d.cardOff ? ';opacity:.45' : '') + '">'
+                               + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-sub)">↳ ' + esc(it.title || '无题') + '</span>'
+                               + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + _snipSize((it.content || '').length) + '</span></div>'
+                               + '<span class="snip-pin-tog' + (on ? ' on' : '') + '" onclick="chatDocTog(' + _qid + ',' + JSON.stringify(it.id).replace(/"/g, '&quot;') + ')">' + (on ? '带上' : '不带') + '</span></div>';
+                        });
+                    }
                 }
                 h += '<div style="padding:8px 14px 4px;font-size:11px;color:var(--text-muted)">合计 '
                    + _snipSize(tot) + ' · 每轮重发</div>';
