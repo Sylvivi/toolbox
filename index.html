@@ -16366,7 +16366,8 @@ body {
         // 11-01 她：「它在这一条里提了要改的，却在下一条才让我点，有种错位的感觉」→ 说出具体改法的同一条就出标签
         var DOC_OP_HELP = '\n\n这些文档可以由你直接提出修改：在回复末尾用下面的标签，每处一个，她会逐条点「改上」或「不要」。\n'
             + '<续 卡片="卡片名" 条="条目标题">接在这条末尾的新内容</续>（往一条里添几行用它，只写新加的）\n'
-            + '<改 卡片="卡片名" 条="条目标题">改好后的完整内容</改>（大半都要重写时才用）\n'
+            + '<替换 卡片="卡片名" 条="条目标题"><原>原文里的一句</原><新>换成的</新><原>另一句</原><新>换成的</新></替换>（改一处或几处都放这一个标签里；原文照抄，要长到在那条里只出现一次；整篇文字的卡片不写「条」）\n'
+            + '<改 卡片="卡片名" 条="条目标题">改好后的完整内容</改>（几乎整条推翻重写时才用）\n'
             + '<加 卡片="卡片名" 标题="新条目标题">内容</加>\n'
             + '<改名 卡片="卡片名" 条="条目标题">新标题</改名>（改卡片本身的名字就不写「条」，收藏里任何一张都行）\n'
             + '<删 卡片="卡片名" 条="条目标题"></删>\n'
@@ -16394,7 +16395,10 @@ body {
                 var a = {};
                 attrs.replace(/([^\s=>]+)="([^"]*)"/g, function (__, k, v) { a[k] = v; return ''; });
                 ops.push({ kind: kind, card: a['卡片'] || a['名'] || '', item: a['条'] || '', title: a['标题'] || '', to: parseInt(a['到'], 10) || 0, body: body.replace(/^\n+|\n+$/g, '') });
-                if (kind === '替换') { var o = ops[ops.length - 1], mf = body.match(/<原>([\s\S]*?)<\/原>/), mt = body.match(/<新>([\s\S]*?)<\/新>/); o.from = mf ? mf[1] : ''; o.to2 = mt ? mt[1] : ''; o.body = ''; }
+                if (kind === '替换') {   // 11-01 她同意：一个替换里可以放好几处（原/新成对）
+                    var o = ops[ops.length - 1]; o.pairs = []; o.body = '';
+                    body.replace(/<原>([\s\S]*?)<\/原>\s*<新>([\s\S]*?)<\/新>/g, function (_, f, t) { o.pairs.push({ from: f, to: t }); return ''; });
+                }
                 return '';
             });
             return { text: t.replace(/\n{3,}/g, '\n\n').trim(), ops: ops };
@@ -16498,7 +16502,7 @@ body {
             ops.forEach(function (o, i) {
                 var s = st[i] && st[i].st, what = o.kind === '加' ? o.title : o.item;
                 var tgt = o.kind === '新卡片' ? o.card : (o.card + (what ? ' · ' + what : '') + (o.kind === '挪' ? ' → 第 ' + o.to + ' 条' : ''));
-                var bd = o.kind === '替换' ? _docPairHtml(o.from, o.to2)
+                var bd = o.kind === '替换' ? o.pairs.map(function (q) { return _docPairHtml(q.from, q.to); }).join('<br>')
                        : o.kind === '改名' ? _docPairHtml(o.item || o.card, o.body.trim())
                        : o.kind === '续' ? '<span class="dd-skip">…</span><ins>' + esc(o.body) + '</ins>'
                        : o.kind === '改' ? _docDiffHtml(s === 'done' && st[i].undo ? st[i].undo.prev : _docCurText(o), o.body)
@@ -16560,9 +16564,13 @@ body {
             if (o.kind === '替换') {
                 var tgt = _docFindText(data, o.card, o.item);
                 if (!tgt) { showToast('没找到「' + o.card + (o.item ? ' · ' + o.item : '') + '」'); return; }
-                var hit = _docCount(tgt.get(), o.from);
-                if (hit !== 1) { showToast(hit ? '这句原文出现了 ' + hit + ' 次，不知道换哪处' : '没找到这句原文，可能已经改过了'); return; }
-                tgt.set(tgt.get().replace(o.from, function () { return o.to2; })); tgt.owner.updatedAt = now; _docSave(data);
+                var txt = tgt.get();
+                for (var pi = 0; pi < o.pairs.length; pi++) {   // 一处对不上就整个不改
+                    var q = o.pairs[pi], hit = _docCount(txt, q.from);
+                    if (hit !== 1) { showToast('「' + q.from.slice(0, 12) + '」' + (hit ? '出现了 ' + hit + ' 次，不知道换哪处' : '没找到，可能已经改过了')); return; }
+                    txt = txt.replace(q.from, function () { return q.to; });
+                }
+                tgt.set(txt); tgt.owner.updatedAt = now; _docSave(data);
                 _docOpSet(msgIdx, i, { st: 'done', undo: {} }, el); return;
             }
             var card = _docFindCard(data, o.card);
@@ -16608,8 +16616,13 @@ body {
             }
             if (o.kind === '替换') {   // 撤回＝把新的那句换回原文
                 var tg = _docFindText(data, o.card, o.item);
-                if (!tg || _docCount(tg.get(), o.to2) !== 1) { showToast('改过的那句找不到了，没法撤回'); return; }
-                tg.set(tg.get().replace(o.to2, function () { return o.from; })); tg.owner.updatedAt = new Date().toISOString(); _docSave(data);
+                var tt = tg && tg.get();
+                for (var pj = o.pairs.length - 1; tg && pj >= 0; pj--) {
+                    if (_docCount(tt, o.pairs[pj].to) !== 1) { tg = null; break; }
+                    tt = tt.replace(o.pairs[pj].to, function () { return o.pairs[pj].from; });
+                }
+                if (!tg) { showToast('改过的那句找不到了，没法撤回'); return; }
+                tg.set(tt); tg.owner.updatedAt = new Date().toISOString(); _docSave(data);
                 _docOpSet(msgIdx, i, { st: 'no' }, el); return;
             }
             data.forEach(function (x) { if (x && x.id === u.card) card = x; });
