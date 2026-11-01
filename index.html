@@ -16320,6 +16320,7 @@ body {
             + '<删 卡片="卡片名" 条="条目标题"></删>\n'
             + '<挪 卡片="卡片名" 条="条目标题" 到="排第几"></挪>\n'
             + '<新卡片 名="卡片名"></新卡片>（新卡片里的条目接着用「加」）\n'
+            + '整篇文字的卡片也能「加」：原来那篇会变成第一条「正文」，新条目排在它下面。\n'
             + '<带上 卡片="卡片名" 条="条目标题"></带上>（想看只有标题的条目全文时用）\n'
             + '卡片名、条目标题照目录原文写。「改」只用在附了全文的条目上，写整条的完整内容。讨论定了再提，没定的先聊；标签外照常说话，不用复述标签里的内容。';
         function _docSave(data) { setSnipData(data); if (typeof renderSnippets === 'function') renderSnippets(); }   // 收藏页开着也要跟着变（她：建好了在收藏里找不到）
@@ -16478,6 +16479,10 @@ body {
                 _docOpSet(msgIdx, i, { st: 'done', undo: {} }, el); return;
             }
             var card = _docFindCard(data, o.card);
+            if (!card && o.kind === '加') {   // 11-01 她：整篇文字的卡片底下也要能加条目 → 整篇挪进第一条「正文」，卡片变成带条目的
+                data.forEach(function (x) { if (!card && x && x.type !== 'collection' && (x.title || '') === o.card) card = x; });
+                if (card) { card.items = [{ id: generateId(), title: '正文', type: 'text', content: card.code || '' }]; card.type = 'collection'; card.code = ''; undo.conv = 1; }
+            }
             if (!card) { showToast('没找到卡片「' + o.card + '」' + (o.kind === '加' ? '，先点上面的「新卡片」' : '')); return; }
             undo.card = card.id;
             if (o.kind === '加') {
@@ -16527,7 +16532,10 @@ body {
             if (!card) { showToast('卡片已经不在了'); return; }
             var k = -1;
             card.items.forEach(function (it, j) { if (it && it.id === u.item) k = j; });
-            if (o.kind === '加') { if (k >= 0) card.items.splice(k, 1); }
+            if (o.kind === '加') {
+                if (k >= 0) card.items.splice(k, 1);
+                if (u.conv && card.items.length === 1 && card.items[0].title === '正文') { card.code = card.items[0].content || ''; card.type = 'text'; card.items = []; }   // 只剩正文就变回整篇
+            }
             else if (o.kind === '删') card.items.splice(Math.min(u.at, card.items.length), 0, u.obj);
             else if (k < 0) { showToast('那一条已经不在了'); return; }
             else if (o.kind === '改') card.items[k].content = u.prev;
