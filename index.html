@@ -2760,6 +2760,11 @@ body {
         .doc-op-hd > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
         .doc-op-ft { flex-shrink: 0; display: flex; gap: 10px; color: var(--text-muted); font-size: 11px; }
         .doc-op-bd { margin-top: 3px; color: var(--text-sub); white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+        .doc-op-bd:not(.diff) { -webkit-line-clamp: 6; }
+        .doc-op-bd.diff { display: block; white-space: normal; }
+        .doc-op-bd del { color: var(--text-muted); }
+        .doc-op-bd ins { text-decoration: none; color: var(--text); background: var(--accent-light); border-radius: 3px; padding: 0 2px; }
+        .dd-skip { color: var(--text-muted); margin: 0 3px; }
         .doc-op-bd.open { display: block; }
         .doc-op.done .doc-op-hd > span, .doc-op.no { opacity: .5; }
         .snip-pin-tog {
@@ -16373,6 +16378,43 @@ body {
             for (var i = 0; i < chatPinnedDocs.length; i++) if (chatPinnedDocs[i].id === _pinKey(cardId, '')) return chatPinnedDocs[i];
             return null;
         }
+        /* 11-01 她：「仍然需要展开才能确认改动」→「改」只显示跟现在比改了哪几句：按句子对齐，删的划掉、加的标色，没动的折成「…」 */
+        function _docCurText(o) {
+            var t = _docFindText(getSnipData(), o.card, o.item);
+            return t ? t.get() : null;
+        }
+        function _docPairHtml(a, b) {   // 一处替换：前后相同的字照常显示，只把中间变了的那段划掉／标色
+            var p = 0, q = 0;
+            while (p < a.length && p < b.length && a[p] === b[p]) p++;
+            while (q < a.length - p && q < b.length - p && a[a.length - 1 - q] === b[b.length - 1 - q]) q++;
+            var ma = a.slice(p, a.length - q), mb = b.slice(p, b.length - q);
+            return esc(a.slice(0, p)) + (ma ? '<del>' + esc(ma) + '</del>' : '') + (mb ? '<ins>' + esc(mb) + '</ins>' : '') + esc(a.slice(a.length - q));
+        }
+        function _docDiffHtml(a, b) {
+            if (a == null) return esc(b || '');
+            var sp = function (t) { return String(t || '').match(/[^。！？!?；\n]+[。！？!?；]*|\n+/g) || []; };
+            var A = sp(a), B = sp(b), n = A.length, m = B.length, L = [], i, j, seq = [];
+            for (i = n; i >= 0; i--) { L[i] = []; for (j = m; j >= 0; j--) L[i][j] = (i === n || j === m) ? 0 : A[i] === B[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]); }
+            i = 0; j = 0;
+            while (i < n || j < m) {
+                if (i < n && j < m && A[i] === B[j]) { seq.push({ t: 's', x: A[i] }); i++; j++; }
+                else if (i < n && (j === m || L[i + 1][j] >= L[i][j + 1])) { seq.push({ t: 'd', x: A[i] }); i++; }
+                else { seq.push({ t: 'i', x: B[j] }); j++; }
+            }
+            var out = [], k = 0, ch = 0;
+            while (k < seq.length) {
+                if (seq[k].t === 's') {   // 没动的：夹在两处改动中间的短句留着当上下文，其余折成「…」
+                    var same = ''; while (k < seq.length && seq[k].t === 's') same += seq[k++].x;
+                    var t = same.replace(/\n+/g, ' ').trim();
+                    out.push(t.length <= 24 && out.length && k < seq.length ? esc(t) : '<span class="dd-skip">…</span>');
+                } else {
+                    var da = '', ib = ''; ch++;
+                    while (k < seq.length && seq[k].t !== 's') { if (seq[k].t === 'd') da += seq[k].x; else ib += seq[k].x; k++; }
+                    out.push(_docPairHtml(da, ib));
+                }
+            }
+            return ch ? out.join('') : '<span class="dd-skip">没有改动</span>';
+        }
         function chatDocOpsHtml(ops, msgIdx) {
             if (!ops.length) return '';
             // 11-01 她嫌「三个画风不太一样的大窗口」→ 收成一个框、一处一行，正文默认只露两行、点开看全
@@ -16383,12 +16425,14 @@ body {
             ops.forEach(function (o, i) {
                 var s = st[i] && st[i].st, what = o.kind === '加' ? o.title : o.item;
                 var tgt = o.kind === '新卡片' ? o.card : (o.card + (what ? ' · ' + what : '') + (o.kind === '挪' ? ' → 第 ' + o.to + ' 条' : ''));
-                var bd = o.kind === '替换' ? '<del>' + esc(o.from) + '</del> → ' + esc(o.to2) : esc(o.body || '');
+                var bd = o.kind === '替换' ? _docPairHtml(o.from, o.to2)
+                       : o.kind === '改' ? _docDiffHtml(s === 'done' && st[i].undo ? st[i].undo.prev : _docCurText(o), o.body)
+                       : esc(o.body || '');
                 h += '<div class="doc-op' + (s ? ' ' + s : '') + '"><div class="doc-op-hd"><em>' + esc(o.kind) + '</em><span>' + esc(tgt) + '</span><div class="doc-op-ft">'
                    + (s === 'done' ? '<span>已改上</span><a onclick="chatDocOpUndo(' + msgIdx + ',' + i + ',this)">撤回</a>'
                       : s === 'no' ? '<span>不要了</span><a onclick="chatDocOpApply(' + msgIdx + ',' + i + ',this)">改上</a>'
                       : '<a onclick="chatDocOpApply(' + msgIdx + ',' + i + ',this)">改上</a><a onclick="chatDocOpSkip(' + msgIdx + ',' + i + ',this)">不要</a>')
-                   + '</div></div>' + (bd ? '<div class="doc-op-bd" onclick="this.classList.toggle(\'open\')">' + bd + '</div>' : '') + '</div>';
+                   + '</div></div>' + (bd ? '<div class="doc-op-bd' + (o.kind === '改' || o.kind === '替换' ? ' diff' : '') + '" onclick="this.classList.toggle(\'open\')">' + bd + '</div>' : '') + '</div>';
             });
             return h + '</div>';
         }
