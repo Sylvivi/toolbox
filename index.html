@@ -2750,6 +2750,19 @@ body {
            行本身是 <button>，HTML 不许 button 套 button，所以外面包一层相对定位的 div，
            开关绝对定位压在右边，行的 padding-right 给它让出位置。 */
         .snip-row-wrap { position: relative; }
+        .pin-card { margin: 0 14px 10px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--card-inner); overflow: hidden; }
+        .pin-hd, .pin-it { display: flex; align-items: center; gap: 10px; padding: 9px 12px; }
+        .pin-hd { font-size: 13px; font-weight: 600; color: var(--text); }
+        .pin-it { border-top: 1px solid var(--card-border); font-size: 12.5px; color: var(--text-sub); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+        .pin-hd .nm, .pin-it .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pin-it.off .nm { color: var(--text-muted); }
+        .pin-it.dim { opacity: .45; }
+        .pin-sz { flex-shrink: 0; font-size: 11px; font-weight: 400; color: var(--text-muted); }
+        .pin-x { flex-shrink: 0; font-size: 11px; font-weight: 400; color: var(--text-muted); cursor: pointer; }
+        .pin-sw { flex-shrink: 0; position: relative; width: 26px; height: 15px; border-radius: 8px; background: rgba(120,120,135,.3); cursor: pointer; transition: background .15s; }
+        .pin-sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform .15s; }
+        .pin-sw.on { background: var(--accent); }
+        .pin-sw.on::after { transform: translateX(11px); }
         /* 11-01 岚：AI 提的文档修改，回复底下一处一张 */
         .doc-ops { margin-top: 10px; border: 1px solid var(--card-border); background: var(--card-inner); border-radius: 10px; font-size: 12px; overflow: hidden; }
         .doc-ops-hd { display: flex; justify-content: space-between; padding: 6px 10px; color: var(--text-muted); font-size: 11px; }
@@ -2775,7 +2788,7 @@ body {
         }
         /* 11-01 岚：她「已经选为常驻的内容，希望可以醒目一点」→ 开关填实色、整行铺一层浅底 */
         .snip-pin-tog.on { color: #fff; background: var(--accent); font-weight: 600; }
-        .snip-row-wrap:has(.snip-pin-tog.on) > .chat-action-item { background: var(--accent-light); box-shadow: inset 3px 0 0 var(--accent); }
+        #snipPickSheet .snip-row-wrap:has(.snip-pin-tog.on) > .chat-action-item { background: var(--accent-light); box-shadow: inset 3px 0 0 var(--accent); }
         .snip-row-wrap > .chat-action-item { padding-right: 58px; }
         /* 2026-08-16：这行小字从「只读标签」变成「可点的切模型入口」。
            她原话：「我希望那个地方可以点击，然后切换收藏模型，这样我就不需要点clawd图标去设置里切换了」。
@@ -16618,32 +16631,27 @@ body {
             if (!list.length) {
                 h += '<div style="padding:6px 14px 18px;font-size:12px;color:var(--text-muted)">还没钉住什么。</div>';
             } else {
+                // 11-01 她嫌常驻面板「界面感觉比较粗糙」→ 一张卡片一个框，条目一行一个小开关，整行点就切；整张的开关挪到卡片名那行
                 var tot = 0;
                 for (var i = 0; i < chatPinnedDocs.length; i++) {
                     var d = chatPinnedDocs[i];
                     var r = list[i] || { name: d.name, body: d.content || '' };
                     tot += (r.body || '').length;
                     var _qid = JSON.stringify(d.id).replace(/"/g, '&quot;'), _dc = _chatDocCard(d);
-                    h += '<div class="snip-row-wrap">'
-                       + '<div class="chat-action-item" style="display:flex;align-items:baseline;gap:8px' + (_dc ? ';font-weight:600' : '') + '">'
-                       + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(r.name) + '</span>'
-                       + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + _snipSize((r.body || '').length) + '</span>'
-                       + '</div>'
-                       + '<span class="snip-pin-tog" onclick="chatUnpinDoc(' + _qid + ')">取下</span>'
-                       + '</div>';
-                    // 绑成文档的卡片：整张一个开关（关了只带目录），底下每条一个「带上」
+                    h += '<div class="pin-card"><div class="pin-hd"><span class="nm">' + esc(r.name) + '</span>'
+                       + '<span class="pin-sz">' + (_dc && d.cardOff ? '只带目录' : _snipSize((r.body || '').length)) + '</span>'
+                       + (_dc ? '<span class="pin-sw' + (d.cardOff ? '' : ' on') + '" onclick="chatDocTog(' + _qid + ')"></span>' : '')
+                       + '<span class="pin-x" onclick="chatUnpinDoc(' + _qid + ')">取下</span></div>';
                     if (_dc) {
-                        h += '<div class="snip-row-wrap"><div class="chat-action-item" style="padding-left:28px;color:var(--text-sub)">↳ 整张</div>'
-                           + '<span class="snip-pin-tog' + (d.cardOff ? '' : ' on') + '" onclick="chatDocTog(' + _qid + ')">' + (d.cardOff ? '只带目录' : '带上') + '</span></div>';
                         _dc.items.forEach(function (it) {
                             if (!it) return;
                             var on = _chatDocOn(d, it);
-                            h += '<div class="snip-row-wrap"><div class="chat-action-item" style="display:flex;gap:8px;padding-left:28px' + (d.cardOff ? ';opacity:.45' : '') + '">'
-                               + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-sub)">↳ ' + esc(it.title || '无题') + '</span>'
-                               + '<span style="flex-shrink:0;font-size:11px;color:var(--text-muted)">' + _snipSize((it.content || '').length) + '</span></div>'
-                               + '<span class="snip-pin-tog' + (on ? ' on' : '') + '" onclick="chatDocTog(' + _qid + ',' + JSON.stringify(it.id).replace(/"/g, '&quot;') + ')">' + (on ? '带上' : '不带') + '</span></div>';
+                            h += '<div class="pin-it' + (on ? '' : ' off') + (d.cardOff ? ' dim' : '') + '" onclick="chatDocTog(' + _qid + ',' + JSON.stringify(it.id).replace(/"/g, '&quot;') + ')">'
+                               + '<span class="nm">' + esc(it.title || '无题') + '</span><span class="pin-sz">' + _snipSize((it.content || '').length) + '</span>'
+                               + '<span class="pin-sw' + (on ? ' on' : '') + '"></span></div>';
                         });
                     }
+                    h += '</div>';
                 }
                 h += '<div style="padding:8px 14px 4px;font-size:11px;color:var(--text-muted)">合计 '
                    + _snipSize(tot) + ' · 每轮重发</div>';
