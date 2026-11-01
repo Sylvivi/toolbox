@@ -16430,10 +16430,11 @@ body {
            下一轮在说明末尾自动提一句（跟原文比：改上了的用撤回资料里的原文，没改上的用现在的） */
         /* 11-01 她：「AI 是不是不知道我有没有点改上啊，有时候点最新的改上会提示找不到」→ 它以为上一条提的都生效了、照改后的样子找原文。
            发出去的那份历史里，给带改动标签的回复末尾附上她的处理结果（只进请求，不改存档） */
+        var DOC_NOTE_RE = /\n?〔(?:她对上面这些改动的处理|改动处理结果)[^〕]*〕/g;   // AI 学着写出来的那句，显示和再发出去时都去掉
         function _docOpsStatusNote(m) {
             var ops = chatDocOpsExtract(m.content).ops, st = m.docOps || {};
             if (!ops.length) return '';
-            return '\n〔她对上面这些改动的处理：' + ops.map(function (o, k) {
+            return '〔改动处理结果·勿复述：' + ops.map(function (o, k) {
                 var s = st[k] && st[k].st;
                 return (k + 1) + '. ' + o.kind + ' ' + (o.kind === '新卡片' ? o.card : o.card + (o.item || o.title ? ' · ' + (o.item || o.title) : '')) + '：' + (s === 'done' ? '改上了' : s === 'no' ? '不要' : '还没点，没生效');
             }).join('；') + '〕';
@@ -18715,7 +18716,7 @@ body {
                     if (_chatMeIsShort(_displayText)) bubble.classList.add('chat-me-short');
                 }
             } else {
-                if (typeof text === 'string') text = chatStripTimeTag(text);
+                if (typeof text === 'string') text = chatStripTimeTag(text).replace(DOC_NOTE_RE, '');
                 var h = '';
                 /* ⚠️这里长得像 chatThinkingBlockHtml，但**故意不用它**，别顺手合并（2026-08-06 记）：
                    这条路径渲染的是**历史消息**，而 chatThinkDuration 是「当前这次请求」的全局值。
@@ -21680,8 +21681,10 @@ body {
                     var _who = src[i].role === 'user' ? (_uName || '用户') : '助手';
                     reqMsgs.push({ role: 'system', content: '〔时间标记·勿复述 ' + _who + ' ' + _dd + ' ' + _tt + '〕' });
                 }
-                if (src[i].role === 'assistant' && typeof _mc === 'string' && _mc.indexOf('</') >= 0) _mc += _docOpsStatusNote(src[i]);
+                if (src[i].role === 'assistant' && typeof _mc === 'string') _mc = _mc.replace(DOC_NOTE_RE, '');
                 reqMsgs.push({ role: src[i].role, content: _mc });
+                // 11-01 她：处理结果原来贴在回复末尾，AI 有样学样自己也写了一句露出来 → 改成紧跟着的一条系统提示（跟时间标记一样标勿复述）
+                if (src[i].role === 'assistant' && typeof _mc === 'string' && _mc.indexOf('</') >= 0) { var _dn = _docOpsStatusNote(src[i]); if (_dn) reqMsgs.push({ role: 'system', content: _dn }); }
             }
 
             var aiDiv = document.createElement('div');
@@ -22078,6 +22081,7 @@ body {
         }
 
         function chatRenderStreamFinal(el, thinking, content) {
+            if (typeof content === 'string') content = content.replace(DOC_NOTE_RE, '');
             _streamContentEl = null;
             if (_streamMdTimer) { clearTimeout(_streamMdTimer); _streamMdTimer = 0; }
             var h = chatThinkingBlockHtml(thinking);
