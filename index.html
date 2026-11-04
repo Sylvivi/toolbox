@@ -39655,6 +39655,16 @@ body {
         var _tpLeadCache = { key: '', leads: {} };
         // 她：「把那 5 个人用不同的颜色标注」→ 划线那 5 色调深一档当字色，按台词总数排（台词最多的拿第一个色，换集也不变）
         var TP_LEAD_C = ['#8b5cf6', '#2f7de1', '#e0702a', '#2f9e4b', '#e0577a'];
+        // 认出来的主角名单记在本机（tp_known_leads：[{人名: 台词总数}]，一部剧一份），给集数少的会话借用；只记不同步，长会话在哪台设备打开过一次就记上了。
+        function tpKnownLeadsLoad() { try { var a = JSON.parse(localStorage.getItem('tp_known_leads') || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+        function tpKnownLeadsSave(known, leads, tot) {
+            var names = Object.keys(leads); if (names.length < 2) return;
+            var set = {}; names.forEach(function (n) { set[n] = tot[n]; });
+            // 跟已记的哪份重了两个以上就算同一部剧，换成新的；否则另起一份（最多留 20 部）
+            var rest = known.filter(function (k) { return names.filter(function (n) { return k[n]; }).length < 2; });
+            rest.unshift(set);
+            try { localStorage.setItem('tp_known_leads', JSON.stringify(rest.slice(0, 20))); } catch (e) {}
+        }
         function translateScriptLeads() {
             var eps = [], key = chatMessages.length + ':' + (chatMessages[0] && chatMessages[0].id || '');
             if (_tpLeadCache.key === key) return _tpLeadCache.leads;
@@ -39667,14 +39677,21 @@ body {
             }
             var leads = {}, tot = {};
             eps.forEach(function (c) { for (var n in c) tot[n] = (tot[n] || 0) + c[n]; });
+            var known = tpKnownLeadsLoad(), rank = tot;
             if (eps.length >= 3) {
                 var seen = {};
                 eps.forEach(function (c) { for (var n in c) if (c[n] >= 3) seen[n] = (seen[n] || 0) + 1; });
                 for (var n in seen) if (seen[n] >= eps.length * 0.6 && n === n.replace(/^[A-Z ]+$/, '')) leads[n] = 1;   // 全大写的（CUT TO）不算人
+                tpKnownLeadsSave(known, leads, tot);
             } else {
-                Object.keys(tot).filter(function (n) { return n !== n.toUpperCase(); }).sort(function (a, b) { return tot[b] - tot[a]; }).slice(0, 5).forEach(function (n) { leads[n] = 1; });
+                // 2026-11-04 岚：新开的会话只有一集时「台词最多的 5 个」会被客串挤掉——《欢乐一家亲》那集 Clive 46 句、Roz 19 句，Roz 就没上色。
+                // 所以先对一下别的长会话记下的主角名单（同一部剧），这集里说话的人对上两个以上就照那份来，颜色也跟那边一致。
+                var best = null, hit = 1;
+                known.forEach(function (k) { var h = Object.keys(k).filter(function (n) { return tot[n]; }).length; if (h > hit) { hit = h; best = k; } });
+                if (best) { rank = best; for (var n2 in best) if (tot[n2]) leads[n2] = 1; }
+                else Object.keys(tot).filter(function (n) { return n !== n.toUpperCase(); }).sort(function (a, b) { return tot[b] - tot[a]; }).slice(0, 5).forEach(function (n) { leads[n] = 1; });
             }
-            Object.keys(leads).sort(function (a, b) { return tot[b] - tot[a]; }).forEach(function (n, i) { leads[n] = i + 1; });
+            Object.keys(leads).sort(function (a, b) { return rank[b] - rank[a]; }).forEach(function (n, i) { leads[n] = i + 1; });
             _tpLeadCache = { key: key, leads: leads };
             return leads;
         }
