@@ -4632,6 +4632,9 @@ body {
            问题一换行两块底就上下叠在一起——用户 2026-08-09 实拍逮到两次（一次是"接壤"、一次是这个）。
            行距只加在问题这一行，答案照旧，不会把整块撑松。 */
         .reading-merged blockquote .reading-q { color: var(--text); line-height: 1.95; }
+        /* 11-06 岚：从划线上点「问」问的那几句，灰色小字压在问题上面（她：「开头一小行灰字写着问的是哪一句」）；长的收成两行 */
+        .reading-merged blockquote .rd-q-quote { font-size: 0.86em; line-height: 1.6; color: var(--text-sub); opacity: 0.8; margin-bottom: 0.15em;
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .reading-merged blockquote .reading-q-hl {
             background: color-mix(in srgb, var(--accent), transparent 84%);
             /* 上下内边距用 em（跟着字号走），且**只给一点点**——给多了等于把两块底往一起推 */
@@ -28448,6 +28451,12 @@ body {
              那条老规矩一致。⟦⟧ 选的是正文几乎不可能出现的括号。
            ⚠️显示时必须剥掉（见渲染处），用户不该看见这个标记。 */
         var BG_ANCHOR_RE = /\s*⟦([^⟧]{1,20})⟧\s*$/;
+        /* 11-06 岚：划线上点「问」＝问划的这几句。问题存成「划的句子」＋她打的问题，还是一行，
+           存储格式、同步、读痕、书签全照旧（书签里看到的也是一句通顺的话）；显示时把「」那段拆出来当上面那行灰字。 */
+        function rdQuoteSplit(q) {
+            var m = /^「([^」]{1,400})」\s*([\s\S]*)$/.exec(String(q || ''));
+            return m && m[2].trim() ? { quote: m[1], rest: m[2] } : null;
+        }
         function _rdBgSplitQ(line) {
             var raw = String(line || '');
             var m = BG_ANCHOR_RE.exec(raw);
@@ -32272,7 +32281,8 @@ body {
                 '<button class="rd-stream-stop" type="button" onclick="readingAbortPending(' + pp.id + ')">停止</button>';
             // 问题文字包 .reading-q-hl（荧光笔底）——生成中的气泡和生成完的问答块要长得一模一样，
             // 不然一停笔样式就跳一下（这两处骨架分开写，改一处必须改另一处，见函数头那条注释）
-            if (pp.question) h += '<div class="reading-q"><span class="reading-q-hl"><span class="reading-q-name">' + esc(chatUserName()) + '</span>：' + esc(pp.question) + '</span></div>';
+            var _pq = rdQuoteSplit(pp.question);   // 划线上问的：那几句灰字放上面（跟问答块同一套，见 rdQuoteSplit）
+            if (pp.question) h += '<div class="reading-q">' + (_pq ? '<div class="rd-q-quote">' + esc(_pq.quote) + '</div>' : '') + '<span class="reading-q-hl"><span class="reading-q-name">' + esc(chatUserName()) + '</span>：' + esc(_pq ? _pq.rest : pp.question) + '</span></div>';
             h += '<div class="rd-stream-ans">';
             h += started
                 ? (renderText(body) + '<span class="rd-stream-cursor">▍</span>')
@@ -32417,15 +32427,16 @@ body {
                手势按书的类型分叉，等于要她每开一本书先想一下这是哪种，必然记反。
                ⚠️这一改动了小说的老习惯（原来小说留空点一下＝标背景），是她明确要的，别改回去。 */
             /* 10-24 她改名「讲解」：点开那排已经是 导读/背景/论证/说人话（小说 读前/读完/背景），再叫「导读」会跟第一个选项重名。 */
-            var _emptyLabel = _bgCi != null ? '追问' : '讲解';
+            var _hlQ = (opts && opts.hlQuote) || '';   // 11-06 岚：划线上点「问」进来的，问的是划的这几句（见 rdHlAsk）
+            var _emptyLabel = _bgCi != null ? '追问' : _hlQ ? '问' : '讲解';
             // 记下「条子开在哪」，重渲后由 readingRestoreActbar 原样接回去（标背景边标边重渲时全靠它）
             _rdActbarState = {
                 msg: chatMessages[msgIdx], pNum: pNum,
                 anchor: (anchorEl && anchorEl.tagName === 'BLOCKQUOTE') ? 'q' : 'p',
-                opts: (_bgCi != null ? { bgCi: _bgCi } : {})
+                opts: (_bgCi != null ? { bgCi: _bgCi } : _hlQ ? { hlQuote: _hlQ } : {})
             };
             var inputHtml = '<textarea class="rp-ask" rows="1" placeholder="' +
-                (_bgCi != null ? '问问这个背景…' :
+                (_bgCi != null ? '问问这个背景…' : _hlQ ? '问问划的这句…' :
                  _isSocial ? '有问题就问…（留空＝讲解，长按＝这段背景）' : '问问这一段…（留空＝讲解，长按＝这段背景）') +
                 '"></textarea>';
             var askHtml = '<button class="rp-ask-send">' + _emptyLabel + '</button>';
@@ -32442,6 +32453,11 @@ body {
                 if (_bgCi != null) {   // 背景追问：空着就把光标放进去，别去重标背景
                     if (!input.value.trim()) { try { input.focus(); } catch (e) {} return; }
                     readingAskOne(msgIdx, pNum, input.value, bar, { bgCi: _bgCi });
+                    return;
+                }
+                if (_hlQ) {   // 划线上问的：空着就放光标（没有「讲解」那一档）；问题前面带上「划的句子」
+                    if (!input.value.trim()) { try { input.focus(); } catch (e) {} return; }
+                    readingAskOne(msgIdx, pNum, '「' + _hlQ + '」' + input.value.trim(), bar, { quote: _hlQ });
                     return;
                 }
                 if (!input.value.trim()) {
@@ -32477,7 +32493,7 @@ body {
                 if (_bgArmed) { _bgArmed = false; send.textContent = _bgLabel; send.classList.remove('rp-bg-armed'); }
             }
             send.addEventListener('pointerdown', function (e) {
-                if (_bgCi != null) return;          // 背景追问模式没有第三态
+                if (_bgCi != null || _hlQ) return;  // 背景追问、划线上问都没有第三态
                 // 2026-09-16 起小说也接长按了（＝标背景），跟社科书同一套手势，见上面 _emptyLabel 那段
                 if (input.value.trim()) return;     // 打了字＝讨论，长按不接管
                 if (readerBgRunning) return;   // 标背景一次只跑一轮；别的段在提问不影响（可并发）
@@ -33360,6 +33376,9 @@ body {
                        等于每轮都把它拽回原点——僵化就是这么来的。系统提示词里那一句已经够了。
                        她 2026-09-16 的原话：「提问和追问的提示词还是有点僵化」。 */
                     ? ''
+                    : (opts && opts.quote)
+                    ? '\n\n（我问的是 [P' + pNum + '] 里我划出来的「' + opts.quote + '」这几句：回答落在这几句上；' +
+                      '这一段别的地方和前面的内容，只在用来解释这几句的时候才提。）'
                     : '\n\n（不管我问得多随意，回答都要落在 [P' + pNum + '] 这一段上：先说这一段本身；' +
                       '前面的内容只在用来解释这一段的时候才提，别把回答写成对前面段落的评论。）');
             }
@@ -37639,7 +37658,10 @@ body {
                    结果划线还在、批注空了（她报「之前的那些痕迹咋都不见了」）。
                    有了这颗键，重注是就地覆盖，划线、颜色、位置全都不动。 */
                 '<button class="rd-act" data-act="gloss">' + (hl.note ? '✍️ 重注' : '✍️ 注') + '</button>' +
-                // 「问」两条小条上都撤了（2026-08-04，用户几乎不用）。真要问，双击段落就有。
+                /* 「问」08-04 从两条小条上都撤过（她：「几乎不用」，那时是把选中的字填进框里）。
+                   11-06 她：「我可能对一个段落中的某一句话或者某几句话有疑问……只能复制下来，然后双击段落，粘贴」
+                   → 加回在**划线**这条上（她定的：先划线、再点划线问）：框开在段落下面，跟双击一样；不用贴，回答开头灰字写着划的那几句。 */
+                '<button class="rd-act" data-act="ask">问</button>' +
                 '<button class="rd-act" data-act="note">✎ 批注</button>' +
                 '<button class="rd-act rd-del" data-act="del">删除</button>';
             bar.addEventListener('mousedown', function(e) { e.preventDefault(); });
@@ -37651,6 +37673,7 @@ body {
                 if (a === 'mk') { rdHlSetMk(id, act.getAttribute('data-to')); return; }
                 if (a === 'style') { rdHlToggleStyle(); return; }   // 键已撤，分支留着兜老缓存里的那条小条
                 if (a === 'note') { rdHlOpenNote(id); return; }
+                if (a === 'ask') { rdHlAsk(hl); return; }
                 if (a === 'gloss') { rdHlHideBar(); rdGlRedo(id); return; }
                 if (a === 'del') {
                     if (act.classList.contains('armed')) { rdHlDelete(id); return; }
@@ -37694,6 +37717,17 @@ body {
         }
         // 批注：复用「点段提问」那套流内单行框（rp-ask），插在划线所在段落后面。
         // 流内元素聚焦时浏览器会自动把它滚到键盘上方，不会被键盘挡住（旧的 fixed 浮层做不到）。
+        function rdHlAsk(hl) {   // 划线上点「问」：开这一段的提问框（同双击段落），带上划的那几句
+            var p = document.querySelector('.chat-msg.ai[data-idx="' + hl.msgIdx + '"] .reading-merged p[data-p="' + hl.p + '"]');
+            if (!p) { if (typeof showToast === 'function') showToast('找不到这一段了'); return; }
+            rdHlHideBar();
+            readingClearActbar();
+            p.classList.add('rp-active');
+            var q = String(hl.text || hl.preview || '').replace(/[「」\n]/g, ' ').replace(/\s+/g, ' ').trim();
+            readingOpenAskBar(hl.msgIdx, hl.p, p, '', { hlQuote: q.length > 300 ? q.slice(0, 300) + '…' : q });
+            var inp = p.nextElementSibling && p.nextElementSibling.querySelector('.rp-ask');
+            if (inp) inp.focus();   // 在点击手势内同步聚焦，移动端才会弹键盘
+        }
         function rdHlOpenNote(id) {
             var list = readingGetConvHl();
             var hl = null; for (var i = 0; i < list.length; i++) { if (list[i].id === id) { hl = list[i]; break; } }
@@ -39534,6 +39568,8 @@ body {
                             //   问题以 # / > 之类开头时它会改结构），replace 会一无所获，硬补就多出个孤儿闭合标签。
                             // 标题行末尾的 ⟦出发点⟧ 是给画圈用的内部标记，显示时剥掉（见 _rdBgSplitQ）
                             _qLine = _rdBgSplitQ(_qLine).text;
+                            var _qq = rdQuoteSplit(_qLine.replace(/^\s*汐：/, '')), _qQuoteHtml = '';   // 划线上问的：「」那段拆成上面那行灰字
+                            if (_qq) { _qQuoteHtml = '<div class="rd-q-quote">' + esc(_qq.quote) + '</div>'; _qLine = QA_TAG + _qq.rest; }
                             var _qHtml = renderText(_qLine);
                             var _qRep = _qHtml.replace(QA_TAG, '<span class="reading-q-hl"><span class="reading-q-name">' + esc(chatUserName()) + '</span>：');
                             /* 时间标记跟在**问题后面**（2026-09-18 她定的：「其实时间我是想要让它跟在问题后面的」）。
@@ -39568,7 +39604,7 @@ body {
                                         ? _qInner.replace(/<\/p>\s*$/, _qtHtml + '</p>')
                                         : _qInner + _qtHtml;
                             }
-                            _cmtRendered = '<div class="reading-q">' + _qInner + '</div>';
+                            _cmtRendered = '<div class="reading-q">' + _qQuoteHtml + _qInner + '</div>';
                             if (_aLine.trim()) {
                                 /* 「掐尾」只作用在这一支——这里是**双击提问/追问**的答案
                                    （存储里以「汐：」开头）。点评走的是下面 else 那条，不受影响。 */
