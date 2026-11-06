@@ -35421,6 +35421,30 @@ body {
            ⚠️**别把圈(c)/荧光(h) 加进来**：她只要这两种。圈是小注那边的，荧光 2026-08-10 就被否了。
            ⚠️随机同样**钉死**在 hlid 上：同一条划线刷新、换设备、重开一章永远是同一种记号。 */
         var RD_HL_MK_KINDS = ['u', 'b'];
+        /* ===== 刚划的那条「写出来」（2026-11-06 岚加）=====
+           她看了样稿（笔压/手势/一笔画框/跨行同手/写出来五条）后只要这一条：线还是 Rough.js 原样，
+           **只在 rdHlCreate 当场**让那一条一行接一行地描出来；翻页、开章、换字号重排一律直接画好。
+           ⚠️排版会在划完后不久再跑（字体/滚动补排），整层 SVG 重建 → 动画按 t0 算出已过多久、用负 delay
+             接着播，不会从头再来一遍，也不会被半路截成已画完。 */
+        var _rdMkFresh = null, RD_MK_ANIM_LINE = 280, RD_MK_ANIM_GAP = 300;
+        function rdMkAnimIn(els) {
+            var f = _rdMkFresh; if (!f || !els || !els.length) return;
+            var past = performance.now() - f.t0;
+            if (past > els.length * RD_MK_ANIM_GAP + 200) { _rdMkFresh = null; return; }
+            try { if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return; } catch (eM) {}
+            for (var i = 0; i < els.length; i++) {
+                var el = els[i]; if (!el) continue;
+                var ps = el.tagName === 'path' ? [el] : el.querySelectorAll('path');
+                for (var k = 0; k < ps.length; k++) {
+                    try {
+                        var len = ps[k].getTotalLength() + 2;
+                        ps[k].style.strokeDasharray = len + ' ' + len;
+                        ps[k].animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }],
+                            { duration: RD_MK_ANIM_LINE, delay: i * RD_MK_ANIM_GAP - past, easing: 'cubic-bezier(.25,.7,.35,1)', fill: 'backwards' });
+                    } catch (eA) { /* 动画只是锦上添花，失败就直接显示画好的线 */ }
+                }
+            }
+        }
         /* 把一串行片段矩形（getClientRects 的产物）按「行」并成几组。
            ⚠️**不能拿 top 比**（2026-08-20 用户实拍报的：划过的句子里只要夹了一段引号，
              同一行就被拆成两组 → 一行上画出**两个框**、或者两截高低错开的下划线，像划了两次）。
@@ -35573,7 +35597,7 @@ body {
                      + ',' + ((cs.getPropertyValue('--hla') || '0.4').trim()) + ')';
             // 这个 class 只干一件事：把原来那层划线底色撤掉（形状全由 SVG 画）
             for (var j = 0; j < marks.length; j++) marks[j].classList.add('rd-mk', 'rd-mk-' + kind);
-            return { kind: kind, rects: rects, ink: ink, fill: fill, seed: rdMkSeed(hlid) };
+            return { kind: kind, rects: rects, ink: ink, fill: fill, seed: rdMkSeed(hlid), hlid: hlid };
         }
         /* 撤掉记号的 class（画出来的线在 .rd-gl-layer 里，rdGlClear 删那一层时一起没）。
            ⚠️必须在 rdGlLayout 的**早退之前**跑：小注被删光时那边直接 return，
@@ -37021,6 +37045,7 @@ body {
                         var job = mkJobs[mj];
                         var els = rdMkDraw(rc, job.rects, job.kind, job.ink, job.fill, job.seed);
                         for (var me = 0; me < els.length; me++) if (els[me]) mkSvg.appendChild(els[me]);
+                        if (_rdMkFresh && job.hlid === _rdMkFresh.id) rdMkAnimIn(els);
                     }
                 } catch (eMk) { console.warn('[手绘记号] 画失败：', eMk); }
             }
@@ -37461,6 +37486,7 @@ body {
                而记号是 rdGlLayout 画的——不排的话划完只看见一段**没有任何标记的白**，
                要等下次换字号/滚动补排才冒出来，看着就是「划线没生效」。 */
             var _cb = p && p.closest('.chat-bubble');
+            _rdMkFresh = { id: id, t0: performance.now() };
             if (_cb) { try { rdGlLayout(_cb); } catch (eL) { console.warn('[划线记号] 排版失败：', eL); } }
             rdHlHideBar();
             /* ⚠️这里原来会弹一句「已划线」，2026-08-23 按她要求拆了——她原话
