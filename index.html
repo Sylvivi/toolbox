@@ -4699,6 +4699,12 @@ body {
         .translate-merged .tp-name { font-weight: 600; }
         /* 主角（她：「那 5 个人，三男两女」）照对话模式加粗那套：强调色＋虚线下划线 */
         .translate-merged .tp-name.tp-lead { font-weight: 700; text-decoration: underline dashed currentColor 1px; text-underline-offset: 3px; }
+        /* 五个主角各一色。⚠️原来是写死在行内 style 里的白天色，夜间没换——11-07 她：「人名的颜色在夜间模式下似乎比较暗淡，
+           不像小注颜色相对比较亮」→ 改成类，夜间用小注那套提亮色（.rd-gl-* 的 body.dark 版）。 */
+        .translate-merged .tp-c1 { color: #8b5cf6; } .translate-merged .tp-c2 { color: #2f7de1; } .translate-merged .tp-c3 { color: #e0702a; }
+        .translate-merged .tp-c4 { color: #2f9e4b; } .translate-merged .tp-c5 { color: #e0577a; }
+        body.dark .translate-merged .tp-c1 { color: #b9a3f5; } body.dark .translate-merged .tp-c2 { color: #7aa3e8; } body.dark .translate-merged .tp-c3 { color: #ff9a52; }
+        body.dark .translate-merged .tp-c4 { color: #5fc46a; } body.dark .translate-merged .tp-c5 { color: #ff8aa3; }
 
         /* 注：原先这里用 content-visibility 省渲染，但会让屏外段落高度变估算值，
            导致「记忆阅读位置」对不准，故移除——改回全量真实排版，定位天然精准。 */
@@ -39745,6 +39751,7 @@ body {
         // 主角＝这个会话里大多数集都在说话的人（每集客串的多、但只出现一两集）；集数少于 3 就取台词最多的 5 个
         var _tpLeadCache = { key: '', leads: {} };
         // 她：「把那 5 个人用不同的颜色标注」→ 划线那 5 色调深一档当字色，按台词总数排（台词最多的拿第一个色，换集也不变）
+        // 颜色本身在 CSS 的 .tp-c1~5（夜间有提亮版）；这里只拿长度算第几种
         var TP_LEAD_C = ['#8b5cf6', '#2f7de1', '#e0702a', '#2f9e4b', '#e0577a'];
         // 认出来的主角名单记在本机（tp_known_leads：[{人名: 台词总数}]，一部剧一份），给集数少的会话借用；只记不同步，长会话在哪台设备打开过一次就记上了。
         function tpKnownLeadsLoad() { try { var a = JSON.parse(localStorage.getItem('tp_known_leads') || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
@@ -39823,7 +39830,7 @@ body {
             var looks = translateScriptLooks(paragraphs), leads = looks.length ? translateScriptLeads() : {};
             for (var j = 0; j < paragraphs.length; j++) {
                 var pNum = j + 1, lk = looks[j], ptxt = esc(paragraphs[j]);
-                if (lk && lk.name) ptxt = '<span class="tp-name' + (leads[lk.name] ? ' tp-lead" style="color:' + TP_LEAD_C[(leads[lk.name] - 1) % TP_LEAD_C.length] : '') + '">' + esc(lk.name) + '</span>' + esc(paragraphs[j].slice(lk.name.length));
+                if (lk && lk.name) ptxt = '<span class="tp-name' + (leads[lk.name] ? ' tp-lead tp-c' + ((leads[lk.name] - 1) % TP_LEAD_C.length + 1) : '') + '">' + esc(lk.name) + '</span>' + esc(paragraphs[j].slice(lk.name.length));
                 html += '<p data-p="' + pNum + '"' + (lk ? ' class="' + lk.cls + '"' : '') + ' style="white-space:pre-wrap;word-break:break-word;margin:0.5em 0">' + ptxt + '</p>';
                 if (blockByEnd[pNum]) {
                     for (var k = 0; k < blockByEnd[pNum].length; k++) {
