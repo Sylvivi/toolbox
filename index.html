@@ -18960,7 +18960,13 @@ body {
                 if (chatFavModels[i].url === provUrl && chatFavModels[i].model === model) { idx = i; break; }
             }
             if (idx >= 0) chatFavModels.splice(idx, 1);
-            else chatFavModels.push({ url: provUrl, model: model, providerId: provId, providerName: item ? (item.name || '') : '' });
+            else {
+                chatFavModels.push({ url: provUrl, model: model, providerId: provId, providerName: item ? (item.name || '') : '' });
+                /* 11-07 她：刚收藏的模型去设置里找不到——收藏区按「最近用过」排、每站只露前 3 个，
+                   没用过的新收藏落在最后、被折进「展开其余」。收藏这一下就当刚用过，排到最前面。
+                   （这张「最近用过」表只给两处收藏列表排序用，不影响别的。） */
+                chatMarkModelUsed(provUrl, model);
+            }
             chatFavModelsSave();
             chatSortModels();
             var curFilter = document.getElementById('chatModelInput').value;
