@@ -765,7 +765,8 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             //   toString() 连注释一起返回，注释里提一嘴就会假红（第一版就这么红的）。
             out.H_选中条上没有问 = rdHlShowSelBar.toString().indexOf('data-act="ask"') < 0;
             // 两条小条上都撤了（用户 2026-08-04 两次要求），函数本体也一并删了
-            out.H_已有划线上也没问 = rdHlShowEditBar.toString().indexOf('data-act="ask"') < 0;
+            // 11-06 她要回来了：先划线、再点划线问（细节见 hlask.test.js）
+            out.H_已有划线上有问 = rdHlShowEditBar.toString().indexOf('data-act="ask"') >= 0;
             out.H_函数已删干净 = typeof window.rdHlAskClawd === 'undefined';
             out.H_注按钮还在 = rdHlShowSelBar.toString().indexOf('data-act=\"gloss\"') >= 0;
             /* 顺序：**🖍划线 → ✍️注 → ✏️改**。
@@ -783,6 +784,9 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
             // 已有划线的小条上也要有「✍️ 重注」——否则想重注只能先删划线再重选（用户真踩了）
             out.H_重注按钮 = rdHlShowEditBar.toString().indexOf("data-act=\"gloss\"") >= 0;
             out.H_重注接到rdGlRedo = rdHlShowEditBar.toString().indexOf('rdGlRedo') >= 0;
+            // 11-07 她：跟选字时的「注」重复 → 只在有小注（或走「注」建的、没注成的）线上出
+            out.H_重注只在注过的线上 = /hl\.note\s*\|\|\s*hl\.gl\s*\?/.test(rdHlShowEditBar.toString())
+                                   && /gl:\s*1/.test(rdGlMake.toString());
             // 新建和重注必须共用同一条 AI 调用路径，别复制两份
             out.H_共用一条路 = rdGlMake.toString().indexOf('rdGlFetch') >= 0
                              && rdGlRedo.toString().indexOf('rdGlFetch') >= 0;
@@ -1052,13 +1056,14 @@ function ok(name, pass, detail) { results.push({ name, pass: !!pass, detail }); 
     ok('H1 小条上有「✍️ 注」按钮', R.H_有注按钮);
     ok('H2 按钮接到 rdGlMake', R.H_接到rdGlMake);
     ok('H3a 选中小条上已经没有「💬 问」', R.H_选中条上没有问);
-    ok('H3b 点已有划线时也没有「💬 问」了', R.H_已有划线上也没问);
+    ok('H3b 点已有划线时有「问」（11-06 加回）', R.H_已有划线上有问);
     ok('H3d 死函数已删干净', R.H_函数已删干净);
     ok('H3c 撤「问」没误删「✍️ 注」', R.H_注按钮还在);
     ok('H3e ⚠️选中小条上已无色板（2026-08-10 改成随机色）', R.H_选中条没色板);
     ok('H3f 顺序：🖍划线 → ✍️注 → ✏️改', R.H_顺序对);
     ok('H4 已有划线上有「✍️ 重注」', R.H_重注按钮);
     ok('H5 重注接到 rdGlRedo', R.H_重注接到rdGlRedo);
+    ok('H5b 「重注」只在注过的线上出（普通划线上没有）', R.H_重注只在注过的线上);
     ok('H6 新建与重注共用同一条 AI 路径', R.H_共用一条路);
     ok('I1 改字号会重排', R.I_字号);
     ok('I2 改段间距会重排', R.I_段间距);
