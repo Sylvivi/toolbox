@@ -29066,6 +29066,13 @@ body {
             else return null;
             var tail = t.slice(cutAt).trim();
             var body = t.slice(0, cutAt).replace(/\s+$/, '');
+            /* 别把加粗切成两半（11-07 她截图：「**……外来文明。** 因为……」——句号后面紧跟着收尾的 **，
+               一刀切在句号后面，开头的 ** 留在正文、收尾的 ** 跑进尾巴，正文那段就加粗不上了）。
+               正文里 ** 是单数＝有一个没收口：尾巴开头正好是 ** 就还给正文；不是（加粗整个跨过切口）就这条不掐。 */
+            if ((body.match(/\*\*/g) || []).length % 2) {
+                if (tail.slice(0, 2) !== '**') return null;
+                body += '**'; tail = tail.slice(2).trim();
+            }
             if (!tail || !body) return null;
             return { body: body, tail: tail };
         }
@@ -39663,7 +39670,7 @@ body {
                                 if (_sp) {
                                     var _mk = '<span class="rd-tail" onclick="this.classList.toggle(\'on\')" title="收起的那句收尾，点一下看">'
                                             + '<span class="rd-tail-dot">⋯</span>'
-                                            + '<span class="rd-tail-txt">' + esc(_sp.tail) + '</span></span>';
+                                            + '<span class="rd-tail-txt">' + esc(_sp.tail.replace(/\*\*/g, '')) + '</span></span>';   // 尾巴是淡色纯文字，加粗记号去掉别露 **
                                     // 尽量塞进最后那个段落里，别让 ⋯ 单独占一行更扎眼
                                     _aH = /<\/p>\s*$/.test(_aH) ? _aH.replace(/<\/p>\s*$/, _mk + '</p>') : _aH + _mk;
                                 }
