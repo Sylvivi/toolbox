@@ -13062,6 +13062,19 @@ body {
             });
         }
 
+        /* 翻译模式贴网页链接 → 取正文（2026-11-07 岚加，她：「我不关心过程只看到结果」）。
+           服务器那边用 Readability 取正文（cc-sync 的 /?page=，代码在 cc-sync/extract/extract.js）。
+           回正文字符串；取不到回 null，并已经弹过提示说为什么。 */
+        function pageFetchText(u) {
+            return cfReq('GET', '', undefined, 'page=' + encodeURIComponent(u))
+                .then(function (r) {
+                    if (r && r.ok && r.text) return r.text;
+                    showToast('取不到正文：' + ((r && r.error) || '服务器没回话'));
+                    return null;
+                })
+                .catch(function () { showToast('取不到正文：连不上服务器'); return null; });
+        }
+
         function xhsFetchNote(u) {
             // 复用 cfReq：地址、令牌、鉴权全是现成的（key 传空串 → 打到 /?xhs=…）
             // 回 {ok,text,images,descLen}；images 只有「正文短」时才有（服务端判的，见 XHS_DESC_SHORT）
@@ -15168,6 +15181,7 @@ body {
             '· 不要开场白、不要小标题、不要 [P] 标记，像朋友接着上一句往下说。';
 
         var chatTranslateMode = false;  // 剧本翻译模式
+        var chatPageFetching = false;   // 翻译模式贴链接、正在取网页正文（防连点）
         var TRANSLATE_MODE_INSTRUCTION = '作为智能翻译辅助工具，请将用户提交的文本翻译成中文后，就文本中难以理解或具有专业术语性质的单词或短语进行标注，并提供其对应含义、音标以及详细而准确的解释，帮助用户深入理解翻译内容的确切意义。\n注意：仅对专业术语、专有名词、特定文化背景或难以理解的单词或短语进行解释。常见词汇如"table"（桌子）、"book"（书）等无需解释。\n\n【剧本 / 台词的智能处理】如果提交的是剧本、台词或影视对白，先判断它属于哪一种，再按对应方式翻译：\n（1）带说话人标注的台本（每句前带人名或角色名，如「张三：…」「MARY: …」）：保留「说话人：台词」的逐行结构来翻译，按标注给出的人物身份来定人称、性别、语气和口吻，与该角色一致；不要把台词并成段落，也不要删掉或改写说话人。\n（2）纯字幕本 / 无人名的对白（只有一句句台词、没有说话人标注）：\n· 从上下文推断这段对话有几个人、谁在跟谁说话，给每一句都加上推断出的说话人标签，格式为「标签（性别）：台词」。如果台词里透露了人物名字（互相称呼、被叫到名字），优先用真名当标签，如「Jack（男）：…」；认不出名字才退而用「A（男）：…」「B（女）：…」这种代号。同一个人全程固定用同一个标签。\n· 全程锁定每个人的人称（他/她、你/您）、性别、语气和口吻，前后保持一致，绝不中途乱跳。\n· 字幕常把完整的一句话拆成好几行（跨行断句）；翻译前先把这些被拆断的碎行拼回成完整的句子，再翻成通顺自然的一整句，不要逐行硬翻出断裂的半句。\n· 拿不准某句是谁说的时候，宁可用中性标签「？：」老实标注，也绝不要自信地乱安一个说话人——标签只是辅助，标错反而误导。\n· 如果这段是同一个剧本接着前文继续发的，说话人标签要和前面保持一致（同一个人还用同一个标签或名字），不要重新从 A 数起、把人认串。\n剧本情况下，下面第一部分就按「说话人：台词」逐行输出、而不是合成自然段落；分割线与术语解释部分照旧。\n\n【输出格式（必须严格遵守，每次回复都使用完全相同的结构，不要增删小标题、不要改变顺序）】\n第一部分：直接给出原文的中文翻译，作为一个或多个自然段落，不要加"翻译："之类的前缀，不要加任何标题。\n然后另起一行，单独输出一行三个连字符作为分割线：\n---\n第二部分：逐条解释术语。每个术语单独占一行（行与行之间空一行），且每一行都严格使用下面这一种格式，不要使用项目符号、不要使用编号、不要使用小标题：\n**英文单词或短语** [美式音标]：**中文含义** 词根/词缀/词源解释 相关emoji（牛津词典英文释义）\n如果整段没有需要解释的术语，第二部分就只输出一句"本段无需特别解释的术语。"，不要省略分割线。\n\n示例：\n**Cockpit** [ˈkɑːk.pɪt]：**驾驶舱** Cock 这个词根来源于古英语"cocc"，意为公鸡，pit 意为坑、围栏，合起来原指斗鸡场，后引申为狭小的操作空间 🛫🚢（the area in a plane, boat or racing car where the pilot or driver sits）';
         var chatStreaming = false;
         var chatAbortCtrl = null;
@@ -21317,6 +21331,19 @@ body {
             var provId = document.getElementById('chatProviderSelect').value;
             var item = getKeyItemById(provId);
             if (!item) { showToast('⚠️ 未找到中转站信息'); return; }
+
+            /* 翻译模式：整条只有一个网页链接 → 先取正文，再当成她贴的原文往下走（2026-11-07 岚加）。
+               ⚠️放在清空输入框**之前**：取不到时链接原样留在框里，不会建出一个只有链接的空译文块。
+               ⚠️取的那几秒锁住，防她以为没反应又点一次、贴进去两份。 */
+            if (chatTranslateMode && !hasImages && !hasFiles && /^https?:\/\/\S+$/.test(text)) {
+                if (chatPageFetching) return;
+                chatPageFetching = true;
+                showToast('正在取网页正文…');
+                var _pageText = await pageFetchText(text);
+                chatPageFetching = false;
+                if (!_pageText) return;
+                text = _pageText;
+            }
 
             if (!chatCurrentConvId) {
                 chatCurrentConvId = 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
