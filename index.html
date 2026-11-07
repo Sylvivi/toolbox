@@ -4447,6 +4447,10 @@ body {
         .rd-hl-bar button.rd-act.rd-act-ghost { background: color-mix(in srgb, var(--accent) 22%, var(--card-bg, #fff)); color: var(--accent); font-weight: 600;
             padding: 4px 12px; border-radius: 0 14px 14px 0; margin: 0 4px 0 -6px; }
         .rd-hl-bar button.rd-act.rd-act-ghost:hover { background: color-mix(in srgb, var(--accent) 22%, var(--card-bg, #fff)); color: var(--accent); }
+        /* 「划线｜注｜解」连成一颗胶囊（11-07 她选的样稿③）：外圈强调色描边，里面三段直角拼接、靠外框 overflow 切圆角；
+           划线白底、留着那条下划线（她手指认的就是它）。上面注/解那套半圆角和负边距在胶囊里一律清掉。 */
+        .rd-hl-bar .rd-cap { display: inline-flex; align-items: stretch; flex-shrink: 0; border: 1.5px solid var(--accent); border-radius: 15px; overflow: hidden; }
+        .rd-hl-bar .rd-cap button.rd-act, .rd-hl-bar .rd-cap button.rd-act.rd-act-main:has(+ .rd-act-ghost) { margin: 0; border-radius: 0; padding: 4px 12px; }   /* 后半个是为了压过上面注的 :has 半圆角 */
         .rd-hl-bar button.rd-act.rd-act-more { color: var(--text-muted); letter-spacing: 1px; }
         .rd-hl-bar button.rd-act.rd-del { color: #e5484d; }
         .rd-hl-bar button.rd-act.rd-del.armed { background: #e5484d; color: #fff; }
@@ -37411,12 +37415,15 @@ body {
             /* ⚠️2026-10-19 换了样子和排法（她：「三个很容易混，怕点错」，选的是「改收进⋯、注放中间」）：
                划线 | 注（实心、居中）| ⋯ ——「改」点了「⋯」才换出来（见下面 'more' 分支）。样式见 .rd-act-main 那段。 */
             bar.innerHTML =
+                /* 11-07 她要「把划线也包进注解那颗胶囊」，三个样稿里选了③：外面描一圈强调色边，划线白底留下划线（样式见 .rd-cap） */
+                '<span class="rd-cap">' +
                 '<button class="rd-act rd-act-hl" data-act="hl"><span>划线</span></button>' +
                 '<button class="rd-act rd-act-main" data-act="gloss">注</button>' +
                 /* 「解」紧挨着注（2026-10-20 她选的位置；名字她定的：「不叫背景，叫解」）：
                    ⚠️同日她又说「解也弄成药丸吧」，两颗实心并排又「有点同质化了」→ 先做成空心；10-24 改成跟注连成一颗胶囊（.rd-act-ghost，样式见那段 CSS）。
                    做的事＝围绕选中的字讲一条背景（readingBgWord） */
                 '<button class="rd-act rd-act-ghost" data-act="bg">解</button>' +
+                '</span>' +
                 '<span class="rd-sep"></span>' +
                 '<button class="rd-act rd-act-more" data-act="more">⋯</button>' +
                 /* 「✏️ 改」＝改正文错字。为什么挂在这条上：改错字的第一步本来就是「选中那个错字」，
