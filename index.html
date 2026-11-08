@@ -37667,7 +37667,7 @@ body {
             var glModel = gm ? gm.model : chatSelectedModel;
             var id = hl.id;
 
-            var pEl = document.querySelector('.chat-msg.ai[data-idx="' + hl.msgIdx + '"] .reading-merged p[data-p="' + hl.p + '"]');
+            var _at = rdHlParaOf(hl), pEl = _at && _at.p;   // 「重注」时这条线可能是别的会话里划的，见 rdHlParaOf
             // 上下文＝这一段原文（贴着用法解释才准；整段几百字，比全章便宜得多）
             var ctxText = '';
             try { ctxText = (pEl ? pEl.textContent : '').replace(/^\s*\[P\d+\]\s*/, '').trim(); } catch (e2) {}
@@ -37805,14 +37805,25 @@ body {
         }
         // 批注：复用「点段提问」那套流内单行框（rp-ask），插在划线所在段落后面。
         // 流内元素聚焦时浏览器会自动把它滚到键盘上方，不会被键盘挡住（旧的 fixed 浮层做不到）。
+        /* 一条划线眼下画在哪一段、哪条消息上。⚠️先认页面上那条 mark，再退回存的编号：
+           纯阅读每次开章都重建会话，划线时记下的 msgIdx 早就不是眼前这条了（划线靠 chap 照样画得出来，
+           按 msgIdx 找段落却落空）——11-09 她：「明明有划线，点问却说找不到这段了」。 */
+        function rdHlParaOf(hl) {
+            var m = document.querySelector('mark.rd-hl[data-hlid="' + hl.id + '"]');
+            var p = m && m.closest('.reading-merged p[data-p]');
+            var msgEl = p && p.closest('.chat-msg.ai[data-idx]');
+            if (p && msgEl) return { p: p, msgIdx: parseInt(msgEl.getAttribute('data-idx')) };
+            p = document.querySelector('.chat-msg.ai[data-idx="' + hl.msgIdx + '"] .reading-merged p[data-p="' + hl.p + '"]');
+            return p ? { p: p, msgIdx: hl.msgIdx } : null;
+        }
         function rdHlAsk(hl) {   // 划线上点「问」：开这一段的提问框（同双击段落），带上划的那几句
-            var p = document.querySelector('.chat-msg.ai[data-idx="' + hl.msgIdx + '"] .reading-merged p[data-p="' + hl.p + '"]');
+            var at = rdHlParaOf(hl), p = at && at.p;
             if (!p) { if (typeof showToast === 'function') showToast('找不到这一段了'); return; }
             rdHlHideBar();
             readingClearActbar();
             p.classList.add('rp-active');
             var q = String(hl.text || hl.preview || '').replace(/[「」\n]/g, ' ').replace(/\s+/g, ' ').trim();
-            readingOpenAskBar(hl.msgIdx, hl.p, p, '', { hlQuote: q.length > 300 ? q.slice(0, 300) + '…' : q });
+            readingOpenAskBar(at.msgIdx, hl.p, p, '', { hlQuote: q.length > 300 ? q.slice(0, 300) + '…' : q });
             var inp = p.nextElementSibling && p.nextElementSibling.querySelector('.rp-ask');
             if (inp) inp.focus();   // 在点击手势内同步聚焦，移动端才会弹键盘
         }
@@ -37820,7 +37831,7 @@ body {
             var list = readingGetConvHl();
             var hl = null; for (var i = 0; i < list.length; i++) { if (list[i].id === id) { hl = list[i]; break; } }
             if (!hl) return;
-            var p = document.querySelector('.chat-msg.ai[data-idx="' + hl.msgIdx + '"] .reading-merged p[data-p="' + hl.p + '"]');
+            var at = rdHlParaOf(hl), p = at && at.p;
             if (!p) { if (typeof showToast === 'function') showToast('找不到这一段了'); return; }
             rdHlHideBar();
             readingClearActbar();

@@ -86,8 +86,21 @@ function bootNovel() {
         readingOnParaClick(document.querySelector('.chat-msg.ai[data-idx="' + mi + '"] .reading-merged p[data-p="8"]'));
         const b2 = document.querySelector('.reading-actbar');
         const ph2 = b2.querySelector('.rp-ask').placeholder;
+        // 纯阅读每次开章重建会话：划线存的 msgIdx 跟眼前这条对不上（划线靠 chap 照样画着）→ 问、批注仍要找得到段落
+        readingClearActbar();
+        const L = readingGetConvHl(); L[0].msgIdx = mi + 7; readingSaveConvHl(L);
+        window._toasts = [];
+        rdHlAsk(L[0]);
+        const b3 = document.querySelector('.reading-actbar');
+        const staleAsk = !!b3 && P().nextElementSibling === b3 && !!b3.querySelector('.rp-ask');
+        readingClearActbar();
+        rdHlOpenNote(L[0].id);
+        const b4 = document.querySelector('.reading-actbar.rp-note-bar');
+        const staleNote = !!b4 && P().nextElementSibling === b4;
+        const staleToasts = window._toasts.slice();
+        readingClearActbar();
         return { hasAsk, barAfterP, ph, label0, sentEmpty, usr, quote: quoteEl && quoteEl.textContent,
-                 qtext: qhl && qhl.textContent, stored, ph2, nQuote: document.querySelectorAll('.rd-q-quote').length };
+                 qtext: qhl && qhl.textContent, stored, ph2, staleAsk, staleNote, staleToasts, nQuote: document.querySelectorAll('.rd-q-quote').length };
     });
     ok('划线小条上有「问」', R.hasAsk);
     ok('提问框开在段落正下方（跟双击一样）', R.barAfterP);
@@ -102,6 +115,9 @@ function bootNovel() {
     ok('原句只出现一次（没有另起一行）', (R.qtext || '').split('这是第6段').length === 2, R.qtext);
     ok('存储格式照旧（一行「汐：」问题）', /\[P6\] 汐：「这是第6段」为什么这么说\n/.test(R.stored), R.stored.slice(-80));
     ok('普通双击提问照旧', /留空＝讲解/.test(R.ph2), R.ph2);
+    ok('划线存的编号对不上时，「问」照样开在这段下面', R.staleAsk);
+    ok('划线存的编号对不上时，「批注」照样开在这段下面', R.staleNote);
+    ok('没弹「找不到这一段了」', !R.staleToasts.some(t => /找不到/.test(t)), R.staleToasts.join(' | '));
     eq('页面上只有这一处淡色原句', R.nQuote, 1);
     ok('页面没有 JS 报错', pageErrs.length === 0, pageErrs.join(' | '));
     await browser.close();
