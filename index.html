@@ -3885,8 +3885,13 @@ body {
            ⚠️**没选字体的槽位也算「跟随」**：它 inherit 的就是正文那个字体。 */
         .reading-merged .reading-quote,
         .reading-merged .reading-keysent { font-weight: 400; }
+        /* ⚠️11-09 她：「字重是不是只控制了正文，没有控制引号内短句」。短句**实际用哪个字体**看「长短分工」开没开：
+             没开 → 短句跟长引号一样用「引号」字体，所以要看 rf-mw-quote（原来看的是短句槽位，
+                    短句槽位里存着个花字体、引号槽位是思源时，短句明明显示思源却被钉在 400）；
+             开了 → 用短句槽位，那个槽位空着就回退引号字体（JS 里已按回退后的字体判 rf-mw-quoteShort）。 */
         body.rf-mw-quote .reading-merged .reading-quote.rq-wide,
-        body.rf-mw-quoteShort .reading-merged .reading-quote:not(.rq-wide),
+        body.rf-mw-quote:not(.reading-ls-on) .reading-merged .reading-quote:not(.rq-wide),
+        body.rf-mw-quoteShort.reading-ls-on .reading-merged .reading-quote:not(.rq-wide),
         body.rf-mw-keysent .reading-merged .reading-keysent { font-weight: var(--reading-fw, normal); }
         /* ⚠️人名**不能**写死 400：精句/短句自己开了加粗时，名词要跟着整句一起粗，
            写死会在加粗的句子中间露出一个细字（她 07-28 明确要过「跟着精句走」）。
@@ -26860,7 +26865,13 @@ body {
                 if (s.isFallback) return;  // 它不占渲染位置，只作为别人链尾出现（见下面 chain）
                 var name = localStorage.getItem(s.key) || '';
                 try {
-                    var _follow = !name || !!_mwNames[name];
+                    /* 短句槽位空着时显示的是「引号」字体（见 CSS --reading-font-quote-short 的回退），按那个字体判 */
+                    var _eff = name;
+                    if (!_eff && s.slot === 'quoteShort') {
+                        var _qs = READING_FONT_SLOTS.filter(function (x) { return x.slot === 'quote'; })[0];
+                        _eff = (_qs && localStorage.getItem(_qs.key)) || '';
+                    }
+                    var _follow = !_eff || !!_mwNames[_eff];
                     document.body.classList.toggle('rf-mw-' + s.slot, _follow);
                 } catch (e) {}
                 if (!name) { document.documentElement.style.removeProperty(s.varName); return; }
