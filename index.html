@@ -2351,6 +2351,19 @@ body {
         .fab-book span { color: var(--text); }
         .fab-book svg { flex-shrink: 0; }
         @keyframes fabIn { from { opacity: 0; transform: scale(.6) } to { opacity: 1; transform: none } }
+        /* 11-09 点选几段：选中的段落底色＋底下那一条（同小克一套新粗野主义：黑描边、硬投影、直角） */
+        .reading-merged p[data-p].rd-pick-on { background: var(--accent-light); box-shadow: -3px 0 0 var(--accent); }
+        #rdPickBar {
+            position: fixed; left: 50%; transform: translateX(-50%); z-index: 301;
+            bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+            display: flex; align-items: center; gap: 6px; padding: 6px 8px; max-width: calc(100vw - 32px); box-sizing: border-box;
+            background: #fff; color: var(--text); border: 2.5px solid var(--text); box-shadow: 4px 4px 0 var(--text);
+            font-size: 13px; white-space: nowrap;
+        }
+        .dark #rdPickBar { background: #1e2b25; }
+        #rdPickBar span { padding: 0 4px; color: var(--text-muted); }
+        #rdPickBar button { border: 2px solid var(--text); background: transparent; color: var(--text); font-size: 13px; padding: 4px 10px; border-radius: 0; cursor: pointer; }
+        #rdPickBar button[data-k="chai"], #rdPickBar button[data-k="suo"] { background: var(--accent); color: #fff; }
         /* ===== 输入区 — 悬浮玻璃条 =====
            2026-09-13 她要的：「人家的输入框是一个独立的东西，字能从它背后穿过；
            我的那个就像一个抽屉，会把字收进去」，点名要 Telegram 那种。
@@ -20737,7 +20750,16 @@ body {
                       ensureChatOpen();
                       if (c && typeof chatLoadConv === 'function') chatLoadConv(c.id);
                       else if (typeof chatNewConv === 'function') chatNewConv();
-                  } }
+                  } },
+                /* 11-09 岚：点选几段一起「拆句」「缩写」（她选的虚线框）。只在读小说的界面出现——别处点了没东西可选。
+                   排在最外侧：存小红书仍挨着球（最常用的离手指最近）。再点一次＝退出点选。 */
+                { t: '点选几段', svg: '<rect x="4" y="4" width="16" height="16" rx="3" stroke-dasharray="3.2 2.8"></rect>',
+                  show: function () {
+                      var ov = document.getElementById('chatModalOverlay');
+                      return !!(ov && ov.classList.contains('show') && chatReadingMode && chatReaderMode && readerBookId != null &&
+                                typeof rbCurBookIsSocial === 'function' && !rbCurBookIsSocial());
+                  },
+                  go: function () { if (readingPickOn()) readingPickEnd(); else readingPickStart(); } }
             ];
 
             /* 最近读的书，**去掉长按会回的那本**，取两本。
@@ -20858,7 +20880,8 @@ body {
                    贴右边时它在右、贴左边时它在左。 */
                 var row = document.createElement('div');
                 row.className = 'fab-row';
-                var list = pos.side === 'l' ? ACTS : ACTS.slice().reverse();
+                var acts = ACTS.filter(function (a) { try { return !a.show || a.show(); } catch (e) { return false; } });
+                var list = pos.side === 'l' ? acts : acts.slice().reverse();
                 list.forEach(function (a, i) {
                     var b = document.createElement('div');
                     b.className = 'fab-act'; b.title = a.t;
@@ -32717,6 +32740,79 @@ body {
         }
         // ⚠️别在这里加「正在生成就 return」——那正是用户报的「一段在生成时双击别的段落没反应」。
         // 可并发之后双击随时可用；同一段重复发由 readingIsPending 在 readingAskOne 里挡。
+        /* ===== 几段一起「拆句」「缩写」（2026-11-09 岚）=====
+           她：对话一句一段，拆句/缩写只能对一段「就没有办法了」；我提过「自动认出一场对话」，
+           她嫌「定范围太不灵活」→ 小克上加一个虚线框（只在读小说时出现）进点选：
+           **先点开头那段、再点结尾那段，中间自动全选**；往前点＝开头挪过去，点在范围里＝结尾缩到那儿（她选的 1）。
+           底下一条「N 段｜拆句｜缩写｜取消」，结果挂在最后一段下面，走 readingAskOne 的 opts.from。
+           ⚠️点选时单击段落不翻页、不弹双击条子（click 处理器开头先问 readingPickOn）。
+           ⚠️只在同一条消息（同一章）里选：点到别的章就从那儿重新开始。 */
+        var _rdPick = null, _rdPickWatch = null;   // _rdPick＝{ mi, a, b }；a 为 0＝还没点开头
+        function readingPickOn() { return !!_rdPick; }
+        function readingPickStart() {
+            readingClearActbar();
+            _rdPick = { mi: -1, a: 0, b: 0 };
+            var bar = document.getElementById('rdPickBar');
+            if (!bar) {
+                bar = document.createElement('div');
+                bar.id = 'rdPickBar';
+                document.body.appendChild(bar);   // ⚠️挂 body：fixed 别被带滤镜的祖先劫持（同小克）
+                bar.addEventListener('click', function (e) {
+                    var b = e.target.closest('button'); if (!b) return;
+                    e.stopPropagation();
+                    var k = b.getAttribute('data-k');
+                    if (k === 'x') readingPickEnd(); else readingPickGo(k);
+                });
+            }
+            readingPickPaint();
+            // 离开阅读界面（关掉对话层、切到别的模式）就自动收掉，别让那条悬在主页上
+            clearInterval(_rdPickWatch);
+            _rdPickWatch = setInterval(function () {
+                var ov = document.getElementById('chatModalOverlay');
+                if (!chatReadingMode || !ov || !ov.classList.contains('show')) readingPickEnd();
+            }, 1000);
+        }
+        function readingPickEnd() {
+            _rdPick = null;
+            clearInterval(_rdPickWatch); _rdPickWatch = null;
+            var bar = document.getElementById('rdPickBar');
+            if (bar) bar.remove();
+            document.querySelectorAll('.rd-pick-on').forEach(function (el) { el.classList.remove('rd-pick-on'); });
+        }
+        function readingPickTap(pEl) {
+            var msgEl = pEl.closest('.chat-msg.ai');
+            if (!msgEl || !msgEl.hasAttribute('data-idx') || !_rdPick) return;
+            var mi = parseInt(msgEl.getAttribute('data-idx')), p = parseInt(pEl.getAttribute('data-p'));
+            if (!(p > 0)) return;
+            var s = _rdPick;
+            if (s.mi !== mi || !s.a) { s.mi = mi; s.a = s.b = p; }
+            else if (p < s.a) s.a = p;
+            else s.b = p;       // 往后点＝结尾挪过去；点在范围里＝结尾缩到这儿
+            readingPickPaint();
+        }
+        function readingPickPaint() {
+            document.querySelectorAll('.rd-pick-on').forEach(function (el) { el.classList.remove('rd-pick-on'); });
+            var s = _rdPick, bar = document.getElementById('rdPickBar');
+            if (!s || !bar) return;
+            if (s.a) {
+                var msgEl = document.querySelector('.chat-msg.ai[data-idx="' + s.mi + '"]');
+                for (var n = s.a; msgEl && n <= s.b; n++) {
+                    var el = msgEl.querySelector('.reading-merged p[data-p="' + n + '"]');
+                    if (el) el.classList.add('rd-pick-on');
+                }
+            }
+            // ⚠️跟选单同一条规矩：短词、不加说明。只有还没点的时候给一句怎么点。
+            bar.innerHTML = s.a
+                ? '<span>' + (s.b - s.a + 1) + ' 段</span><button data-k="chai">拆句</button><button data-k="suo">缩写</button><button data-k="x">取消</button>'
+                : '<span>点开头那段，再点结尾那段</span><button data-k="x">取消</button>';
+        }
+        function readingPickGo(k) {
+            var s = _rdPick; if (!s || !s.a) return;
+            var mi = s.mi, a = s.a, b = s.b;
+            readingPickEnd();
+            readingAskOne(mi, b, k === 'chai' ? '拆句' : '缩写', null, { novel: k, from: a });
+        }
+
         function readingOnParaClick(pEl) {
             var wasActive = pEl.classList.contains('rp-active');
             readingClearActbar();
@@ -33196,6 +33292,8 @@ body {
             /* 2026-11-09 小说两样：'chai'＝拆句、'suo'＝缩写，都是就这一段。
                ⚠️上下文**跟条子上的圆圈走**（她点头的）——跟普通提问同一套 ctxLines／摘要开关，不像说人话那样写死前两段。 */
             var _nov = (opts && opts.novel) || '';
+            /* 11-09 几段一起（小克点选）：from＝开头段号，pNum＝结尾段号（结果挂这儿）。只认小说两样。 */
+            var _novFrom = (_nov && opts.from > 0 && opts.from < pNum) ? opts.from : 0;
             var _sec = null, _secText = null;
             var _socPara = '';
             if (_soc === 'argue') {
@@ -33279,7 +33377,24 @@ body {
                 if (n >= 1 && n <= lines.length && lines[n - 1] != null) ctxLines.push('[P' + n + '] ' + lines[n - 1]);
             }
             if (!_guide) {
-                if (_ctxCfg.pre < 0) {
+                if (_novFrom) {
+                    /* 选中的几段**整块无条件收下**，前文按圆圈往开头之前铺；后文照下面那段从结尾往后铺。
+                       ⚠️「全章」那档的 8000 字预算先扣掉选中这块，不然选得长时前文会铺爆。 */
+                    for (var _ri = _novFrom; _ri <= pNum; _ri++) {
+                        var _rs = '[P' + _ri + '] ' + lines[_ri - 1];
+                        ctxLines.push(_rs); ctxUsed += _rs.length + 1;
+                    }
+                    if (ctxUsed > 6000) { showToast('选得太长了，少选几段再试'); readingClearActbar(); return; }
+                    if (_ctxCfg.pre < 0) {
+                        for (var _rj = _novFrom - 1; _rj >= 1; _rj--) {
+                            var _rp2 = '[P' + _rj + '] ' + lines[_rj - 1];
+                            if (ctxUsed + _rp2.length > CTX_CHAR_BUDGET) break;
+                            ctxLines.unshift(_rp2); ctxUsed += _rp2.length + 1;
+                        }
+                    } else {
+                        for (var _rk = _novFrom - 1; _rk >= Math.max(1, _novFrom - _ctxCfg.pre); _rk--) ctxLines.unshift('[P' + _rk + '] ' + lines[_rk - 1]);
+                    }
+                } else if (_ctxCfg.pre < 0) {
                     // 「全章」＝一直以来的默认：从这一段往前铺到章首，8000 字封顶
                     for (var i = pNum - 1; i >= 0; i--) {
                         var lineStr = '[P' + (i + 1) + '] ' + lines[i];
@@ -33413,8 +33528,13 @@ body {
                     (_soc === 'plain' ? '把这一段重写成人话。只输出重写后的段落。' : '就这一段举一个例子。');
             } else if (_nov) {
                 sysPrompt = NOVEL_EASE_PERSONA + '\n\n' + (_nov === 'chai' ? NOVEL_CHAI_INSTRUCTION : NOVEL_SUO_INSTRUCTION);
-                userMsg = ctxPreface + '，要处理的是 [P' + pNum + '] 这一段，别的段只是参照、别处理它们：\n\n' + ctxLines.join('\n') +
-                    '\n\n按上面的【' + (_nov === 'chai' ? '拆句' : '缩写') + '】要求，只处理 [P' + pNum + ']，不要加 [P] 段落标记。' +
+                var _tgt = _novFrom ? '[P' + _novFrom + ']～[P' + pNum + '] 这几段' : '[P' + pNum + '] 这一段';
+                userMsg = ctxPreface + '，要处理的是 ' + _tgt + '，别的段只是参照、别处理它们：\n\n' + ctxLines.join('\n') +
+                    '\n\n按上面的【' + (_nov === 'chai' ? '拆句' : '缩写') + '】要求，只处理' + _tgt + '，不要加 [P] 段落标记。' +
+                    /* 几段一起时「那一段」的说法要放宽：对话一句一段，按一整块处理才有意义 */
+                    (_novFrom ? (_nov === 'chai'
+                        ? '这几段当成一整块：大意可以写一两句，最绕的句子最多挑三句。'
+                        : '这几段合起来缩成一段，是对话的话写清谁说了什么。') : '') +
                     (_ctxCfg.post !== 0 ? '后面几段原文我也给你了，可以参照；' : '') +
                     '我还没读到的后续情节一个字都不许提，也别暗示后面会怎样。';
             } else if (_bgCi != null) {
@@ -38972,6 +39092,12 @@ body {
                     // ⚠️落点 Y 要在这里就存下来：250ms 后定时器里拿不到 e 了（事件对象早已回收）
                     var _tapY = e.clientY;
                     var rpara = e.target.closest('.reading-merged p[data-p]');
+                    // 11-09 点选模式（小克的虚线框）：点段落＝定范围，点别处什么都不做——不翻页、不弹条子
+                    if (readingPickOn()) {
+                        clearTimeout(_readingTapTimer); _pTapCount = 0; _pTapEl = null;
+                        if (rpara && !e.target.closest('.translate-merged')) readingPickTap(rpara);
+                        return;
+                    }
                     if (rpara && !e.target.closest('.translate-merged')) {
                         var now = Date.now();
                         if (_pTapEl === rpara && now - _pTapTime < 500) _pTapCount++; else _pTapCount = 1;
@@ -39043,6 +39169,7 @@ body {
                 // 这里用 dblclick 兜底提问；同时清掉连击状态/翻页定时器和双击选中的词，避免移动端 click 连击再触发一次
                 // （dblclick 紧跟第二次 click，能抢在 250ms 翻页定时器触发前清掉，移动端从而也统一走这条、不会提问两次）。
                 var _rp = e.target.closest('.reading-merged p[data-p]');
+                if (_rp && readingPickOn()) { try { window.getSelection().removeAllRanges(); } catch (x) {} return; }   // 点选时双击也只当两下点，click 那边已经处理
                 if (_rp) {
                     clearTimeout(_readingTapTimer);
                     _pTapCount = 0; _pTapEl = null;
