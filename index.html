@@ -15014,7 +15014,19 @@ body {
            论证是**三行**（她之前把导读里的论证脉络块砍掉过，所以这一档单独存在、只在她点的时候出）。 */
         var SOCIAL_PLAIN_INSTRUCTION = '【说人话】把我指定的那一段用大白话重写一遍：意思不变、不增不减、顺序不变；术语就地换成日常说法，实在换不掉的在括号里留原词。不解释、不评论、不举例、不加开场白、不加"这段是说"之类的引子。长度跟原段差不多。只输出重写后的段落本身。';
         var SOCIAL_EXAMPLE_INSTRUCTION = '【举个例子】就我指定的那一段的核心意思，举一个贴近日常、中文语境的具体例子：有人、有场景、有一两句对话或一个动作，三到五句，讲完就停。不要复述原段、不要解释理论、不要说"这个例子说明了"、不加开场白。';
-        var SOCIAL_ARGUE_INSTRUCTION = '【这一节在论证什么】只写三行，每行一句、不超过四十字，行首用这三个词开头：\n主张：作者这一节到底想让我信什么\n凭什么：靠什么撑着（证据、案例、还是推理）\n反谁：在跟谁的说法对着干；没有明确对手就写「没有明确对手」\n除这三行外什么都不写。';
+        /* 2026-11-09 岚：小说「拆句」「缩写」（她读《米德尔马契》时要的「每段降低难度」）。
+           她嫌说人话「事无巨细、每一句都翻」→ 三种尺度的样稿里她挑了「大意＋拆最绕的一两句」最好、「缩写到三分之一」也不错，两样都要。
+           ⚠️不用蘑菇点评人设：那套是「像朋友唠嗑地评论」，这两样要的是帮她读懂，评论和🍄签名都是多余的。
+           ⚠️名著模型多半读过全书，最容易顺嘴说「这为后来……埋下伏笔」——人设里禁一次，用户消息末尾再禁一次（位置＝效力）。 */
+        var NOVEL_EASE_PERSONA = '你在陪我读小说。我读到一段比较绕，想快点读懂它。你的任务是帮我读懂，不是点评：不赏析、不夸作者、不加开场白和总结、不签名。\n\n我读到哪儿就到哪儿。这本书你可能读过全书，但我还没读到的后续情节一个字都不许提，也不许说「这为后来……埋下伏笔」「后面你会看到」这类话。';
+        var NOVEL_CHAI_INSTRUCTION = '【拆句】帮我把指定的那一段拆开读懂。\n' +
+            '第一行以「大意：」开头，一句话说这段讲了什么，三十字以内。\n' +
+            '然后挑这一段里最绕、最难读懂的一两句——只挑真绕的：长句里拐了好几个弯、话里有话、旧说法或典故让人看不明白。' +
+            '每句另起一行，以「· 」开头，先用「」引出原句（太长就只引开头几个字……结尾几个字，不超过二十字），接「——」，再用大白话把这句的意思讲直；是反话就点明一句。每条六十字以内。\n' +
+            '这段要是没什么绕的，就只写大意那一行。读得懂的句子不管。只输出这几行。';
+        var NOVEL_SUO_INSTRUCTION = '【缩写】把指定的那一段缩写成原来三分之一左右的长度：按原文顺序，只留意思的主干；绕的句子拆直了说，好懂的细节可以省掉；人名、地名、称呼照原文。' +
+            '像替我把这段读了一遍、再用自己的话讲给我听。不解释作者用意，不加「这段是说」之类的引子。只输出缩写后的这一段。';
+        var SOCIAL_ARGUE_INSTRUCTION ='【这一节在论证什么】只写三行，每行一句、不超过四十字，行首用这三个词开头：\n主张：作者这一节到底想让我信什么\n凭什么：靠什么撑着（证据、案例、还是推理）\n反谁：在跟谁的说法对着干；没有明确对手就写「没有明确对手」\n除这三行外什么都不写。';
         // 社科书「导读」的任务说明：只要人话讲解（不加概念块/论证脉络块），允许引书外例子但以本节为主
         var SOCIAL_GUIDE_INSTRUCTION = '【导读任务】我刚读完这本书的一小节，请把这一节讲给我听。\n\n· 用大白话说清这一节到底在讲什么、作者想让我明白什么。遇到术语就地解释。\n· 抽象的地方举例子，中文语境优先。\n· 可以联系书外的知识，也可以用一句话提这节跟后面章节的关系，但重心必须在这一节，不要大段展开别处。\n· 不要复述原文、不要逐段罗列、不要加小标题（这一节的标题我已经告诉你了）、不要写「本节主要讲了」这类开场白。\n· 不要输出 [P] 段落标记。\n· 控制在 400 字以内，说完就停。';
         /* 小说「导读」两档（2026-09-16 她提的，读《欧·亨利小说全集》时）。
@@ -32611,8 +32623,9 @@ body {
             box.className = 'rp-guide-pick';
             // ⚠️就两个字，别加副标题/说明（她 2026-09-16：「那两个选项太啰嗦了，简洁一点，
             //   不要解释那么长的，我喜欢极简风」）。见 [[user-taste-minimal-no-badges]]。
+            /* 11-09 岚：后面加「拆句」「缩写」＝就这一段（她：前三样对整章、后两样对这一段，跟社科那排一样针对段的放最后）。 */
             box.innerHTML = '<button data-k="pre">读前</button><button data-k="post">读完</button>' +
-                            '<button data-k="bgone">背景</button>';
+                            '<button data-k="bgone">背景</button><button data-k="chai">拆句</button><button data-k="suo">缩写</button>';
             bar.appendChild(box);
             box.addEventListener('click', function (e) {
                 var b = e.target.closest('button'); if (!b) return;
@@ -32620,6 +32633,7 @@ body {
                 var k = b.getAttribute('data-k');
                 box.remove();
                 if (k === 'bgone') { readingStartBgFromPara(msgIdx, pNum); return; }   // 10-24 对调：选单里的背景＝整章（长按才是这一段）
+                if (k === 'chai' || k === 'suo') { readingAskOne(msgIdx, pNum, k === 'chai' ? '拆句' : '缩写', bar, { novel: k }); return; }
                 readingAskOne(msgIdx, pNum, '导读', bar, { guide: true, guideKind: k });
             });
         }
@@ -33179,6 +33193,9 @@ body {
             /* 2026-09-21 社科书三样：'plain'＝说人话（就这一段原位重写）、'example'＝举例（就这一段）、
                'argue'＝这一节在论证什么（整节，挂在节末——她说的是「章末」）。 */
             var _soc = (opts && opts.social) || '';
+            /* 2026-11-09 小说两样：'chai'＝拆句、'suo'＝缩写，都是就这一段。
+               ⚠️上下文**跟条子上的圆圈走**（她点头的）——跟普通提问同一套 ctxLines／摘要开关，不像说人话那样写死前两段。 */
+            var _nov = (opts && opts.novel) || '';
             var _sec = null, _secText = null;
             var _socPara = '';
             if (_soc === 'argue') {
@@ -33394,6 +33411,12 @@ body {
                 userMsg = (_socCtx.length ? '前面两段（只是参照，别处理它们）：\n' + _socCtx.join('\n') + '\n\n' : '') +
                     '要处理的这一段 [P' + pNum + ']：\n' + _socPara + '\n\n' +
                     (_soc === 'plain' ? '把这一段重写成人话。只输出重写后的段落。' : '就这一段举一个例子。');
+            } else if (_nov) {
+                sysPrompt = NOVEL_EASE_PERSONA + '\n\n' + (_nov === 'chai' ? NOVEL_CHAI_INSTRUCTION : NOVEL_SUO_INSTRUCTION);
+                userMsg = ctxPreface + '，要处理的是 [P' + pNum + '] 这一段，别的段只是参照、别处理它们：\n\n' + ctxLines.join('\n') +
+                    '\n\n按上面的【' + (_nov === 'chai' ? '拆句' : '缩写') + '】要求，只处理 [P' + pNum + ']，不要加 [P] 段落标记。' +
+                    (_ctxCfg.post !== 0 ? '后面几段原文我也给你了，可以参照；' : '') +
+                    '我还没读到的后续情节一个字都不许提，也别暗示后面会怎样。';
             } else if (_bgCi != null) {
                 // 背景追问：人设仍是同一个蘑菇声音（小说/社科各用各的），指令换成「背景优先」
                 sysPrompt = (rbCurBookIsSocial() ? SOCIAL_MODE_PERSONA : BG_NOVEL_PERSONA) + '\n\n' + BG_FOLLOWUP_INSTRUCTION;
@@ -33462,7 +33485,7 @@ body {
                 var _qaMdl = chatSelectedModel;
                 // ⚠️这一条路同时跑三件事：社科导读(_guide) / 背景追问(_bgCi) / 普通共读提问。
                 //   导读走自己那档；背景追问仍归 qa（它就是一次问答，且改归属会悄悄换掉她现在用的模型）。
-                var _qaM = chatResolveReadingModel((_guide || _soc) ? 'guide' : 'qa');   // 三样社科新活走「导读/讲解」那一档模型
+                var _qaM = chatResolveReadingModel((_guide || _soc || _nov) ? 'guide' : 'qa');   // 三样社科新活、小说拆句/缩写走「导读/讲解」那一档模型
                 if (_qaM) { baseUrl = _qaM.baseUrl; apiKey = _qaM.apiKey; _qaMdl = _qaM.model; }
                 // 带上前文已读章节的摘要，否则双击提问时 AI 看不到被压缩掉的前情（剧情/人物/伏笔）
                 var _askMsgs = [{ role: 'system', content: sysPrompt }];
@@ -33530,7 +33553,7 @@ body {
                         '人设+指令': sysPrompt.length,
                         '我的问题': question.length
                     };
-                } else if (!_guide && !_soc) {
+                } else if (!_guide && !_soc && !_nov) {
                     _parts = {
                         '本章原文': ctxLines.join('\n').length,
                         '记忆表': _mtLen,
@@ -33551,7 +33574,7 @@ body {
                     var a = (await chatStreamChat({
                         baseUrl: _bu, apiKey: _ak, model: _md, markUsed: true,
                         // 分开记账：背景追问该比普通提问便宜一大截，记成同一个环节就看不出来省没省
-                        purpose: _guide ? '社科导读' : (_soc ? ({ plain: '说人话', example: '举例', argue: '论证' }[_soc]) : (_bgCi != null ? '背景追问' : '共读提问')),
+                        purpose: _guide ? '社科导读' : (_soc ? ({ plain: '说人话', example: '举例', argue: '论证' }[_soc]) : (_nov ? (_nov === 'chai' ? '拆句' : '缩写') : (_bgCi != null ? '背景追问' : '共读提问'))),
                         messages: _askMsgs,
                         parts: _parts,
                         signal: _pd.ctl.signal,
@@ -33598,7 +33621,7 @@ body {
                 /* 「蘑菇记得的我」：这轮聊完，另起一次小请求问「有没有值得记的」。
                    ⚠️只在她**真的问了话**时跑：社科导读是点一下自动生成的，里头没有她的话。
                    ⚠️不 await——它慢不慢都跟她无关，绝不能让记笔记挡住读书。 */
-                if (!_guide && !_soc && question) umMaybeReview(question, answer, { baseUrl: baseUrl, apiKey: apiKey, model: _qaMdl });
+                if (!_guide && !_soc && !_nov && question) umMaybeReview(question, answer, { baseUrl: baseUrl, apiKey: apiKey, model: _qaMdl });
                 /* ⚠️下标必须现查，别用进函数时那个 msgIdx：这一笔几十秒，期间只要往上滑补了
                    上一章，所有消息下标就整体挪过位（同 readerMarkBg 里那条注释的坑）。 */
                 var _mi = chatMessages.indexOf(msg);
