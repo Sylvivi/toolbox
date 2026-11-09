@@ -39857,9 +39857,11 @@ body {
                             _cmtRendered = '<div class="reading-q">' + _qInner + '</div>';
                             if (_aLine.trim()) {
                                 /* 「掐尾」只作用在这一支——这里是**双击提问/追问**的答案
-                                   （存储里以「汐：」开头）。点评走的是下面 else 那条，不受影响。 */
+                                   （存储里以「汐：」开头）。点评走的是下面 else 那条，不受影响。
+                                   ⚠️11-09 她：拆句、缩写「不需要应用，单独隔离」——那俩的最后一句是正文（最后一条拆句／缩写的末句），不是套话收尾。 */
                                 var _aTxt = _aLine.replace(/^\n+/, '');
-                                var _sp = (localStorage.getItem('reading_trim_tail') === '1')
+                                var _noTrim = /^\s*汐：\s*(拆句|缩写)\s*$/.test(_rdBgSplitQ(_nl >= 0 ? _cmtRaw.slice(0, _nl) : _cmtRaw).text);
+                                var _sp = (!_noTrim && localStorage.getItem('reading_trim_tail') === '1')
                                         ? rdSplitTail(_aTxt) : null;
                                 var _aH = renderText(_sp ? _sp.body : _aTxt);
                                 if (_sp) {
