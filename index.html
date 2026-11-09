@@ -32530,7 +32530,7 @@ body {
             };
             var inputHtml = '<textarea class="rp-ask" rows="1" placeholder="' +
                 (_bgCi != null ? '问问这个背景…' : _hlQ ? '问问划的这句…' :
-                 _isSocial ? '有问题就问…（留空＝讲解，长按＝这段背景）' : '问问这一段…（留空＝讲解，长按＝这段背景）') +
+                 _isSocial ? '有问题就问…（留空＝讲解，长按＝整节背景）' : '问问这一段…（留空＝讲解，长按＝整章背景）') +
                 '"></textarea>';
             var askHtml = '<button class="rp-ask-send">' + _emptyLabel + '</button>';
             // 极简：输入框 + 讨论按钮，「带前文问答」勾选框紧贴讨论按钮左边（粘性，状态存 localStorage，替代原设置里的全局开关）
@@ -32619,9 +32619,10 @@ body {
                 if (!_bgArmed) { _bgDisarm(); return; }
                 _bgDisarm();
                 _bgEatClick = true;                // pointerup 之后紧跟一个 click，别让它再走一遍导读
-                /* 10-24 她对调了：「双击之后长按那个导读是给这一段，下面 4 个选是给这一节」。
-                   长按＝只标这一段；选单里那档「背景」＝整节（社科）/整章（小说），两种书一样。 */
-                readingBgOne(msgIdx, pNum);
+                /* 11-09 她又对调回来了：「长按那个变成针对整节或者整章，点那个背景变成针对双击的这一段」。
+                   长按＝整节（社科）/整章（小说）；选单里那档「背景」＝只标这一段，两种书一样。
+                   （10-24 那版是反过来的：长按＝这一段、选单＝整节/整章，已作废。） */
+                readingStartBgFromPara(msgIdx, pNum);
             });
             send.addEventListener('pointercancel', _bgDisarm);
             send.addEventListener('pointerleave', _bgDisarm);
@@ -32656,7 +32657,7 @@ body {
                 e.stopPropagation();
                 var k = b.getAttribute('data-k');
                 box.remove();
-                if (k === 'bgone') { readingStartBgFromPara(msgIdx, pNum); return; }   // 10-24 对调：选单里的背景＝整章（长按才是这一段）
+                if (k === 'bgone') { readingBgOne(msgIdx, pNum); return; }   // 11-09 对调回来：选单里的背景＝这一段（长按才是整章）
                 if (k === 'chai' || k === 'suo') { readingAskOne(msgIdx, pNum, k === 'chai' ? '拆句' : '缩写', bar, { novel: k }); return; }
                 readingAskOne(msgIdx, pNum, '导读', bar, { guide: true, guideKind: k });
             });
@@ -32671,10 +32672,11 @@ body {
             var box = document.createElement('div');
             box.className = 'rp-guide-pick';
             /* ⚠️2026-09-22 她：「举例感觉没啥用」→ 从这一行摘掉。代码路径（opts.social='example'）留着没删。 */
-            /* 10-24 她排的顺序：「导读、背景、论证、说人话——其他都是针对节的，只有最后一个是针对段」
-               （同日背景改成整节，见 readingBgOne 那段）。按范围排：前三个整节，说人话＝这一段放最后。 */
-            box.innerHTML = '<button data-k="guide">导读</button><button data-k="bgone">背景</button>' +
-                            '<button data-k="argue">论证</button><button data-k="plain">说人话</button>';
+            /* 10-24 她排的顺序：「导读、背景、论证、说人话——其他都是针对节的，只有最后一个是针对段」。
+               11-09 背景改回「这一段」（见 readingBgOne 那段）→ 照她「按范围排」的规矩挪到论证后面：
+               导读、论证＝整节在前；背景、说人话＝这一段在后。 */
+            box.innerHTML = '<button data-k="guide">导读</button><button data-k="argue">论证</button>' +
+                            '<button data-k="bgone">背景</button><button data-k="plain">说人话</button>';
             bar.appendChild(box);
             box.addEventListener('click', function (e) {
                 var b = e.target.closest('button'); if (!b) return;
@@ -32682,13 +32684,13 @@ body {
                 var k = b.getAttribute('data-k');
                 box.remove();
                 if (k === 'guide') readingAskOne(msgIdx, pNum, '导读', bar, { guide: true });
-                else if (k === 'bgone') readingStartBgFromPara(msgIdx, pNum);   // 10-24 对调：选单里的背景＝整节（长按才是这一段）
+                else if (k === 'bgone') readingBgOne(msgIdx, pNum);   // 11-09 对调回来：选单里的背景＝这一段（长按才是整节）
                 else readingAskOne(msgIdx, pNum, k, bar, { social: k });
             });
         }
         /* 只标**这一段**的背景（2026-09-22 她要的）。她的原话：「全章有时候其实我那个词我也未必
            就想了解，但他放在那儿又会在我的阅读范围里面，有时候反而拖慢我的阅读进度」。
-           ⚠️10-24 她对调了入口：现在是**长按「导读」**走这里；选单里那档「背景」改走 readingStartBgFromPara（整节/整章）。 */
+           ⚠️10-24 对调过一次（长按走这里），11-09 她又调回来：现在是**选单里那档「背景」**走这里；长按「讲解」走 readingStartBgFromPara（整节/整章）。 */
         function readingBgOne(msgIdx, pNum) {
             var b = readerBookId ? rbGetBook(readerBookId) : null;
             if (!b) { showToast('先打开一本书'); return; }
@@ -32826,7 +32828,7 @@ body {
             readingOpenAskBar(msgIdx, pNum, pEl);
         }
 
-        /* 从正文里开标背景（10-24 起由选单里那档「背景」触发；长按改成只标这一段，见 readingBgOne）。范围刻意跟目录里的入口对齐，
+        /* 从正文里开标背景（11-09 起由长按「讲解」触发；选单里那档「背景」只标这一段，见 readingBgOne）。范围刻意跟目录里的入口对齐，
            免得同一个功能在两处标出来的量不一样：社科书＝这一段所在的**小节**
            （readerMarkBg 里的 rbSectionOf 会把任意段号折算成它所在那一节，所以直接把
            双击的段号丢进去就行），小说＝**整章**（小说没有目录小节，rbDetectHeads 在
