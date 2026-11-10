@@ -41602,8 +41602,12 @@ body {
              · 颜色：蓝系主题用雾蓝；霞玫用玫瑰、紫粉用紫（主题自己沉在底部的那个色）；夜间全是亮一点的海蓝
              · 沉在下半屏：上面渐隐，跟「暖顶＋主色沉底」的主题渐变一个意思
              · 手机发热是硬约束：每秒最多 24 帧、鲸鱼两条、小鱼 60 条；切后台/熄屏引擎自己停；设置「背景」行有开关
-           ⚠️同一块画布在主页（body 下 fixed）和对话弹层（.chat-modal 里）之间搬家，不建两个引擎：
-             对话弹层带 backdrop-filter，放在它后面的画布会被糊成一片，所以打开对话时把画布挪进弹层、z-index:-1
+             · 同日二改，她发来 dsh 里的截图：「我想要的是这种效果，就是遮罩可以盖在上面，然后汉字鲸鱼也有必要，但是我想是逍遥游相关的汉字」
+               → 用插件自带的汉字模式（字表本来就是《逍遥游》：北冥有鱼、鲲鹏、渊、翼、抟，一条身上藏「逍遥齐物」）；
+               → 对话页画布放到 .chat-modal **后面**，遮罩（chat-mask-on / 夜间暗底）那层底色就盖在鲸鱼上面；
+                 手机上 .chat-modal 的毛玻璃是关掉的（发热，见文件末尾 @media），所以遮罩开着时给画布自己加 blur，
+                 糊了细节也看不出，帧数降到 15
+           ⚠️同一块画布在主页（body 下 fixed）和对话弹层之间搬家，不建两个引擎
            ================================================================ */
         var TB_WHALES_SRC = '/whales/whales.js?v=1';
         var _tbWh = { cv: null, eng: null, loading: false, key: '', spot: '' };
@@ -41644,22 +41648,25 @@ body {
             if (!cv) {
                 cv = _tbWh.cv = document.createElement('canvas');
                 cv.setAttribute('aria-hidden', 'true');
-                cv.style.cssText = 'inset:0;width:100%;height:100%;pointer-events:none;z-index:-1;font-family:"Whales Mono",monospace;font-weight:600;'
+                cv.style.cssText = 'inset:0;width:100%;height:100%;pointer-events:none;z-index:-1;font-family:"Whales Hanzi","Noto Serif SC","Source Han Serif SC",serif;font-weight:400;'
                     + '-webkit-mask-image:linear-gradient(to bottom,transparent 18%,rgba(0,0,0,.45) 48%,#000 82%);mask-image:linear-gradient(to bottom,transparent 18%,rgba(0,0,0,.45) 48%,#000 82%);';
             }
-            var host = spot === 'chat' ? ov.querySelector('.chat-modal') : document.body;
-            if (cv.parentNode !== host) { host.insertBefore(cv, host.firstChild); }
+            var modal = ov && ov.querySelector('.chat-modal'), host = spot === 'chat' ? ov : document.body, before = spot === 'chat' ? modal : host.firstChild;
+            if (cv.parentNode !== host) { host.insertBefore(cv, before); }
+            var bc = document.body.classList, masked = spot === 'chat' && (bc.contains('chat-mask-on') || bc.contains('nightmask-soft') || bc.contains('nightmask-stone'));
+            _tbWh.slow = masked;
+            cv.style.filter = masked && modal && getComputedStyle(modal).backdropFilter === 'none' ? 'blur(5px) saturate(1.3)' : '';
             cv.style.position = spot === 'chat' ? 'absolute' : 'fixed';
             cv.style.display = '';
             var dark = document.body.classList.contains('dark'), color = _tbWhColor(dark);
-            cv.style.opacity = dark ? '0.6' : '0.55';
+            cv.style.opacity = masked ? '1' : dark ? '0.6' : '0.55';   // 遮罩那层自己会压淡，底下得给足
             if (!_tbWh.eng) {
                 var E = window.__tbWhales.OceanEngine;
-                _tbWh.eng = new E(cv, [{ kind: 'whale', size: 1.1 }, { kind: 'whale', size: 0.75 }], 0.5, dark, 1, 0, 60, 0.8, color, 'ascii', false, 'primary', 0.8, 0.7, 0.8);
+                _tbWh.eng = new E(cv, [{ kind: 'whale', size: 1.1 }, { kind: 'whale', size: 0.75 }], 0.5, dark, 1, 0, 60, 0.8, color, 'hanzi', false, 'primary', 0.8, 0.7, 0.8);
                 // 限帧：原版每帧都画（手机 60～120 帧），这里最多 24 帧；世界照固定步长算，慢了也不会乱
                 var eng = _tbWh.eng, run = eng.frame, last = 0;
                 eng.frame = function (now) {
-                    if (now - last < 41) { eng.raf = requestAnimationFrame(eng.frame); return; }
+                    if (now - last < (_tbWh.slow ? 66 : 41)) { eng.raf = requestAnimationFrame(eng.frame); return; }
                     last = now; run(now);
                 };
                 eng.schedule();
