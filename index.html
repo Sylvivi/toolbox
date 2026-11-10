@@ -7013,6 +7013,7 @@ body {
                     <span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0">背景</span>
                     <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end">
                         <button class="chip-btn active" id="chipNight" onclick="setNightMode(!nightMode)">夜间</button>
+                        <button class="chip-btn" id="chipWhales" onclick="tbWhalesToggle()" title="主页和对话页底下游的鲸鱼，点一下开关">鲸鱼</button>
                         <button class="chip-btn" id="chipReadBg" onclick="readingToggleBgPanel()" title="换阅读底图：点开挑一张，也可以填自己的图" style="display: none;">底图</button>
                         <button class="chip-btn" id="chipWarmMask" onclick="readingToggleWarmMask()" style="display: none;">白底</button>
                         <button class="chip-btn" id="chipBlackMask" onclick="readingToggleBlackMask()" title="夜间把弹窗底色压成暗底，循环切换 柔黑/夜岩" style="display: none;">暗底</button>
@@ -41589,6 +41590,97 @@ body {
                 setInterval(function() { reg.update(); }, 60 * 60 * 1000);
             }).catch(function() {});
         }
+
+        /* ================================================================
+           鲸鱼底纹（2026-11-10 岚）
+           她：「我给你发过一个 dsh 相关的压缩包，是那个鲸鱼，我想用于我的工具箱，做个动态的底纹」。
+           动画本体取自 dsh-ascii-whales 插件，**不在这个仓库里**：它改编自 stackedlol/ascii-sharks，
+           原作者没附许可，放进公开仓库等于替人家发布。所以脚本只放服务器 /var/www/tbwhales，
+           网址 /whales/whales.js（Caddy 单独一段），源文件和许可说明在 ~/toolbox-whales/。
+           跟她商量定的：
+             · 只在主页和对话页游；阅读（共读/阅读器）不放，看书背后有东西动容易分心；开了底图也不放
+             · 颜色：蓝系主题用雾蓝；霞玫用玫瑰、紫粉用紫（主题自己沉在底部的那个色）；夜间全是亮一点的海蓝
+             · 沉在下半屏：上面渐隐，跟「暖顶＋主色沉底」的主题渐变一个意思
+             · 手机发热是硬约束：每秒最多 24 帧、鲸鱼两条、小鱼 60 条；切后台/熄屏引擎自己停；设置「背景」行有开关
+           ⚠️同一块画布在主页（body 下 fixed）和对话弹层（.chat-modal 里）之间搬家，不建两个引擎：
+             对话弹层带 backdrop-filter，放在它后面的画布会被糊成一片，所以打开对话时把画布挪进弹层、z-index:-1
+           ================================================================ */
+        var TB_WHALES_SRC = '/whales/whales.js?v=1';
+        var _tbWh = { cv: null, eng: null, loading: false, key: '', spot: '' };
+        function tbWhalesOn() { try { return localStorage.getItem('toolbox_whales') !== '0'; } catch (e) { return true; } }
+        function tbWhalesToggle() {
+            try { localStorage.setItem('toolbox_whales', tbWhalesOn() ? '0' : '1'); } catch (e) {}
+            tbWhalesSync();
+        }
+        function _tbWhColor(dark) {
+            if (dark) return '#86a6e0';
+            var c = document.body.classList;
+            if (c.contains('theme-rose')) return '#c98399';
+            if (c.contains('theme-purplepink')) return '#9a86c8';
+            if (c.contains('theme-tealblue')) return '#4f8894';
+            return '#4a74b5';
+        }
+        function tbWhalesSync() {
+            var chip = document.getElementById('chipWhales');
+            if (chip) chip.classList.toggle('active', tbWhalesOn());
+            var ov = document.getElementById('chatModalOverlay'), chatOpen = ov && ov.classList.contains('show');
+            var reading = (typeof chatReadingMode !== 'undefined' && chatReadingMode) || (typeof chatReaderMode !== 'undefined' && chatReaderMode);
+            var spot = !tbWhalesOn() || document.body.classList.contains('rdbg-on') ? '' : chatOpen ? (reading ? '' : 'chat') : 'home';
+            // ⚠️主页那块画布 z-index:-1，body 不自成一层的话会被 body 自己的渐变底盖住（html 另有底色，body 的底不往外传）。
+            //   isolation 只开在 body 上：卡片、弹层的毛玻璃照样糊得到 body 里的东西（见 .chat-input-box 上那段 backdrop root 的坑，那是开在玻璃盒自己身上）
+            document.body.style.isolation = spot === 'home' ? 'isolate' : '';
+            if (!spot) { if (_tbWh.cv) _tbWh.cv.style.display = 'none'; return; }
+            if (!window.__tbWhales) {
+                if (!_tbWh.loading) {
+                    _tbWh.loading = true;
+                    window.__tbWhalesReady = tbWhalesSync;
+                    var sc = document.createElement('script'); sc.src = TB_WHALES_SRC; sc.async = true;
+                    sc.onerror = function () { _tbWh.loading = false; };   // 下回再试，不打扰她
+                    document.head.appendChild(sc);
+                }
+                return;
+            }
+            var cv = _tbWh.cv;
+            if (!cv) {
+                cv = _tbWh.cv = document.createElement('canvas');
+                cv.setAttribute('aria-hidden', 'true');
+                cv.style.cssText = 'inset:0;width:100%;height:100%;pointer-events:none;z-index:-1;font-family:"Whales Mono",monospace;font-weight:600;'
+                    + '-webkit-mask-image:linear-gradient(to bottom,transparent 18%,rgba(0,0,0,.45) 48%,#000 82%);mask-image:linear-gradient(to bottom,transparent 18%,rgba(0,0,0,.45) 48%,#000 82%);';
+            }
+            var host = spot === 'chat' ? ov.querySelector('.chat-modal') : document.body;
+            if (cv.parentNode !== host) { host.insertBefore(cv, host.firstChild); }
+            cv.style.position = spot === 'chat' ? 'absolute' : 'fixed';
+            cv.style.display = '';
+            var dark = document.body.classList.contains('dark'), color = _tbWhColor(dark);
+            cv.style.opacity = dark ? '0.6' : '0.55';
+            if (!_tbWh.eng) {
+                var E = window.__tbWhales.OceanEngine;
+                _tbWh.eng = new E(cv, [{ kind: 'whale', size: 1.1 }, { kind: 'whale', size: 0.75 }], 0.5, dark, 1, 0, 60, 0.8, color, 'ascii', false, 'primary', 0.8, 0.7, 0.8);
+                // 限帧：原版每帧都画（手机 60～120 帧），这里最多 24 帧；世界照固定步长算，慢了也不会乱
+                var eng = _tbWh.eng, run = eng.frame, last = 0;
+                eng.frame = function (now) {
+                    if (now - last < 41) { eng.raf = requestAnimationFrame(eng.frame); return; }
+                    last = now; run(now);
+                };
+                eng.schedule();
+                _tbWh.key = dark + color;
+            } else if (_tbWh.key !== dark + color) {
+                _tbWh.eng.setAppearance(0.5, dark, 0, 0.8, color, false, 'primary', 0.8, 0.7, 0.8);
+                _tbWh.key = dark + color;
+            }
+        }
+        (function () {
+            // 换主题/夜间/开关对话/开底图都会动 body 或弹层的 class；阅读模式只是个变量，靠慢轮询补上
+            var t = 0, kick = function () { clearTimeout(t); t = setTimeout(tbWhalesSync, 60); };
+            function boot() {
+                new MutationObserver(kick).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+                var ov = document.getElementById('chatModalOverlay');
+                if (ov) new MutationObserver(kick).observe(ov, { attributes: true, attributeFilter: ['class'] });
+                setInterval(function () { if (!document.hidden) tbWhalesSync(); }, 1500);
+                tbWhalesSync();
+            }
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+        })();
 
 
     </script>
