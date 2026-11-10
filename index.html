@@ -41601,7 +41601,7 @@ body {
              · 主页、对话页、阅读都游（阅读起初没放，她说可以接受）；开了底图不放
              · 颜色：蓝系主题用雾蓝；霞玫用玫瑰、紫粉用紫（主题自己沉在底部的那个色）；夜间全是亮一点的海蓝
              · 沉在下半屏：上面渐隐，跟「暖顶＋主色沉底」的主题渐变一个意思
-             · 手机发热是硬约束：每秒最多 24 帧、鲸鱼两条、小鱼 60 条；切后台/熄屏引擎自己停；设置「背景」行有开关
+             · 手机发热是硬约束：每秒最多 24 帧、鲸鱼两条、小鱼 60 条（同日她：「小鱼可以取消，大鱼弄到三条，不用弄很小」→ 三条、没有小鱼）；切后台/熄屏引擎自己停；设置「背景」行有开关
              · 同日二改，她发来 dsh 里的截图：「我想要的是这种效果，就是遮罩可以盖在上面，然后汉字鲸鱼也有必要，但是我想是逍遥游相关的汉字」
                → 用插件自带的汉字模式（字表本来就是《逍遥游》：北冥有鱼、鲲鹏、渊、翼、抟，一条身上藏「逍遥齐物」）；
                → 对话页画布放到 .chat-modal **后面**，遮罩（chat-mask-on / 夜间暗底）那层底色就盖在鲸鱼上面；
@@ -41609,8 +41609,17 @@ body {
                  糊了细节也看不出，帧数降到 15
            ⚠️同一块画布在主页（body 下 fixed）和对话弹层之间搬家，不建两个引擎
            ================================================================ */
-        var TB_WHALES_SRC = '/whales/whales.js?v=1';
-        var _tbWh = { cv: null, eng: null, loading: false, key: '', spot: '' };
+        var TB_WHALES_SRC = '/whales/whales.js?v=2';
+        var _tbWh = { cv: null, eng: null, wk: null, loading: false, key: '', spot: '', run: '' };
+        // ⚠️同日她：「我上下滑动鲸鱼会停住」→ 能用 OffscreenCanvas 的就把动画搬进 worker（同一个 whales.js，
+        //   在 worker 里自己跑循环、画到交过去的画布上），页面滑动再忙也不卡它；老浏览器照旧在页面里跑
+        var TB_WH_WORKER = !!(window.Worker && window.HTMLCanvasElement && HTMLCanvasElement.prototype.transferControlToOffscreen);
+        var TB_WH_SPEC = { whales: [{ kind: 'whale', size: 1.1 }, { kind: 'whale', size: 0.95 }, { kind: 'whale', size: 0.85 }], speed: 0.5, fish: 0, wake: 0.8, glyph: 'hanzi', swing: 0.8, agility: 0.7, tail: 0.8,
+            font: '"Whales Hanzi","Noto Serif SC","Source Han Serif SC",serif' };
+        function _tbWhSize() {
+            var r = _tbWh.cv.getBoundingClientRect();
+            return { w: r.width, h: r.height, dpr: Math.min(window.devicePixelRatio || 1, 2) };
+        }
         function tbWhalesOn() { try { return localStorage.getItem('toolbox_whales') !== '0'; } catch (e) { return true; } }
         function tbWhalesToggle() {
             try { localStorage.setItem('toolbox_whales', tbWhalesOn() ? '0' : '1'); } catch (e) {}
@@ -41633,8 +41642,8 @@ body {
             // ⚠️主页那块画布 z-index:-1，body 不自成一层的话会被 body 自己的渐变底盖住（html 另有底色，body 的底不往外传）。
             //   isolation 只开在 body 上：卡片、弹层的毛玻璃照样糊得到 body 里的东西（见 .chat-input-box 上那段 backdrop root 的坑，那是开在玻璃盒自己身上）
             document.body.style.isolation = spot === 'home' ? 'isolate' : '';
-            if (!spot) { if (_tbWh.cv) _tbWh.cv.style.display = 'none'; return; }
-            if (!window.__tbWhales) {
+            if (!spot) { if (_tbWh.cv) _tbWh.cv.style.display = 'none'; _tbWhRun(false); return; }
+            if (!TB_WH_WORKER && !window.__tbWhales) {
                 if (!_tbWh.loading) {
                     _tbWh.loading = true;
                     window.__tbWhalesReady = tbWhalesSync;
@@ -41660,9 +41669,31 @@ body {
             cv.style.display = '';
             var dark = document.body.classList.contains('dark'), color = _tbWhColor(dark);
             cv.style.opacity = masked ? '1' : dark ? '0.6' : '0.55';   // 遮罩那层自己会压淡，底下得给足
+            if (TB_WH_WORKER) {
+                if (!_tbWh.wk) {
+                    var sz = _tbWhSize();
+                    if (sz.w < 1 || sz.h < 1) return;   // 还没排好版，下一轮再起
+                    try {
+                        var off = cv.transferControlToOffscreen(), wk = new Worker(TB_WHALES_SRC);
+                        wk.postMessage(Object.assign({ t: 'init', canvas: off, w: sz.w, h: sz.h, dpr: sz.dpr, dark: dark, color: color }, TB_WH_SPEC), [off]);
+                        _tbWh.wk = wk; _tbWh.key = dark + color;
+                        new ResizeObserver(function () { var z = _tbWhSize(); if (z.w >= 1) wk.postMessage({ t: 'size', w: z.w, h: z.h, dpr: z.dpr }); }).observe(cv);
+                        // 点一下屏幕漾一圈（原版在引擎里听，搬进 worker 后由这边转过去）
+                        window.addEventListener('pointerdown', function (e) {
+                            if (!_tbWh.run || _tbWh.run.charAt(0) !== '1') return;
+                            var r = cv.getBoundingClientRect(); wk.postMessage({ t: 'splash', x: e.clientX - r.left, y: e.clientY - r.top });
+                        }, { passive: true });
+                    } catch (e) { TB_WH_WORKER = false; return; }   // 交画布失败就退回页面里跑，下一轮装脚本
+                } else if (_tbWh.key !== dark + color) {
+                    _tbWh.wk.postMessage({ t: 'theme', dark: dark, color: color });
+                    _tbWh.key = dark + color;
+                }
+                _tbWhRun(!document.hidden);
+                return;
+            }
             if (!_tbWh.eng) {
-                var E = window.__tbWhales.OceanEngine;
-                _tbWh.eng = new E(cv, [{ kind: 'whale', size: 1.1 }, { kind: 'whale', size: 0.75 }], 0.5, dark, 1, 0, 60, 0.8, color, 'hanzi', false, 'primary', 0.8, 0.7, 0.8);
+                var E = window.__tbWhales.OceanEngine, P = TB_WH_SPEC;
+                _tbWh.eng = new E(cv, P.whales, P.speed, dark, 1, 0, P.fish, P.wake, color, P.glyph, false, 'primary', P.swing, P.agility, P.tail);
                 // 限帧：原版每帧都画（手机 60～120 帧），这里最多 24 帧；世界照固定步长算，慢了也不会乱
                 var eng = _tbWh.eng, run = eng.frame, last = 0;
                 eng.frame = function (now) {
@@ -41676,6 +41707,12 @@ body {
                 _tbWh.key = dark + color;
             }
         }
+        function _tbWhRun(on) {
+            if (!_tbWh.wk) return;
+            var k = (on ? '1' : '0') + (_tbWh.slow ? 's' : '');
+            if (k === _tbWh.run) return;
+            _tbWh.run = k; _tbWh.wk.postMessage({ t: 'run', on: on, slow: !!_tbWh.slow });
+        }
         (function () {
             // 换主题/夜间/开关对话/开底图都会动 body 或弹层的 class；阅读模式只是个变量，靠慢轮询补上
             var t = 0, kick = function () { clearTimeout(t); t = setTimeout(tbWhalesSync, 60); };
@@ -41684,6 +41721,7 @@ body {
                 var ov = document.getElementById('chatModalOverlay');
                 if (ov) new MutationObserver(kick).observe(ov, { attributes: true, attributeFilter: ['class'] });
                 setInterval(function () { if (!document.hidden) tbWhalesSync(); }, 1500);
+                document.addEventListener('visibilitychange', tbWhalesSync);   // 切后台停、回来接着游（worker 不会自己知道）
                 tbWhalesSync();
             }
             if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
